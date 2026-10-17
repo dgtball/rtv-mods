@@ -18,6 +18,9 @@ const GRASS_MATS := [
 # Тон воздуха слабее тона листвы и берётся долей, чтобы не пережечь небо.
 const AIR_STRENGTH := 0.55
 const AIR_PROPS := ["ambient_light_color"]
+# Кроссфейд тона: ваниль плавно сходит снег (глобальный Snow), а тон должен
+# приходить так же - за фиксированное реальное время, а не скачком.
+const TRANSITION_SECS := 8.0
 
 var _last_index := -1
 var _visuals := true
@@ -26,6 +29,11 @@ var _tree_entries: Array = []
 var _grass_entries: Array = []
 var _air_entries: Array = []
 var _world: Node = null
+var _fade_active := false
+var _fade_t := 0.0
+var _fade_from_index := -1
+var _fade_mats: Array = []
+var _fade_airs: Array = []
 
 func _init() -> void:
 	_last_index = -1
@@ -46,11 +54,57 @@ func set_season(index: int, is_dynamic_run: bool = true, visuals: bool = true) -
 	if sim == null:
 		return
 	_set_prop(sim, "season", 2 if index == 3 else 1)
-	if _visuals:
+	var first := _last_index < 0
+	if not _visuals:
+		_cancel_fade()
+		_restore_foliage()
+		_restore_air_all()
+	elif first or TRANSITION_SECS <= 0.0:
+		_cancel_fade()
 		_apply_tint(index)
 	else:
-		_restore_foliage()
+		_begin_fade(index)
 	_last_index = index
+
+func tick(delta: float) -> void:
+	if not _fade_active:
+		return
+	_fade_t = minf(1.0, _fade_t + delta / TRANSITION_SECS)
+	for e in _fade_mats:
+		_set_mat(e, SEASONS.blend(e["from"], e["to"], _fade_t))
+	for a in _fade_airs:
+		_set_air_value(a, SEASONS.blend(a["from"], a["to"], _fade_t))
+	if _fade_t >= 1.0:
+		_cancel_fade()
+
+func _begin_fade(index: int) -> void:
+	if not _bound:
+		_bind()
+	_fade_from_index = _last_index
+	_fade_mats.clear()
+	for e in _tree_entries:
+		_add_fade_mat(_fade_mats, e, SEASONS.tree_tint(index) if SEASONS.uses_tint(index) else e["orig"])
+	for e in _grass_entries:
+		_add_fade_mat(_fade_mats, e, SEASONS.grass_tint(index) if SEASONS.uses_tint(index) else e["orig"])
+	_fade_airs = _air_pairs(index, _fade_from_index)
+	_air_entries_clear_and_fill(_fade_airs)
+	_fade_t = 0.0
+	_fade_active = true
+
+func _add_fade_mat(list: Array, e: Dictionary, to: Color) -> void:
+	var mat = e["mat"]
+	if mat == null or not is_instance_valid(mat):
+		return
+	var from = mat.get_shader_parameter("tint")
+	if not (from is Color):
+		from = Color(1, 1, 1, 1)
+	list.append({"mat": mat, "from": from, "to": to})
+
+func _cancel_fade() -> void:
+	_fade_active = false
+	_fade_t = 0.0
+	_fade_mats.clear()
+	_fade_airs.clear()
 
 # season у Simulation может быть как свойством, так и методом-сеттером:
 # сначала пробуем метод, иначе пишем свойство - как делал прежний код.
@@ -64,16 +118,22 @@ func _set_prop(obj: Object, name: String, value: Variant) -> void:
 # тонированы, а узел воздуха новый, поэтому его надо найти и покрасить заново.
 func on_world_ready() -> void:
 	_world = null
-	if _visuals and _last_index >= 0:
+	if not _visuals or _last_index < 0:
+		return
+	if _fade_active:
+		_fade_airs = _air_pairs(_last_index, _fade_from_index)
+		_air_entries_clear_and_fill(_fade_airs)
+		for a in _fade_airs:
+			_set_air_value(a, SEASONS.blend(a["from"], a["to"], _fade_t))
+	else:
 		_apply_air(_last_index)
 
 func restore() -> void:
+	_cancel_fade()
 	_restore_foliage()
-	for e in _air_entries:
-		_restore_air(e)
-	_air_entries.clear()
-	_world = null
+	_restore_air_all()
 	_last_index = -1
+	_world = null
 
 func _apply_tint(index: int) -> void:
 	if not _bound:
@@ -121,39 +181,63 @@ func _restore_foliage() -> void:
 
 # Тон воздуха аддитивный: к исходному цвету карты добавляется отклонение палитры.
 # Исходник хранится метой на объекте, поэтому переживает пересборку драйвера.
-func _apply_air(index: int) -> void:
-	_air_entries.clear()
+# Воздух: пары from/to считаются от ванильного цвета, снятого метой с объекта,
+# поэтому переживают пересборку драйвера и перезагрузку карты.
+func _air_pairs(to_index: int, from_index: int) -> Array:
+	var out: Array = []
 	var world := _find_world()
 	if world == null:
-		return
+		return out
 	var env_node = world.get("environment")
 	if env_node != null and is_instance_valid(env_node):
 		var env_res = env_node.get("environment")
 		if env_res != null:
 			for prop in AIR_PROPS:
-				_set_air(env_res, prop, index, AIR_STRENGTH)
+				_air_pair(out, env_res, prop, to_index, from_index, AIR_STRENGTH)
 	var sun = world.get("sunLight")
 	if sun == null:
 		sun = world.get_node_or_null("Planet/Sun/Light")
 	if sun != null and is_instance_valid(sun):
-		_set_air(sun, "light_color", index, AIR_STRENGTH * 0.6)
+		_air_pair(out, sun, "light_color", to_index, from_index, AIR_STRENGTH * 0.6)
+	return out
 
-func _set_air(obj: Object, prop: String, index: int, strength: float) -> void:
-	var tint := SEASONS.air_tint(index)
+func _air_pair(out: Array, obj: Object, prop: String, to_index: int, from_index: int, strength: float) -> void:
 	if not obj.has_meta(_vanilla_key(prop)):
 		var cur = obj.get(prop)
 		if not (cur is Color):
 			return
 		obj.set_meta(_vanilla_key(prop), cur)
 	var vanilla: Color = obj.get_meta(_vanilla_key(prop))
-	obj.set(prop, _tint_color(vanilla, tint, strength))
-	_air_entries.append({"obj": obj, "prop": prop})
+	out.append({
+		"obj": obj,
+		"prop": prop,
+		"from": _tint_color(vanilla, SEASONS.air_tint(from_index), strength),
+		"to": _tint_color(vanilla, SEASONS.air_tint(to_index), strength),
+	})
 
-func _restore_air(e: Dictionary) -> void:
-	var obj = e["obj"]
-	var prop: String = e["prop"]
-	if obj != null and is_instance_valid(obj) and obj.has_meta(_vanilla_key(prop)):
-		obj.set(prop, obj.get_meta(_vanilla_key(prop)))
+func _apply_air(index: int) -> void:
+	_air_entries.clear()
+	for a in _air_pairs(index, -1):
+		_set_air_value(a, a["to"])
+		_air_entries.append({"obj": a["obj"], "prop": a["prop"]})
+
+func _set_air_value(a: Dictionary, color: Color) -> void:
+	var obj = a["obj"]
+	if obj != null and is_instance_valid(obj):
+		obj.set(a["prop"], color)
+
+func _air_entries_clear_and_fill(pairs: Array) -> void:
+	_air_entries.clear()
+	for a in pairs:
+		_air_entries.append({"obj": a["obj"], "prop": a["prop"]})
+
+func _restore_air_all() -> void:
+	for e in _air_entries:
+		var obj = e["obj"]
+		var prop: String = e["prop"]
+		if obj != null and is_instance_valid(obj) and obj.has_meta(_vanilla_key(prop)):
+			obj.set(prop, obj.get_meta(_vanilla_key(prop)))
+	_air_entries.clear()
 
 func _vanilla_key(prop: String) -> String:
 	return "vtk_tint_vanilla_" + prop
