@@ -18,6 +18,8 @@ func _init() -> void:
 	t_start_offset_for()
 	t_vanilla_season()
 	t_is_winter()
+	t_uses_tint()
+	t_palettes()
 	print("")
 	if fails == 0:
 		print("Seasons tests passed")
@@ -69,3 +71,22 @@ func t_vanilla_season() -> void:
 func t_is_winter() -> void:
 	ck(S.is_winter(3), "индекс 3 - зима")
 	ck(not S.is_winter(0), "индекс 0 - не зима")
+
+func t_uses_tint() -> void:
+	ck(S.uses_tint(0), "весна тонируется")
+	ck(S.uses_tint(1), "лето тонируется")
+	ck(S.uses_tint(2), "осень тонируется")
+	ck(not S.uses_tint(3), "зима не тонируется - работает ванильный снег")
+
+func t_palettes() -> void:
+	ck(S.SEASON_TREE_TINT.has("spring"), "палитра листвы: есть весна")
+	ck(S.SEASON_TREE_TINT.has("autumn"), "палитра листвы: есть осень")
+	ck(not S.SEASON_TREE_TINT.has("winter"), "палитра листвы: зимы нет (тон снимается)")
+	ck(S.tree_tint(0) == S.SEASON_TREE_TINT["spring"], "tree_tint(весна) - из палитры")
+	ck(S.tree_tint(2) == S.SEASON_TREE_TINT["autumn"], "tree_tint(осень) - из палитры")
+	ck(S.tree_tint(3) == Color(1, 1, 1, 1), "tree_tint(зима) - белый (без изменений)")
+	ck(S.grass_tint(2) == S.SEASON_GRASS_TINT["autumn"], "grass_tint(осень) - из палитры")
+	ck(S.SEASON_AIR_TINT.size() == 4, "палитра воздуха: все четыре сезона")
+	ck(S.air_tint(3) == S.SEASON_AIR_TINT["winter"], "air_tint(зима) - из палитры")
+	ck(S.tree_tint(99) == Color(1, 1, 1, 1), "индекс вне диапазона - белый, без падения")
+	ck(S.air_tint(-1) == Color(1, 1, 1, 1), "отрицательный индекс - белый")

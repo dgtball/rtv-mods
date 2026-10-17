@@ -53,6 +53,7 @@ var _dyn_enabled := false
 var _dyn_start_offset := 1
 var _dyn_cycle_days := 30
 var _dyn_last_idx := -1
+var _dyn_visuals := true
 
 # Ironman respawn drops you somewhere random out of these instead of always
 # Highway, so a death run can't be re-learned as one fixed route.
@@ -155,6 +156,8 @@ func _do_register() -> void:
 func _on_compiler_spawn() -> void:
 	if _dyn_enabled:
 		_season_apply()
+		if _season_driver != null:
+			_season_driver.on_world_ready()
 	travel_arrived.emit()
 
 # Late Start (and any mod that saves the world from its own loader-newgame-post
@@ -200,6 +203,7 @@ const MCM_CONFIG := "user://MCM/vostok-toolkit/config.ini"
 const DYNAMIC_SEASON := 3
 
 func _season_new_run(season: int) -> void:
+	_season_restore()
 	_dyn_last_idx = -1
 	_dyn_enabled = false
 	if season != DYNAMIC_SEASON:
@@ -210,6 +214,7 @@ func _season_new_run(season: int) -> void:
 		return
 	_dyn_start_offset = _season_offset_of(str(cfg.season_start))
 	_dyn_cycle_days = cfg.season_cycle_days
+	_dyn_visuals = cfg.season_visuals
 	_dyn_enabled = true
 	_season_meta_write({
 		"dynamic": true,
@@ -226,14 +231,20 @@ func _season_resume() -> void:
 	if m.is_empty():
 		return
 	if not bool(m.get("dynamic", false)):
+		_season_restore()
 		_dyn_enabled = false
 		_dyn_last_idx = -1
 		return
 	_dyn_start_offset = clampi(int(m.get("start_offset", _dyn_start_offset)), 0, SEASONS.SEASONS.size() - 1)
 	_dyn_cycle_days = maxi(1, int(m.get("cycle_days", _dyn_cycle_days)))
+	_dyn_visuals = _season_config().season_visuals
 	_dyn_enabled = true
 	_dyn_last_idx = -1
 	_season_apply()
+
+func _season_restore() -> void:
+	if _season_driver != null:
+		_season_driver.restore()
 
 func _season_apply() -> void:
 	if not _dyn_enabled:
@@ -243,7 +254,7 @@ func _season_apply() -> void:
 	var idx := SEASONS.resolve_index(_season_day(), _dyn_cycle_days, _dyn_start_offset)
 	if idx == _dyn_last_idx:
 		return
-	_season_driver.set_season(idx, true)
+	_season_driver.set_season(idx, true, _dyn_visuals)
 	# Мир может быть ещё не поднят (start до Compiler.Spawn) - драйвер молча
 	# пропустит; тогда отметку не ставим и повторим на compiler-spawn-post.
 	if int(_season_driver._last_index) != idx:

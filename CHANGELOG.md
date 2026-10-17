@@ -4,6 +4,13 @@ All notable changes to Vostok Toolkit are documented here.
 User-facing only: describe the visible effect, not the implementation (no hook names, files or functions).
 Format based on Keep a Changelog; versioning: MAJOR.MINOR.PATCH.
 
+## [5.1.0] - 2026-10-17
+
+### Added
+
+- Spring, summer and autumn now look distinct in a Dynamic run: trees, grass and light are recoloured for each season.
+- MCM setting to turn the seasonal colours on or off.
+
 ## [5.0.1] - 2026-10-17
 
 ### Fixed
