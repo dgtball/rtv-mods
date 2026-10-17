@@ -1369,6 +1369,8 @@ func _on_death_load_pressed() -> void:
 	_on_restart_pressed(VTKData.prop(death, "gameData", null), death, true)
 
 func _resolve_start_season() -> int:
+	if _dyn_enabled:
+		return DYNAMIC_SEASON
 	var sim = get_node_or_null(Paths.SIMULATION)
 	if sim != null:
 		var s = sim.get("season")
