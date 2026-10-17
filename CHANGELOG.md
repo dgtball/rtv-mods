@@ -4,6 +4,16 @@ All notable changes to Vostok Toolkit are documented here.
 User-facing only: describe the visible effect, not the implementation (no hook names, files or functions).
 Format based on Keep a Changelog; versioning: MAJOR.MINOR.PATCH.
 
+## [5.1.1] - 2026-10-17
+
+### Changed
+
+- Seasonal colours now fade in and out smoothly over a few seconds instead of switching instantly.
+
+### Fixed
+
+- A Dynamic run keeps cycling seasons after a death restart instead of turning into a normal run.
+
 ## [5.1.0] - 2026-10-17
 
 ### Added
