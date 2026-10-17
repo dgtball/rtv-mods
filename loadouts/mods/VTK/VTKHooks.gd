@@ -72,11 +72,13 @@ func reset_kills() -> void:
 	_last_damager.clear()
 	_seen_deaths.clear()
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not _registered:
 		_try_register()
 	if _dyn_enabled:
 		_season_apply()
+		if _season_driver != null:
+			_season_driver.tick(delta)
 
 func set_equip_enabled(on: bool) -> void:
 	_equip_on = on
