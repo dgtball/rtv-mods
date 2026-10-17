@@ -65,3 +65,6 @@ static func grass_tint(index: int) -> Color:
 
 static func air_tint(index: int) -> Color:
 	return SEASON_AIR_TINT.get(_name_of(index), Color(1, 1, 1, 1))
+
+static func blend(a: Color, b: Color, t: float) -> Color:
+	return a.lerp(b, clampf(t, 0.0, 1.0))

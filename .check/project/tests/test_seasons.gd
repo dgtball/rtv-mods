@@ -20,6 +20,7 @@ func _init() -> void:
 	t_is_winter()
 	t_uses_tint()
 	t_palettes()
+	t_blend()
 	print("")
 	if fails == 0:
 		print("Seasons tests passed")
@@ -90,3 +91,13 @@ func t_palettes() -> void:
 	ck(S.air_tint(3) == S.SEASON_AIR_TINT["winter"], "air_tint(зима) - из палитры")
 	ck(S.tree_tint(99) == Color(1, 1, 1, 1), "индекс вне диапазона - белый, без падения")
 	ck(S.air_tint(-1) == Color(1, 1, 1, 1), "отрицательный индекс - белый")
+
+
+func t_blend() -> void:
+	var a := Color(0, 0, 0)
+	var b := Color(1, 1, 1)
+	ck(S.blend(a, b, 0.0) == a, "blend t=0 -> a")
+	ck(S.blend(a, b, 1.0) == b, "blend t=1 -> b")
+	ck(S.blend(a, b, -1.0) == a, "blend ниже 0 клампится к a")
+	ck(S.blend(a, b, 2.0) == b, "blend выше 1 клампится к b")
+	ck(S.blend(a, b, 0.5).is_equal_approx(Color(0.5, 0.5, 0.5)), "blend середина")
