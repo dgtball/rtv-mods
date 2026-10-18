@@ -92,7 +92,6 @@ func t_palettes() -> void:
 	ck(S.tree_tint(99) == Color(1, 1, 1, 1), "индекс вне диапазона - белый, без падения")
 	ck(S.air_tint(-1) == Color(1, 1, 1, 1), "отрицательный индекс - белый")
 
-
 func t_blend() -> void:
 	var a := Color(0, 0, 0)
 	var b := Color(1, 1, 1)

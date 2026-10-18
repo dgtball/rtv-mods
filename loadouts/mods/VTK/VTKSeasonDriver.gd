@@ -103,6 +103,7 @@ func _add_fade_mat(list: Array, e: Dictionary, to: Color) -> void:
 func _cancel_fade() -> void:
 	_fade_active = false
 	_fade_t = 0.0
+	_fade_from_index = -1
 	_fade_mats.clear()
 	_fade_airs.clear()
 
@@ -180,9 +181,8 @@ func _restore_foliage() -> void:
 			mat.set_shader_parameter("tint", e["orig"])
 
 # Тон воздуха аддитивный: к исходному цвету карты добавляется отклонение палитры.
-# Исходник хранится метой на объекте, поэтому переживает пересборку драйвера.
-# Воздух: пары from/to считаются от ванильного цвета, снятого метой с объекта,
-# поэтому переживают пересборку драйвера и перезагрузку карты.
+# Пары from/to считаются от ванильного цвета, снятого метой с объекта, поэтому
+# переживают пересборку драйвера и перезагрузку карты.
 func _air_pairs(to_index: int, from_index: int) -> Array:
 	var out: Array = []
 	var world := _find_world()
@@ -216,10 +216,10 @@ func _air_pair(out: Array, obj: Object, prop: String, to_index: int, from_index:
 	})
 
 func _apply_air(index: int) -> void:
-	_air_entries.clear()
-	for a in _air_pairs(index, -1):
+	var pairs := _air_pairs(index, -1)
+	for a in pairs:
 		_set_air_value(a, a["to"])
-		_air_entries.append({"obj": a["obj"], "prop": a["prop"]})
+	_air_entries_clear_and_fill(pairs)
 
 func _set_air_value(a: Dictionary, color: Color) -> void:
 	var obj = a["obj"]
