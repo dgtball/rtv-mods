@@ -8,3 +8,5 @@
 !/standalone mods/
 !/docs/vostokmods/
 /standalone mods/**/*.vmz
+/.check/project/tests/
+/docs/superpowers/
