@@ -24,11 +24,9 @@ var p_thickness := 0.006
 var p_brightness := 0.6
 var p_colors := {
 	"state_normal": States.DEFAULT_NORMAL,
-	"state_alerted": States.DEFAULT_ALERTED,
-	"state_hunting": States.DEFAULT_HUNTING,
 	"state_combat": States.DEFAULT_COMBAT,
+	"state_defend": States.DEFAULT_DEFEND,
 }
-var p_nomad := States.DEFAULT_NOMAD
 
 var _entries: Dictionary = {}
 var _pending: Array = []
@@ -335,7 +333,7 @@ func _opts_for(e: Dictionary, node: Node, dist: float, now: float) -> Dictionary
 	var alpha := Tracker.distance_alpha(dist, p_dist)
 	var nomad := bool(e.get("nomad", false))
 	var cat: int = int(e.get("cat", States.NORMAL))
-	var key: Color = States.KEY_NOMAD if nomad else States.state_key(cat)
+	var key: Color = States.state_key(cat)
 	var foot_y: float = (node as Node3D).global_position.y
 	return {
 		"cat": cat,
@@ -349,16 +347,15 @@ func _opts_for(e: Dictionary, node: Node, dist: float, now: float) -> Dictionary
 		"brightness": p_brightness,
 		"grow": p_thickness,
 		"fill_alpha": p_fill_alpha if p_fill else 0.0,
-		"fill_color": _state_color(cat, nomad),
+		"fill_color": _state_color(cat),
 	}
 
-# The fill tint is the same colour the outline uses: nomad override first,
-# then the per-state colour, falling back to the state default when the
-# colour dictionary has no entry for that key. p_colors/p_nomad are wired from
-# MCM CAT3 in ThermalVTK._mcm_apply, so the fill matches the outline.
-func _state_color(cat: int, nomad: bool) -> Color:
-	if nomad:
-		return p_nomad
+# The fill tint is the same colour the outline uses: the per-category colour,
+# falling back to the category default when the colour dictionary has no entry
+# for that key. p_colors is wired from MCM CAT3 in ThermalVTK._mcm_apply, so the
+# fill matches the outline. Nomads take their category colour too; the separate
+# friendly marker is drawn by the Task 8 diamond, not a colour override here.
+func _state_color(cat: int) -> Color:
 	var key: String = States.category_key(cat)
 	return p_colors.get(key, States.default_color(cat))
 
