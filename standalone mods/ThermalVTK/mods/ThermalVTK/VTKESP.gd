@@ -199,6 +199,13 @@ func _read_state(node: Node) -> int:
 
 func _process(delta: float) -> void:
 	if not enabled and not marker_visible:
+		# Both layers are off: free any lingering markers before parking, or they
+		# would stick until the map reloads (set_enabled's early-return skips the
+		# cleanup when the contour was already disabled).
+		if not _markers.is_empty():
+			for id in _markers.keys():
+				_marker_free(id)
+			_markers.clear()
 		return
 	_weapon.tick()
 	_labels_sync()
@@ -216,7 +223,8 @@ func _process(delta: float) -> void:
 		_dbg_tick(delta, "no player in group Player")
 		return
 	var ppos: Vector3 = ppos_v
-	_draw(ppos)
+	if enabled:
+		_draw(ppos)
 	_dbg_tick(delta, "entries=%d cand=%d keep=%d applied=%d ppos=%.1f,%.1f,%.1f" % [_entries.size(), _dbg_cand, _dbg_keep, _dbg_applied, ppos.x, ppos.y, ppos.z])
 
 func _dbg_tick(delta: float, msg: String) -> void:
@@ -258,6 +266,7 @@ func _labels_sync() -> void:
 			var lbl = _labels[id]
 			if is_instance_valid(lbl):
 				lbl.text = States.label_text(state, bool(e.get("nomad", false)))
+				lbl.visible = enabled
 			_labels_state[id] = state
 	# Drop labels whose entry is gone (deactivate raced the loop above).
 	for id in _labels.keys():
