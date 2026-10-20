@@ -18,13 +18,11 @@ var _key_palette_cycle: int = KEY_F6
 var _thermal_enabled: bool = false
 var _mines_enabled: bool = true
 var _mcm_thermal_seen: int = -1
-var _saved_palette: int = -1
+var _mcm_palette_seen: int = -1
 var _outline_enabled: bool = true
 var _nvg_worn: bool = false
 
 func _ready() -> void:
-	var saved_pal = _read_state("world_palette", null)
-	_saved_palette = int(saved_pal) if saved_pal != null else -1
 	_register_mcm()
 
 func _ensure_nvg() -> void:
@@ -265,10 +263,18 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 	_mines_enabled = bool(_mcm_key_val(cfg, "Bool", "thermal_mines", true))
 	_nvg.set_nvg_noise = float(_mcm_key_val(cfg, "Float", "nvg_noise", 4.0))
 	_nvg.set_nvg_white = float(_mcm_key_val(cfg, "Float", "nvg_white", 1.0))
-	if _saved_palette >= 0:
-		_nvg.set_palette = _saved_palette
+	# Palette: last explicit choice wins. An actual dropdown change beats the
+	# saved state and is written back; a plain reload keeps the saved state (F6
+	# or a previous menu choice) ahead of the MCM value.
+	var mcm_palette: int = _palette_mode_from_cfg(cfg)
+	var pal = _read_state("world_palette", null)
+	var saved_i: int = int(pal) if pal != null else -1
+	if _mcm_palette_seen >= 0 and mcm_palette != _mcm_palette_seen:
+		_nvg.set_palette_mode(mcm_palette)
+		_save_state("world_palette", mcm_palette)
 	else:
-		_nvg.set_palette = _palette_mode_from_cfg(cfg)
+		_nvg.set_palette_mode(saved_i if saved_i >= 0 else mcm_palette)
+	_mcm_palette_seen = mcm_palette
 	_nvg.set_world = float(_mcm_key_val(cfg, "Float", "thermal_world", 1.70))
 	_nvg.set_thermal_enabled(_thermal_enabled)
 	_nvg.set_mines_enabled(_mines_enabled)
@@ -290,6 +296,8 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 			"state_combat": _mcm_color_val(cfg, "state_combat", States.DEFAULT_COMBAT),
 			"nomad_color": _mcm_color_val(cfg, "nomad_color", States.DEFAULT_NOMAD),
 		})
+	# Mines share the ESP outline distance so both ranges track one setting.
+	_nvg.set_glow_distance = _esp.p_dist
 	_outline_enabled = bool(_mcm_key_val(cfg, "Bool", "outline_enabled", true))
 	_apply_mode()
 

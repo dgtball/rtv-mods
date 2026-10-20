@@ -43,11 +43,6 @@ const TICK := 0.1
 # shader's mineKey uniform and the unshaded overlay material that emits it.
 const MINE_KEY := Color(0.0, 0.0, 1.0)
 
-# Mines read as scenery past this range. The MCM Distance setting is gone
-# together with bot painting; 45 m was its default and stays the mine glow
-# range so removing the knob does not change how the game plays.
-const MINE_GLOW_RANGE := 45.0
-
 # Detection target, NOT the emitted key. The vanilla NVG WorldEnvironment
 # (glow + tonemap) desaturates the unshaded key colour toward white BEFORE the
 # frame reaches our screen shader, so matching the raw key always misses.
@@ -75,6 +70,8 @@ var set_nvg_noise: float = 4.0
 var set_nvg_white: float = 1.0
 var set_thermal: bool = false
 var set_mines: bool = true
+# Mirrors the MCM outline distance; gates mine glow (and, before the ESP took over, bot glow).
+var set_glow_distance: float = 150.0
 var set_palette: int = 0
 var set_world: float = 1.70
 var set_outline_brightness: float = 0.6
@@ -521,10 +518,10 @@ func _update_mine(id: int, thermal_on: bool, ppos: Vector3) -> void:
 	if not is_instance_valid(e["node"]):
 		_mines.erase(id)
 		return
-	# Mines read as scenery past the glow range.
+	# Mines read as scenery past the shared outline distance.
 	var node = e["node"]
 	var dist := ppos.distance_to(node.global_position)
-	var show := thermal_on and set_mines and dist <= MINE_GLOW_RANGE
+	var show := thermal_on and set_mines and dist <= maxf(set_glow_distance, 1.0)
 	for mesh in e["meshes"]:
 		if is_instance_valid(mesh):
 			mesh.material_override = _mat_mine if show else null
