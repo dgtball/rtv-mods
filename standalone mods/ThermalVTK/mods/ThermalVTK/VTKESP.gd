@@ -294,6 +294,10 @@ func _draw(ppos: Vector3) -> void:
 		if node == null or not is_instance_valid(node) or not node.is_inside_tree():
 			continue
 		valid[id] = true
+		# Mark death from the node itself when the ai-death-post hook missed:
+		# the hook is unreliable in game, and without this the corpse never cools.
+		if not bool(e.get("dead", false)) and bool(node.get("dead")):
+			Tracker.mark_dead(e, now)
 		var pos: Vector3 = (node as Node3D).global_position
 		var dist := ppos.distance_to(pos)
 		if dist > p_dist and not e.get("dead", false):
