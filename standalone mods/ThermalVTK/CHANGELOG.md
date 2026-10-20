@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0] - 2026-10-20
+
+### Added
+- A Fill opacity slider for the NPC body fill; the body now fills with the NPC's state colour.
+
+### Changed
+- F6 now cycles the world thermal palette instead of switching thermal modes.
+
+### Removed
+- The separate FULL thermal mode; contour is now the only mode.
+- The Bot colour, Distance and Spotted flash settings.
+
 ## [1.5.0] - 2026-10-20
 
 ### Added
