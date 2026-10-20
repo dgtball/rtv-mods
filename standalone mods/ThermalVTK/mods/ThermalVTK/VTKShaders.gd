@@ -9,8 +9,7 @@ const RING_SRC := preload("res://mods/ThermalVTK/VTKOutlineRing.gdshader")
 
 static var _body_wall: Shader = null
 static var _body_los: Shader = null
-static var _ring_wall: Shader = null
-static var _ring_los: Shader = null
+static var _ring_cache: Dictionary = {}
 
 static func strip_depth_test(code: String) -> String:
 	return code.replace("depth_test_disabled, ", "")
@@ -22,15 +21,25 @@ static func _ensure() -> void:
 	var los_body := Shader.new()
 	los_body.code = strip_depth_test(BODY_SRC.code)
 	_body_los = los_body
-	_ring_wall = RING_SRC
-	var los_ring := Shader.new()
-	los_ring.code = strip_depth_test(RING_SRC.code)
-	_ring_los = los_ring
 
 static func body(through_walls: bool) -> Shader:
 	_ensure()
 	return _body_wall if through_walls else _body_los
 
-static func ring(through_walls: bool) -> Shader:
+static func _with_cull(code: String, front_faces: bool) -> String:
+	if not front_faces:
+		return code
+	return code.replace("cull_back", "cull_front")
+
+static func ring(through_walls: bool, front_faces: bool) -> Shader:
 	_ensure()
-	return _ring_wall if through_walls else _ring_los
+	var key := "%s_%s" % [str(through_walls), str(front_faces)]
+	if _ring_cache.has(key):
+		return _ring_cache[key]
+	var variant := Shader.new()
+	var code := _with_cull(RING_SRC.code, front_faces)
+	if not through_walls:
+		code = strip_depth_test(code)
+	variant.code = code
+	_ring_cache[key] = variant
+	return variant
