@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.7.0] - 2026-10-20
+
+### Added
+- Friendly nomads now show a green diamond marker above them when thermal vision and the night-vision helmet are both on.
+- A new "Outline style" setting: the cleaner front-face silhouette (default) or the older back-face look.
+- A new "Fill style" setting: a flat state colour (default) or a warm-to-cold thermal gradient fill.
+
+### Changed
+- NPC colours are now three categories instead of four: Normal / idle, In combat, and Defending. The old "Alerted" and "Hunting" colours were merged into these, so any colours saved for them are dropped.
+- The contour outline now draws a neater silhouette that hugs the body instead of the older inflated look.
+- The default outline range is now 60 m so the view is less cluttered; it is still adjustable.
+- Debug state labels now appear whenever the debug log is on, even with thermal vision off.
+
+### Fixed
+- The "Corpse cooling time" setting now takes effect: a dead NPC's outline cools from warm to cold over the configured time.
+
 ## [1.6.1] - 2026-10-20
 
 ### Fixed
