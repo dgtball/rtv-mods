@@ -31,20 +31,6 @@ const NVG_SCRIPT_SUFFIX := "NVG.gd"
 const SHADER_RES := "res://mods/ThermalVTK/VTKNVG.gdshader"
 const BOT_SHADER_RES := "res://mods/ThermalVTK/VTKBot.gdshader"
 
-# Friendly Nomad marker: a mesh ▼ floating over the head, shown only while
-# thermal is on. It carries a real key material -- the same unshaded + emission
-# setup as the mine overlay -- rather than a font glyph, because a Label3D
-# renders its glyph through the font atlas and never lands on the pure key
-# colour, so the screen shader would palettise it like any scenery. The key is
-# green, kept clear of the magenta/cyan bot keys and only accepted under a
-# tight tolerance, so ordinary green foliage cannot trip it.
-const MARKER_NAME := "VTK_NomadMarker"
-const MARKER_KEY := Color(0.0, 1.0, 0.0)
-# World height tracks distance so the ▼ keeps a steady on-screen size; the floor
-# keeps a Nomad standing right beside the player from shrinking away to nothing.
-const MARKER_SCREEN_SCALE := 0.035
-const MARKER_MIN_SCALE := 0.3
-
 # Bot heat: three detector keys emitted by VTKBot.gdshader, chosen by a pixel's
 # height on the body (feet warm, head cold) so a corpse reads as cooling from
 # the extremities inward. A living bot emits warm everywhere; as DEATH_COOLDOWN
@@ -78,7 +64,20 @@ const DET_WARM := Color(0.94, 0.69, 0.94)
 const DET_MID := Color(0.94, 0.94, 0.88)
 const DET_COLD := Color(0.88, 0.94, 0.94)
 const DET_MINE := Color(0.50, 0.06, 0.94)
-const DET_MARKER := Color(0.82, 0.96, 0.82)
+
+# Contour state keys (emitted by VTKStates.KEY_*; these are the measured post-NVG
+# values from the F7 ring probe). The unshaded ring is thin, so its on-screen
+# colour is the key blended with the background by glow/tonemap -- matching the
+# raw keys misses. Probe averages (motion-gated, 3 runs): normal (1,0,0)->
+# (1.00,0.21,0.16), alerted (1,1,0)->(1.00,0.97,0.46), hunting (1,0,1)->
+# (1.00,0.34,1.00), combat (0,1,1)->(0.82,1.00,1.00), nomad (0,1,0)->
+# (0.77,1.00,0.53). The ring still EMITS the raw keys; only the detector
+# compares against these.
+const DET_ST_NORMAL := Color(1.00, 0.21, 0.16)
+const DET_ST_ALERTED := Color(1.00, 0.97, 0.46)
+const DET_ST_HUNTING := Color(1.00, 0.34, 1.00)
+const DET_ST_COMBAT := Color(0.82, 1.00, 1.00)
+const DET_ST_NOMAD := Color(0.77, 1.00, 0.53)
 
 # Bot glow substitution colours, per preset: [warm, mid, cold]. These never
 # reach the detector -- the keys in BOT_WARM_KEY/BOT_MID_KEY/BOT_COLD_KEY are
@@ -101,15 +100,18 @@ var set_mines: bool = true
 var set_palette: int = 0
 var set_world: float = 1.70
 var set_bot_preset: int = 0
+var set_outline_brightness: float = 0.6
+var _state_colors: Dictionary = {}
 # Glow range: bots and mines only glow within this distance (MCM "Glow range").
 # Past it they read as ordinary scenery, the way real optics lose a signature.
 var set_far_distance: float = 45.0
-# Friendly Nomads show a floating ▼ marker on top of their (warm) body glow.
-var set_mark_nomads: bool = true
-# In winter (gameData.season == 2) snow blows the thermal image out, so world
-# visibility is scaled down by set_winter_dim. See _apply_uniforms.
-var set_winter_auto: bool = true
-var set_winter_dim: float = 0.55
+# Full-thermal mode flag (mode B). On: the NVG screen runs the world palette and
+# bots carry the detector keys it reads. Off (mode A / contour): the world
+# palette still runs, bots are not keyed, and the contour ESP emits state keys
+# whose colours the overlay substitutes after the palette. (bot_paint gates the
+# bot keys only, not the palette.)
+var bot_paint: bool = true
+var _bots_painted: bool = false
 var _game_data: Resource = null
 var _shader: Shader = null
 var _nvg_root: Node = null
@@ -118,8 +120,6 @@ var _installed: bool = false
 var _install_retry: int = 0
 
 var _mat_mine: StandardMaterial3D = null
-var _mat_marker: StandardMaterial3D = null
-var _marker_mesh: Mesh = null
 # Shared bot body shader; each bot gets its own ShaderMaterial instance off it,
 # because "cool" and "footY" are per-bot uniforms (VTKBot.gdshader).
 var _bot_shader: Shader = null
@@ -134,6 +134,19 @@ var _scene_ref: Node = null
 var _paint_on: bool = false
 # прошлое значение on, нужно ровно для перехода on->off (снять покраску один раз).
 var _was_on: bool = false
+# TEMP CALIBRATION (Task 6): raw-screen passthrough for the ring probe.
+var _debug_raw: bool = false
+# PIP off + magnifying scope rotates colour channels, so the overlay detector
+# matches a key's orbit; pushed only on change (see _process).
+var _scope_rotate: bool = false
+
+
+func set_debug_raw(v: bool) -> void:
+	_debug_raw = v
+	if _installed and _nvg_mat_node != null and is_instance_valid(_nvg_mat_node):
+		var m = _nvg_mat_node.get("material")
+		if m is ShaderMaterial:
+			(m as ShaderMaterial).set_shader_parameter("debugRaw", _debug_raw)
 
 
 func _ready() -> void:
@@ -152,19 +165,10 @@ func _ready() -> void:
 	if ResourceLoader.exists(BOT_SHADER_RES):
 		_bot_shader = load(BOT_SHADER_RES) as Shader
 
-	# Key materials emit the detector pixels. Mines and the Nomad marker use a
-	# plain unshaded+emission StandardMaterial3D; bots use VTKBot.gdshader (per
-	# bot), which emits warm/mid/cold by pixel height. The marker material is a
-	# real key material too -- the Label3D route produced a font glyph that never
-	# landed on the pure key, so it got palettised; a mesh with the same
-	# unshaded+emission setup does not.
+	# Key materials emit the detector pixels. Mines use a plain
+	# unshaded+emission StandardMaterial3D; bots use VTKBot.gdshader (per
+	# bot), which emits warm/mid/cold by pixel height.
 	_mat_mine = _key_material(MINE_KEY)
-	_mat_marker = _key_material(MARKER_KEY)
-	_mat_marker.no_depth_test = true
-	_mat_marker.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	_mat_marker.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_mat_marker.render_priority = 10
-	_marker_mesh = _make_marker_mesh()
 
 	get_tree().node_added.connect(_on_node_added)
 	# The game rewrites a bot's body material during its own update (seasonal
@@ -179,17 +183,6 @@ func _ready() -> void:
 
 # A single downward-pointing triangle reads as ▼. Billboarded via the material,
 # so the exact winding does not matter (cull is disabled anyway).
-func _make_marker_mesh() -> Mesh:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	st.add_vertex(Vector3(-0.5, 0.4, 0.0))
-	st.add_vertex(Vector3(0.5, 0.4, 0.0))
-	st.add_vertex(Vector3(0.0, -0.5, 0.0))
-	return st.commit()
-
-
-# node_added only ever reports nodes created after we connected, so anything
-# already in the scene when this node comes up has to be swept manually.
 func _reseed(scene: Node) -> void:
 	if scene == null:
 		return
@@ -322,7 +315,6 @@ func _apply_uniforms() -> void:
 	# Kept ahead of the _installed check on purpose -- if this were gated on the
 	# shader being live, the two sides could desync during startup.
 	_key_set(_mat_mine, MINE_KEY)
-	_key_set(_mat_marker, MARKER_KEY)
 	if not _installed or _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
 		return
 	var nvg_mat = _nvg_mat_node.get("material")
@@ -330,37 +322,42 @@ func _apply_uniforms() -> void:
 		return
 	nvg_mat.set_shader_parameter("noise", set_nvg_noise)
 	nvg_mat.set_shader_parameter("thermalMode", set_thermal and _nvg_active())
-	# Winter snow reads near-white, so the whole frame pins to the top of the
-	# palette and everything vanishes. Scaling the world darkening down pulls
-	# the snow back into the readable mid-range.
-	var darken := set_world
-	if _is_winter():
-		darken *= set_winter_dim
-	nvg_mat.set_shader_parameter("thermalDarken", darken)
+	nvg_mat.set_shader_parameter("thermalDarken", set_world)
 	nvg_mat.set_shader_parameter("worldPaletteMode", set_palette)
-	nvg_mat.set_shader_parameter("markNomads", set_mark_nomads)
 	nvg_mat.set_shader_parameter("nvgWhite", set_nvg_white)
 	nvg_mat.set_shader_parameter("warmKey", DET_WARM)
 	nvg_mat.set_shader_parameter("midKey", DET_MID)
 	nvg_mat.set_shader_parameter("coldKey", DET_COLD)
 	nvg_mat.set_shader_parameter("mineKey", DET_MINE)
-	nvg_mat.set_shader_parameter("markerKey", DET_MARKER)
+	nvg_mat.set_shader_parameter("stNormalKey", DET_ST_NORMAL)
+	nvg_mat.set_shader_parameter("stAlertedKey", DET_ST_ALERTED)
+	nvg_mat.set_shader_parameter("stHuntingKey", DET_ST_HUNTING)
+	nvg_mat.set_shader_parameter("stCombatKey", DET_ST_COMBAT)
+	nvg_mat.set_shader_parameter("stNomadKey", DET_ST_NOMAD)
+	nvg_mat.set_shader_parameter("stNormalColor", _state_colors.get("state_normal", Color(1.0, 0.72, 0.28)))
+	nvg_mat.set_shader_parameter("stAlertedColor", _state_colors.get("state_alerted", Color(1.0, 0.9, 0.25)))
+	nvg_mat.set_shader_parameter("stHuntingColor", _state_colors.get("state_hunting", Color(1.0, 0.5, 0.1)))
+	nvg_mat.set_shader_parameter("stCombatColor", _state_colors.get("state_combat", Color(0.95, 0.18, 0.15)))
+	nvg_mat.set_shader_parameter("stNomadColor", _state_colors.get("nomad_color", Color(0.30, 1.0, 0.35)))
+	nvg_mat.set_shader_parameter("stateBright", set_outline_brightness)
+	nvg_mat.set_shader_parameter("debugRaw", _debug_raw)
+	nvg_mat.set_shader_parameter("scopeRotate", _scope_rotate)
 	var p: Array = BOT_PRESETS[clampi(set_bot_preset, 0, BOT_PRESETS.size() - 1)]
 	nvg_mat.set_shader_parameter("warmColor", p[0])
 	nvg_mat.set_shader_parameter("midColor", p[1])
 	nvg_mat.set_shader_parameter("coldColor", p[2])
 
 
-# gameData.season == 2 is winter (default 1). Gated on the setting so the
-# dimming is a no-op when the player turns it off.
-func _is_winter() -> bool:
-	return set_winter_auto and _game_data != null and int(_game_data.get("season")) == 2
-
-
 func _nvg_active() -> bool:
 	if _game_data == null or not _game_data.has_method("get"):
 		return false
 	return bool(_game_data.get("NVG"))
+
+
+# Public read for the coordinator (ThermalVTK), which gates the contour ESP on
+# the vanilla NVG being worn. See ThermalVTK._process.
+func nvg_active() -> bool:
+	return _nvg_active()
 
 
 func _process(delta: float) -> void:
@@ -384,6 +381,22 @@ func _process(delta: float) -> void:
 		if _installed:
 			_install_retry = 0
 	var on := set_thermal and _nvg_active()
+	# PIP off + aiming a magnifying scope is the only path that rotates colour
+	# channels; flag the overlay then so it matches whole key orbits. Cache and
+	# push on change only: _apply_uniforms is not called per frame.
+	var want := false
+	if _game_data != null and _game_data.has_method("get"):
+		want = bool(_game_data.get("isScoped"))
+		if want:
+			var pip = _game_data.get("PIP")
+			if pip == null or bool(pip):
+				want = false
+	if want != _scope_rotate:
+		_scope_rotate = want
+		if _installed and _nvg_mat_node != null and is_instance_valid(_nvg_mat_node):
+			var sm = _nvg_mat_node.get("material")
+			if sm is ShaderMaterial:
+				(sm as ShaderMaterial).set_shader_parameter("scopeRotate", _scope_rotate)
 	# Позиция игрока — один вызов на кадр, а не по два на каждого бота
 	# (_update_bot звал её дважды: для маркера и для дистанции покраски).
 	var ppos := _player_pos()
@@ -393,8 +406,13 @@ func _process(delta: float) -> void:
 		# below runs the world scan, but if painting waited for it, a quick NVG
 		# toggle left bots a frame behind on the flash of raw key pixels.
 		_paint_on = false
-		for id in _bots.keys():
-			_update_bot(id, true, ppos)
+		if bot_paint:
+			for id in _bots.keys():
+				_update_bot(id, true, ppos)
+			_bots_painted = true
+		elif _bots_painted:
+			_clear_bot_paint()
+			_bots_painted = false
 		for id in _mines.keys():
 			_update_mine(id, true, ppos)
 	elif _was_on or _paint_on:
@@ -402,6 +420,7 @@ func _process(delta: float) -> void:
 		# и их меши кадр не обходит вовсе.
 		_clear_paint()
 		_paint_on = false
+		_bots_painted = false
 	_was_on = on
 
 	if not on:
@@ -458,8 +477,7 @@ func _sweep_bot_meshes(node: Node) -> Array:
 	_collect_meshes(node, all)
 	var out: Array = []
 	for m in all:
-		# Skip the friendly ▼ we add ourselves; it carries its own key material.
-		if is_instance_valid(m) and String(m.name) != MARKER_NAME:
+		if is_instance_valid(m):
 			out.append(m)
 	return out
 
@@ -507,14 +525,6 @@ func _update_bot(id: int, thermal_on: bool, ppos: Vector3) -> void:
 	if e["recorded"]:
 		secs = now - float(e["death"])
 	var recorded: bool = e["recorded"]
-
-	# A friendly Nomad gets a floating ▼ on top of its body glow, but only inside
-	# the same glow range as the body -- otherwise it reads through the whole map.
-	var mark := false
-	if friendly and not recorded:
-		mark = thermal_on and set_mark_nomads \
-			and ppos.distance_to(node.global_position) <= maxf(set_far_distance, 1.0)
-	_update_nomad_marker(node, mark, ppos)
 
 	# Геометрия бота меняется, когда игра добавляет/убирает LOD и gear-меши.
 	# Полный свип каждый кадр был расточителен; пере-собираем только когда число
@@ -584,8 +594,7 @@ func _off_frame_upkeep() -> void:
 
 
 # Снимает покраску на переходе on->off ровно один раз: material_override в null
-# на все меши ботов и мин, маркеры Nomad скрыты. Дальше кадр при off ботов и
-# мешей не обходит вовсе.
+# на все меши ботов и мин. Дальше кадр при off ботов и мешей не обходит вовсе.
 func _clear_paint() -> void:
 	for id in _bots.keys():
 		var e = _bots.get(id)
@@ -596,9 +605,6 @@ func _clear_paint() -> void:
 				(m as GeometryInstance3D).material_override = null
 		e["painted"] = false
 		e["paint"] = null
-		var node = e.get("node")
-		if node != null and is_instance_valid(node):
-			_update_nomad_marker(node, false, Vector3.ZERO)
 	for id in _mines.keys():
 		var e = _mines.get(id)
 		if e == null:
@@ -606,6 +612,31 @@ func _clear_paint() -> void:
 		for m in e.get("meshes", []):
 			if is_instance_valid(m):
 				(m as GeometryInstance3D).material_override = null
+
+
+func _clear_bot_paint() -> void:
+	for id in _bots.keys():
+		var e = _bots.get(id)
+		if e == null:
+			continue
+		for m in e.get("meshes", []):
+			if is_instance_valid(m):
+				(m as GeometryInstance3D).material_override = null
+		e["painted"] = false
+		e["paint"] = null
+
+
+func set_bot_paint(on: bool) -> void:
+	if bot_paint == on:
+		return
+	bot_paint = on
+	# bot_paint gates the bot keys (not the world palette), so push it through
+	# immediately instead of waiting for the next TICK.
+	_apply_uniforms()
+	_tick_cd = 0.0
+	if not on and _bots_painted:
+		_clear_bot_paint()
+		_bots_painted = false
 
 
 # Last write before the frame is drawn, after every node has processed. Re-assert
@@ -621,6 +652,8 @@ func _frame_pre_draw() -> void:
 		var e = _bots.get(id)
 		if e == null:
 			continue
+		if not bot_paint:
+			continue
 		var node = e.get("node")
 		if node == null or not is_instance_valid(node):
 			continue
@@ -632,30 +665,6 @@ func _frame_pre_draw() -> void:
 			if g.material_override == paint:
 				continue
 			g.material_override = paint
-
-
-# Lazily builds the marker on the bot itself (looked up by name, not via the
-# bookkeeping dict) so a dropped-and-recreated entry can never orphan the mesh.
-# The ▼ is a real key mesh, billboarded and depth-test-free, so the screen
-# shader substitutes it to markerColor instead of palettising it.
-func _update_nomad_marker(node: Node, show_marker: bool, ppos: Vector3) -> void:
-	var marker := node.get_node_or_null(MARKER_NAME) as MeshInstance3D
-	if not show_marker:
-		if marker != null:
-			marker.visible = false
-		return
-	if marker == null:
-		marker = MeshInstance3D.new()
-		marker.name = MARKER_NAME
-		marker.mesh = _marker_mesh
-		marker.material_override = _mat_marker
-		marker.position = Vector3(0.0, 2.2, 0.0)
-		node.add_child(marker)
-	# Scale with distance so the ▼ keeps a steady on-screen size, with a floor so
-	# a Nomad standing right beside the player does not shrink away.
-	var dist := ppos.distance_to(node.global_position)
-	marker.scale = Vector3.ONE * maxf(dist * MARKER_SCREEN_SCALE, MARKER_MIN_SCALE)
-	marker.visible = true
 
 
 func _player_pos() -> Vector3:
@@ -737,3 +746,8 @@ func set_thermal_enabled(on: bool) -> void:
 func set_mines_enabled(on: bool) -> void:
 	set_mines = on
 	_tick_cd = 0.0
+
+
+func set_state_colors(colors: Dictionary) -> void:
+	_state_colors = colors
+	_apply_uniforms()

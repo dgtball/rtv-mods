@@ -1,5 +1,51 @@
 # Changelog
 
+## [1.5.0] - 2026-10-20
+
+### Added
+- In the debug log mode, every NPC now shows its AI state and the colour category the mod assigned, so the state dictionary can be checked while playing.
+
+### Fixed
+- The contour outline no longer disappears or changes colour when aiming a magnifying scope while the game's scope rendering is off.
+
+## [1.4.0] - 2026-10-19
+
+### Changed
+- Contour ESP now only shows while the night-vision helmet is worn.
+- In contour mode the world is shown as plain night vision, so the outlines no longer get washed out by the surrounding heat colours. Mines stay highlighted.
+- The world no longer dims in winter.
+
+### Fixed
+- Toggling thermal vision off and on again no longer permanently removes the outlines of NPCs that are already in the scene.
+
+## [1.3.1] - 2026-10-19
+
+### Fixed
+- Contour mode: your weapon now draws in front of the NPC outlines instead of being covered by them.
+- The diagnostic log no longer writes the same message every frame, so it stays readable.
+
+## [1.3.0] - 2026-10-19
+
+### Added
+- "Debug log" option under Diagnostics: writes a diagnostic log of the contour ESP to a file, for troubleshooting.
+
+## [1.2.1] - 2026-10-19
+
+### Fixed
+- Contour ESP now actually draws: NPC outlines, body fill and the visibility flash were invisible because no NPC geometry matched the collector.
+
+## [1.2.0] - 2026-10-18
+
+### Added
+- Contour ESP: NPCs get a coloured outline by their awareness state (idle, alerted, hunting, in combat), with friendly nomads always green.
+- Body fill inside the outline: a warm-to-cold thermal gradient, cooling over a configurable time after death.
+- Spotted flash: the body flashes when an NPC's own sensors see you.
+- F6 switches between the contour view and the full-screen thermal view while NVG is worn.
+- New settings for the contour: on/off, body fill, corpse cooling time, outline thickness, brightness, spotted flash and flash colour, per-state colours, outline range and see-through-walls range.
+
+### Changed
+- The floating marker over friendly Nomads is replaced by the green outline.
+
 ## [1.1.0] - 2026-10-15
 
 ### Added

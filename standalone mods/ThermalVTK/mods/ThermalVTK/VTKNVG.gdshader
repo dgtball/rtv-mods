@@ -22,6 +22,11 @@ uniform float goggleAspect : hint_range(0.0, 2.0, 0.1) = 1.6;
 uniform float goggleOutline : hint_range(0.0, 0.1, 0.01) = 0.05;
 
 uniform bool thermalMode = false;
+// TEMP CALIBRATION: output the raw NVG-processed screen untouched (no palette,
+// no tint). The ring probe diffs a frame with the ESP on against one with it
+// off to read the washed ring colour. Remove after Task 6.
+uniform bool debugRaw = false;
+uniform bool scopeRotate = false;
 uniform float thermalDarken : hint_range(1.0, 4.0, 0.01) = 1.70;
 uniform int worldPaletteMode = 0;
 uniform bool markNomads = false;
@@ -47,6 +52,22 @@ uniform vec3 warmColor : source_color = vec3(0.6, 0.48, 0.09);
 uniform vec3 midColor : source_color = vec3(0.55, 0.45, 0.28);
 uniform vec3 coldColor : source_color = vec3(0.28, 0.3, 0.4);
 
+// Contour ESP state keys. The ring emits these fixed colours; the frame is
+// NVG-processed before this shader sees it, so the *Key uniforms hold the
+// measured post-NVG (washed) values (see VTKNVG.gd DET_ST_*). The *Color
+// uniforms are the per-state display colours, substituted AFTER the palette.
+uniform vec3 stNormalKey : source_color = vec3(1.0, 0.0, 0.0);
+uniform vec3 stAlertedKey : source_color = vec3(1.0, 1.0, 0.0);
+uniform vec3 stHuntingKey : source_color = vec3(1.0, 0.0, 1.0);
+uniform vec3 stCombatKey : source_color = vec3(0.0, 1.0, 1.0);
+uniform vec3 stNomadKey : source_color = vec3(0.0, 1.0, 0.0);
+uniform vec3 stNormalColor : source_color = vec3(1.0, 0.72, 0.28);
+uniform vec3 stAlertedColor : source_color = vec3(1.0, 0.9, 0.25);
+uniform vec3 stHuntingColor : source_color = vec3(1.0, 0.5, 0.1);
+uniform vec3 stCombatColor : source_color = vec3(0.95, 0.18, 0.15);
+uniform vec3 stNomadColor : source_color = vec3(0.30, 1.0, 0.35);
+uniform float stateBright : hint_range(0.1, 3.0, 0.05) = 0.6;
+
 uniform vec3 mineColor : source_color = vec3(0.7, 0.1, 0.07);
 uniform vec3 markerColor : source_color = vec3(0.2, 1.0, 0.2);
 
@@ -59,6 +80,7 @@ float Goggles(vec2 uv)
 	return min(G1Distance, G2Distance);
 }
 
+// 0 = Classic (else), 1 = Amber, 2 = Forest, 3 = Ice.
 vec3 ThermalPalette(float t)
 {
 	t = clamp(t, 0.0, 1.0);
@@ -68,31 +90,18 @@ vec3 ThermalPalette(float t)
 	vec3 c3;
 	vec3 c4;
 	if (worldPaletteMode == 1) {
-		c0 = vec3(0.0, 0.0, 0.0);
-		c1 = vec3(0.25, 0.25, 0.25);
-		c2 = vec3(0.5, 0.5, 0.5);
-		c3 = vec3(0.75, 0.75, 0.75);
-		c4 = vec3(1.0, 1.0, 1.0);
-	} else if (worldPaletteMode == 2) {
-		t = pow(t, 0.4);
-		c0 = vec3(0.7, 0.7, 0.7);
-		c1 = vec3(0.55, 0.55, 0.55);
-		c2 = vec3(0.4, 0.4, 0.4);
-		c3 = vec3(0.2, 0.2, 0.2);
-		c4 = vec3(0.0, 0.0, 0.0);
-	} else if (worldPaletteMode == 3) {
 		c0 = vec3(0.02, 0.01, 0.0);
 		c1 = vec3(0.25, 0.12, 0.02);
 		c2 = vec3(0.55, 0.30, 0.05);
 		c3 = vec3(0.80, 0.58, 0.18);
 		c4 = vec3(1.0, 0.92, 0.70);
-	} else if (worldPaletteMode == 4) {
+	} else if (worldPaletteMode == 2) {
 		c0 = vec3(0.0, 0.02, 0.02);
 		c1 = vec3(0.05, 0.18, 0.12);
 		c2 = vec3(0.10, 0.38, 0.22);
 		c3 = vec3(0.35, 0.62, 0.30);
 		c4 = vec3(0.80, 0.95, 0.65);
-	} else if (worldPaletteMode == 5) {
+	} else if (worldPaletteMode == 3) {
 		c0 = vec3(0.0, 0.01, 0.04);
 		c1 = vec3(0.05, 0.12, 0.35);
 		c2 = vec3(0.10, 0.30, 0.60);
@@ -112,6 +121,20 @@ vec3 ThermalPalette(float t)
 	return color;
 }
 
+// PIP off + magnifying scope: the lens path rotates colour channels on screen,
+// so a key shows up as its three cyclic rotations. Match the orbit when that can
+// happen, plain distance otherwise (zero change off-scope / PIP on).
+float orbitDist(vec3 c, vec3 k)
+{
+	if (!scopeRotate) {
+		return distance(c, k);
+	}
+	float d = distance(c, k);
+	d = min(d, distance(c, k.brg));
+	d = min(d, distance(c, k.gbr));
+	return d;
+}
+
 void fragment()
 {
 	vec4 pixelColor = texture(screen_texture, SCREEN_UV);
@@ -126,11 +149,16 @@ void fragment()
 		// Pick whichever key is CLOSEST: with a wide tolerance two keys'
 		// ranges can overlap on a single pixel, and an if/elif chain would
 		// let an earlier check steal matches that belong to a later key.
-		float dWarm = distance(pixelColor.rgb, warmKey);
-		float dMid = distance(pixelColor.rgb, midKey);
-		float dCold = distance(pixelColor.rgb, coldKey);
-		float dMine = distance(pixelColor.rgb, mineKey);
-		float dMark = distance(pixelColor.rgb, markerKey);
+		float dWarm = orbitDist(pixelColor.rgb, warmKey);
+		float dMid = orbitDist(pixelColor.rgb, midKey);
+		float dCold = orbitDist(pixelColor.rgb, coldKey);
+		float dMine = orbitDist(pixelColor.rgb, mineKey);
+		float dMark = orbitDist(pixelColor.rgb, markerKey);
+		float dStN = orbitDist(pixelColor.rgb, stNormalKey);
+		float dStA = orbitDist(pixelColor.rgb, stAlertedKey);
+		float dStH = orbitDist(pixelColor.rgb, stHuntingKey);
+		float dStC = orbitDist(pixelColor.rgb, stCombatKey);
+		float dStNomad = orbitDist(pixelColor.rgb, stNomadKey);
 		// The Nomad marker key is very tight and only live while marking is on;
 		// a loose match here would steal ordinary green foliage.
 		if (!markNomads || dMark > 0.15) {
@@ -138,6 +166,7 @@ void fragment()
 		}
 		float minD = min(min(dWarm, dMid), min(dCold, dMine));
 		minD = min(minD, dMark);
+		minD = min(minD, min(min(dStN, dStA), min(min(dStH, dStC), dStNomad)));
 
 		{
 			float rawLuminance = dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114));
@@ -149,6 +178,16 @@ void fragment()
 					subColor = mineColor;
 				} else if (minD == dMark) {
 					subColor = markerColor;
+				} else if (minD == dStN) {
+					subColor = stNormalColor * stateBright;
+				} else if (minD == dStA) {
+					subColor = stAlertedColor * stateBright;
+				} else if (minD == dStH) {
+					subColor = stHuntingColor * stateBright;
+				} else if (minD == dStC) {
+					subColor = stCombatColor * stateBright;
+				} else if (minD == dStNomad) {
+					subColor = stNomadColor * stateBright;
 				} else {
 				// Bot heat: the key says WHERE on the cooling ladder the
 				// pixel sits, the preset says what that reads as. Only the
@@ -166,9 +205,22 @@ void fragment()
 		}
 	} else {
 		color = pixelColor * tint;
+		// Contour mode: no world palette, but mine keys are still painted onto
+		// mines (bots deliberately are not -- the contour ESP draws them), so
+		// keep mines readable here instead of letting them read as a plain
+		// tinted shell.
+		if (orbitDist(pixelColor.rgb, mineKey) < 0.15) {
+			color = vec4(mineColor, pixelColor.a);
+		}
 	}
 	color.rgb *= nvgWhite;
 	color += noiseEffect;
 	color.rgb *= (1.0 + goggleOutlines);
-	COLOR = mix(vec4(0.0, 0.0, 0.0, 1.0), color, goggleMask);
+	// TEMP CALIBRATION: debugRaw outputs the untouched NVG-processed frame so
+	// the ring probe can diff it against the ESP-off frame. Remove after Task 6.
+	if (debugRaw) {
+		COLOR = pixelColor;
+	} else {
+		COLOR = mix(vec4(0.0, 0.0, 0.0, 1.0), color, goggleMask);
+	}
 }

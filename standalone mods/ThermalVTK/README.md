@@ -1,6 +1,6 @@
 # ThermalVTK
 
-**Version:** 1.1.0
+**Version:** 1.5.0
 
 Standalone NVG / thermal-vision mod for Road to Vostok. It is the thermal
 feature of Vostok Toolkit, packaged on its own.
@@ -12,9 +12,15 @@ feature of Vostok Toolkit, packaged on its own.
 
 - Replaces the vanilla NVG overlay shader with an adjustable one (noise,
   brightness).
-- Adds a thermal layer on top of NVG: bounty bots glow with a heat signature
-  that cools after death, mines light up, and friendly Nomads get a floating
-  marker.
+- Two modes while NVG is worn: **Contour** (default) and **Full thermal**,
+  switched with F6.
+- Contour mode draws a coloured outline over NPCs by their awareness state
+  (idle, alerted, hunting, in combat), with friendly Nomads always green. The
+  body can be filled with a warm-to-cold gradient that cools after death, and
+  flashes when an NPC's own sensors see you. Outlines fade with distance and can
+  show through walls within a configurable range.
+- Full thermal mode is the classic look: bounty bots glow with a heat signature
+  that cools after death, mines light up.
 - World palettes, bot colour presets, glow distance, and winter auto-dimming.
 - A hotkey to turn the thermal layer on and off, with an on-screen
   notification.
