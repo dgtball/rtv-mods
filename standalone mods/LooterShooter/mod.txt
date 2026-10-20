@@ -10,6 +10,9 @@ LSH="res://mods/LooterShooter/LSHBoot.gd"
 res://Scripts/LootContainer.gd = CreateLoot, AILoot
 res://Scripts/Tooltip.gd = Update
 
+[script_extend]
+res://Scripts/SlotData.gd = "res://mods/LooterShooter/Scripts/SlotData.gd"
+
 [dependencies]
 optional=["doinkoink-mcm"]
 
