@@ -9,24 +9,22 @@ const CONFIG_DIR := "user://MCM/thermal-vtk"
 const CONFIG_FILE := "user://MCM/thermal-vtk/config.ini"
 const STATE_FILE := "user://MCM/thermal-vtk/thermal_state.cfg"
 const MCM_HELPERS := "res://ModConfigurationMenu/Scripts/Doink Oink/MCM_Helpers.tres"
-const KEY_MODE := KEY_F6
-# TEMP CALIBRATION (Task 6): press while looking at an NPC in Mode A to log the
-# washed contour-ring colours. Remove after Task 6.
-const KEY_PROBE := KEY_F7
+const PALETTE_COUNT := 4
 
 var _nvg: Node = null
 var _esp: Node = null
 var _key_thermal_toggle: int = 0
+var _key_palette_cycle: int = KEY_F6
 var _thermal_enabled: bool = false
 var _mines_enabled: bool = true
 var _mcm_thermal_seen: int = -1
-var _mode_full_thermal: bool = false
+var _saved_palette: int = -1
 var _outline_enabled: bool = true
 var _nvg_worn: bool = false
 
 func _ready() -> void:
-	var saved_mode = _read_state("full_thermal_mode", false)
-	_mode_full_thermal = bool(saved_mode) if saved_mode != null else false
+	var saved_pal = _read_state("world_palette", null)
+	_saved_palette = int(saved_pal) if saved_pal != null else -1
 	_register_mcm()
 
 func _ensure_nvg() -> void:
@@ -50,12 +48,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventKey) or not event.pressed or event.echo:
 		return
 	var k := event as InputEventKey
-	if k.physical_keycode == KEY_MODE:
-		_toggle_mode()
-		get_viewport().set_input_as_handled()
-		return
-	if k.physical_keycode == KEY_PROBE:
-		_run_ring_probe()
+	if _key_palette_cycle != 0 and (k.keycode == _key_palette_cycle or k.physical_keycode == _key_palette_cycle):
+		_cycle_palette()
 		get_viewport().set_input_as_handled()
 		return
 	if _key_thermal_toggle == 0:
@@ -73,20 +67,19 @@ func _toggle_thermal() -> void:
 		Color.GREEN if _thermal_enabled else Color(0.7, 0.7, 0.7))
 	_save_state("thermal_enabled", _thermal_enabled)
 
-func _toggle_mode() -> void:
-	_mode_full_thermal = not _mode_full_thermal
-	_apply_mode()
-	_notify("Thermal mode: " + ("FULL" if _mode_full_thermal else "CONTOUR"),
-		Color(0.6, 0.8, 1.0) if _mode_full_thermal else Color(1, 0.7, 0.3))
-	_save_state("full_thermal_mode", _mode_full_thermal)
+const PALETTE_NAMES: Array[String] = ["Classic", "Amber", "Forest", "Ice"]
+
+func _cycle_palette() -> void:
+	if _nvg == null or not is_instance_valid(_nvg):
+		return
+	var mode: int = (int(_nvg.set_palette) + 1) % PALETTE_COUNT
+	_nvg.set_palette_mode(mode)
+	_notify("World palette: " + PALETTE_NAMES[mode], Color(0.6, 0.8, 1.0))
+	_save_state("world_palette", mode)
 
 func _apply_mode() -> void:
-	if _nvg != null and is_instance_valid(_nvg):
-		# Mode B = v1: bots carry the detector keys the NVG screen reads.
-		# Mode A: keys off, contour ESP on.
-		_nvg.set_bot_paint(_mode_full_thermal)
 	if _esp != null and is_instance_valid(_esp):
-		_esp.set_enabled(_thermal_enabled and _outline_enabled and not _mode_full_thermal and _nvg_active())
+		_esp.set_enabled(_thermal_enabled and _outline_enabled and _nvg_active())
 
 func _nvg_active() -> bool:
 	if _nvg == null or not is_instance_valid(_nvg):
@@ -95,7 +88,7 @@ func _nvg_active() -> bool:
 
 # The contour lives in world space, so it does not follow vanilla NVG by itself.
 # Watch the worn state and re-apply on change, or outlines would keep drawing
-# with the helmet off and only appear on the next mode/hotkey change.
+# with the helmet off and only appear on the next hotkey change.
 func _process(_delta: float) -> void:
 	var worn := _nvg_active()
 	if worn == _nvg_worn:
@@ -109,140 +102,9 @@ func _notify(text: String, color: Color) -> void:
 	if loader != null and loader.has_method("Message"):
 		loader.Message(text, color)
 
-# TEMP CALIBRATION (Task 6): the ring emits a detector key that the vanilla NVG
-# world processing washes, so its on-screen colour cannot be read by eye (and
-# the washed value differs per key). Press F7 facing an NPC in Mode A: the probe
-# cycles every state key (plus mine as a control) across all rings, and for each
-# captures a raw frame with the ESP on and one with it off, diffing them with a
-# magnitude-weighted average so the ring dominates the world drift. Logs the
-# washed colour of each key. Remove after Task 6.
-const CAL_KEYS := [
-	["normal", Color(1.0, 0.0, 0.0)],
-	["alerted", Color(1.0, 1.0, 0.0)],
-	["hunting", Color(1.0, 0.0, 1.0)],
-	["combat", Color(0.0, 1.0, 1.0)],
-	["nomad", Color(0.0, 1.0, 0.0)],
-	["mine(ctrl)", Color(0.0, 0.0, 1.0)],
-]
-var _probe_busy: bool = false
-
-func _run_ring_probe() -> void:
-	if _probe_busy:
-		return
-	if _nvg == null or not is_instance_valid(_nvg) or _esp == null or not is_instance_valid(_esp):
-		VTKDebug.log("PROBE", "nvg/esp missing")
-		return
-	if not _esp.enabled:
-		VTKDebug.log("PROBE", "esp off: set thermal ON, mode CONTOUR, wear NVG")
-		return
-	var vp := get_viewport()
-	if vp == null:
-		return
-	_probe_busy = true
-	_nvg.set_debug_raw(true)
-	var old_thick: float = _esp.p_thickness
-	_esp.p_thickness = 0.02
-	for idx in CAL_KEYS.size():
-		var label: String = CAL_KEYS[idx][0]
-		_esp.key_override_on = true
-		_esp.key_override = CAL_KEYS[idx][1]
-		await RenderingServer.frame_post_draw
-		await RenderingServer.frame_post_draw
-		var img_a := vp.get_texture().get_image()
-		await RenderingServer.frame_post_draw
-		var img_ref := vp.get_texture().get_image()
-		_esp.set_enabled(false)
-		await RenderingServer.frame_post_draw
-		await RenderingServer.frame_post_draw
-		var img_off := vp.get_texture().get_image()
-		_esp.set_enabled(true)
-		await RenderingServer.frame_post_draw
-		if img_a == null or img_ref == null or img_off == null:
-			VTKDebug.log("PROBE", "%s: no frame image" % label)
-			continue
-		_probe_diff(label, img_a, img_ref, img_off)
-	_esp.p_thickness = old_thick
-	_esp.key_override_on = false
-	_nvg.set_debug_raw(false)
-	_probe_busy = false
-	VTKDebug.log("PROBE", "calibration done")
-
-# Diff two ESP-on frames (img_a vs img_ref, one frame apart) to reject pixels
-# whose WORLD moved, then diff the surviving static pixels against an ESP-off
-# frame (img_off). Only the ring differs between a static on/off pair, so the
-# kept pixels are ring pixels and their colour is the washed key. Without the
-# motion gate the world drift injects RGB fringing that swamps the ring.
-func _probe_diff(label: String, img_a: Image, img_ref: Image, img_off: Image) -> void:
-	var w := img_a.get_width()
-	var h := img_a.get_height()
-	if img_ref.get_width() != w or img_off.get_width() != w \
-			or img_ref.get_height() != h or img_off.get_height() != h:
-		VTKDebug.log("PROBE", "%s: size mismatch" % label)
-		return
-	var a := img_a.get_data()
-	var ref := img_ref.get_data()
-	var b := img_off.get_data()
-	if a.size() != ref.size() or a.size() != b.size():
-		VTKDebug.log("PROBE", "%s: data size mismatch" % label)
-		return
-	var changed := 0
-	var moving := 0
-	var maxd := 0
-	var wsum := 0.0
-	var sr := 0.0
-	var sg := 0.0
-	var sb := 0.0
-	var buckets: Dictionary = {}
-	var n := a.size()
-	var i := 0
-	while i + 3 < n:
-		var mr := absi(int(a[i]) - int(ref[i]))
-		var mg := absi(int(a[i + 1]) - int(ref[i + 1]))
-		var mb := absi(int(a[i + 2]) - int(ref[i + 2]))
-		if mr + mg + mb > 24:
-			moving += 1
-			i += 4
-			continue
-		var dr := absi(int(a[i]) - int(b[i]))
-		var dg := absi(int(a[i + 1]) - int(b[i + 1]))
-		var dbl := absi(int(a[i + 2]) - int(b[i + 2]))
-		var d := dr + dg + dbl
-		if d > maxd:
-			maxd = d
-		if d > 24:
-			var r := float(a[i]) / 255.0
-			var g := float(a[i + 1]) / 255.0
-			var bl := float(a[i + 2]) / 255.0
-			changed += 1
-			wsum += float(d)
-			sr += r * float(d)
-			sg += g * float(d)
-			sb += bl * float(d)
-			var bk := "%d_%d_%d" % [int(r * 16.0), int(g * 16.0), int(bl * 16.0)]
-			var bkt = buckets.get(bk)
-			if bkt == null:
-				buckets[bk] = [r, g, bl, 1]
-			else:
-				bkt[0] += r
-				bkt[1] += g
-				bkt[2] += bl
-				bkt[3] += 1
-		i += 4
-	if changed == 0:
-		VTKDebug.log("PROBE", "%s: no static ring pixels (moving=%d maxd=%d)" % [label, moving, maxd])
-		return
-	VTKDebug.log("PROBE", "%s: stable=%d moving=%d maxd=%d washed=(%.3f, %.3f, %.3f)" % [label, changed, moving, maxd, sr / wsum, sg / wsum, sb / wsum])
-	var keys := buckets.keys()
-	keys.sort_custom(func(x, y): return int(buckets[x][3]) > int(buckets[y][3]))
-	var shown: int = min(keys.size(), 4)
-	for j in shown:
-		var v: Array = buckets[keys[j]]
-		var cnt := int(v[3])
-		VTKDebug.log("PROBE", "  %s top n=%d avg=(%.3f, %.3f, %.3f)" % [label, cnt, v[0] / cnt, v[1] / cnt, v[2] / cnt])
-
-# Persist hotkey/mode choices in our own state file. MCM keeps an in-memory copy
+# Persist hotkey/palette choices in our own state file. MCM keeps an in-memory copy
 # and rewrites its config wholesale, so writing the toggle there gets clobbered.
-# Read-modify-write so the two keys (thermal_enabled, full_thermal_mode) do not
+# Read-modify-write so the two keys (thermal_enabled, world_palette) do not
 # clobber each other.
 func _save_state(key: String, v) -> void:
 	var sf := ConfigFile.new()
@@ -275,14 +137,13 @@ func _register_mcm() -> void:
 	var cfg = ConfigFile.new()
 	var CAT := "01. ThermalVision"
 	cfg.set_value("Keycode", "key_thermal_toggle", {"name": "Hotkey: Toggle thermal vision", "default": 0, "default_type": "Keycode", "value": 0, "category": CAT, "menu_pos": 0, "tooltip": "Press in game to turn the thermal layer on and off."})
-	cfg.set_value("Float", "nvg_noise", {"name": "NVG noise", "default": 4.0, "value": 4.0, "minRange": 0.0, "maxRange": 60.0, "step": 0.5, "category": CAT, "menu_pos": 1, "tooltip": "Grain amount over the NVG image. Lower is cleaner. Vanilla is fixed at 10."})
-	cfg.set_value("Float", "nvg_white", {"name": "NVG brightness", "default": 1.0, "value": 1.0, "minRange": 0.05, "maxRange": 1.0, "step": 0.05, "category": CAT, "menu_pos": 2, "tooltip": "Brightness of the NVG image. 1 = full brightness; lower darkens the whole overlay."})
-	cfg.set_value("Bool", "thermal_enabled", {"name": "Thermal vision", "default": false, "value": false, "category": CAT, "menu_pos": 3, "tooltip": "Master switch for the thermal vision layer: bot heat glow and mines. Plain green NVG is unaffected while this is off."})
-	cfg.set_value("Bool", "thermal_mines", {"name": "Mine highlighting", "default": true, "value": true, "category": CAT, "menu_pos": 4, "tooltip": "Highlight mines while thermal vision is on."})
-	cfg.set_value("Dropdown", "thermal_palette", {"default": "classic", "value": "classic", "options": {"classic": "Classic", "amber": "Amber", "forest": "Forest", "ice": "Ice"}, "category": CAT, "menu_pos": 9, "tooltip": "World thermal palette.", "name": "World palette"})
-	cfg.set_value("Float", "thermal_world", {"default": 1.70, "value": 1.70, "minRange": 1.0, "maxRange": 4.0, "step": 0.05, "category": CAT, "menu_pos": 10, "tooltip": "How bright the surrounding world reads in thermal.", "name": "World brightness"})
-	cfg.set_value("Int", "thermal_bot_preset", {"default": 0, "value": 0, "minRange": 0, "maxRange": 3, "step": 1, "category": CAT, "menu_pos": 11, "tooltip": "0 = Amber, 1 = White, 2 = Orange, 3 = Red. Living bots glow in this colour; a corpse cools from the head down before disappearing.", "name": "Bot colour"})
-	cfg.set_value("Float", "thermal_far_distance", {"default": 45.0, "value": 45.0, "minRange": 5.0, "maxRange": 300.0, "step": 5.0, "category": CAT, "menu_pos": 12, "tooltip": "Bots and mines only glow within this distance; past it they read as ordinary scenery. 5 = only right beside you, 300 = the whole map.", "name": "Distance"})
+	cfg.set_value("Keycode", "key_palette_cycle", {"name": "Hotkey: Cycle world palette", "default": KEY_F6, "default_type": "Keycode", "value": KEY_F6, "category": CAT, "menu_pos": 1, "tooltip": "Press in game to cycle the world thermal palette."})
+	cfg.set_value("Float", "nvg_noise", {"name": "NVG noise", "default": 4.0, "value": 4.0, "minRange": 0.0, "maxRange": 60.0, "step": 0.5, "category": CAT, "menu_pos": 2, "tooltip": "Grain amount over the NVG image. Lower is cleaner. Vanilla is fixed at 10."})
+	cfg.set_value("Float", "nvg_white", {"name": "NVG brightness", "default": 1.0, "value": 1.0, "minRange": 0.05, "maxRange": 1.0, "step": 0.05, "category": CAT, "menu_pos": 3, "tooltip": "Brightness of the NVG image. 1 = full brightness; lower darkens the whole overlay."})
+	cfg.set_value("Bool", "thermal_enabled", {"name": "Thermal vision", "default": false, "value": false, "category": CAT, "menu_pos": 4, "tooltip": "Master switch for the thermal vision layer: bot heat glow and mines. Plain green NVG is unaffected while this is off."})
+	cfg.set_value("Bool", "thermal_mines", {"name": "Mine highlighting", "default": true, "value": true, "category": CAT, "menu_pos": 5, "tooltip": "Highlight mines while thermal vision is on."})
+	cfg.set_value("Dropdown", "thermal_palette", {"default": "classic", "value": "classic", "options": {"classic": "Classic", "amber": "Amber", "forest": "Forest", "ice": "Ice"}, "category": CAT, "menu_pos": 8, "tooltip": "World thermal palette.", "name": "World palette"})
+	cfg.set_value("Float", "thermal_world", {"default": 1.70, "value": 1.70, "minRange": 1.0, "maxRange": 4.0, "step": 0.05, "category": CAT, "menu_pos": 9, "tooltip": "How bright the surrounding world reads in thermal.", "name": "World brightness"})
 
 	var CAT2 := "02. Contour ESP"
 	cfg.set_value("Bool", "outline_enabled", {"name": "Contour ESP", "default": true, "value": true, "category": CAT2, "menu_pos": 0, "tooltip": "Draw state-coloured body outlines over NPCs. Off = full-screen thermal only."})
@@ -389,6 +250,7 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 	if _nvg == null or not is_instance_valid(_nvg):
 		return
 	_key_thermal_toggle = int(_mcm_key_val(cfg, "Keycode", "key_thermal_toggle", 0))
+	_key_palette_cycle = int(_mcm_key_val(cfg, "Keycode", "key_palette_cycle", KEY_F6))
 	var mcm_thermal := bool(_mcm_key_val(cfg, "Bool", "thermal_enabled", false))
 	var mcm_i: int = 1 if mcm_thermal else 0
 	var saved = _read_state("thermal_enabled", null)
@@ -403,10 +265,11 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 	_mines_enabled = bool(_mcm_key_val(cfg, "Bool", "thermal_mines", true))
 	_nvg.set_nvg_noise = float(_mcm_key_val(cfg, "Float", "nvg_noise", 4.0))
 	_nvg.set_nvg_white = float(_mcm_key_val(cfg, "Float", "nvg_white", 1.0))
-	_nvg.set_palette = _palette_mode_from_cfg(cfg)
+	if _saved_palette >= 0:
+		_nvg.set_palette = _saved_palette
+	else:
+		_nvg.set_palette = _palette_mode_from_cfg(cfg)
 	_nvg.set_world = float(_mcm_key_val(cfg, "Float", "thermal_world", 1.70))
-	_nvg.set_bot_preset = int(_mcm_key_val(cfg, "Int", "thermal_bot_preset", 0))
-	_nvg.set_far_distance = float(_mcm_key_val(cfg, "Float", "thermal_far_distance", 45.0))
 	_nvg.set_thermal_enabled(_thermal_enabled)
 	_nvg.set_mines_enabled(_mines_enabled)
 	_ensure_esp()
