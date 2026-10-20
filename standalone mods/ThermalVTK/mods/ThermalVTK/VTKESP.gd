@@ -18,7 +18,7 @@ var enabled: bool = false
 var p_fill := true
 var p_fill_alpha := 0.4
 var p_decay := 8.0
-var p_dist := 150.0
+var p_dist := 60.0
 var p_through := 5.0
 var p_thickness := 0.006
 var p_brightness := 0.6
@@ -41,6 +41,10 @@ var _hook_ids: Array = []
 var _player: Node3D = null
 var _labels: Dictionary = {}
 var _labels_state: Dictionary = {}
+var _markers: Dictionary = {}
+# Shown when thermal vision + the NVG helmet are both live, independent of the
+# contour ESP toggle and of the diagnostic log. Set from ThermalVTK._apply_mode.
+var marker_visible: bool = false
 var _dbg_cd: float = 0.0
 var _dbg_cand: int = 0
 var _dbg_keep: int = 0
@@ -64,6 +68,9 @@ func set_enabled(on: bool) -> void:
 			_label_free(id)
 		_labels.clear()
 		_labels_state.clear()
+		for id in _markers.keys():
+			_marker_free(id)
+		_markers.clear()
 	else:
 		# Disabling wiped _entries; NPCs already in the scene never fire
 		# node_added again, so re-enabling must re-scan or every pre-existing
@@ -172,6 +179,9 @@ func _exit_tree() -> void:
 		_label_free(id)
 	_labels.clear()
 	_labels_state.clear()
+	for id in _markers.keys():
+		_marker_free(id)
+	_markers.clear()
 	if _lib != null:
 		for h in _hook_ids:
 			_lib.unhook(h)
@@ -188,10 +198,11 @@ func _read_state(node: Node) -> int:
 # ---------------------------------------------------------------------------
 
 func _process(delta: float) -> void:
-	if not enabled:
+	if not enabled and not marker_visible:
 		return
 	_weapon.tick()
 	_labels_sync()
+	_markers_sync()
 	_frame += 1
 	if not _pending.is_empty():
 		for node_id in _pending:
@@ -218,6 +229,8 @@ func _dbg_tick(delta: float, msg: String) -> void:
 # ---------------------------------------------------------------------------
 # Debug state labels (only while the diagnostic log is on)
 # ---------------------------------------------------------------------------
+# Debug state labels are shown whenever the diagnostic log is on, regardless of
+# thermal vision or the NVG helmet: they are a diagnostic, not a gameplay layer.
 
 func _labels_sync() -> void:
 	if not Dbg.enabled:
@@ -278,6 +291,63 @@ func _label_free(id: int) -> void:
 			lbl.queue_free()
 		_labels.erase(id)
 	_labels_state.erase(id)
+
+# ---------------------------------------------------------------------------
+# Friendly-nomad diamond marker (while thermal + NVG are on)
+# ---------------------------------------------------------------------------
+
+func _markers_sync() -> void:
+	if not marker_visible:
+		for id in _markers.keys():
+			_marker_free(id)
+		_markers.clear()
+		return
+	for id in _entries.keys():
+		var e: Dictionary = _entries[id]
+		if not bool(e.get("nomad", false)):
+			if _markers.has(id):
+				_marker_free(id)
+			continue
+		var node = e.get("node")
+		if node == null or not is_instance_valid(node) or not node.is_inside_tree():
+			_marker_free(id)
+			continue
+		# Dead nomads keep their entry (for cooling) but drop the marker.
+		if bool(e.get("dead", false)) or bool(node.get("dead")):
+			_marker_free(id)
+			continue
+		if not _markers.has(id):
+			_marker_make(id, node)
+	for id in _markers.keys():
+		if not _entries.has(id):
+			_marker_free(id)
+
+func _marker_make(id: int, node: Node) -> void:
+	var mesh = node.get("mesh")
+	var parent: Node = node
+	var y := 1.9
+	if mesh is Node3D:
+		parent = mesh
+		y = (mesh as Node3D).get_aabb().end.y + 0.1
+	var lbl := Label3D.new()
+	lbl.text = "\u25c6"
+	lbl.modulate = Color(0.30, 1.0, 0.35)
+	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lbl.no_depth_test = true
+	lbl.render_priority = 41
+	lbl.font_size = 32
+	lbl.outline_size = 12
+	lbl.position = Vector3(0.0, y, 0.0)
+	lbl.visible = true
+	parent.add_child(lbl)
+	_markers[id] = lbl
+
+func _marker_free(id: int) -> void:
+	if _markers.has(id):
+		var lbl = _markers[id]
+		if is_instance_valid(lbl):
+			lbl.queue_free()
+		_markers.erase(id)
 
 func _draw(ppos: Vector3) -> void:
 	var now := _now()

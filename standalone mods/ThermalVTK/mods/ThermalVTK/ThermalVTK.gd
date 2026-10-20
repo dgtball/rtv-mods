@@ -78,6 +78,7 @@ func _cycle_palette() -> void:
 func _apply_mode() -> void:
 	if _esp != null and is_instance_valid(_esp):
 		_esp.set_enabled(_thermal_enabled and _outline_enabled and _nvg_active())
+		_esp.marker_visible = _thermal_enabled and _nvg_active()
 
 func _nvg_active() -> bool:
 	if _nvg == null or not is_instance_valid(_nvg):
