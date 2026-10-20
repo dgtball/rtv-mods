@@ -138,7 +138,7 @@ func _register_mcm() -> void:
 	cfg.set_value("Keycode", "key_palette_cycle", {"name": "Hotkey: Cycle world palette", "default": KEY_F6, "default_type": "Keycode", "value": KEY_F6, "category": CAT, "menu_pos": 1, "tooltip": "Press in game to cycle the world thermal palette."})
 	cfg.set_value("Float", "nvg_noise", {"name": "NVG noise", "default": 4.0, "value": 4.0, "minRange": 0.0, "maxRange": 60.0, "step": 0.5, "category": CAT, "menu_pos": 2, "tooltip": "Grain amount over the NVG image. Lower is cleaner. Vanilla is fixed at 10."})
 	cfg.set_value("Float", "nvg_white", {"name": "NVG brightness", "default": 1.0, "value": 1.0, "minRange": 0.05, "maxRange": 1.0, "step": 0.05, "category": CAT, "menu_pos": 3, "tooltip": "Brightness of the NVG image. 1 = full brightness; lower darkens the whole overlay."})
-	cfg.set_value("Bool", "thermal_enabled", {"name": "Thermal vision", "default": false, "value": false, "category": CAT, "menu_pos": 4, "tooltip": "Master switch for the thermal vision layer: bot heat glow and mines. Plain green NVG is unaffected while this is off."})
+	cfg.set_value("Bool", "thermal_enabled", {"name": "Thermal vision", "default": false, "value": false, "category": CAT, "menu_pos": 4, "tooltip": "Master switch for the thermal vision layer: the contour ESP and mine highlighting. Plain green NVG is unaffected while this is off."})
 	cfg.set_value("Bool", "thermal_mines", {"name": "Mine highlighting", "default": true, "value": true, "category": CAT, "menu_pos": 5, "tooltip": "Highlight mines while thermal vision is on."})
 	cfg.set_value("Dropdown", "thermal_palette", {"default": "classic", "value": "classic", "options": {"classic": "Classic", "amber": "Amber", "forest": "Forest", "ice": "Ice"}, "category": CAT, "menu_pos": 8, "tooltip": "World thermal palette.", "name": "World palette"})
 	cfg.set_value("Float", "thermal_world", {"default": 1.70, "value": 1.70, "minRange": 1.0, "maxRange": 4.0, "step": 0.05, "category": CAT, "menu_pos": 9, "tooltip": "How bright the surrounding world reads in thermal.", "name": "World brightness"})
@@ -170,7 +170,7 @@ func _register_mcm() -> void:
 	cfg.set_value("Info", "author", "CaptiveAI and opencode")
 	DirAccess.make_dir_recursive_absolute(CONFIG_DIR)
 	_sync_config(cfg)
-	MCM.RegisterConfiguration(MOD_ID, MOD_NAME, CONFIG_DIR, "NVG thermal overlay: bot, mine and Nomad highlighting", _mcm_apply, self)
+	MCM.RegisterConfiguration(MOD_ID, MOD_NAME, CONFIG_DIR, "NVG thermal overlay: contour ESP, mine highlighting and world thermal view", _mcm_apply, self)
 	_mcm_apply(ConfigFile.new())
 
 # Merge the freshly declared keys into the on-disk config by KEY: drop sections
@@ -287,8 +287,14 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 		_esp.p_brightness = float(_mcm_key_val(cfg, "Float", "outline_brightness", 0.6))
 		_esp.p_fill = bool(_mcm_key_val(cfg, "Bool", "outline_body_fill", true))
 		_esp.p_fill_alpha = float(_mcm_key_val(cfg, "Float", "fill_opacity", 0.4))
-		_esp.p_brightness = float(_mcm_key_val(cfg, "Float", "outline_brightness", 0.6))
 		_nvg.set_outline_brightness = _esp.p_brightness
+		_esp.p_colors = {
+			"state_normal": _mcm_color_val(cfg, "state_normal", States.DEFAULT_NORMAL),
+			"state_alerted": _mcm_color_val(cfg, "state_alerted", States.DEFAULT_ALERTED),
+			"state_hunting": _mcm_color_val(cfg, "state_hunting", States.DEFAULT_HUNTING),
+			"state_combat": _mcm_color_val(cfg, "state_combat", States.DEFAULT_COMBAT),
+		}
+		_esp.p_nomad = _mcm_color_val(cfg, "nomad_color", States.DEFAULT_NOMAD)
 		_nvg.set_state_colors({
 			"state_normal": _mcm_color_val(cfg, "state_normal", States.DEFAULT_NORMAL),
 			"state_alerted": _mcm_color_val(cfg, "state_alerted", States.DEFAULT_ALERTED),
@@ -296,8 +302,8 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 			"state_combat": _mcm_color_val(cfg, "state_combat", States.DEFAULT_COMBAT),
 			"nomad_color": _mcm_color_val(cfg, "nomad_color", States.DEFAULT_NOMAD),
 		})
-	# Mines share the ESP outline distance so both ranges track one setting.
-	_nvg.set_glow_distance = _esp.p_dist
+		# Mines share the ESP outline distance so both ranges track one setting.
+		_nvg.set_glow_distance = _esp.p_dist
 	_outline_enabled = bool(_mcm_key_val(cfg, "Bool", "outline_enabled", true))
 	_apply_mode()
 

@@ -63,7 +63,7 @@ var set_nvg_noise: float = 4.0
 var set_nvg_white: float = 1.0
 var set_thermal: bool = false
 var set_mines: bool = true
-# Mirrors the MCM outline distance; gates mine glow (and, before the ESP took over, bot glow).
+# Mirrors the MCM outline distance; gates mine glow.
 var set_glow_distance: float = 150.0
 var set_palette: int = 0
 var set_world: float = 1.70
@@ -83,8 +83,6 @@ var _mine_watch: Dictionary = {}
 var _pending: Array[int] = []
 var _tick_cd: float = 0.0
 var _scene_ref: Node = null
-# true, если прошлый _process что-то покрасил (гейт перехода on->off).
-var _paint_on: bool = false
 # прошлое значение on, нужно ровно для перехода on->off (снять покраску один раз).
 var _was_on: bool = false
 # PIP off + magnifying scope rotates colour channels, so the overlay detector
@@ -311,12 +309,10 @@ func _process(delta: float) -> void:
 	var ppos := _player_pos()
 
 	if on:
-		_paint_on = false
 		for id in _mines.keys():
 			_update_mine(id, true, ppos)
-	elif _was_on or _paint_on:
+	elif _was_on:
 		_clear_paint()
-		_paint_on = false
 	_was_on = on
 
 	if not on:

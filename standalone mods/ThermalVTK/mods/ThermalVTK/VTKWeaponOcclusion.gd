@@ -6,7 +6,7 @@ extends RefCounted
 # transparent pass) and depth_draw_always (keeps self-occlusion), then give it a
 # render_priority ABOVE the outlines (30 vs 20/21) so it draws last.
 #
-# Driven once per frame by VTKESP while mode A is active.
+# Driven once per frame by VTKESP while the contour ESP is active.
 
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")

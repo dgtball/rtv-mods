@@ -1,7 +1,7 @@
 extends Node
 # Discovers NPCs (RTVModLib AI hooks with a polling fallback), reads faction /
-# state / PVisible, and hands per-NPC draw options to VTKOutline. Owns no
-# materials itself. Enabled only in mode A; VTKNVG is unaware of it.
+# state, and hands per-NPC draw options to VTKOutline. Owns no
+# materials itself; VTKNVG is unaware of it.
 
 const Tracker = preload("res://mods/ThermalVTK/VTKTracker.gd")
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
@@ -14,7 +14,7 @@ const POLL_EVERY := 12
 const CAP := 24
 
 var enabled: bool = false
-# MCM-driven params; see _defaults().
+# MCM-driven params.
 var p_fill := true
 var p_fill_alpha := 0.4
 var p_decay := 8.0
@@ -29,11 +29,6 @@ var p_colors := {
 	"state_combat": States.DEFAULT_COMBAT,
 }
 var p_nomad := States.DEFAULT_NOMAD
-# TEMP CALIBRATION (Task 6): when on, every ring emits key_override instead of
-# its per-state key, so the ring probe can measure the washed value of each key
-# in turn. Remove after Task 6.
-var key_override_on: bool = false
-var key_override: Color = Color(1.0, 0.0, 0.0)
 
 var _entries: Dictionary = {}
 var _pending: Array = []
@@ -237,8 +232,9 @@ func _labels_sync() -> void:
 			_label_free(id)
 			continue
 		# Dead NPCs keep their entry (for cooling) but drop the label: a corpse
-		# with a state readout is noise.
-		if bool(e.get("dead", false)):
+		# with a state readout is noise. Read the node's own `dead` too, so the
+		# label goes even if the death hook did not fire.
+		if bool(e.get("dead", false)) or bool(node.get("dead")):
 			_label_free(id)
 			continue
 		var state := _read_state(node)
@@ -340,8 +336,6 @@ func _opts_for(e: Dictionary, node: Node, dist: float, now: float) -> Dictionary
 	var nomad := bool(e.get("nomad", false))
 	var cat: int = int(e.get("cat", States.NORMAL))
 	var key: Color = States.KEY_NOMAD if nomad else States.state_key(cat)
-	if key_override_on:
-		key = key_override
 	var foot_y: float = (node as Node3D).global_position.y
 	return {
 		"cat": cat,
@@ -359,8 +353,9 @@ func _opts_for(e: Dictionary, node: Node, dist: float, now: float) -> Dictionary
 	}
 
 # The fill tint is the same colour the outline uses: nomad override first,
-# then the MCM per-state colour, falling back to the state default when the
-# colour dictionary has no entry for that key.
+# then the per-state colour, falling back to the state default when the
+# colour dictionary has no entry for that key. p_colors/p_nomad are wired from
+# MCM CAT3 in ThermalVTK._mcm_apply, so the fill matches the outline.
 func _state_color(cat: int, nomad: bool) -> Color:
 	if nomad:
 		return p_nomad

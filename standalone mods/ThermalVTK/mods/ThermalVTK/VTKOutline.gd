@@ -124,6 +124,8 @@ func refresh(id: int, opts: Dictionary) -> void:
 		body_mat.set_shader_parameter("fill_alpha", fill_alpha * alpha)
 	if body_mat.get_shader_parameter("cool") == null or not is_equal_approx(float(body_mat.get_shader_parameter("cool")), cool):
 		body_mat.set_shader_parameter("cool", cool)
+	if ring_mat.get_shader_parameter("cool") == null or not is_equal_approx(float(ring_mat.get_shader_parameter("cool")), cool):
+		ring_mat.set_shader_parameter("cool", cool)
 	if body_mat.get_shader_parameter("footY") == null or not is_equal_approx(float(body_mat.get_shader_parameter("footY")), foot_y):
 		body_mat.set_shader_parameter("footY", foot_y)
 	if body_mat.get_shader_parameter("bodyHeight") == null or not is_equal_approx(float(body_mat.get_shader_parameter("bodyHeight")), body_h):
