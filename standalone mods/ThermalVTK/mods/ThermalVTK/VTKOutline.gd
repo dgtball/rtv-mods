@@ -147,6 +147,12 @@ func refresh(id: int, opts: Dictionary) -> void:
 		body_mat.set_shader_parameter("bodyHeight", body_h)
 	if body_mat.get_shader_parameter("fillColor") != fill_col:
 		body_mat.set_shader_parameter("fillColor", fill_col)
+	var fill_style := int(opts.get("fill_style", 0))
+	if body_mat.get_shader_parameter("fill_style") == null or int(body_mat.get_shader_parameter("fill_style")) != fill_style:
+		body_mat.set_shader_parameter("fill_style", fill_style)
+	if body_mat.get_shader_parameter("warmColor") == null:
+		body_mat.set_shader_parameter("warmColor", Color(1.0, 0.95, 0.7))
+		body_mat.set_shader_parameter("coldColor", Color(0.05, 0.05, 0.12))
 
 func clear(id: int) -> void:
 	var entry = _items.get(id)
