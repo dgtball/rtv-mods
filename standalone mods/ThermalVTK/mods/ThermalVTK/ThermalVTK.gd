@@ -145,21 +145,22 @@ func _register_mcm() -> void:
 
 	var CAT2 := "02. Contour ESP"
 	cfg.set_value("Bool", "outline_enabled", {"name": "Contour ESP", "default": true, "value": true, "category": CAT2, "menu_pos": 0, "tooltip": "Draw state-coloured body outlines over NPCs. Off = full-screen thermal only."})
-	cfg.set_value("Bool", "outline_body_fill", {"name": "Body fill", "default": true, "value": true, "category": CAT2, "menu_pos": 1, "tooltip": "Fill the NPC body with its state colour inside the outline."})
-	cfg.set_value("Float", "fill_opacity", {"name": "Fill opacity", "default": 0.4, "value": 0.4, "minRange": 0.0, "maxRange": 1.0, "step": 0.05, "category": CAT2, "menu_pos": 2, "tooltip": "How solid the body fill is. 0 = outline only."})
-	cfg.set_value("Float", "corpse_decay", {"name": "Corpse cooling time", "default": 8.0, "value": 8.0, "minRange": 0.0, "maxRange": 30.0, "step": 1.0, "category": CAT2, "menu_pos": 3, "tooltip": "Seconds a dead NPC's outline takes to cool from warm to cold."})
-	cfg.set_value("Float", "outline_thickness", {"name": "Outline thickness", "default": 0.006, "value": 0.006, "minRange": 0.0, "maxRange": 0.05, "step": 0.001, "category": CAT2, "menu_pos": 4, "tooltip": "How far the outline band grows beyond the body."})
-	cfg.set_value("Float", "outline_brightness", {"name": "Outline brightness", "default": 0.6, "value": 0.6, "minRange": 0.1, "maxRange": 3.0, "step": 0.1, "category": CAT2, "menu_pos": 5, "tooltip": "Brightness multiplier on the outline colour."})
+	cfg.set_value("Dropdown", "outline_style", {"name": "Outline style", "default": "front", "value": "front", "options": {"front": "Front-faces (ITH)", "back": "Back-faces"}, "category": CAT2, "menu_pos": 1, "tooltip": "Outline look. Front-faces is the clean silhouette; Back-faces is the older inflated look."})
+	cfg.set_value("Float", "outline_rim", {"name": "Outline rim", "default": 0.42, "value": 0.42, "minRange": 0.0, "maxRange": 1.0, "step": 0.02, "category": CAT2, "menu_pos": 2, "tooltip": "Edge band width (Front-faces) or edge sharpness (Back-faces) of the outline."})
+	cfg.set_value("Bool", "outline_body_fill", {"name": "Body fill", "default": true, "value": true, "category": CAT2, "menu_pos": 3, "tooltip": "Fill the NPC body with its state colour inside the outline."})
+	cfg.set_value("Dropdown", "fill_style", {"name": "Fill style", "default": "flat", "value": "flat", "options": {"flat": "Flat (state colour)", "gradient": "Gradient (thermal)"}, "category": CAT2, "menu_pos": 4, "tooltip": "Body fill look. Gradient mixes the state colour over a warm-to-cold thermal ramp."})
+	cfg.set_value("Float", "fill_opacity", {"name": "Fill opacity", "default": 0.4, "value": 0.4, "minRange": 0.0, "maxRange": 1.0, "step": 0.05, "category": CAT2, "menu_pos": 5, "tooltip": "How solid the body fill is. 0 = outline only."})
+	cfg.set_value("Float", "corpse_decay", {"name": "Corpse cooling time", "default": 8.0, "value": 8.0, "minRange": 0.0, "maxRange": 30.0, "step": 1.0, "category": CAT2, "menu_pos": 6, "tooltip": "Seconds a dead NPC's outline takes to cool from warm to cold."})
+	cfg.set_value("Float", "outline_thickness", {"name": "Outline thickness", "default": 0.006, "value": 0.006, "minRange": 0.001, "maxRange": 0.02, "step": 0.001, "category": CAT2, "menu_pos": 7, "tooltip": "How far the outline band grows beyond the body."})
+	cfg.set_value("Float", "outline_brightness", {"name": "Outline brightness", "default": 0.6, "value": 0.6, "minRange": 0.1, "maxRange": 3.0, "step": 0.1, "category": CAT2, "menu_pos": 8, "tooltip": "Brightness multiplier on the outline colour."})
 
 	var CAT3 := "03. Outline Colours"
 	cfg.set_value("Color", "state_normal", {"name": "Normal / idle", "default": Color(1.0, 0.72, 0.28), "value": Color(1.0, 0.72, 0.28), "allowAlpha": false, "category": CAT3, "menu_pos": 0, "tooltip": "Colour for NPCs that are idle, patrolling, looting or guarding."})
-	cfg.set_value("Color", "state_alerted", {"name": "Alerted", "default": Color(1.0, 0.9, 0.25), "value": Color(1.0, 0.9, 0.25), "allowAlpha": false, "category": CAT3, "menu_pos": 1, "tooltip": "Colour for NPCs taking cover, defending or taking a vantage point."})
-	cfg.set_value("Color", "state_hunting", {"name": "Hunting", "default": Color(1.0, 0.5, 0.1), "value": Color(1.0, 0.5, 0.1), "allowAlpha": false, "category": CAT3, "menu_pos": 2, "tooltip": "Colour for NPCs hunting, hiding, ambushing or lurking."})
-	cfg.set_value("Color", "state_combat", {"name": "In combat", "default": Color(0.95, 0.18, 0.15), "value": Color(0.95, 0.18, 0.15), "allowAlpha": false, "category": CAT3, "menu_pos": 3, "tooltip": "Colour for NPCs in combat, attacking or throwing grenades."})
-	cfg.set_value("Color", "nomad_color", {"name": "Friendly nomads", "default": Color(0.30, 1.0, 0.35), "value": Color(0.30, 1.0, 0.35), "allowAlpha": false, "category": CAT3, "menu_pos": 4, "tooltip": "Colour for friendly nomads. Their state is ignored."})
+	cfg.set_value("Color", "state_combat", {"name": "In combat", "default": Color(0.95, 0.18, 0.15), "value": Color(0.95, 0.18, 0.15), "allowAlpha": false, "category": CAT3, "menu_pos": 1, "tooltip": "Colour for NPCs in combat, hunting, attacking or throwing grenades."})
+	cfg.set_value("Color", "state_defend", {"name": "Defending", "default": Color(0.62, 0.30, 0.95), "value": Color(0.62, 0.30, 0.95), "allowAlpha": false, "category": CAT3, "menu_pos": 2, "tooltip": "Colour for NPCs taking cover, defending, ambushing or lurking."})
 
 	var CAT4 := "04. Contour Range"
-	cfg.set_value("Float", "outline_distance", {"name": "Outline distance", "default": 150.0, "value": 150.0, "minRange": 0.0, "maxRange": 300.0, "step": 10.0, "category": CAT4, "menu_pos": 0, "tooltip": "Maximum distance for an outline. Past half of this the outline fades out."})
+	cfg.set_value("Float", "outline_distance", {"name": "Outline distance", "default": 60.0, "value": 60.0, "minRange": 0.0, "maxRange": 300.0, "step": 10.0, "category": CAT4, "menu_pos": 0, "tooltip": "Maximum distance for an outline. Past half of this the outline fades out."})
 	cfg.set_value("Float", "outline_through_walls", {"name": "See through walls", "default": 5.0, "value": 5.0, "minRange": 0.0, "maxRange": 30.0, "step": 5.0, "category": CAT4, "menu_pos": 1, "tooltip": "NPCs closer than this show through walls. 0 = only when in direct line of sight."})
 
 	var CAT5 := "05. Diagnostics"
@@ -281,26 +282,25 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 	_ensure_esp()
 	if _esp != null and is_instance_valid(_esp):
 		_esp.p_decay = float(_mcm_key_val(cfg, "Float", "corpse_decay", 8.0))
-		_esp.p_dist = float(_mcm_key_val(cfg, "Float", "outline_distance", 150.0))
+		_esp.p_dist = float(_mcm_key_val(cfg, "Float", "outline_distance", 60.0))
 		_esp.p_through = float(_mcm_key_val(cfg, "Float", "outline_through_walls", 5.0))
 		_esp.p_thickness = float(_mcm_key_val(cfg, "Float", "outline_thickness", 0.006))
 		_esp.p_brightness = float(_mcm_key_val(cfg, "Float", "outline_brightness", 0.6))
 		_esp.p_fill = bool(_mcm_key_val(cfg, "Bool", "outline_body_fill", true))
 		_esp.p_fill_alpha = float(_mcm_key_val(cfg, "Float", "fill_opacity", 0.4))
+		_esp.p_style = 0 if String(_mcm_key_val(cfg, "Dropdown", "outline_style", "front")) == "front" else 1
+		_esp.p_rim = float(_mcm_key_val(cfg, "Float", "outline_rim", 0.42))
+		_esp.p_fill_style = 0 if String(_mcm_key_val(cfg, "Dropdown", "fill_style", "flat")) == "flat" else 1
 		_nvg.set_outline_brightness = _esp.p_brightness
 		_esp.p_colors = {
 			"state_normal": _mcm_color_val(cfg, "state_normal", States.DEFAULT_NORMAL),
-			"state_alerted": _mcm_color_val(cfg, "state_alerted", States.DEFAULT_ALERTED),
-			"state_hunting": _mcm_color_val(cfg, "state_hunting", States.DEFAULT_HUNTING),
 			"state_combat": _mcm_color_val(cfg, "state_combat", States.DEFAULT_COMBAT),
+			"state_defend": _mcm_color_val(cfg, "state_defend", States.DEFAULT_DEFEND),
 		}
-		_esp.p_nomad = _mcm_color_val(cfg, "nomad_color", States.DEFAULT_NOMAD)
 		_nvg.set_state_colors({
 			"state_normal": _mcm_color_val(cfg, "state_normal", States.DEFAULT_NORMAL),
-			"state_alerted": _mcm_color_val(cfg, "state_alerted", States.DEFAULT_ALERTED),
-			"state_hunting": _mcm_color_val(cfg, "state_hunting", States.DEFAULT_HUNTING),
 			"state_combat": _mcm_color_val(cfg, "state_combat", States.DEFAULT_COMBAT),
-			"nomad_color": _mcm_color_val(cfg, "nomad_color", States.DEFAULT_NOMAD),
+			"state_defend": _mcm_color_val(cfg, "state_defend", States.DEFAULT_DEFEND),
 		})
 		# Mines share the ESP outline distance so both ranges track one setting.
 		_nvg.set_glow_distance = _esp.p_dist
