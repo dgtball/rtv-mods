@@ -1,5 +1,4 @@
 extends RefCounted
-class_name LSHPool
 
 const VANILLA := 0
 const COMMON := 1
@@ -8,198 +7,103 @@ const LEGENDARY := 3
 
 const TIER_NAMES := {0: "Vanilla", 1: "Common", 2: "Rare", 3: "Legendary"}
 
-const _WEAPON_ENTRIES := [
-	{
-		"stat": "damage",
-		"category": "weapon",
-		"unit": "pct",
-		"weight": 100.0,
-		"ranges": {1: [5, 15], 2: [10, 25], 3: [15, 30]}
-	},
-	{
-		"stat": "recoil",
-		"category": "weapon",
-		"unit": "pct",
-		"weight": 90.0,
-		"ranges": {1: [-15, -5], 2: [-25, -10], 3: [-40, -15]}
-	},
-	{
-		"stat": "sway",
-		"category": "weapon",
-		"unit": "pct",
-		"weight": 85.0,
-		"ranges": {1: [-15, -5], 2: [-25, -10], 3: [-40, -15]}
-	},
-	{
-		"stat": "fire_rate",
-		"category": "weapon",
-		"unit": "pct",
-		"weight": 80.0,
-		"ranges": {1: [5, 12], 2: [10, 20], 3: [15, 30]}
-	},
-	{
-		"stat": "penetration",
-		"category": "weapon",
-		"unit": "flat",
-		"weight": 40.0,
-		"ranges": {2: [1, 1], 3: [1, 2]}
-	},
-	{
-		"stat": "low_hp_damage",
-		"category": "weapon",
-		"unit": "pct",
-		"weight": 40.0,
-		"ranges": {2: [15, 30], 3: [25, 50]}
-	},
-	{
-		"stat": "durability",
-		"category": "weapon",
-		"unit": "pct",
-		"weight": 70.0,
-		"ranges": {1: [5, 15], 2: [10, 25], 3: [15, 40]}
-	}
+const POOL: Array = [
+	{"stat": "damage", "category": "weapon", "unit": "pct", "weight": 1.0,
+		"ranges": {1: [5, 15], 2: [10, 20], 3: [15, 30]}},
+	{"stat": "recoil", "category": "weapon", "unit": "pct", "weight": 1.0,
+		"ranges": {1: [8, 15], 2: [12, 22], 3: [18, 30]}},
+	{"stat": "sway", "category": "weapon", "unit": "pct", "weight": 1.0,
+		"ranges": {1: [10, 20], 2: [15, 30], 3: [20, 40]}},
+	{"stat": "fire_rate", "category": "weapon", "unit": "pct", "weight": 0.8,
+		"ranges": {1: [5, 10], 2: [8, 14], 3: [10, 20]}},
+	{"stat": "penetration", "category": "weapon", "unit": "flat", "weight": 0.6,
+		"ranges": {2: [1, 1], 3: [1, 2]}},
+	{"stat": "low_hp_damage", "category": "weapon", "unit": "pct", "weight": 0.7,
+		"ranges": {1: [15, 25], 2: [25, 35], 3: [35, 50]}},
+	{"stat": "durability", "category": "weapon", "unit": "pct", "weight": 0.8,
+		"ranges": {1: [25, 40], 2: [40, 55], 3: [55, 75]}},
+
+	{"stat": "max_hp", "category": "clothing", "unit": "hp", "weight": 1.0,
+		"ranges": {1: [5, 10], 2: [10, 20], 3: [15, 50]}},
+	{"stat": "regen", "category": "clothing", "unit": "rate", "weight": 1.0,
+		"ranges": {1: [0.01, 0.02], 2: [0.02, 0.05], 3: [0.04, 0.08]}},
+	{"stat": "low_hp_regen", "category": "clothing", "unit": "mult", "weight": 0.5,
+		"ranges": {1: [2.0, 2.0], 2: [2.5, 2.5], 3: [3.0, 3.0]}},
+	{"stat": "carry", "category": "clothing", "unit": "kg", "weight": 0.9,
+		"ranges": {1: [2, 5], 2: [5, 8], 3: [8, 10]}},
+	{"stat": "stamina_drain", "category": "clothing", "unit": "pct", "weight": 0.9,
+		"ranges": {1: [8, 15], 2: [12, 22], 3: [18, 30]}},
+	{"stat": "insulation", "category": "clothing", "unit": "pct", "weight": 0.9,
+		"ranges": {1: [10, 20], 2: [20, 30], 3: [30, 40]}},
+	{"stat": "noise", "category": "clothing", "unit": "pct", "weight": 0.7,
+		"ranges": {1: [10, 20], 2: [15, 30], 3: [20, 40]}},
+	{"stat": "sprint", "category": "clothing", "unit": "pct", "weight": 0.8,
+		"ranges": {1: [3, 6], 2: [5, 9], 3: [8, 12]}},
+	{"stat": "protection", "category": "clothing", "unit": "flat", "weight": 0.5,
+		"ranges": {2: [1, 1], 3: [1, 1]}},
+	{"stat": "thirst_drain", "category": "clothing", "unit": "pct", "weight": 0.7,
+		"ranges": {1: [8, 15], 2: [12, 22], 3: [18, 30]}},
+	{"stat": "hunger_drain", "category": "clothing", "unit": "pct", "weight": 0.7,
+		"ranges": {1: [8, 15], 2: [12, 22], 3: [18, 30]}},
+	{"stat": "sanity_drain", "category": "clothing", "unit": "pct", "weight": 0.5,
+		"ranges": {1: [8, 15], 2: [12, 22], 3: [18, 30]}},
 ]
 
-const _CLOTHING_ENTRIES := [
-	{
-		"stat": "max_hp",
-		"category": "clothing",
-		"unit": "hp",
-		"weight": 100.0,
-		"ranges": {1: [5, 10], 2: [8, 15], 3: [15, 50]}
-	},
-	{
-		"stat": "regen",
-		"category": "clothing",
-		"unit": "hp",
-		"weight": 90.0,
-		"ranges": {1: [0.1, 0.25], 2: [0.15, 0.4], 3: [0.25, 0.6]}
-	},
-	{
-		"stat": "low_hp_regen",
-		"category": "clothing",
-		"unit": "hp",
-		"weight": 40.0,
-		"ranges": {2: [0.15, 0.4], 3: [0.25, 0.6]}
-	},
-	{
-		"stat": "carry",
-		"category": "clothing",
-		"unit": "kg",
-		"weight": 95.0,
-		"ranges": {1: [1, 3], 2: [2, 5], 3: [3, 8]}
-	},
-	{
-		"stat": "stamina_drain",
-		"category": "clothing",
-		"unit": "pct",
-		"weight": 90.0,
-		"ranges": {1: [-10, -5], 2: [-20, -8], 3: [-30, -15]}
-	},
-	{
-		"stat": "insulation",
-		"category": "clothing",
-		"unit": "pct",
-		"weight": 80.0,
-		"ranges": {1: [5, 10], 2: [10, 20], 3: [15, 30]}
-	},
-	{
-		"stat": "noise",
-		"category": "clothing",
-		"unit": "pct",
-		"weight": 80.0,
-		"ranges": {1: [-10, -5], 2: [-20, -10], 3: [-40, -20]}
-	},
-	{
-		"stat": "sprint",
-		"category": "clothing",
-		"unit": "pct",
-		"weight": 85.0,
-		"ranges": {1: [2, 5], 2: [5, 10], 3: [8, 15]}
-	},
-	{
-		"stat": "protection",
-		"category": "clothing",
-		"unit": "pct",
-		"weight": 95.0,
-		"ranges": {1: [2, 5], 2: [5, 10], 3: [8, 15]}
-	},
-	{
-		"stat": "thirst_drain",
-		"category": "clothing",
-		"unit": "pct",
-		"weight": 70.0,
-		"ranges": {1: [-10, -5], 2: [-20, -10], 3: [-30, -15]}
-	},
-	{
-		"stat": "hunger_drain",
-		"category": "clothing",
-		"unit": "pct",
-		"weight": 70.0,
-		"ranges": {1: [-10, -5], 2: [-20, -10], 3: [-30, -15]}
-	},
-	{
-		"stat": "sanity_drain",
-		"category": "clothing",
-		"unit": "pct",
-		"weight": 60.0,
-		"ranges": {1: [-10, -5], 2: [-20, -10], 3: [-40, -20]}
-	}
-]
-
-static func _all_entries() -> Array:
-	return _WEAPON_ENTRIES + _CLOTHING_ENTRIES
+const UNITS := ["pct", "hp", "kg", "flat", "rate", "mult"]
+const CATEGORIES := ["weapon", "clothing"]
 
 static func entries(category: String) -> Array:
 	var out: Array = []
-	for e in _all_entries():
+	for e in POOL:
 		if e["category"] == category:
 			out.append(e)
 	return out
 
 static func affix_ids(category: String) -> Array:
-	var seen := {}
-	var out: Array = []
-	for e in entries(category):
-		var s: String = e["stat"]
-		if not seen.has(s):
-			seen[s] = true
-			out.append(s)
-	out.sort()
-	return out
+	var ids: Array = []
+	for e in POOL:
+		if e["category"] == category and not ids.has(e["stat"]):
+			ids.append(e["stat"])
+	ids.sort()
+	return ids
 
 static func entry(category: String, stat: String) -> Dictionary:
-	for e in entries(category):
-		if e["stat"] == stat:
+	for e in POOL:
+		if e["category"] == category and e["stat"] == stat:
 			return e
 	return {}
 
 static func validate() -> Array:
-	var errs: Array = []
-	for e in _all_entries():
-		var cat: String = e.get("category", "")
-		if cat != "weapon" and cat != "clothing":
-			errs.append("bad category: %s" % cat)
-		var stat: String = e.get("stat", "")
-		if stat.is_empty():
-			errs.append("empty stat")
-		var unit: String = e.get("unit", "")
-		if unit.is_empty():
-			errs.append("empty unit for %s" % stat)
-		var rngs: Dictionary = e.get("ranges", {})
-		if rngs.is_empty():
-			errs.append("no ranges for %s" % stat)
-		for tier in rngs.keys():
-			if typeof(tier) != TYPE_INT:
-				errs.append("tier key not int for %s" % stat)
-			var r: Array = rngs[tier]
-			if r.size() != 2:
-				errs.append("range not [min,max] for %s" % stat)
-			else:
-				if typeof(r[0]) != TYPE_FLOAT and typeof(r[0]) != TYPE_INT:
-					errs.append("range min not number for %s" % stat)
-				if typeof(r[1]) != TYPE_FLOAT and typeof(r[1]) != TYPE_INT:
-					errs.append("range max not number for %s" % stat)
-				if r[0] > r[1]:
-					errs.append("range min>max for %s" % stat)
-	return errs
+	var problems: Array = []
+	var seen: Array = []
+	for e in POOL:
+		var cat = e.get("category", "")
+		var st = e.get("stat", "")
+		var tag: String = str(cat) + "/" + str(st)
+		if not CATEGORIES.has(cat):
+			problems.append("bad category: " + tag)
+		if st == "":
+			problems.append("empty stat: " + tag)
+		if seen.has(tag):
+			problems.append("duplicate: " + tag)
+		seen.append(tag)
+		if not UNITS.has(e.get("unit", "")):
+			problems.append("bad unit: " + tag)
+		if float(e.get("weight", 0.0)) <= 0.0:
+			problems.append("bad weight: " + tag)
+		var ranges = e.get("ranges", {})
+		if typeof(ranges) != TYPE_DICTIONARY or ranges.is_empty():
+			problems.append("no ranges: " + tag)
+		else:
+			for tier in ranges.keys():
+				if not [COMMON, RARE, LEGENDARY].has(tier):
+					problems.append("bad tier " + str(tier) + ": " + tag)
+				var r = ranges[tier]
+				if typeof(r) != TYPE_ARRAY or r.size() != 2:
+					problems.append("bad range at tier " + str(tier) + ": " + tag)
+				else:
+					var r0 = float(r[0])
+					var r1 = float(r[1])
+					if r0 > r1:
+						problems.append("bad range at tier " + str(tier) + ": " + tag)
+	return problems
