@@ -286,12 +286,11 @@ func _register_mcm() -> void:
 
 	var CAT2 := "02. Contour ESP"
 	cfg.set_value("Bool", "outline_enabled", {"name": "Contour ESP", "default": true, "value": true, "category": CAT2, "menu_pos": 0, "tooltip": "Draw state-coloured body outlines over NPCs. Off = full-screen thermal only."})
-	cfg.set_value("Bool", "outline_body_fill", {"name": "Body fill", "default": true, "value": true, "category": CAT2, "menu_pos": 1, "tooltip": "Fill the NPC body with a warm-to-cold thermal gradient inside the outline."})
-	cfg.set_value("Float", "corpse_decay", {"name": "Corpse cooling time", "default": 8.0, "value": 8.0, "minRange": 0.0, "maxRange": 30.0, "step": 1.0, "category": CAT2, "menu_pos": 2, "tooltip": "Seconds a dead NPC's outline takes to cool from warm to cold."})
-	cfg.set_value("Float", "outline_thickness", {"name": "Outline thickness", "default": 0.006, "value": 0.006, "minRange": 0.0, "maxRange": 0.05, "step": 0.001, "category": CAT2, "menu_pos": 3, "tooltip": "How far the outline band grows beyond the body."})
-	cfg.set_value("Float", "outline_brightness", {"name": "Outline brightness", "default": 0.6, "value": 0.6, "minRange": 0.1, "maxRange": 3.0, "step": 0.1, "category": CAT2, "menu_pos": 4, "tooltip": "Brightness multiplier on the outline colour."})
-	cfg.set_value("Bool", "outline_pvisible", {"name": "Spotted flash", "default": true, "value": true, "category": CAT2, "menu_pos": 5, "tooltip": "Flash the body when the NPC's own sensors currently see you."})
-	cfg.set_value("Color", "pvisible_color", {"name": "Flash colour", "default": Color(1, 1, 1), "value": Color(1, 1, 1), "allowAlpha": false, "category": CAT2, "menu_pos": 6, "tooltip": "Colour the body flashes when the NPC sees you."})
+	cfg.set_value("Bool", "outline_body_fill", {"name": "Body fill", "default": true, "value": true, "category": CAT2, "menu_pos": 1, "tooltip": "Fill the NPC body with its state colour inside the outline."})
+	cfg.set_value("Float", "fill_opacity", {"name": "Fill opacity", "default": 0.4, "value": 0.4, "minRange": 0.0, "maxRange": 1.0, "step": 0.05, "category": CAT2, "menu_pos": 2, "tooltip": "How solid the body fill is. 0 = outline only."})
+	cfg.set_value("Float", "corpse_decay", {"name": "Corpse cooling time", "default": 8.0, "value": 8.0, "minRange": 0.0, "maxRange": 30.0, "step": 1.0, "category": CAT2, "menu_pos": 3, "tooltip": "Seconds a dead NPC's outline takes to cool from warm to cold."})
+	cfg.set_value("Float", "outline_thickness", {"name": "Outline thickness", "default": 0.006, "value": 0.006, "minRange": 0.0, "maxRange": 0.05, "step": 0.001, "category": CAT2, "menu_pos": 4, "tooltip": "How far the outline band grows beyond the body."})
+	cfg.set_value("Float", "outline_brightness", {"name": "Outline brightness", "default": 0.6, "value": 0.6, "minRange": 0.1, "maxRange": 3.0, "step": 0.1, "category": CAT2, "menu_pos": 5, "tooltip": "Brightness multiplier on the outline colour."})
 
 	var CAT3 := "03. Outline Colours"
 	cfg.set_value("Color", "state_normal", {"name": "Normal / idle", "default": Color(1.0, 0.72, 0.28), "value": Color(1.0, 0.72, 0.28), "allowAlpha": false, "category": CAT3, "menu_pos": 0, "tooltip": "Colour for NPCs that are idle, patrolling, looting or guarding."})
@@ -418,8 +417,7 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 		_esp.p_thickness = float(_mcm_key_val(cfg, "Float", "outline_thickness", 0.006))
 		_esp.p_brightness = float(_mcm_key_val(cfg, "Float", "outline_brightness", 0.6))
 		_esp.p_fill = bool(_mcm_key_val(cfg, "Bool", "outline_body_fill", true))
-		_esp.p_flash = bool(_mcm_key_val(cfg, "Bool", "outline_pvisible", true))
-		_esp.p_flash_color = _mcm_color_val(cfg, "pvisible_color", Color.WHITE)
+		_esp.p_fill_alpha = float(_mcm_key_val(cfg, "Float", "fill_opacity", 0.4))
 		_esp.p_brightness = float(_mcm_key_val(cfg, "Float", "outline_brightness", 0.6))
 		_nvg.set_outline_brightness = _esp.p_brightness
 		_nvg.set_state_colors({

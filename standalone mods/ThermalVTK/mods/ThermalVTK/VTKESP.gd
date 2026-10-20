@@ -16,11 +16,10 @@ const CAP := 24
 var enabled: bool = false
 # MCM-driven params; see _defaults().
 var p_fill := true
+var p_fill_alpha := 0.4
 var p_decay := 8.0
 var p_dist := 150.0
 var p_through := 5.0
-var p_flash := true
-var p_flash_color := Color.WHITE
 var p_thickness := 0.006
 var p_brightness := 0.6
 var p_colors := {
@@ -343,9 +342,6 @@ func _opts_for(e: Dictionary, node: Node, dist: float, now: float) -> Dictionary
 	var key: Color = States.KEY_NOMAD if nomad else States.state_key(cat)
 	if key_override_on:
 		key = key_override
-	var flash := 0.0
-	if p_flash and _player_visible(node):
-		flash = 0.7
 	var foot_y: float = (node as Node3D).global_position.y
 	return {
 		"cat": cat,
@@ -354,21 +350,22 @@ func _opts_for(e: Dictionary, node: Node, dist: float, now: float) -> Dictionary
 		"alpha": alpha,
 		"cool": cool,
 		"through_walls": p_through > 0.0 and dist <= p_through,
-		"flash": flash,
-		"flash_color": p_flash_color,
 		"foot_y": foot_y,
 		"body_height": 1.8,
 		"brightness": p_brightness,
 		"grow": p_thickness,
-		"fill_alpha": 0.0,
+		"fill_alpha": p_fill_alpha if p_fill else 0.0,
+		"fill_color": _state_color(cat, nomad),
 	}
 
-# sensor.PVisible is true when the NPC's sensor currently sees the player.
-func _player_visible(node: Node) -> bool:
-	var sensor = node.get("sensor")
-	if sensor == null:
-		return false
-	return sensor.get("PVisible") == true
+# The fill tint is the same colour the outline uses: nomad override first,
+# then the MCM per-state colour, falling back to the state default when the
+# colour dictionary has no entry for that key.
+func _state_color(cat: int, nomad: bool) -> Color:
+	if nomad:
+		return p_nomad
+	var key: String = States.category_key(cat)
+	return p_colors.get(key, States.default_color(cat))
 
 func _player_pos() -> Variant:
 	var players := get_tree().get_nodes_in_group("Player")

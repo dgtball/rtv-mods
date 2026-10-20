@@ -105,11 +105,11 @@ func refresh(id: int, opts: Dictionary) -> void:
 	var key: Color = opts.get("state_key", States.KEY_NORMAL)
 	var alpha := float(opts.get("alpha", 1.0))
 	var grow := float(opts.get("grow", 0.006))
-	var flash := float(opts.get("flash", 0.0))
 	var foot_y := float(opts.get("foot_y", 0.0))
 	var body_h := float(opts.get("body_height", 1.8))
 	var cool := float(opts.get("cool", 0.0))
-	var fill_alpha := float(opts.get("fill_alpha", 0.4))
+	var fill_alpha := float(opts.get("fill_alpha", 0.0))
+	var fill_col: Color = opts.get("fill_color", Color(1.0, 0.72, 0.28))
 
 	var body_mat: ShaderMaterial = entry["body"]
 	var ring_mat: ShaderMaterial = entry["ring"]
@@ -128,11 +128,8 @@ func refresh(id: int, opts: Dictionary) -> void:
 		body_mat.set_shader_parameter("footY", foot_y)
 	if body_mat.get_shader_parameter("bodyHeight") == null or not is_equal_approx(float(body_mat.get_shader_parameter("bodyHeight")), body_h):
 		body_mat.set_shader_parameter("bodyHeight", body_h)
-	if body_mat.get_shader_parameter("flash") == null or not is_equal_approx(float(body_mat.get_shader_parameter("flash")), flash):
-		body_mat.set_shader_parameter("flash", flash)
-	var flash_col: Color = opts.get("flash_color", Color.WHITE)
-	if body_mat.get_shader_parameter("flash_color") != flash_col:
-		body_mat.set_shader_parameter("flash_color", flash_col)
+	if body_mat.get_shader_parameter("fillColor") != fill_col:
+		body_mat.set_shader_parameter("fillColor", fill_col)
 
 func clear(id: int) -> void:
 	var entry = _items.get(id)
