@@ -333,10 +333,6 @@ func _process(delta: float) -> void:
 	_retry_mines()
 
 
-func _cdist(a: Color, b: Color) -> float:
-	return sqrt(pow(a.r - b.r, 2.0) + pow(a.g - b.g, 2.0) + pow(a.b - b.b, 2.0))
-
-
 # Покой при выключенном тепловизоре. Регистрация (node_added) продолжает идти
 # и при off, поэтому мёртвые записи мин всё равно надо чистить, иначе _mines рос бы
 # без границы.
