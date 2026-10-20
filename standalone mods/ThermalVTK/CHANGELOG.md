@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1] - 2026-10-20
+
+### Fixed
+- The body fill now uses the same state colour as the outline, so they always match after changing a state colour in the settings.
+- The outline on a dead body now dims as the body cools, matching the fill.
+- The debug state label no longer stays floating over a dead body.
+
 ## [1.6.0] - 2026-10-20
 
 ### Added
