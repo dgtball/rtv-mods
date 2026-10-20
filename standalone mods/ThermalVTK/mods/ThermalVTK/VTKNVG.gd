@@ -12,7 +12,7 @@ const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
 #      calls there did nothing).
 #   2. Mines carry a fixed emissive "key" colour and are painted by
 #      material_override, so the whole on-screen shell IS the key pixel. The
-#      contour's state-key ring (normal/alerted/hunting/combat/nomad) is a
+#      contour's state-key ring (normal/combat/defend) is a
 #      separate unshaded layer owned by VTKOutline.
 #   3. The shader samples the screen, finds whichever key is nearest, and
 #      substitutes a display color. Everything else goes through the
@@ -48,15 +48,12 @@ const DET_MINE := Color(0.50, 0.06, 0.94)
 # values from the F7 ring probe). The unshaded ring is thin, so its on-screen
 # colour is the key blended with the background by glow/tonemap -- matching the
 # raw keys misses. Probe averages (motion-gated, 3 runs): normal (1,0,0)->
-# (1.00,0.21,0.16), alerted (1,1,0)->(1.00,0.97,0.46), hunting (1,0,1)->
-# (1.00,0.34,1.00), combat (0,1,1)->(0.82,1.00,1.00), nomad (0,1,0)->
-# (0.77,1.00,0.53). The ring still EMITS the raw keys; only the detector
+# (1.00,0.21,0.16), combat (0,1,1)->(0.82,1.00,1.00), defend (1,0,1)->
+# (1.00,0.34,1.00). The ring still EMITS the raw keys; only the detector
 # compares against these.
 const DET_ST_NORMAL := Color(1.00, 0.21, 0.16)
-const DET_ST_ALERTED := Color(1.00, 0.97, 0.46)
-const DET_ST_HUNTING := Color(1.00, 0.34, 1.00)
 const DET_ST_COMBAT := Color(0.82, 1.00, 1.00)
-const DET_ST_NOMAD := Color(0.77, 1.00, 0.53)
+const DET_ST_DEFEND := Color(1.00, 0.34, 1.00)
 
 # settings
 var set_nvg_noise: float = 4.0
@@ -244,15 +241,11 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("nvgWhite", set_nvg_white)
 	nvg_mat.set_shader_parameter("mineKey", DET_MINE)
 	nvg_mat.set_shader_parameter("stNormalKey", DET_ST_NORMAL)
-	nvg_mat.set_shader_parameter("stAlertedKey", DET_ST_ALERTED)
-	nvg_mat.set_shader_parameter("stHuntingKey", DET_ST_HUNTING)
 	nvg_mat.set_shader_parameter("stCombatKey", DET_ST_COMBAT)
-	nvg_mat.set_shader_parameter("stNomadKey", DET_ST_NOMAD)
+	nvg_mat.set_shader_parameter("stDefendKey", DET_ST_DEFEND)
 	nvg_mat.set_shader_parameter("stNormalColor", _state_colors.get("state_normal", Color(1.0, 0.72, 0.28)))
-	nvg_mat.set_shader_parameter("stAlertedColor", _state_colors.get("state_alerted", Color(1.0, 0.9, 0.25)))
-	nvg_mat.set_shader_parameter("stHuntingColor", _state_colors.get("state_hunting", Color(1.0, 0.5, 0.1)))
 	nvg_mat.set_shader_parameter("stCombatColor", _state_colors.get("state_combat", Color(0.95, 0.18, 0.15)))
-	nvg_mat.set_shader_parameter("stNomadColor", _state_colors.get("nomad_color", Color(0.30, 1.0, 0.35)))
+	nvg_mat.set_shader_parameter("stDefendColor", _state_colors.get("state_defend", Color(0.62, 0.30, 0.95)))
 	nvg_mat.set_shader_parameter("stateBright", set_outline_brightness)
 	nvg_mat.set_shader_parameter("scopeRotate", _scope_rotate)
 

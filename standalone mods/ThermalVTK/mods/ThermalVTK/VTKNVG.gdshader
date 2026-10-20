@@ -33,16 +33,12 @@ uniform vec3 mineKey : source_color = vec3(0.0, 0.0, 1.0);
 // NVG-processed before this shader sees it, so the *Key uniforms hold the
 // measured post-NVG (washed) values (see VTKNVG.gd DET_ST_*). The *Color
 // uniforms are the per-state display colours, substituted AFTER the palette.
-uniform vec3 stNormalKey : source_color = vec3(1.0, 0.0, 0.0);
-uniform vec3 stAlertedKey : source_color = vec3(1.0, 1.0, 0.0);
-uniform vec3 stHuntingKey : source_color = vec3(1.0, 0.0, 1.0);
-uniform vec3 stCombatKey : source_color = vec3(0.0, 1.0, 1.0);
-uniform vec3 stNomadKey : source_color = vec3(0.0, 1.0, 0.0);
+uniform vec3 stNormalKey : source_color = vec3(1.0, 0.21, 0.16);
+uniform vec3 stCombatKey : source_color = vec3(0.82, 1.0, 1.0);
+uniform vec3 stDefendKey : source_color = vec3(1.0, 0.34, 1.0);
 uniform vec3 stNormalColor : source_color = vec3(1.0, 0.72, 0.28);
-uniform vec3 stAlertedColor : source_color = vec3(1.0, 0.9, 0.25);
-uniform vec3 stHuntingColor : source_color = vec3(1.0, 0.5, 0.1);
 uniform vec3 stCombatColor : source_color = vec3(0.95, 0.18, 0.15);
-uniform vec3 stNomadColor : source_color = vec3(0.30, 1.0, 0.35);
+uniform vec3 stDefendColor : source_color = vec3(0.62, 0.30, 0.95);
 uniform float stateBright : hint_range(0.1, 3.0, 0.05) = 0.6;
 
 uniform vec3 mineColor : source_color = vec3(0.7, 0.1, 0.07);
@@ -127,11 +123,9 @@ void fragment()
 		// let an earlier check steal matches that belong to a later key.
 		float dMine = orbitDist(pixelColor.rgb, mineKey);
 		float dStN = orbitDist(pixelColor.rgb, stNormalKey);
-		float dStA = orbitDist(pixelColor.rgb, stAlertedKey);
-		float dStH = orbitDist(pixelColor.rgb, stHuntingKey);
 		float dStC = orbitDist(pixelColor.rgb, stCombatKey);
-		float dStNomad = orbitDist(pixelColor.rgb, stNomadKey);
-		float minD = min(dMine, min(min(dStN, dStA), min(min(dStH, dStC), dStNomad)));
+		float dStD = orbitDist(pixelColor.rgb, stDefendKey);
+		float minD = min(dMine, min(dStN, min(dStC, dStD)));
 
 		{
 			float rawLuminance = dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114));
@@ -143,14 +137,10 @@ void fragment()
 					subColor = mineColor;
 				} else if (minD == dStN) {
 					subColor = stNormalColor * stateBright;
-				} else if (minD == dStA) {
-					subColor = stAlertedColor * stateBright;
-				} else if (minD == dStH) {
-					subColor = stHuntingColor * stateBright;
 				} else if (minD == dStC) {
 					subColor = stCombatColor * stateBright;
 				} else {
-					subColor = stNomadColor * stateBright;
+					subColor = stDefendColor * stateBright;
 				}
 				color = vec4(subColor, pixelColor.a);
 			} else {
