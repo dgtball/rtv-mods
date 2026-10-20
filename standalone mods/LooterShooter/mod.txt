@@ -1,0 +1,17 @@
+[mod]
+name="LooterShooter"
+id="looter-shooter"
+version="0.1.0"
+
+[autoload]
+LSH="res://mods/LooterShooter/LSHBoot.gd"
+
+[hooks]
+res://Scripts/LootContainer.gd = CreateLoot, AILoot
+res://Scripts/Tooltip.gd = Update
+
+[dependencies]
+optional=["doinkoink-mcm"]
+
+[updates]
+source=""
