@@ -22,7 +22,7 @@ func material_of(id: int) -> Dictionary:
 # MeshInstance3D) so MultiMesh/CSG parts are covered, and NO layer/visible
 # filter: bot geometry sits on render layer 1, and hidden LODs must still carry
 # the overlay so the LOD that becomes visible already has it. This mirrors
-# VTKNVG._collect_meshes, the route mode B already proves works.
+# VTKNVG._collect_meshes, the same sweep the mine path uses.
 func _collect(node: Node, out: Array) -> void:
 	if node is GeometryInstance3D:
 		out.append(node)

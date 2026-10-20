@@ -10,14 +10,10 @@ const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
 #      a "noise" uniform we can actually drive (vanilla's own shader declares
 #      noise as a `const`, which is why BetterNVG's set_shader_parameter
 #      calls there did nothing).
-#   2. Bots, mines and the friendly Nomad marker each carry fixed emissive
-#      "key" colours. Mines are painted by material_override, so the whole
-#      on-screen shell IS the key pixel. A bot's key body is a DUPLICATE of its
-#      real mesh (a sibling carrying VTKBot.gdshader) with the real mesh hidden,
-#      because the game's own bot geometry ignores an external material_override;
-#      that shader picks the key by pixel height so a corpse can cool from the
-#      extremities inward. The marker is a separate small billboarded key mesh
-#      over a Nomad's head.
+#   2. Mines carry a fixed emissive "key" colour and are painted by
+#      material_override, so the whole on-screen shell IS the key pixel. The
+#      contour's state-key ring (normal/alerted/hunting/combat/nomad) is a
+#      separate unshaded layer owned by VTKOutline.
 #   3. The shader samples the screen, finds whichever key is nearest, and
 #      substitutes a display color. Everything else goes through the
 #      false-color thermal palette.
@@ -30,9 +26,6 @@ const GAME_DATA_RES := Paths.GAME_DATA
 const NVG_SCRIPT_SUFFIX := "NVG.gd"
 const SHADER_RES := "res://mods/ThermalVTK/VTKNVG.gdshader"
 
-# A body stays highlighted for DEATH_COOLDOWN seconds after death, cooling from
-# the head down, then the glow hides entirely.
-const DEATH_COOLDOWN := 120.0
 # Сколько кадров подряд пробовать поставить шейдер, если NVG-узел уже найден,
 # но его Overlay ещё не готов (ванильный _ready ждёт ~0.1 c). ~60 кадров.
 const INSTALL_RETRY_FRAMES := 60
@@ -85,7 +78,6 @@ var _install_retry: int = 0
 
 var _mat_mine: StandardMaterial3D = null
 
-var _bots: Dictionary = {}
 var _mines: Dictionary = {}
 var _mine_watch: Dictionary = {}
 var _pending: Array[int] = []
@@ -140,8 +132,6 @@ func _scan_node(n: Node) -> void:
 			_install_retry = INSTALL_RETRY_FRAMES
 	elif path.ends_with("Mine.gd"):
 		_register_mine(n)
-	elif _is_bot(n):
-		_register_bot(n)
 	for c in n.get_children():
 		_scan_node(c)
 
@@ -196,15 +186,6 @@ func _deferred_check(node_id: int) -> void:
 	if path.ends_with("Mine.gd"):
 		_register_mine(n)
 		return
-	if _is_bot(n):
-		_register_bot(n)
-
-
-# AI.gd extends Node3D, not CharacterBody3D. Signature: has Activate(), exposes
-# a "dead" flag and an exported MeshInstance3D "mesh". Trader.gd also has
-# Activate() but no "dead", so it stays out of the bot set.
-func _is_bot(n: Node) -> bool:
-	return n is Node3D and n.has_method("Activate") and "dead" in n and "mesh" in n
 
 
 # The shader lives on a ColorRect under the NVG node's "Overlay" child. Vanilla
@@ -294,7 +275,6 @@ func _process(delta: float) -> void:
 	_drain_pending()
 	if get_tree().current_scene != _scene_ref:
 		_scene_ref = get_tree().current_scene
-		_bots.clear()
 		_mines.clear()
 		_mine_watch.clear()
 		_nvg_root = null
@@ -357,79 +337,10 @@ func _cdist(a: Color, b: Color) -> float:
 	return sqrt(pow(a.r - b.r, 2.0) + pow(a.g - b.g, 2.0) + pow(a.b - b.b, 2.0))
 
 
-func _register_bot(node: Node) -> void:
-	var id := node.get_instance_id()
-	if _bots.has(id):
-		return
-	# The bot's visual (variant skin, LODs, gear) is assembled by AI.Initialize()
-	# at runtime as a whole subtree, and the exported node.mesh is only ONE inner
-	# piece of it -- duplicating that single mesh highlighted just the sliver that
-	# pokes past the real skin, so the body read as scenery. Instead we paint the
-	# bot's own geometry directly, exactly like mines: sweep every
-	# GeometryInstance3D under the node and override its material. The sweep is
-	# (re)done lazily on the tick, because the subtree does not exist yet at
-	# registration and AI.Initialize() can rewire it later.
-	_bots[id] = {
-		"node": node,
-		"meshes": [],
-		"mat": null,
-		"painted": false,
-		"paint": null,
-		"friendly": _is_friendly(node),
-		"friendly_resolved": false,
-		"death": 0.0,
-		"recorded": false,
-		"child_count": -1,
-	}
-
-
-# Sweeps the bot's whole visual subtree and returns its geometry nodes. The
-# exported node.mesh is only an inner piece of the rig -- the visible skin is
-# separate LOD/gear meshes -- so painting that one node (or a duplicate of it)
-# left the real body as scenery with just a key sliver at the silhouette. This
-# is the same route mines already take.
-func _sweep_bot_meshes(node: Node) -> Array:
-	var all: Array = []
-	_collect_meshes(node, all)
-	var out: Array = []
-	for m in all:
-		if is_instance_valid(m):
-			out.append(m)
-	return out
-
-
-func _is_friendly(node: Node) -> bool:
-	# Faction comes from the AIData variant picked in AI.Initialize(), which can
-	# be null at registration time, so the result is only cached once the variant
-	# resolves. Falls back to the pooled node name, since AISpawner names them
-	# AI_Nomad, AI_Nomad_2.
-	var v = node.get("variant")
-	if v != null and v.get("faction") != null:
-		return int(v.get("faction")) == 0
-	return String(node.name).contains("Nomad")
-
-
 # Покой при выключенном тепловизоре. Регистрация (node_added) продолжает идти
-# и при off, поэтому мёртвые записи всё равно надо чистить, иначе _mines рос бы
-# без границы. Заодно лэтчим death clock: иначе труп, убитый при выключенном
-# тепловизоре, при включении получил бы death="now" и светился бы лишние
-# DEATH_COOLDOWN секунд.
+# и при off, поэтому мёртвые записи мин всё равно надо чистить, иначе _mines рос бы
+# без границы.
 func _off_frame_upkeep() -> void:
-	var now := float(Time.get_ticks_msec()) / 1000.0
-	for id in _bots.keys():
-		var e = _bots.get(id)
-		if e == null:
-			continue
-		var node = e.get("node")
-		if node == null or not is_instance_valid(node):
-			_bots.erase(id)
-			continue
-		if bool(node.get("dead")):
-			if not e["recorded"]:
-				e["recorded"] = true
-				e["death"] = now
-		else:
-			e["recorded"] = false
 	for id in _mines.keys():
 		var e = _mines.get(id)
 		if e == null or not is_instance_valid(e.get("node")):
@@ -437,17 +348,8 @@ func _off_frame_upkeep() -> void:
 
 
 # Снимает покраску на переходе on->off ровно один раз: material_override в null
-# на все меши ботов и мин. Дальше кадр при off ботов и мешей не обходит вовсе.
+# на меши мин. Дальше кадр при off мешей не обходит вовсе.
 func _clear_paint() -> void:
-	for id in _bots.keys():
-		var e = _bots.get(id)
-		if e == null:
-			continue
-		for m in e.get("meshes", []):
-			if is_instance_valid(m):
-				(m as GeometryInstance3D).material_override = null
-		e["painted"] = false
-		e["paint"] = null
 	for id in _mines.keys():
 		var e = _mines.get(id)
 		if e == null:
