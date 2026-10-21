@@ -55,15 +55,15 @@ const DET_ST_NORMAL := Color(1.00, 0.21, 0.16)
 const DET_ST_COMBAT := Color(0.82, 1.00, 1.00)
 const DET_ST_DEFEND := Color(1.00, 0.34, 1.00)
 
-# Fill / nomad detector targets. PLACEHOLDERS: seeded to the raw keys (which
-# moved when the keys were re-spaced) until an in-game probe like DET_ST_*
-# measures the washed values -- do not treat these numbers as calibrated, a
-# detector that sits inside another key's radius mis-classifies pixels. The
-# fill mesh is opaque, so its washed value stays close to the emitted key.
-const DET_FILL_NORMAL := Color(0.0, 0.5, 0.0)
-const DET_FILL_COMBAT := Color(1.0, 0.0, 0.5)
-const DET_FILL_DEFEND := Color(0.5, 0.0, 1.0)
-const DET_NOMAD := Color(0.6, 1.0, 0.6)
+# Fill / nomad detector targets. Calibrated in-game against the vanilla NVG
+# palette (a probe measured each raw fill/nomad key after the wash). Each value
+# is the measured post-NVG colour of the matching world key in VTKStates.gd, so
+# a fill detector can no longer sit inside another key's radius: the fill pool
+# stays 0.71 apart and the core pool (mine + states + nomad) 0.41 apart.
+const DET_FILL_NORMAL := Color(0.961, 0.753, 0.184)
+const DET_FILL_COMBAT := Color(0.000, 0.149, 0.969)
+const DET_FILL_DEFEND := Color(1.000, 0.192, 0.624)
+const DET_NOMAD := Color(0.580, 0.973, 0.584)
 
 # settings
 var set_nvg_noise: float = 4.0

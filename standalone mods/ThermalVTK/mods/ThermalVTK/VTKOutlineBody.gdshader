@@ -16,7 +16,7 @@ render_mode unshaded, cull_back, depth_draw_never;
 // luminance, leaving an opaque blob over the NPC. The fill is depth-tested
 // against the world like any other surface: it only shows where the NPC is
 // actually in view.
-uniform vec3 fill_key : source_color = vec3(0.0, 0.5, 0.0);
+uniform vec3 fill_key : source_color = vec3(0.55, 0.38, 0.02);
 uniform float cool : hint_range(0.0, 1.0, 0.01) = 0.0;
 uniform bool fill_on = true;
 uniform float footY = 0.0;
