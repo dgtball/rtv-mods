@@ -4,6 +4,10 @@ const Log = preload("res://mods/LooterShooter/LSHLog.gd")
 const ConfigRec = preload("res://mods/LooterShooter/LSHConfig.gd")
 const DebugMod = preload("res://mods/LooterShooter/LSHDebug.gd")
 
+const Roll = preload("res://mods/LooterShooter/LSHRoll.gd")
+const Store = preload("res://mods/LooterShooter/LSHStore.gd")
+const Category = preload("res://mods/LooterShooter/LSHCategory.gd")
+
 const MCM_HELPERS := "res://ModConfigurationMenu/Scripts/Doink Oink/MCM_Helpers.tres"
 
 var _lib = null
@@ -14,6 +18,13 @@ func _ready() -> void:
 	register_mcm()
 	_debug.configure(_cfg)
 	Log.line("booted (debug=" + str(_cfg.debug_enabled) + ")")
+	var lib = Engine.get_meta("RTVModLib") if Engine.has_meta("RTVModLib") else null
+	if lib == null:
+		Log.warn("RTVModLib not found; loot hooks are inactive")
+	else:
+		_lib = lib
+		_lib.hook("lootcontainer-createloot-post", Callable(self, "tag_created_loot"), 100)
+		_lib.hook("lootcontainer-ailoot-post", Callable(self, "tag_ai_loot"), 100)
 
 func register_mcm() -> void:
 	if not ResourceLoader.exists(MCM_HELPERS):
@@ -81,3 +92,58 @@ func apply_config(cfg: ConfigFile) -> void:
 
 func reroll_item(_item) -> bool:
 	return false
+
+func tag_created_loot(item) -> void:
+	var slotData = _created_slot()
+	if slotData == null or slotData.itemData == null:
+		return
+	_roll_into(slotData, {"item": item, "rarity_roll": _caller_rarity_roll()})
+
+func _created_slot():
+	if _lib == null:
+		return null
+	var caller = _lib._caller if "_caller" in _lib else null
+	if caller == null or not ("loot" in caller):
+		return null
+	var loot = caller.loot
+	if loot is Array and loot.size() > 0:
+		return loot[loot.size() - 1]
+	return null
+
+func tag_ai_loot(slotData) -> void:
+	if slotData == null or slotData.itemData == null:
+		return
+	var ctx := {"rarity_roll": _caller_rarity_roll()}
+	_roll_into(slotData, ctx)
+
+func _caller_rarity_roll() -> int:
+	if _lib == null:
+		return 100
+	var caller = _lib._caller if "_caller" in _lib else null
+	if caller != null and "rarityRoll" in caller:
+		return int(caller.rarityRoll)
+	return 100
+
+func _roll_into(slotData, ctx: Dictionary) -> void:
+	if slotData == null or slotData.itemData == null:
+		return
+	if not Category.rollable(slotData.itemData):
+		return
+	var r: Dictionary = roll_for(slotData.itemData, ctx, RandomNumberGenerator.new())
+	if r["tier"] <= 0 and Store.has_tier(slotData):
+		return
+	Store.stamp(slotData, r["tier"], r["affixes"])
+	if _debug.should_log():
+		Log.line("roll " + str(slotData.itemData.name) + " tier=" + str(r["tier"])
+				+ " affixes=" + str(r["affixes"]))
+
+func roll_for(itemData, ctx: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
+	var cat: String = Category.of_item(itemData)
+	if cat == Category.OTHER:
+		return {"tier": 0, "affixes": []}
+	var rarity_roll: int = int(ctx.get("rarity_roll", 100))
+	var ctx_dict := {"rarity_roll": rarity_roll, "corpse": bool(ctx.get("corpse", false)), "joker": bool(ctx.get("joker", false))}
+	var weights: Array = Roll.tier_weights(ctx_dict, _cfg.freq_mult, _debug.force_tier())
+	var tier: int = Roll.pick_tier(weights, rng.randf())
+	var affixes: Array = Roll.build_affixes(cat, tier, rng)
+	return {"tier": tier, "affixes": affixes}
