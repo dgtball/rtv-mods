@@ -8,6 +8,7 @@
 - The friendly-nomad marker shows only while the contour is on.
 
 ### Fixed
+- The friendly-nomad marker shows a proper green again (it was being re-coloured by the thermal palette).
 - Front-face outlines show a proper rim again (the rim was lost on the default style).
 - Disabling the contour no longer leaves nomad markers floating.
 - The palette-cycle hotkey does nothing while thermal vision is off (no palette change, no notification).

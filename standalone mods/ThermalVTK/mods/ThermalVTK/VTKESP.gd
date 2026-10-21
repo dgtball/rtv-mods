@@ -41,8 +41,9 @@ var _player: Node3D = null
 var _labels: Dictionary = {}
 var _labels_state: Dictionary = {}
 var _markers: Dictionary = {}
-# Shown when thermal vision + the NVG helmet are both live, independent of the
-# contour ESP toggle and of the diagnostic log. Set from ThermalVTK._apply_mode.
+# Shown when thermal vision, the NVG helmet and the contour ESP are all live
+# (the marker belongs to the contour, not the diagnostic log). Set from
+# ThermalVTK._apply_mode.
 var marker_visible: bool = false
 var _dbg_cd: float = 0.0
 var _dbg_cand: int = 0
