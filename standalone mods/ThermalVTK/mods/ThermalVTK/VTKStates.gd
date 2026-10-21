@@ -23,6 +23,24 @@ const KEY_DEFEND := Color(1.0, 0.0, 1.0)
 
 const CATEGORY_KEY_COLORS: Array[Color] = [KEY_NORMAL, KEY_COMBAT, KEY_DEFEND]
 
+# Body-fill keys. Separate from the outline keys so the overlay can give the
+# fill its own density; one per category so the fill carries the state colour.
+# Chosen far from every other key and from the display colours: the overlay
+# detects by raw distance, so overlap would mis-classify.
+const KEY_FILL_NORMAL := Color(0.0, 0.35, 1.0)
+const KEY_FILL_COMBAT := Color(0.0, 1.0, 0.35)
+const KEY_FILL_DEFEND := Color(1.0, 0.55, 0.0)
+
+const FILL_KEY_COLORS: Array[Color] = [KEY_FILL_NORMAL, KEY_FILL_COMBAT, KEY_FILL_DEFEND]
+
+# Friendly-nomad marker key (green display colour proposed by the overlay).
+const KEY_NOMAD := Color(0.35, 0.0, 1.0)
+
+static func fill_key(cat: int) -> Color:
+	if cat < 0 or cat >= FILL_KEY_COLORS.size():
+		return KEY_FILL_NORMAL
+	return FILL_KEY_COLORS[cat]
+
 static func state_key(cat: int) -> Color:
 	if cat < 0 or cat >= CATEGORY_KEY_COLORS.size():
 		return KEY_NORMAL
