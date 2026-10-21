@@ -2,13 +2,14 @@ shader_type canvas_item;
 
 // NVG / thermal overlay. Replaces the vanilla NVG ColorRect shader (see
 // VTKNVG.gd for why the swap is safe). The whole frame is read back through
-// the false-colour thermal palette; mines and the contour state keys are
-// pulled out by comparing the screen against the *Key uniforms. Those keys
-// are NOT the raw colours the ring emits -- the vanilla NVG world processing
+// the false-colour thermal palette; the mine, the three contour state keys,
+// the three body-fill keys and the nomad marker key are pulled out by
+// comparing the screen against the *Key uniforms. Those keys are NOT the raw
+// colours the world-space shaders emit -- the vanilla NVG world processing
 // washes bright keys toward white before this shader ever sees them -- but the
 // measured post-NVG values (VTKNVG.gd DET_*). Keep the key lists in lockstep
 // with VTKNVG.gd. The *Color uniforms are the freely chosen substitution
-// colours.
+// colours; fillOpacity (applied here, not on the mesh) is the fill density.
 
 uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_linear_mipmap;
 uniform vec4 tint : source_color = vec4(0.47, 0.67, 0.51, 1.0);

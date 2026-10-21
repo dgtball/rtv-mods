@@ -442,15 +442,6 @@ func _opts_for(e: Dictionary, node: Node, dist: float, now: float) -> Dictionary
 		"fill_on": p_fill,
 	}
 
-# The per-category display colour: the MCM CAT3 dictionary first, the category
-# default when it has no entry for that key. The body fill no longer tints with
-# it -- the fill paints a detector key and the overlay substitutes the display
-# colour -- so this helper is kept only until the leftover call sites are
-# cleaned up.
-func _state_color(cat: int) -> Color:
-	var key: String = States.category_key(cat)
-	return p_colors.get(key, States.default_color(cat))
-
 func _player_pos() -> Variant:
 	var players := get_tree().get_nodes_in_group("Player")
 	for p in players:
