@@ -21,8 +21,6 @@ var _key_debug_probe: int = KEY_F7
 var _key_cal_cycle: int = KEY_F8
 var _thermal_enabled: bool = false
 var _mines_enabled: bool = true
-var _mcm_thermal_seen: int = -1
-var _mcm_palette_seen: int = -1
 var _outline_enabled: bool = true
 var _nvg_worn: bool = false
 var _cal_active: bool = false
@@ -214,32 +212,28 @@ func _register_mcm() -> void:
 	var CAT := "01. ThermalVision"
 	cfg.set_value("Keycode", "key_thermal_toggle", {"name": "Hotkey: Toggle thermal vision", "default": 0, "default_type": "Keycode", "value": 0, "category": CAT, "menu_pos": 0, "tooltip": "Press in game to turn the thermal layer on and off."})
 	cfg.set_value("Keycode", "key_palette_cycle", {"name": "Hotkey: Cycle world palette", "default": KEY_F6, "default_type": "Keycode", "value": KEY_F6, "category": CAT, "menu_pos": 1, "tooltip": "Press in game to cycle the world thermal palette."})
-	cfg.set_value("Keycode", "key_debug_probe", {"name": "Hotkey: Debug key probe", "default": KEY_F7, "default_type": "Keycode", "value": KEY_F7, "category": CAT, "menu_pos": 20, "tooltip": "Writes the colour under the crosshair to the debug log. Turn the debug log on first, then press it while aiming at a filled NPC or the nomad marker. The view blinks for one frame."})
 	cfg.set_value("Float", "nvg_noise", {"name": "NVG noise", "default": 4.0, "value": 4.0, "minRange": 0.0, "maxRange": 60.0, "step": 0.5, "category": CAT, "menu_pos": 2, "tooltip": "Grain amount over the NVG image. Lower is cleaner. Vanilla is fixed at 10."})
 	cfg.set_value("Float", "nvg_white", {"name": "NVG brightness", "default": 1.0, "value": 1.0, "minRange": 0.05, "maxRange": 1.0, "step": 0.05, "category": CAT, "menu_pos": 3, "tooltip": "Brightness of the NVG image. 1 = full brightness; lower darkens the whole overlay."})
-	cfg.set_value("Bool", "thermal_enabled", {"name": "Thermal vision", "default": false, "value": false, "category": CAT, "menu_pos": 4, "tooltip": "Master switch for the thermal vision layer: the contour ESP and mine highlighting. Plain green NVG is unaffected while this is off."})
 	cfg.set_value("Bool", "thermal_mines", {"name": "Mine highlighting", "default": true, "value": true, "category": CAT, "menu_pos": 5, "tooltip": "Highlight mines while thermal vision is on."})
-	cfg.set_value("Dropdown", "thermal_palette", {"default": "classic", "value": "classic", "options": {"classic": "Classic", "amber": "Amber", "forest": "Forest", "ice": "Ice"}, "category": CAT, "menu_pos": 8, "tooltip": "World thermal palette.", "name": "World palette"})
 	cfg.set_value("Float", "thermal_world", {"default": 1.70, "value": 1.70, "minRange": 1.0, "maxRange": 4.0, "step": 0.05, "category": CAT, "menu_pos": 9, "tooltip": "How bright the surrounding world reads in thermal.", "name": "World brightness"})
 
-	var CAT2 := "02. Contour ESP"
-	cfg.set_value("Bool", "outline_enabled", {"name": "Contour ESP", "default": true, "value": true, "category": CAT2, "menu_pos": 0, "tooltip": "Draw state-coloured body outlines over NPCs. Off = full-screen thermal only."})
-	cfg.set_value("Float", "outline_rim", {"name": "Outline rim", "default": 1.0, "value": 1.0, "minRange": 0.0, "maxRange": 6.0, "step": 0.1, "category": CAT2, "menu_pos": 2, "tooltip": "Edge sharpness of the outline. 1.0 is a linear falloff; higher values tighten the band toward the silhouette."})
-	cfg.set_value("Float", "corpse_decay", {"name": "Corpse cooling time", "default": 30.0, "value": 30.0, "minRange": 0.0, "maxRange": 180.0, "step": 1.0, "category": CAT2, "menu_pos": 6, "tooltip": "Seconds a dead NPC's outline takes to cool from warm to cold."})
-	cfg.set_value("Float", "outline_thickness", {"name": "Outline thickness", "default": 0.006, "value": 0.006, "minRange": 0.001, "maxRange": 0.02, "step": 0.001, "category": CAT2, "menu_pos": 7, "tooltip": "How far the outline band grows beyond the body."})
-	cfg.set_value("Float", "outline_brightness", {"name": "Outline brightness", "default": 0.6, "value": 0.6, "minRange": 0.1, "maxRange": 3.0, "step": 0.1, "category": CAT2, "menu_pos": 8, "tooltip": "Brightness multiplier on the outline colour."})
+	var CAT2 := "02. ESP"
+	cfg.set_value("Bool", "outline_enabled", {"name": "ESP", "default": true, "value": true, "category": CAT2, "menu_pos": 0, "tooltip": "Draw state-coloured body outlines over NPCs. Off = full-screen thermal only."})
+	cfg.set_value("Float", "outline_distance", {"name": "Distance", "default": 60.0, "value": 60.0, "minRange": 0.0, "maxRange": 300.0, "step": 10.0, "category": CAT2, "menu_pos": 1, "tooltip": "Maximum distance for an outline. Past half of this the outline fades out."})
+	cfg.set_value("Float", "outline_rim", {"name": "Rim", "default": 2.0, "value": 2.0, "minRange": 0.0, "maxRange": 6.0, "step": 0.5, "category": CAT2, "menu_pos": 2, "tooltip": "Edge sharpness of the outline. 1.0 is a linear falloff; higher values tighten the band toward the silhouette."})
+	cfg.set_value("Float", "corpse_decay", {"name": "Cooling time", "default": 30.0, "value": 30.0, "minRange": 0.0, "maxRange": 180.0, "step": 1.0, "category": CAT2, "menu_pos": 6, "tooltip": "Seconds a dead NPC's outline takes to cool from warm to cold."})
+	cfg.set_value("Float", "outline_thickness", {"name": "Thickness", "default": 0.006, "value": 0.006, "minRange": 0.001, "maxRange": 0.02, "step": 0.001, "category": CAT2, "menu_pos": 7, "tooltip": "How far the outline band grows beyond the body."})
+	cfg.set_value("Float", "outline_brightness", {"name": "Brightness", "default": 0.6, "value": 0.6, "minRange": 0.1, "maxRange": 3.0, "step": 0.1, "category": CAT2, "menu_pos": 8, "tooltip": "Brightness multiplier on the outline colour."})
 
 	var CAT3 := "03. Outline Colours"
-	cfg.set_value("Color", "state_normal", {"name": "Normal / idle", "default": Color(1.0, 0.72, 0.28), "value": Color(1.0, 0.72, 0.28), "allowAlpha": false, "category": CAT3, "menu_pos": 0, "tooltip": "Colour for NPCs that are idle, patrolling, looting or guarding."})
+	cfg.set_value("Color", "state_normal", {"name": "Default", "default": Color(1.0, 0.72, 0.28), "value": Color(1.0, 0.72, 0.28), "allowAlpha": false, "category": CAT3, "menu_pos": 0, "tooltip": "Colour for NPCs that are idle, patrolling, looting or guarding."})
 	cfg.set_value("Color", "state_combat", {"name": "In combat", "default": Color(0.95, 0.18, 0.15), "value": Color(0.95, 0.18, 0.15), "allowAlpha": false, "category": CAT3, "menu_pos": 1, "tooltip": "Colour for NPCs in combat, hunting, attacking or throwing grenades."})
 	cfg.set_value("Color", "state_defend", {"name": "Defending", "default": Color(0.62, 0.30, 0.95), "value": Color(0.62, 0.30, 0.95), "allowAlpha": false, "category": CAT3, "menu_pos": 2, "tooltip": "Colour for NPCs taking cover, defending, ambushing or lurking."})
 
-	var CAT4 := "04. Contour Range"
-	cfg.set_value("Float", "outline_distance", {"name": "Outline distance", "default": 60.0, "value": 60.0, "minRange": 0.0, "maxRange": 300.0, "step": 10.0, "category": CAT4, "menu_pos": 0, "tooltip": "Maximum distance for an outline. Past half of this the outline fades out."})
-
 	var CAT5 := "05. Diagnostics"
 	cfg.set_value("Bool", "debug_log", {"name": "Debug log", "default": false, "value": false, "category": CAT5, "menu_pos": 0, "tooltip": "Write a diagnostic log of the contour ESP to user://MCM/thermal-vtk/debug.log. For troubleshooting; leave off for normal play."})
-	cfg.set_value("Keycode", "key_cal_cycle", {"name": "Hotkey: Calibration cycle", "default": KEY_F8, "default_type": "Keycode", "value": KEY_F8, "category": CAT5, "menu_pos": 21, "tooltip": "Debug tool: cycles a test colour for the body fill and the nomad marker, so its colour under the night-vision helmet can be measured with the debug probe. Turn the debug log on first, then aim at a filled NPC and press the probe key. Shift turns the calibration off."})
+	cfg.set_value("Keycode", "key_debug_probe", {"name": "Hotkey: Debug key probe", "default": KEY_F7, "default_type": "Keycode", "value": KEY_F7, "category": CAT5, "menu_pos": 20, "tooltip": "Writes the colour under the crosshair to the debug log. Turn the debug log on first, then press it while aiming at an outlined NPC or the nomad marker. The view blinks for one frame."})
+	cfg.set_value("Keycode", "key_cal_cycle", {"name": "Hotkey: Calibration cycle", "default": KEY_F8, "default_type": "Keycode", "value": KEY_F8, "category": CAT5, "menu_pos": 21, "tooltip": "Debug tool: cycles a test colour for the outline and the nomad marker, so its colour under the night-vision helmet can be measured with the debug probe. Turn the debug log on first, then aim at an outlined NPC and press the probe key. Shift turns the calibration off."})
 
 	cfg.set_value("Info", "version", _mod_version())
 	cfg.set_value("Info", "author", "CaptiveAI and opencode")
@@ -302,19 +296,6 @@ func _mcm_color_val(cfg: ConfigFile, key: String, fallback: Color) -> Color:
 	var v = d.get("value") if typeof(d) == TYPE_DICTIONARY else d
 	return v if v is Color else fallback
 
-const PALETTE_MODES := {"classic": 0, "amber": 1, "forest": 2, "ice": 3}
-# Old Int configs (0..5) map onto the 4 remaining palettes; 1/2 (white/black
-# hot) were dropped and fall back to Classic.
-const LEGACY_PALETTE := {0: 0, 3: 1, 4: 2, 5: 3}
-
-func _palette_mode_from_cfg(cfg: ConfigFile) -> int:
-	var raw = _mcm_key_val(cfg, "Dropdown", "thermal_palette", "classic")
-	if raw is String:
-		return int(PALETTE_MODES.get(raw, 0))
-	if raw is int or raw is float:
-		return int(LEGACY_PALETTE.get(int(raw), 0))
-	return 0
-
 func _mcm_apply(cfg: ConfigFile) -> void:
 	if cfg.get_sections().is_empty() and FileAccess.file_exists(CONFIG_FILE):
 		cfg.load(CONFIG_FILE)
@@ -326,32 +307,17 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 	_key_palette_cycle = int(_mcm_key_val(cfg, "Keycode", "key_palette_cycle", KEY_F6))
 	_key_debug_probe = int(_mcm_key_val(cfg, "Keycode", "key_debug_probe", KEY_F7))
 	_key_cal_cycle = int(_mcm_key_val(cfg, "Keycode", "key_cal_cycle", KEY_F8))
-	var mcm_thermal := bool(_mcm_key_val(cfg, "Bool", "thermal_enabled", false))
-	var mcm_i: int = 1 if mcm_thermal else 0
-	var saved = _read_state("thermal_enabled", null)
-	if _mcm_thermal_seen < 0:
-		_thermal_enabled = saved if saved != null else mcm_thermal
-	elif saved != null and mcm_i == _mcm_thermal_seen:
-		_thermal_enabled = saved
-	else:
-		_thermal_enabled = mcm_thermal
-		_save_state("thermal_enabled", _thermal_enabled)
-	_mcm_thermal_seen = mcm_i
+	# The thermal toggle and the world palette live in our own state file, not
+	# in the MCM config: the hotkey writes them, and a second source of truth
+	# would fight the hotkey on every menu round-trip.
+	_thermal_enabled = bool(_read_state("thermal_enabled", false))
 	_mines_enabled = bool(_mcm_key_val(cfg, "Bool", "thermal_mines", true))
 	_nvg.set_nvg_noise = float(_mcm_key_val(cfg, "Float", "nvg_noise", 4.0))
 	_nvg.set_nvg_white = float(_mcm_key_val(cfg, "Float", "nvg_white", 1.0))
-	# Palette: last explicit choice wins. An actual dropdown change beats the
-	# saved state and is written back; a plain reload keeps the saved state (F6
-	# or a previous menu choice) ahead of the MCM value.
-	var mcm_palette: int = _palette_mode_from_cfg(cfg)
+	# The world palette is a runtime choice: it lives in our state file and is
+	# changed with the cycle hotkey, so there is no MCM dropdown for it.
 	var pal = _read_state("world_palette", null)
-	var saved_i: int = int(pal) if pal != null else -1
-	if _mcm_palette_seen >= 0 and mcm_palette != _mcm_palette_seen:
-		_nvg.set_palette_mode(mcm_palette)
-		_save_state("world_palette", mcm_palette)
-	else:
-		_nvg.set_palette_mode(saved_i if saved_i >= 0 else mcm_palette)
-	_mcm_palette_seen = mcm_palette
+	_nvg.set_palette_mode(int(pal) if pal != null else 0)
 	_nvg.set_world = float(_mcm_key_val(cfg, "Float", "thermal_world", 1.70))
 	_nvg.set_thermal_enabled(_thermal_enabled)
 	_nvg.set_mines_enabled(_mines_enabled)
@@ -361,8 +327,8 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 		_esp.p_dist = float(_mcm_key_val(cfg, "Float", "outline_distance", 60.0))
 		_esp.p_thickness = float(_mcm_key_val(cfg, "Float", "outline_thickness", 0.006))
 		_esp.p_brightness = float(_mcm_key_val(cfg, "Float", "outline_brightness", 0.6))
-		_esp.p_rim = float(_mcm_key_val(cfg, "Float", "outline_rim", 1.0))
-		_nvg.set_outline_brightness = _esp.p_brightness
+		_esp.p_rim = float(_mcm_key_val(cfg, "Float", "outline_rim", 2.0))
+		_nvg.set_state_brightness = _esp.p_brightness
 		_nvg.set_state_colors({
 			"state_normal": _mcm_color_val(cfg, "state_normal", States.DEFAULT_NORMAL),
 			"state_combat": _mcm_color_val(cfg, "state_combat", States.DEFAULT_COMBAT),
@@ -374,10 +340,12 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 	_apply_mode()
 
 func _apply_defaults() -> void:
-	var saved = _read_state("thermal_enabled", null)
-	if saved != null:
-		_thermal_enabled = saved
+	# No MCM in this install: the runtime choices still come from our state
+	# file, so the hotkeys keep working.
+	_thermal_enabled = bool(_read_state("thermal_enabled", false))
+	var pal = _read_state("world_palette", null)
 	if _nvg != null and is_instance_valid(_nvg):
+		_nvg.set_palette_mode(int(pal) if pal != null else 0)
 		_nvg.set_thermal_enabled(_thermal_enabled)
 		_nvg.set_mines_enabled(_mines_enabled)
 	_apply_mode()

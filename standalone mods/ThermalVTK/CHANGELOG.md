@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.7.3] - 2026-10-21
+
+### Changed
+- The settings panel is tidier: the NPC block is called "ESP" and its sliders lost the duplicated "Outline"/"Contour" prefix.
+- The "Normal / idle" colour is now called "Default", and the corpse cooling time is now called "Cooling time".
+- "Outline rim" now defaults to 2.0 and steps by 0.5.
+- The world palette is now changed only with the cycle hotkey; the dropdown next to it is gone.
+
+### Removed
+- The "Thermal vision" checkbox: the hotkey is now the only way to turn the thermal layer on and off, so the two can no longer disagree.
+- The separate "Contour Range" section: the distance moved into the ESP block.
+
 ## [1.7.2] - 2026-10-21
 
 ### Changed

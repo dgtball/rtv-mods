@@ -70,7 +70,9 @@ var set_mines: bool = true
 var set_glow_distance: float = 150.0
 var set_palette: int = 0
 var set_world: float = 1.70
-var set_outline_brightness: float = 0.6
+# Brightness of the state key the ESP outlines emit; the overlay uses it to
+# scale the substituted state colour.
+var set_state_brightness: float = 0.6
 # Display colour of the friendly-nomad marker.
 var set_nomad_color: Color = Color(0.30, 1.0, 0.35)
 var _state_colors: Dictionary = {}
@@ -255,7 +257,7 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("stNormalColor", _state_colors.get("state_normal", Color(1.0, 0.72, 0.28)))
 	nvg_mat.set_shader_parameter("stCombatColor", _state_colors.get("state_combat", Color(0.95, 0.18, 0.15)))
 	nvg_mat.set_shader_parameter("stDefendColor", _state_colors.get("state_defend", Color(0.62, 0.30, 0.95)))
-	nvg_mat.set_shader_parameter("stateBright", set_outline_brightness)
+	nvg_mat.set_shader_parameter("stateBright", set_state_brightness)
 	nvg_mat.set_shader_parameter("nomadKey", DET_NOMAD)
 	nvg_mat.set_shader_parameter("nomadColor", set_nomad_color)
 	nvg_mat.set_shader_parameter("scopeRotate", _scope_rotate)
