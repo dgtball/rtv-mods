@@ -211,6 +211,22 @@ func _register_mcm() -> void:
 	if MCM == null or not MCM.has_method("RegisterConfiguration"):
 		_apply_defaults()
 		return
+	var cfg := _mcm_config()
+	DirAccess.make_dir_recursive_absolute(CONFIG_DIR)
+	# The default file is the seed MCM copies a fresh profile from.
+	_sync_config(cfg, CONFIG_FILE)
+	MCM.RegisterConfiguration(MOD_ID, MOD_NAME, CONFIG_DIR, "NVG thermal overlay: contour ESP, mine highlighting and world thermal view", _mcm_apply, self)
+	# MCM creates the profile file once and never refreshes it, so the menu
+	# would keep showing entries we removed or renamed. Merge the registration
+	# into the active profile too: the player's values stay, the labels and
+	# defaults come from the code.
+	_config_path = _active_config_path()
+	_sync_config(cfg, _config_path)
+	_mcm_apply(ConfigFile.new())
+
+# The settings the mod declares. MCM shows them and the mod merges them into
+# the config file, so the labels, the ranges and the defaults live here only.
+func _mcm_config() -> ConfigFile:
 	var cfg = ConfigFile.new()
 	var CAT := "01. ThermalVision"
 	cfg.set_value("Keycode", "key_thermal_toggle", {"name": "Hotkey: Toggle thermal vision", "default": 0, "default_type": "Keycode", "type": "Key", "value": 0, "category": CAT, "menu_pos": 0, "tooltip": "Press in game to turn the thermal layer on and off."})
@@ -240,17 +256,7 @@ func _register_mcm() -> void:
 
 	cfg.set_value("Info", "version", _mod_version())
 	cfg.set_value("Info", "author", "CaptiveAI and opencode")
-	DirAccess.make_dir_recursive_absolute(CONFIG_DIR)
-	# The default file is the seed MCM copies a fresh profile from.
-	_sync_config(cfg, CONFIG_FILE)
-	MCM.RegisterConfiguration(MOD_ID, MOD_NAME, CONFIG_DIR, "NVG thermal overlay: contour ESP, mine highlighting and world thermal view", _mcm_apply, self)
-	# MCM creates the profile file once and never refreshes it, so the menu
-	# would keep showing entries we removed or renamed. Merge the registration
-	# into the active profile too: the player's values stay, the labels and
-	# defaults come from the code.
-	_config_path = _active_config_path()
-	_sync_config(cfg, _config_path)
-	_mcm_apply(ConfigFile.new())
+	return cfg
 
 # Merge the freshly declared keys into an on-disk config by KEY: drop sections
 # and keys that no longer exist in code, add new ones, but never overwrite a
