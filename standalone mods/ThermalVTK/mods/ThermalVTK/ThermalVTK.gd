@@ -149,7 +149,6 @@ func _register_mcm() -> void:
 	cfg.set_value("Dropdown", "outline_style", {"name": "Outline style", "default": "front", "value": "front", "options": {"front": "Front-faces (ITH)", "back": "Back-faces"}, "category": CAT2, "menu_pos": 1, "tooltip": "Outline look. Front-faces is the clean silhouette; Back-faces is the older inflated look."})
 	cfg.set_value("Float", "outline_rim", {"name": "Outline rim", "default": 0.42, "value": 0.42, "minRange": 0.0, "maxRange": 1.0, "step": 0.02, "category": CAT2, "menu_pos": 2, "tooltip": "Edge band width (Front-faces) or edge sharpness (Back-faces) of the outline."})
 	cfg.set_value("Bool", "outline_body_fill", {"name": "Body fill", "default": true, "value": true, "category": CAT2, "menu_pos": 3, "tooltip": "Fill the NPC body with its state colour inside the outline."})
-	cfg.set_value("Dropdown", "fill_style", {"name": "Fill style", "default": "flat", "value": "flat", "options": {"flat": "Flat (state colour)", "gradient": "Gradient (thermal)"}, "category": CAT2, "menu_pos": 4, "tooltip": "Body fill look. Gradient mixes the state colour over a warm-to-cold thermal ramp."})
 	cfg.set_value("Float", "fill_opacity", {"name": "Fill opacity", "default": 0.4, "value": 0.4, "minRange": 0.0, "maxRange": 1.0, "step": 0.05, "category": CAT2, "menu_pos": 5, "tooltip": "How solid the body fill is. 0 = outline only."})
 	cfg.set_value("Float", "corpse_decay", {"name": "Corpse cooling time", "default": 8.0, "value": 8.0, "minRange": 0.0, "maxRange": 30.0, "step": 1.0, "category": CAT2, "menu_pos": 6, "tooltip": "Seconds a dead NPC's outline takes to cool from warm to cold."})
 	cfg.set_value("Float", "outline_thickness", {"name": "Outline thickness", "default": 0.006, "value": 0.006, "minRange": 0.001, "maxRange": 0.02, "step": 0.001, "category": CAT2, "menu_pos": 7, "tooltip": "How far the outline band grows beyond the body."})
@@ -162,7 +161,6 @@ func _register_mcm() -> void:
 
 	var CAT4 := "04. Contour Range"
 	cfg.set_value("Float", "outline_distance", {"name": "Outline distance", "default": 60.0, "value": 60.0, "minRange": 0.0, "maxRange": 300.0, "step": 10.0, "category": CAT4, "menu_pos": 0, "tooltip": "Maximum distance for an outline. Past half of this the outline fades out."})
-	cfg.set_value("Float", "outline_through_walls", {"name": "See through walls", "default": 5.0, "value": 5.0, "minRange": 0.0, "maxRange": 30.0, "step": 5.0, "category": CAT4, "menu_pos": 1, "tooltip": "NPCs closer than this show through walls. 0 = only when in direct line of sight."})
 
 	var CAT5 := "05. Diagnostics"
 	cfg.set_value("Bool", "debug_log", {"name": "Debug log", "default": false, "value": false, "category": CAT5, "menu_pos": 0, "tooltip": "Write a diagnostic log of the contour ESP to user://MCM/thermal-vtk/debug.log. For troubleshooting; leave off for normal play."})
@@ -284,15 +282,22 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 	if _esp != null and is_instance_valid(_esp):
 		_esp.p_decay = float(_mcm_key_val(cfg, "Float", "corpse_decay", 8.0))
 		_esp.p_dist = float(_mcm_key_val(cfg, "Float", "outline_distance", 60.0))
-		_esp.p_through = float(_mcm_key_val(cfg, "Float", "outline_through_walls", 5.0))
 		_esp.p_thickness = float(_mcm_key_val(cfg, "Float", "outline_thickness", 0.006))
 		_esp.p_brightness = float(_mcm_key_val(cfg, "Float", "outline_brightness", 0.6))
 		_esp.p_fill = bool(_mcm_key_val(cfg, "Bool", "outline_body_fill", true))
 		_esp.p_fill_alpha = float(_mcm_key_val(cfg, "Float", "fill_opacity", 0.4))
 		_esp.p_style = 0 if String(_mcm_key_val(cfg, "Dropdown", "outline_style", "front")) == "front" else 1
 		_esp.p_rim = float(_mcm_key_val(cfg, "Float", "outline_rim", 0.42))
-		_esp.p_fill_style = 0 if String(_mcm_key_val(cfg, "Dropdown", "fill_style", "flat")) == "flat" else 1
+		# Preset: the outline style decides the fill default. Only when the style
+		# actually changes do we touch fill/opacity, so a user's manual sliders
+		# survive editor round-trips.
+		var seen_style = _read_state("outline_style_seen", null)
+		if seen_style != _esp.p_style:
+			_esp.p_fill = (_esp.p_style == 0)
+			_esp.p_fill_alpha = 0.05 if _esp.p_style == 0 else 0.0
+			_save_state("outline_style_seen", _esp.p_style)
 		_nvg.set_outline_brightness = _esp.p_brightness
+		_nvg.set_fill_opacity = _esp.p_fill_alpha if _esp.p_fill else 0.0
 		_esp.p_colors = {
 			"state_normal": _mcm_color_val(cfg, "state_normal", States.DEFAULT_NORMAL),
 			"state_combat": _mcm_color_val(cfg, "state_combat", States.DEFAULT_COMBAT),

@@ -19,12 +19,10 @@ var p_fill := true
 var p_fill_alpha := 0.4
 var p_decay := 8.0
 var p_dist := 60.0
-var p_through := 5.0
 var p_thickness := 0.006
 var p_brightness := 0.6
 var p_style := 0
 var p_rim := 0.42
-var p_fill_style := 0
 var p_colors := {
 	"state_normal": States.DEFAULT_NORMAL,
 	"state_combat": States.DEFAULT_COMBAT,
@@ -427,11 +425,9 @@ func _opts_for(e: Dictionary, node: Node, dist: float, now: float) -> Dictionary
 		"state_key": key,
 		"alpha": alpha,
 		"cool": cool,
-		"through_walls": p_through > 0.0 and dist <= p_through,
 		"front_faces": p_style == 0,
 		"outline_style": p_style,
 		"rim": p_rim,
-		"fill_style": p_fill_style,
 		"foot_y": foot_y,
 		"body_height": 1.8,
 		"brightness": p_brightness,
