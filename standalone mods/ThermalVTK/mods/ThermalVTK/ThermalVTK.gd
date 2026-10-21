@@ -68,6 +68,10 @@ func _toggle_thermal() -> void:
 const PALETTE_NAMES: Array[String] = ["Classic", "Amber", "Forest", "Ice"]
 
 func _cycle_palette() -> void:
+	# The world palette only shows while thermal vision is on, so F6 is a
+	# no-op otherwise: no palette change and no toast.
+	if not _thermal_enabled:
+		return
 	if _nvg == null or not is_instance_valid(_nvg):
 		return
 	var mode: int = (int(_nvg.set_palette) + 1) % PALETTE_COUNT
@@ -77,8 +81,11 @@ func _cycle_palette() -> void:
 
 func _apply_mode() -> void:
 	if _esp != null and is_instance_valid(_esp):
-		_esp.set_enabled(_thermal_enabled and _outline_enabled and _nvg_active())
-		_esp.marker_visible = _thermal_enabled and _nvg_active()
+		# The nomad marker belongs to the contour: it follows the same gate as
+		# the outlines, so switching the contour off hides it as well.
+		var on := _thermal_enabled and _outline_enabled and _nvg_active()
+		_esp.set_enabled(on)
+		_esp.marker_visible = on
 
 func _nvg_active() -> bool:
 	if _nvg == null or not is_instance_valid(_nvg):
