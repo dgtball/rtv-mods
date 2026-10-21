@@ -17,7 +17,7 @@ const CAP := 24
 var enabled: bool = false
 # MCM-driven params.
 var p_fill := true
-var p_fill_alpha := 0.4
+var p_fill_alpha := 0.05
 var p_decay := 8.0
 var p_dist := 60.0
 var p_thickness := 0.006
