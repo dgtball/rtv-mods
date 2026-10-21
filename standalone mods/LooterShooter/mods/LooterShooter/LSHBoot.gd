@@ -23,6 +23,19 @@ func register_mcm() -> void:
 	if mcm == null or not mcm.has_method("RegisterConfiguration"):
 		_cfg.read(ConfigFile.new())
 		return
+	var cfg := build_config()
+	var path := "user://MCM/lootershooter"
+	DirAccess.make_dir_recursive_absolute(path)
+	var cfile := path + "/config.ini"
+	if FileAccess.file_exists(cfile):
+		var existing := ConfigFile.new()
+		if existing.load(cfile) == OK:
+			merge_user_values(cfg, existing)
+	cfg.save(cfile)
+	mcm.RegisterConfiguration("lootershooter", "LooterShooter", path, "Per-instance loot rarity and affixes", Callable(self, "apply_config"), self)
+	apply_config(ConfigFile.new())
+
+static func build_config() -> ConfigFile:
 	var cfg := ConfigFile.new()
 	var cat := "01. Display"
 	cfg.set_value("Bool", "paint_cells", {"name": "Paint item cells", "default": true, "value": true, "category": cat, "menu_pos": 0, "tooltip": "Tint the inventory cell by loot rarity."})
@@ -43,30 +56,17 @@ func register_mcm() -> void:
 	cfg.set_value("Bool", "log_rolls", {"name": "Log rolls", "default": false, "value": false, "category": dbg, "menu_pos": 3, "tooltip": "Print every loot roll to the log."})
 	cfg.set_value("Info", "version", "0.1.0")
 
-	var path := "user://MCM/lootershooter"
-	DirAccess.make_dir_recursive_absolute(path)
-	var cfile := path + "/config.ini"
-	if FileAccess.file_exists(cfile):
-		var existing := ConfigFile.new()
-		if existing.load(cfile) == OK:
-			for section in existing.get_sections():
-				if not cfg.has_section(section):
-					existing.erase_section(section)
-					continue
-				for key in existing.get_section_keys(section):
-					if not cfg.has_section_key(section, key):
-						existing.erase_section_key(section, key)
-						continue
-					var old_v = existing.get_value(section, key)
-					var new_v = cfg.get_value(section, key)
-					if old_v is Dictionary and new_v is Dictionary:
-						new_v["value"] = old_v.get("value", new_v.get("value"))
-						existing.set_value(section, key, new_v)
-			existing.save(cfile)
-	else:
-		cfg.save(cfile)
-	mcm.RegisterConfiguration("lootershooter", "LooterShooter", path, "Per-instance loot rarity and affixes", Callable(self, "apply_config"), self)
-	apply_config(ConfigFile.new())
+	return cfg
+
+static func merge_user_values(cfg: ConfigFile, existing: ConfigFile) -> void:
+	for section in cfg.get_sections():
+		for key in cfg.get_section_keys(section):
+			var new_v = cfg.get_value(section, key)
+			if existing.has_section_key(section, key) and new_v is Dictionary:
+				var old_v = existing.get_value(section, key)
+				if old_v is Dictionary and old_v.has("value"):
+					new_v["value"] = old_v["value"]
+					cfg.set_value(section, key, new_v)
 
 func apply_config(cfg: ConfigFile) -> void:
 	if cfg == null or cfg.get_sections().is_empty():
