@@ -9,7 +9,7 @@ const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 
 # id -> {"meshes": Array, "body": ShaderMaterial, "ring": ShaderMaterial,
-#        "wall": bool, "front_faces": bool, "_c": ... change-gate cache}
+#        "front_faces": bool, "_c": ... change-gate cache}
 var _items: Dictionary = {}
 
 func has(id: int) -> bool:
@@ -29,12 +29,12 @@ func _collect(node: Node, out: Array) -> void:
 	for c in node.get_children():
 		_collect(c, out)
 
-func _build_chain(through_walls: bool, front_faces: bool) -> Array:
+func _build_chain(front_faces: bool) -> Array:
 	var body_mat := ShaderMaterial.new()
-	body_mat.shader = Shaders.body(through_walls)
+	body_mat.shader = Shaders.body()
 	body_mat.render_priority = 20
 	var ring_mat := ShaderMaterial.new()
-	ring_mat.shader = Shaders.ring(through_walls, front_faces)
+	ring_mat.shader = Shaders.ring(front_faces)
 	ring_mat.render_priority = 21
 	body_mat.next_pass = ring_mat
 	return [body_mat, ring_mat]
@@ -46,9 +46,8 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 		Dbg.log("OUTLINE", "apply id=%d meshes=0 child_count=%d" % [id, node.get_child_count()])
 		return
 	Dbg.log("OUTLINE", "apply id=%d meshes=%d child_count=%d" % [id, meshes.size(), node.get_child_count()])
-	var wall := bool(opts.get("through_walls", true))
 	var front_faces := bool(opts.get("front_faces", true))
-	var chain := _build_chain(wall, front_faces)
+	var chain := _build_chain(front_faces)
 	var body_mat: ShaderMaterial = chain[0]
 	var ring_mat: ShaderMaterial = chain[1]
 	# render_priority high so overlays draw after the world but before the
@@ -58,7 +57,7 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 	for m in meshes:
 		(m as GeometryInstance3D).material_overlay = body_mat
 	_items[id] = {
-		"meshes": meshes, "body": body_mat, "ring": ring_mat, "wall": wall,
+		"meshes": meshes, "body": body_mat, "ring": ring_mat,
 		"front_faces": front_faces,
 		"node": node, "child_count": node.get_child_count(),
 	}
@@ -86,18 +85,15 @@ func _recollect(id: int, entry: Dictionary) -> void:
 	entry["meshes"] = fresh
 	entry["child_count"] = node.get_child_count()
 
-# Swap the cull/depth variant in place when either the through-walls decision
-# or the front/back style flips; the overlay assignment does not change, only
-# the shader resources.
-func _set_variants(id: int, entry: Dictionary, wall: bool, front_faces: bool) -> void:
-	if bool(entry.get("wall", wall)) == wall \
-			and bool(entry.get("front_faces", front_faces)) == front_faces:
+# Swap the cull variant in place when the front/back style flips; the overlay
+# assignment does not change, only the shader resources.
+func _set_variants(id: int, entry: Dictionary, front_faces: bool) -> void:
+	if bool(entry.get("front_faces", front_faces)) == front_faces:
 		return
-	entry["wall"] = wall
 	entry["front_faces"] = front_faces
-	(entry["body"] as ShaderMaterial).shader = Shaders.body(wall)
-	(entry["ring"] as ShaderMaterial).shader = Shaders.ring(wall, front_faces)
-	Dbg.log("OUTLINE", "wall id=%d through=%s front=%s" % [id, str(wall), str(front_faces)])
+	(entry["body"] as ShaderMaterial).shader = Shaders.body()
+	(entry["ring"] as ShaderMaterial).shader = Shaders.ring(front_faces)
+	Dbg.log("OUTLINE", "variant id=%d front=%s" % [id, str(front_faces)])
 
 func refresh(id: int, opts: Dictionary) -> void:
 	var entry = _items.get(id)
@@ -106,7 +102,7 @@ func refresh(id: int, opts: Dictionary) -> void:
 	var node = entry.get("node")
 	if node != null and is_instance_valid(node) and node.get_child_count() != int(entry.get("child_count", -1)):
 		_recollect(id, entry)
-	_set_variants(id, entry, bool(opts.get("through_walls", true)), bool(opts.get("front_faces", true)))
+	_set_variants(id, entry, bool(opts.get("front_faces", true)))
 	var key: Color = opts.get("state_key", States.KEY_NORMAL)
 	var grow := float(opts.get("grow", 0.006))
 	var foot_y := float(opts.get("foot_y", 0.0))
