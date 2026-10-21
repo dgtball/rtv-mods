@@ -3,6 +3,7 @@ extends Node
 const Log = preload("res://mods/LooterShooter/LSHLog.gd")
 const ConfigRec = preload("res://mods/LooterShooter/LSHConfig.gd")
 const DebugMod = preload("res://mods/LooterShooter/LSHDebug.gd")
+const Display = preload("res://mods/LooterShooter/LSHDisplay.gd")
 
 const Roll = preload("res://mods/LooterShooter/LSHRoll.gd")
 const Store = preload("res://mods/LooterShooter/LSHStore.gd")
@@ -13,10 +14,13 @@ const MCM_HELPERS := "res://ModConfigurationMenu/Scripts/Doink Oink/MCM_Helpers.
 var _lib = null
 var _cfg = ConfigRec.new()
 var _debug = DebugMod.new()
+var _display = Display.new()
 
 func _ready() -> void:
 	register_mcm()
 	_debug.configure(_cfg)
+	_display.configure(_cfg)
+	_display.set_host(self)
 	Log.line("booted (debug=" + str(_cfg.debug_enabled) + ")")
 	var lib = Engine.get_meta("RTVModLib") if Engine.has_meta("RTVModLib") else null
 	if lib == null:
@@ -25,6 +29,8 @@ func _ready() -> void:
 		_lib = lib
 		_lib.hook("lootcontainer-createloot-post", Callable(self, "tag_created_loot"), 100)
 		_lib.hook("lootcontainer-ailoot-post", Callable(self, "tag_ai_loot"), 100)
+		_lib.hook("tooltip-update-post", Callable(self, "on_tooltip_update"), 100)
+		_display.attach(get_tree())
 
 func register_mcm() -> void:
 	if not ResourceLoader.exists(MCM_HELPERS):
@@ -89,9 +95,29 @@ func apply_config(cfg: ConfigFile) -> void:
 	if cfg != null and not cfg.get_sections().is_empty():
 		_cfg.read(cfg)
 	_debug.configure(_cfg)
+	_display.configure(_cfg)
 
-func reroll_item(_item) -> bool:
-	return false
+func on_tooltip_update(tooltip) -> void:
+	_display.apply_tooltip(tooltip)
+
+func _input(event: InputEvent) -> void:
+	if _debug.matches_reroll(event):
+		if _display.reroll_hovered(get_tree()):
+			Log.line("rerolled hovered item")
+
+func reroll_item(item) -> bool:
+	if item == null or item.slotData == null:
+		return false
+	var ctx := {"rarity_roll": 100}
+	if _debug.force_tier() == 0:
+		ctx["rarity_roll"] = randi_range(1, 100)
+	var r: Dictionary = roll_for(item.slotData.itemData, ctx, RandomNumberGenerator.new())
+	if r["tier"] <= 0:
+		r = {"tier": Roll.pick_tier(Roll.tier_weights(ctx, _cfg.freq_mult, 1), randf()),
+			 "affixes": Roll.build_affixes(Category.of_item(item.slotData.itemData), 1, RandomNumberGenerator.new())}
+	Store.stamp(item.slotData, r["tier"], r["affixes"])
+	_display.paint(item)
+	return true
 
 func tag_created_loot(item) -> void:
 	var slotData = _created_slot()
