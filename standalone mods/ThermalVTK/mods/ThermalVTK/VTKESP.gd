@@ -436,15 +436,15 @@ func _opts_for(e: Dictionary, node: Node, dist: float, now: float) -> Dictionary
 		"body_height": 1.8,
 		"brightness": p_brightness,
 		"grow": p_thickness,
-		"fill_alpha": p_fill_alpha if p_fill else 0.0,
-		"fill_color": _state_color(cat),
+		"fill_key": States.fill_key(cat),
+		"fill_on": p_fill,
 	}
 
-# The fill tint is the same colour the outline uses: the per-category colour,
-# falling back to the category default when the colour dictionary has no entry
-# for that key. p_colors is wired from MCM CAT3 in ThermalVTK._mcm_apply, so the
-# fill matches the outline. Nomads take their category colour too; the separate
-# friendly marker is drawn by the Task 8 diamond, not a colour override here.
+# The per-category display colour: the MCM CAT3 dictionary first, the category
+# default when it has no entry for that key. The body fill no longer tints with
+# it -- the fill paints a detector key and the overlay substitutes the display
+# colour -- so this helper is kept only until the leftover call sites are
+# cleaned up.
 func _state_color(cat: int) -> Color:
 	var key: String = States.category_key(cat)
 	return p_colors.get(key, States.default_color(cat))

@@ -108,13 +108,11 @@ func refresh(id: int, opts: Dictionary) -> void:
 		_recollect(id, entry)
 	_set_variants(id, entry, bool(opts.get("through_walls", true)), bool(opts.get("front_faces", true)))
 	var key: Color = opts.get("state_key", States.KEY_NORMAL)
-	var alpha := float(opts.get("alpha", 1.0))
 	var grow := float(opts.get("grow", 0.006))
 	var foot_y := float(opts.get("foot_y", 0.0))
 	var body_h := float(opts.get("body_height", 1.8))
 	var cool := float(opts.get("cool", 0.0))
-	var fill_alpha := float(opts.get("fill_alpha", 0.0))
-	var fill_col: Color = opts.get("fill_color", Color(1.0, 0.72, 0.28))
+	var fill_key: Color = opts.get("fill_key", States.KEY_FILL_NORMAL)
 
 	var body_mat: ShaderMaterial = entry["body"]
 	var ring_mat: ShaderMaterial = entry["ring"]
@@ -135,8 +133,6 @@ func refresh(id: int, opts: Dictionary) -> void:
 	if ring_mat.get_shader_parameter("rim_power") == null or not is_equal_approx(float(ring_mat.get_shader_parameter("rim_power")), rim):
 		ring_mat.set_shader_parameter("rim_power", rim)
 
-	if body_mat.get_shader_parameter("fill_alpha") == null or not is_equal_approx(float(body_mat.get_shader_parameter("fill_alpha")), fill_alpha * alpha):
-		body_mat.set_shader_parameter("fill_alpha", fill_alpha * alpha)
 	if body_mat.get_shader_parameter("cool") == null or not is_equal_approx(float(body_mat.get_shader_parameter("cool")), cool):
 		body_mat.set_shader_parameter("cool", cool)
 	if ring_mat.get_shader_parameter("cool") == null or not is_equal_approx(float(ring_mat.get_shader_parameter("cool")), cool):
@@ -145,14 +141,8 @@ func refresh(id: int, opts: Dictionary) -> void:
 		body_mat.set_shader_parameter("footY", foot_y)
 	if body_mat.get_shader_parameter("bodyHeight") == null or not is_equal_approx(float(body_mat.get_shader_parameter("bodyHeight")), body_h):
 		body_mat.set_shader_parameter("bodyHeight", body_h)
-	if body_mat.get_shader_parameter("fillColor") != fill_col:
-		body_mat.set_shader_parameter("fillColor", fill_col)
-	var fill_style := int(opts.get("fill_style", 0))
-	if body_mat.get_shader_parameter("fill_style") == null or int(body_mat.get_shader_parameter("fill_style")) != fill_style:
-		body_mat.set_shader_parameter("fill_style", fill_style)
-	if body_mat.get_shader_parameter("warmColor") == null:
-		body_mat.set_shader_parameter("warmColor", Color(1.0, 0.95, 0.7))
-		body_mat.set_shader_parameter("coldColor", Color(0.05, 0.05, 0.12))
+	if body_mat.get_shader_parameter("fill_key") != fill_key:
+		body_mat.set_shader_parameter("fill_key", fill_key)
 
 func clear(id: int) -> void:
 	var entry = _items.get(id)
