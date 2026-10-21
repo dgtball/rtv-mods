@@ -55,13 +55,15 @@ const DET_ST_NORMAL := Color(1.00, 0.21, 0.16)
 const DET_ST_COMBAT := Color(0.82, 1.00, 1.00)
 const DET_ST_DEFEND := Color(1.00, 0.34, 1.00)
 
-# Fill / nomad detector targets (post-NVG measured values; seeded to the raw
-# keys for the first pass, refine with an in-game probe like DET_ST_*). The
+# Fill / nomad detector targets. PLACEHOLDERS: seeded to the raw keys (which
+# moved when the keys were re-spaced) until an in-game probe like DET_ST_*
+# measures the washed values -- do not treat these numbers as calibrated, a
+# detector that sits inside another key's radius mis-classifies pixels. The
 # fill mesh is opaque, so its washed value stays close to the emitted key.
-const DET_FILL_NORMAL := Color(0.0, 0.35, 1.0)
-const DET_FILL_COMBAT := Color(0.0, 1.0, 0.35)
-const DET_FILL_DEFEND := Color(1.0, 0.55, 0.0)
-const DET_NOMAD := Color(0.35, 0.0, 1.0)
+const DET_FILL_NORMAL := Color(0.0, 0.5, 0.0)
+const DET_FILL_COMBAT := Color(1.0, 0.0, 0.5)
+const DET_FILL_DEFEND := Color(0.5, 0.0, 1.0)
+const DET_NOMAD := Color(0.6, 1.0, 0.6)
 
 # settings
 var set_nvg_noise: float = 4.0

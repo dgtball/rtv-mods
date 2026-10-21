@@ -5,7 +5,7 @@ render_mode unshaded, depth_draw_never, cull_disabled;
 // the NVG overlay detects and swaps for the green display colour. The mesh is a
 // billboarded diamond quad (VTKESP._marker_make). The marker is depth-tested
 // against the world like any other surface: it does not read through walls.
-uniform vec3 nomad_key : source_color = vec3(0.35, 0.0, 1.0);
+uniform vec3 nomad_key : source_color = vec3(0.6, 1.0, 0.6);
 
 void vertex() {
 	// Camera-facing billboard. MeshInstance3D has no billboard property in

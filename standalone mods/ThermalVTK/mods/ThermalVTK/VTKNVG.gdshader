@@ -47,14 +47,14 @@ uniform float stateBright : hint_range(0.1, 3.0, 0.05) = 0.6;
 // colour. The *Key uniforms hold the measured post-NVG values (see VTKNVG.gd
 // DET_FILL_* / DET_NOMAD). fillOpacity is applied HERE, not on the mesh, so
 // the fill reads translucent while its pixel stays opaque enough to detect.
-uniform vec3 fillNormKey : source_color = vec3(0.0, 0.35, 1.0);
-uniform vec3 fillCombKey : source_color = vec3(0.0, 1.0, 0.35);
-uniform vec3 fillDefKey : source_color = vec3(1.0, 0.55, 0.0);
+uniform vec3 fillNormKey : source_color = vec3(0.0, 0.5, 0.0);
+uniform vec3 fillCombKey : source_color = vec3(1.0, 0.0, 0.5);
+uniform vec3 fillDefKey : source_color = vec3(0.5, 0.0, 1.0);
 uniform vec3 fillNormColor : source_color = vec3(1.0, 0.72, 0.28);
 uniform vec3 fillCombColor : source_color = vec3(0.95, 0.18, 0.15);
 uniform vec3 fillDefColor : source_color = vec3(0.62, 0.30, 0.95);
 uniform float fillOpacity : hint_range(0.0, 1.0, 0.01) = 0.05;
-uniform vec3 nomadKey : source_color = vec3(0.35, 0.0, 1.0);
+uniform vec3 nomadKey : source_color = vec3(0.6, 1.0, 0.6);
 uniform vec3 nomadColor : source_color = vec3(0.30, 1.0, 0.35);
 
 uniform vec3 mineColor : source_color = vec3(0.7, 0.1, 0.07);

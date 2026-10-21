@@ -21,6 +21,12 @@ const DEFAULT_DEFEND := Color(0.62, 0.30, 0.95)
 # outline, state and nomad keys, wider for the body fill, whose pixel fades
 # away from the key while a corpse cools -- so every key -- the outline, fill
 # and nomad ones alike -- must stay more than the widest radius apart.
+#
+# The rule: the shortest distance between ANY two world keys (the three
+# outline keys, the mine key, the three fill keys and the nomad key) must be
+# >= 0.40 -- the widest detector radius (DET_TOL_FILL in VTKNVG.gdshader).
+# Below that a fill detector can claim a state ring pixel, and a nomad
+# marker can be read as a mine. The current minimum is 0.50.
 const KEY_NORMAL := Color(1.0, 0.0, 0.0)
 const KEY_COMBAT := Color(0.0, 1.0, 1.0)
 const KEY_DEFEND := Color(1.0, 0.0, 1.0)
@@ -30,15 +36,18 @@ const CATEGORY_KEY_COLORS: Array[Color] = [KEY_NORMAL, KEY_COMBAT, KEY_DEFEND]
 # Body-fill keys. Separate from the outline keys so the overlay can give the
 # fill its own density; one per category so the fill carries the state colour.
 # Chosen far from every other key and from the display colours: the overlay
-# detects by raw distance, so overlap would mis-classify.
-const KEY_FILL_NORMAL := Color(0.0, 0.35, 1.0)
-const KEY_FILL_COMBAT := Color(0.0, 1.0, 0.35)
-const KEY_FILL_DEFEND := Color(1.0, 0.55, 0.0)
+# detects by raw distance, so overlap would mis-classify. The spacing rule
+# above (>= 0.40 from every other world key) is what "far" means here.
+const KEY_FILL_NORMAL := Color(0.0, 0.5, 0.0)
+const KEY_FILL_COMBAT := Color(1.0, 0.0, 0.5)
+const KEY_FILL_DEFEND := Color(0.5, 0.0, 1.0)
 
 const FILL_KEY_COLORS: Array[Color] = [KEY_FILL_NORMAL, KEY_FILL_COMBAT, KEY_FILL_DEFEND]
 
 # Friendly-nomad marker key (green display colour proposed by the overlay).
-const KEY_NOMAD := Color(0.35, 0.0, 1.0)
+# Same spacing rule as the fill keys: it must stay clear of the mine key, or
+# a washed nomad marker reads as a mine.
+const KEY_NOMAD := Color(0.6, 1.0, 0.6)
 
 static func fill_key(cat: int) -> Color:
 	if cat < 0 or cat >= FILL_KEY_COLORS.size():
