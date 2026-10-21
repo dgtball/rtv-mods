@@ -8,6 +8,11 @@ const Shaders = preload("res://mods/ThermalVTK/VTKShaders.gd")
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 
+# Nodes the mod adds under a bot's subtree (the nomad marker, the debug label)
+# carry this meta: the sweep must skip them, or the body-fill overlay is
+# assigned on top of their own material and paints over the key they emit.
+const NO_CONTOUR_META := "vtk_no_contour"
+
 # id -> {"meshes": Array, "body": ShaderMaterial, "ring": ShaderMaterial,
 #        "front_faces": bool, "_c": ... change-gate cache}
 var _items: Dictionary = {}
@@ -24,6 +29,8 @@ func material_of(id: int) -> Dictionary:
 # the overlay so the LOD that becomes visible already has it. This mirrors
 # VTKNVG._collect_meshes, the same sweep the mine path uses.
 func _collect(node: Node, out: Array) -> void:
+	if node.has_meta(NO_CONTOUR_META):
+		return
 	if node is GeometryInstance3D:
 		out.append(node)
 	for c in node.get_children():

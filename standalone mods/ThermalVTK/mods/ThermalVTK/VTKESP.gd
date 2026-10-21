@@ -302,6 +302,7 @@ func _label_make(id: int, e: Dictionary, node: Node, state: int) -> void:
 	lbl.outline_size = 12
 	lbl.position = Vector3(0.0, y, 0.0)
 	lbl.visible = enabled
+	lbl.set_meta(Outline.NO_CONTOUR_META, true)
 	parent.add_child(lbl)
 	_labels[id] = lbl
 	_labels_state[id] = state
@@ -358,6 +359,10 @@ func _marker_make(id: int, node: Node) -> void:
 	var quad := QuadMesh.new()
 	quad.size = Vector2(0.18, 0.18)
 	mi.mesh = quad
+	# Keep the contour collector off our own geometry: the marker is a child of
+	# the bot mesh, so the sweep would otherwise hand it the body-fill overlay
+	# and paint over the nomad key before the overlay could substitute it.
+	mi.set_meta(Outline.NO_CONTOUR_META, true)
 	var mat := ShaderMaterial.new()
 	mat.shader = NomadMarkerShader
 	mat.render_priority = 41
