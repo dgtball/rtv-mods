@@ -20,7 +20,8 @@ func set_host(h) -> void:
 	_host = h
 
 func attach(tree: SceneTree) -> void:
-	tree.node_added.connect(track)
+	if not tree.node_added.is_connected(track):
+		tree.node_added.connect(track)
 	_walk(tree.get_root())
 
 func track(node: Node) -> void:
@@ -39,20 +40,20 @@ func _is_item(node: Node) -> bool:
 	return node is Panel and "slotData" in node
 
 func paint(item) -> void:
-	if item.slotData == null:
-		return
-	var tier: int = Store.tier(item.slotData)
 	var existing = item.get_node_or_null(BORDER_NAME)
+	var tier: int = 0 if item.slotData == null else Store.tier(item.slotData)
 	if tier <= 0:
 		if existing != null:
 			existing.queue_free()
 		return
-	if existing != null:
-		return
-	var overlay := Panel.new()
-	overlay.name = BORDER_NAME
-	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var overlay = existing
+	if overlay == null:
+		overlay = Panel.new()
+		overlay.name = BORDER_NAME
+		overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+		item.add_child(overlay)
+		item.move_child(overlay, 0)
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0, 0, 0, 0)
 	style.draw_center = false
@@ -60,8 +61,6 @@ func paint(item) -> void:
 	style.set_border_width_all(int(w))
 	style.border_color = _border_color(tier)
 	overlay.add_theme_stylebox_override("panel", style)
-	item.add_child(overlay)
-	item.move_child(overlay, 0)
 
 func _border_color(tier: int) -> Color:
 	var palette: Dictionary = COLORS_DEFAULT
