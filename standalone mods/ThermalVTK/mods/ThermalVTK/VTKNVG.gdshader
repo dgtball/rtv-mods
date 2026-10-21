@@ -41,6 +41,21 @@ uniform vec3 stCombatColor : source_color = vec3(0.95, 0.18, 0.15);
 uniform vec3 stDefendColor : source_color = vec3(0.62, 0.30, 0.95);
 uniform float stateBright : hint_range(0.1, 3.0, 0.05) = 0.6;
 
+// Body-fill keys + nomad marker key. Same contract as the state keys: the
+// world-space shader emits the key, this overlay substitutes the display
+// colour. The *Key uniforms hold the measured post-NVG values (see VTKNVG.gd
+// DET_FILL_* / DET_NOMAD). fillOpacity is applied HERE, not on the mesh, so
+// the fill reads translucent while its pixel stays opaque enough to detect.
+uniform vec3 fillNormKey : source_color = vec3(0.0, 0.35, 1.0);
+uniform vec3 fillCombKey : source_color = vec3(0.0, 1.0, 0.35);
+uniform vec3 fillDefKey : source_color = vec3(1.0, 0.55, 0.0);
+uniform vec3 fillNormColor : source_color = vec3(1.0, 0.72, 0.28);
+uniform vec3 fillCombColor : source_color = vec3(0.95, 0.18, 0.15);
+uniform vec3 fillDefColor : source_color = vec3(0.62, 0.30, 0.95);
+uniform float fillOpacity : hint_range(0.0, 1.0, 0.01) = 0.05;
+uniform vec3 nomadKey : source_color = vec3(0.35, 0.0, 1.0);
+uniform vec3 nomadColor : source_color = vec3(0.30, 1.0, 0.35);
+
 uniform vec3 mineColor : source_color = vec3(0.7, 0.1, 0.07);
 
 float Goggles(vec2 uv)
@@ -125,24 +140,41 @@ void fragment()
 		float dStN = orbitDist(pixelColor.rgb, stNormalKey);
 		float dStC = orbitDist(pixelColor.rgb, stCombatKey);
 		float dStD = orbitDist(pixelColor.rgb, stDefendKey);
-		float minD = min(dMine, min(dStN, min(dStC, dStD)));
+		float dFiN = orbitDist(pixelColor.rgb, fillNormKey);
+		float dFiC = orbitDist(pixelColor.rgb, fillCombKey);
+		float dFiD = orbitDist(pixelColor.rgb, fillDefKey);
+		float dNom = orbitDist(pixelColor.rgb, nomadKey);
+		float minD = min(dMine, min(dStN, min(dStC, min(dStD, min(dFiN, min(dFiC, min(dFiD, dNom)))))));
 
 		{
 			float rawLuminance = dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114));
 			float luminance = clamp(rawLuminance * thermalDarken, 0.0, 1.0);
 			vec3 backgroundColor = ThermalPalette(luminance) * 0.7;
 			if (minD < 0.22) {
-				vec3 subColor;
+				// Precedence: mine, state, nomad, fill. The fill is the last
+				// branch because it is translucent -- it mixes the display
+				// colour over the palette instead of replacing it.
 				if (minD == dMine) {
-					subColor = mineColor;
+					color = vec4(mineColor, pixelColor.a);
 				} else if (minD == dStN) {
-					subColor = stNormalColor * stateBright;
+					color = vec4(stNormalColor * stateBright, pixelColor.a);
 				} else if (minD == dStC) {
-					subColor = stCombatColor * stateBright;
+					color = vec4(stCombatColor * stateBright, pixelColor.a);
+				} else if (minD == dStD) {
+					color = vec4(stDefendColor * stateBright, pixelColor.a);
+				} else if (minD == dNom) {
+					color = vec4(nomadColor, pixelColor.a);
 				} else {
-					subColor = stDefendColor * stateBright;
+					vec3 fillColor;
+					if (minD == dFiN) {
+						fillColor = fillNormColor;
+					} else if (minD == dFiC) {
+						fillColor = fillCombColor;
+					} else {
+						fillColor = fillDefColor;
+					}
+					color = vec4(mix(backgroundColor, fillColor, fillOpacity), pixelColor.a);
 				}
-				color = vec4(subColor, pixelColor.a);
 			} else {
 				color = vec4(backgroundColor, pixelColor.a);
 			}

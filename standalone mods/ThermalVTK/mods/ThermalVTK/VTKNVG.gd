@@ -55,6 +55,14 @@ const DET_ST_NORMAL := Color(1.00, 0.21, 0.16)
 const DET_ST_COMBAT := Color(0.82, 1.00, 1.00)
 const DET_ST_DEFEND := Color(1.00, 0.34, 1.00)
 
+# Fill / nomad detector targets (post-NVG measured values; seeded to the raw
+# keys for the first pass, refine with an in-game probe like DET_ST_*). The
+# fill mesh is opaque, so its washed value stays close to the emitted key.
+const DET_FILL_NORMAL := Color(0.0, 0.35, 1.0)
+const DET_FILL_COMBAT := Color(0.0, 1.0, 0.35)
+const DET_FILL_DEFEND := Color(1.0, 0.55, 0.0)
+const DET_NOMAD := Color(0.35, 0.0, 1.0)
+
 # settings
 var set_nvg_noise: float = 4.0
 var set_nvg_white: float = 1.0
@@ -65,6 +73,12 @@ var set_glow_distance: float = 150.0
 var set_palette: int = 0
 var set_world: float = 1.70
 var set_outline_brightness: float = 0.6
+# Density of the body fill. Applied by the overlay (not on the mesh), so the
+# fill pixel stays opaque enough to be detected while still reading as
+# translucent.
+var set_fill_opacity: float = 0.05
+# Display colour of the friendly-nomad marker.
+var set_nomad_color: Color = Color(0.30, 1.0, 0.35)
 var _state_colors: Dictionary = {}
 var _game_data: Resource = null
 var _shader: Shader = null
@@ -247,6 +261,15 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("stCombatColor", _state_colors.get("state_combat", Color(0.95, 0.18, 0.15)))
 	nvg_mat.set_shader_parameter("stDefendColor", _state_colors.get("state_defend", Color(0.62, 0.30, 0.95)))
 	nvg_mat.set_shader_parameter("stateBright", set_outline_brightness)
+	nvg_mat.set_shader_parameter("fillNormKey", DET_FILL_NORMAL)
+	nvg_mat.set_shader_parameter("fillCombKey", DET_FILL_COMBAT)
+	nvg_mat.set_shader_parameter("fillDefKey", DET_FILL_DEFEND)
+	nvg_mat.set_shader_parameter("nomadKey", DET_NOMAD)
+	nvg_mat.set_shader_parameter("fillNormColor", _state_colors.get("state_normal", Color(1.0, 0.72, 0.28)))
+	nvg_mat.set_shader_parameter("fillCombColor", _state_colors.get("state_combat", Color(0.95, 0.18, 0.15)))
+	nvg_mat.set_shader_parameter("fillDefColor", _state_colors.get("state_defend", Color(0.62, 0.30, 0.95)))
+	nvg_mat.set_shader_parameter("nomadColor", set_nomad_color)
+	nvg_mat.set_shader_parameter("fillOpacity", set_fill_opacity)
 	nvg_mat.set_shader_parameter("scopeRotate", _scope_rotate)
 
 
