@@ -31,3 +31,15 @@ re-roll the item under the cursor with the debug hotkey.
 ```powershell
 powershell -ExecutionPolicy Bypass -File pack.ps1
 ```
+
+## Manual test checklist (before a release)
+
+- Container weapon rolls a tier (check the log with "Log rolls").
+- Tooltip shows the rarity line and affixes; the cell border matches.
+- Moving/dropping/stashing/reloading keeps the tier and affixes.
+- Corpse loot rolls.
+- "Force tier" debug applies to all finds.
+- The re-roll hotkey updates the hovered item.
+- Runs without MCM installed.
+- No save errors with the mod present.
+- Coexists with Evolve and ItemClarity.
