@@ -8,6 +8,7 @@ const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Outline = preload("res://mods/ThermalVTK/VTKOutline.gd")
 const WeaponOcclusion = preload("res://mods/ThermalVTK/VTKWeaponOcclusion.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
+const NomadMarkerShader := preload("res://mods/ThermalVTK/VTKNomadMarker.gdshader")
 
 # Polling cadence for state re-reads / fallback discovery (frames).
 const POLL_EVERY := 12
@@ -336,18 +337,23 @@ func _marker_make(id: int, node: Node) -> void:
 	if mesh is Node3D:
 		parent = mesh
 		y = (mesh as Node3D).get_aabb().end.y + 0.1
-	var lbl := Label3D.new()
-	lbl.text = "\u25c6"
-	lbl.modulate = Color(0.30, 1.0, 0.35)
-	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	lbl.no_depth_test = true
-	lbl.render_priority = 41
-	lbl.font_size = 32
-	lbl.outline_size = 12
-	lbl.position = Vector3(0.0, y, 0.0)
-	lbl.visible = true
-	parent.add_child(lbl)
-	_markers[id] = lbl
+	# A key-emitting mesh instead of a Label3D: the marker paints the nomad key
+	# colour, so the NVG overlay detects it and substitutes the display colour.
+	# A green Label3D was re-coloured by the thermal palette ramp instead.
+	var mi := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.18, 0.18)
+	mi.mesh = quad
+	var mat := ShaderMaterial.new()
+	mat.shader = NomadMarkerShader
+	mat.render_priority = 41
+	mi.material_override = mat
+	mi.position = Vector3(0.0, y, 0.0)
+	# The quad is billboarded inside the shader (MeshInstance3D has no
+	# billboard property in Godot 4). The default depth test is kept, so the
+	# marker does not read through walls.
+	parent.add_child(mi)
+	_markers[id] = mi
 
 func _marker_free(id: int) -> void:
 	if _markers.has(id):
