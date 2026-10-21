@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.7.1] - 2026-10-21
+
+### Changed
+- The body fill now reads as a translucent state colour (density is its own control); the warm-to-cold gradient and the separate "Fill style" setting are gone.
+- Switching the "Outline style" picks a matching fill preset automatically (front-face → fill on, back-face → fill off), so you can still adjust the slider afterwards.
+- The friendly-nomad marker shows only while the contour is on.
+
+### Fixed
+- Front-face outlines show a proper rim again (the rim was lost on the default style).
+- Disabling the contour no longer leaves nomad markers floating.
+- The palette-cycle hotkey does nothing while thermal vision is off (no palette change, no notification).
+
+### Removed
+- The "Fill style" setting (flat vs gradient); the body fill is now always a translucent state colour.
+- The "See through walls" option; the contour no longer draws through geometry.
+
 ## [1.7.0] - 2026-10-20
 
 ### Added
