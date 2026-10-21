@@ -55,14 +55,10 @@ const DET_ST_NORMAL := Color(1.00, 0.21, 0.16)
 const DET_ST_COMBAT := Color(0.82, 1.00, 1.00)
 const DET_ST_DEFEND := Color(1.00, 0.34, 1.00)
 
-# Fill / nomad detector targets. Calibrated in-game against the vanilla NVG
-# palette (a probe measured each raw fill/nomad key after the wash). Each value
-# is the measured post-NVG colour of the matching world key in VTKStates.gd, so
-# a fill detector can no longer sit inside another key's radius: the fill pool
-# stays 0.71 apart and the core pool (mine + states + nomad) 0.48 apart.
-const DET_FILL_NORMAL := Color(0.961, 0.753, 0.184)
-const DET_FILL_COMBAT := Color(0.000, 0.149, 0.969)
-const DET_FILL_DEFEND := Color(1.000, 0.192, 0.624)
+# Fill / nomad detector targets. The nomad value was calibrated in-game
+# against the vanilla NVG palette (a probe measured the raw nomad key after the
+# wash). It is the measured post-NVG colour of KEY_NOMAD in VTKStates.gd, so the
+# nomad detector cannot sit inside another key's radius.
 const DET_NOMAD := Color(0.580, 0.973, 0.584)
 
 # settings
@@ -75,10 +71,6 @@ var set_glow_distance: float = 150.0
 var set_palette: int = 0
 var set_world: float = 1.70
 var set_outline_brightness: float = 0.6
-# Density of the body fill. Applied by the overlay (not on the mesh), so the
-# fill pixel stays opaque enough to be detected while still reading as
-# translucent.
-var set_fill_opacity: float = 0.05
 # Display colour of the friendly-nomad marker.
 var set_nomad_color: Color = Color(0.30, 1.0, 0.35)
 var _state_colors: Dictionary = {}
@@ -123,8 +115,8 @@ func _ready() -> void:
 	_reseed(get_tree().current_scene)
 
 
-# A single downward-pointing triangle reads as ▼. Billboarded via the material,
-# so the exact winding does not matter (cull is disabled anyway).
+# A single diamond quad reads as a glyph. Billboarded via the material, so the
+# exact winding does not matter (cull is disabled anyway).
 func _reseed(scene: Node) -> void:
 	if scene == null:
 		return
@@ -264,15 +256,8 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("stCombatColor", _state_colors.get("state_combat", Color(0.95, 0.18, 0.15)))
 	nvg_mat.set_shader_parameter("stDefendColor", _state_colors.get("state_defend", Color(0.62, 0.30, 0.95)))
 	nvg_mat.set_shader_parameter("stateBright", set_outline_brightness)
-	nvg_mat.set_shader_parameter("fillNormKey", DET_FILL_NORMAL)
-	nvg_mat.set_shader_parameter("fillCombKey", DET_FILL_COMBAT)
-	nvg_mat.set_shader_parameter("fillDefKey", DET_FILL_DEFEND)
 	nvg_mat.set_shader_parameter("nomadKey", DET_NOMAD)
-	nvg_mat.set_shader_parameter("fillNormColor", _state_colors.get("state_normal", Color(1.0, 0.72, 0.28)))
-	nvg_mat.set_shader_parameter("fillCombColor", _state_colors.get("state_combat", Color(0.95, 0.18, 0.15)))
-	nvg_mat.set_shader_parameter("fillDefColor", _state_colors.get("state_defend", Color(0.62, 0.30, 0.95)))
 	nvg_mat.set_shader_parameter("nomadColor", set_nomad_color)
-	nvg_mat.set_shader_parameter("fillOpacity", set_fill_opacity)
 	nvg_mat.set_shader_parameter("scopeRotate", _scope_rotate)
 
 

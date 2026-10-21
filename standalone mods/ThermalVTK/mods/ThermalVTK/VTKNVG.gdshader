@@ -2,14 +2,13 @@ shader_type canvas_item;
 
 // NVG / thermal overlay. Replaces the vanilla NVG ColorRect shader (see
 // VTKNVG.gd for why the swap is safe). The whole frame is read back through
-// the false-colour thermal palette; the mine, the three contour state keys,
-// the three body-fill keys and the nomad marker key are pulled out by
-// comparing the screen against the *Key uniforms. Those keys are NOT the raw
-// colours the world-space shaders emit -- the vanilla NVG world processing
-// washes bright keys toward white before this shader ever sees them -- but the
-// measured post-NVG values (VTKNVG.gd DET_*). Keep the key lists in lockstep
-// with VTKNVG.gd. The *Color uniforms are the freely chosen substitution
-// colours; fillOpacity (applied here, not on the mesh) is the fill density.
+// the false-colour thermal palette; the mine, the three contour state keys
+// and the nomad marker key are pulled out by comparing the screen against the
+// *Key uniforms. Those keys are NOT the raw colours the world-space shaders
+// emit -- the vanilla NVG world processing washes bright keys toward white
+// before this shader ever sees them -- but the measured post-NVG values
+// (VTKNVG.gd DET_*). Keep the key lists in lockstep with VTKNVG.gd. The *Color
+// uniforms are the freely chosen substitution colours.
 
 uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_linear_mipmap;
 uniform vec4 tint : source_color = vec4(0.47, 0.67, 0.51, 1.0);
@@ -42,18 +41,7 @@ uniform vec3 stCombatColor : source_color = vec3(0.95, 0.18, 0.15);
 uniform vec3 stDefendColor : source_color = vec3(0.62, 0.30, 0.95);
 uniform float stateBright : hint_range(0.1, 3.0, 0.05) = 0.6;
 
-// Body-fill keys + nomad marker key. Same contract as the state keys: the
-// world-space shader emits the key, this overlay substitutes the display
-// colour. The *Key uniforms hold the measured post-NVG values (see VTKNVG.gd
-// DET_FILL_* / DET_NOMAD). fillOpacity is applied HERE, not on the mesh, so
-// the fill reads translucent while its pixel stays opaque enough to detect.
-uniform vec3 fillNormKey : source_color = vec3(0.961, 0.753, 0.184);
-uniform vec3 fillCombKey : source_color = vec3(0.000, 0.149, 0.969);
-uniform vec3 fillDefKey : source_color = vec3(1.000, 0.192, 0.624);
-uniform vec3 fillNormColor : source_color = vec3(1.0, 0.72, 0.28);
-uniform vec3 fillCombColor : source_color = vec3(0.95, 0.18, 0.15);
-uniform vec3 fillDefColor : source_color = vec3(0.62, 0.30, 0.95);
-uniform float fillOpacity : hint_range(0.0, 1.0, 0.01) = 0.05;
+// Body-fill / nomad detector targets removed in 1.7.2: the fill is gone.
 uniform vec3 nomadKey : source_color = vec3(0.580, 0.973, 0.584);
 uniform vec3 nomadColor : source_color = vec3(0.30, 1.0, 0.35);
 
@@ -123,13 +111,10 @@ float orbitDist(vec3 c, vec3 k)
 	return d;
 }
 
-// Detector radii. The mine, state and nomad keys are matched tightly: those
+// Detector radius. The mine, state and nomad keys are matched tightly: those
 // branches replace the pixel outright, so a loose radius would paint the
-// wrong colour over unrelated pixels. The body fill gets a wider radius: a
-// cooling corpse's fill fades by alpha, which drags the pixel away from the
-// pure key, so a tight radius would lose the fill while the body dissolves.
+// wrong colour over unrelated pixels.
 const float DET_TOL_CORE = 0.22;
-const float DET_TOL_FILL = 0.40;
 
 void fragment()
 {
@@ -142,60 +127,33 @@ void fragment()
 
 	vec4 color;
 	if (thermalMode) {
-		// Pick whichever key is CLOSEST: with a wide tolerance two keys'
-		// ranges can overlap on a single pixel, and an if/elif chain would
-		// let an earlier check steal matches that belong to a later key.
-		// The fill has its own (wider) radius, so the keys are reduced in two
-		// groups: a pixel inside the fill radius but outside the tight one is
-		// still a fill.
+		// Pick whichever key is CLOSEST: an if/elif chain would let an
+		// earlier check steal matches that belong to a later key.
 		float dMine = orbitDist(pixelColor.rgb, mineKey);
 		float dStN = orbitDist(pixelColor.rgb, stNormalKey);
 		float dStC = orbitDist(pixelColor.rgb, stCombatKey);
 		float dStD = orbitDist(pixelColor.rgb, stDefendKey);
-		float dFiN = orbitDist(pixelColor.rgb, fillNormKey);
-		float dFiC = orbitDist(pixelColor.rgb, fillCombKey);
-		float dFiD = orbitDist(pixelColor.rgb, fillDefKey);
 		float dNom = orbitDist(pixelColor.rgb, nomadKey);
 		float dCore = min(dMine, min(dStN, min(dStC, min(dStD, dNom))));
-		float dFill = min(dFiN, min(dFiC, dFiD));
-		bool coreHit = dCore < DET_TOL_CORE;
-		bool fillHit = dFill < DET_TOL_FILL;
 
-		{
-			float rawLuminance = dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114));
-			float luminance = clamp(rawLuminance * thermalDarken, 0.0, 1.0);
-			vec3 backgroundColor = ThermalPalette(luminance) * 0.7;
-			if (coreHit || fillHit) {
-				// Closest wins. Inside the core group the order is mine,
-				// state, nomad (exact ties only). The fill is separate: it is
-				// translucent -- it mixes the display colour over the palette
-				// instead of replacing it.
-				if (coreHit && dCore <= dFill) {
-					if (dCore == dMine) {
-						color = vec4(mineColor, pixelColor.a);
-					} else if (dCore == dStN) {
-						color = vec4(stNormalColor * stateBright, pixelColor.a);
-					} else if (dCore == dStC) {
-						color = vec4(stCombatColor * stateBright, pixelColor.a);
-					} else if (dCore == dStD) {
-						color = vec4(stDefendColor * stateBright, pixelColor.a);
-					} else {
-						color = vec4(nomadColor, pixelColor.a);
-					}
-				} else {
-					vec3 fillColor;
-					if (dFill == dFiN) {
-						fillColor = fillNormColor;
-					} else if (dFill == dFiC) {
-						fillColor = fillCombColor;
-					} else {
-						fillColor = fillDefColor;
-					}
-					color = vec4(mix(backgroundColor, fillColor, fillOpacity), pixelColor.a);
-				}
+		float rawLuminance = dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114));
+		float luminance = clamp(rawLuminance * thermalDarken, 0.0, 1.0);
+		vec3 backgroundColor = ThermalPalette(luminance) * 0.7;
+		if (dCore < DET_TOL_CORE) {
+			// Closest wins. Order (exact ties only): mine, state, nomad.
+			if (dCore == dMine) {
+				color = vec4(mineColor, pixelColor.a);
+			} else if (dCore == dStN) {
+				color = vec4(stNormalColor * stateBright, pixelColor.a);
+			} else if (dCore == dStC) {
+				color = vec4(stCombatColor * stateBright, pixelColor.a);
+			} else if (dCore == dStD) {
+				color = vec4(stDefendColor * stateBright, pixelColor.a);
 			} else {
-				color = vec4(backgroundColor, pixelColor.a);
+				color = vec4(nomadColor, pixelColor.a);
 			}
+		} else {
+			color = vec4(backgroundColor, pixelColor.a);
 		}
 	} else {
 		color = pixelColor * tint;

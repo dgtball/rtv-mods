@@ -16,50 +16,23 @@ const DEFAULT_COMBAT := Color(0.95, 0.18, 0.15)
 const DEFAULT_DEFEND := Color(0.62, 0.30, 0.95)
 
 # Detector keys the ring emits; the overlay detector matches them and swaps in
-# the category colour. The body-fill keys and the nomad key follow the same
-# rule. The overlay matches the CLOSEST key within its radius -- tight for the
-# outline, state and nomad keys, wider for the body fill, whose pixel fades
-# away from the key while a corpse cools -- so every key -- the outline, fill
-# and nomad ones alike -- must stay more than the widest radius apart.
-#
-# The rule: the shortest distance between ANY two world keys (the three
-# outline keys, the mine key, the three fill keys and the nomad key) must be
-# >= 0.40 -- the widest detector radius (DET_TOL_FILL in VTKNVG.gdshader).
-# Below that a fill detector can claim a state ring pixel, and a nomad
-# marker can be read as a mine. The current minimum is 0.41.
+# the category colour. The overlay matches the CLOSEST key within its radius
+# (DET_TOL_CORE in VTKNVG.gdshader), so every key -- the three outline keys, the
+# mine key and the nomad key -- must stay more than that radius apart, or one
+# key's detector can claim another key's pixel. The current minimum is well
+# above the radius.
 const KEY_NORMAL := Color(1.0, 0.0, 0.0)
 const KEY_COMBAT := Color(0.0, 1.0, 1.0)
 const KEY_DEFEND := Color(1.0, 0.0, 1.0)
 
 const CATEGORY_KEY_COLORS: Array[Color] = [KEY_NORMAL, KEY_COMBAT, KEY_DEFEND]
 
-# Body-fill keys. Separate from the outline keys so the overlay can give the
-# fill its own density; one per category so the fill carries the state colour.
-# Chosen far from every other key and from the display colours: the overlay
-# detects by raw distance, so overlap would mis-classify. The spacing rule
-# above (>= 0.40 from every other world key) is what "far" means here.
-#
-# These are low-sum keys (each channel stays small): the vanilla NVG palette
-# washes a bright key toward white before the overlay ever sees it, so a key
-# that is too bright loses its hue and every state collapses onto the same
-# pixel. They were calibrated against the game (see DET_FILL_* in VTKNVG.gd).
-const KEY_FILL_NORMAL := Color(0.55, 0.38, 0.02)
-const KEY_FILL_COMBAT := Color(0.02, 0.10, 0.60)
-const KEY_FILL_DEFEND := Color(0.55, 0.10, 0.32)
-
-const FILL_KEY_COLORS: Array[Color] = [KEY_FILL_NORMAL, KEY_FILL_COMBAT, KEY_FILL_DEFEND]
-
 # Friendly-nomad marker key (green display colour proposed by the overlay).
-# Same spacing rule as the fill keys: it must stay clear of the mine key, or
-# a washed nomad marker reads as a mine. Calibrated: a green whose red and
-# blue stay near zero survives the NVG wash as green, where a bright green
+# The rule above applies: it must stay clear of the mine key, or a washed
+# nomad marker reads as a mine. Calibrated: a green whose red and blue stay
+# near zero survives the NVG wash as green, where a bright green
 # (0.6, 1.0, 0.6) washed out to pure white and lost the marker.
 const KEY_NOMAD := Color(0.02, 0.60, 0.24)
-
-static func fill_key(cat: int) -> Color:
-	if cat < 0 or cat >= FILL_KEY_COLORS.size():
-		return KEY_FILL_NORMAL
-	return FILL_KEY_COLORS[cat]
 
 static func state_key(cat: int) -> Color:
 	if cat < 0 or cat >= CATEGORY_KEY_COLORS.size():

@@ -12,8 +12,6 @@ const CONFIG_FILE := "user://MCM/thermal-vtk/config.ini"
 const STATE_FILE := "user://MCM/thermal-vtk/thermal_state.cfg"
 const MCM_HELPERS := "res://ModConfigurationMenu/Scripts/Doink Oink/MCM_Helpers.tres"
 const PALETTE_COUNT := 4
-# Fill opacity the Front-faces preset applies (the design's flat fill).
-const PRESET_FILL_ALPHA := 0.05
 
 var _nvg: Node = null
 var _esp: Node = null
@@ -226,11 +224,8 @@ func _register_mcm() -> void:
 
 	var CAT2 := "02. Contour ESP"
 	cfg.set_value("Bool", "outline_enabled", {"name": "Contour ESP", "default": true, "value": true, "category": CAT2, "menu_pos": 0, "tooltip": "Draw state-coloured body outlines over NPCs. Off = full-screen thermal only."})
-	cfg.set_value("Dropdown", "outline_style", {"name": "Outline style", "default": "front", "value": "front", "options": {"front": "Front-faces (ITH)", "back": "Back-faces"}, "category": CAT2, "menu_pos": 1, "tooltip": "Outline look. Front-faces is the clean silhouette; Back-faces is the older inflated look."})
-	cfg.set_value("Float", "outline_rim", {"name": "Outline rim", "default": 0.42, "value": 0.42, "minRange": 0.0, "maxRange": 1.0, "step": 0.02, "category": CAT2, "menu_pos": 2, "tooltip": "Edge band width (Front-faces) or edge sharpness (Back-faces) of the outline."})
-	cfg.set_value("Bool", "outline_body_fill", {"name": "Body fill", "default": true, "value": true, "category": CAT2, "menu_pos": 3, "tooltip": "Fill the NPC body with its state colour inside the outline."})
-	cfg.set_value("Float", "fill_opacity", {"name": "Fill opacity", "default": 0.05, "value": 0.05, "minRange": 0.0, "maxRange": 1.0, "step": 0.05, "category": CAT2, "menu_pos": 5, "tooltip": "How strong the body fill's state colour is. Turn Body fill off to show the outline alone."})
-	cfg.set_value("Float", "corpse_decay", {"name": "Corpse cooling time", "default": 8.0, "value": 8.0, "minRange": 0.0, "maxRange": 30.0, "step": 1.0, "category": CAT2, "menu_pos": 6, "tooltip": "Seconds a dead NPC's outline takes to cool from warm to cold."})
+	cfg.set_value("Float", "outline_rim", {"name": "Outline rim", "default": 1.0, "value": 1.0, "minRange": 0.0, "maxRange": 6.0, "step": 0.1, "category": CAT2, "menu_pos": 2, "tooltip": "Edge sharpness of the outline. 1.0 is a linear falloff; higher values tighten the band toward the silhouette."})
+	cfg.set_value("Float", "corpse_decay", {"name": "Corpse cooling time", "default": 30.0, "value": 30.0, "minRange": 0.0, "maxRange": 180.0, "step": 1.0, "category": CAT2, "menu_pos": 6, "tooltip": "Seconds a dead NPC's outline takes to cool from warm to cold."})
 	cfg.set_value("Float", "outline_thickness", {"name": "Outline thickness", "default": 0.006, "value": 0.006, "minRange": 0.001, "maxRange": 0.02, "step": 0.001, "category": CAT2, "menu_pos": 7, "tooltip": "How far the outline band grows beyond the body."})
 	cfg.set_value("Float", "outline_brightness", {"name": "Outline brightness", "default": 0.6, "value": 0.6, "minRange": 0.1, "maxRange": 3.0, "step": 0.1, "category": CAT2, "menu_pos": 8, "tooltip": "Brightness multiplier on the outline colour."})
 
@@ -362,25 +357,12 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 	_nvg.set_mines_enabled(_mines_enabled)
 	_ensure_esp()
 	if _esp != null and is_instance_valid(_esp):
-		_esp.p_decay = float(_mcm_key_val(cfg, "Float", "corpse_decay", 8.0))
+		_esp.p_decay = float(_mcm_key_val(cfg, "Float", "corpse_decay", 30.0))
 		_esp.p_dist = float(_mcm_key_val(cfg, "Float", "outline_distance", 60.0))
 		_esp.p_thickness = float(_mcm_key_val(cfg, "Float", "outline_thickness", 0.006))
 		_esp.p_brightness = float(_mcm_key_val(cfg, "Float", "outline_brightness", 0.6))
-		_esp.p_fill = bool(_mcm_key_val(cfg, "Bool", "outline_body_fill", true))
-		_esp.p_fill_alpha = float(_mcm_key_val(cfg, "Float", "fill_opacity", 0.05))
-		_esp.p_style = 0 if String(_mcm_key_val(cfg, "Dropdown", "outline_style", "front")) == "front" else 1
-		_esp.p_rim = float(_mcm_key_val(cfg, "Float", "outline_rim", 0.42))
-		# Preset: the outline style decides the fill default. Only when the style
-		# actually changes do we touch fill/opacity, so a user's manual sliders
-		# survive editor round-trips.
-		_apply_style_preset(_esp.p_style, cfg)
+		_esp.p_rim = float(_mcm_key_val(cfg, "Float", "outline_rim", 1.0))
 		_nvg.set_outline_brightness = _esp.p_brightness
-		_nvg.set_fill_opacity = _esp.p_fill_alpha if _esp.p_fill else 0.0
-		_esp.p_colors = {
-			"state_normal": _mcm_color_val(cfg, "state_normal", States.DEFAULT_NORMAL),
-			"state_combat": _mcm_color_val(cfg, "state_combat", States.DEFAULT_COMBAT),
-			"state_defend": _mcm_color_val(cfg, "state_defend", States.DEFAULT_DEFEND),
-		}
 		_nvg.set_state_colors({
 			"state_normal": _mcm_color_val(cfg, "state_normal", States.DEFAULT_NORMAL),
 			"state_combat": _mcm_color_val(cfg, "state_combat", States.DEFAULT_COMBAT),
@@ -390,51 +372,6 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 		_nvg.set_glow_distance = _esp.p_dist
 	_outline_enabled = bool(_mcm_key_val(cfg, "Bool", "outline_enabled", true))
 	_apply_mode()
-
-# The outline style is a fill preset: Front-faces fills the body at 0.05,
-# Back-faces turns the fill off. The preset is written back into the MCM
-# config, so the panel shows the values the shader uses instead of a stale
-# slider. The guard (the persisted outline_style_seen state) keeps a manual
-# fill opacity from being reset on every MCM round-trip.
-func _apply_style_preset(style: int, cfg: ConfigFile, config_path: String = CONFIG_FILE, state_path: String = STATE_FILE) -> bool:
-	var seen_style = _read_state("outline_style_seen", null, state_path)
-	if seen_style == style:
-		return false
-	var fill: bool = (style == 0)
-	var alpha: float = PRESET_FILL_ALPHA if fill else 0.0
-	if _esp != null and is_instance_valid(_esp):
-		_esp.p_fill = fill
-		_esp.p_fill_alpha = alpha
-	_cfg_set_value(cfg, "Bool", "outline_body_fill", fill)
-	_cfg_set_value(cfg, "Float", "fill_opacity", alpha)
-	_write_config_values(config_path, fill, alpha)
-	_save_state("outline_style_seen", style, state_path)
-	return true
-
-# Writes the "value" member of an MCM entry and leaves the rest of the entry
-# (name, range, tooltip) alone.
-func _cfg_set_value(cfg: ConfigFile, section: String, key: String, value) -> void:
-	if cfg == null or not cfg.has_section_key(section, key):
-		return
-	var d = cfg.get_value(section, key, {})
-	if typeof(d) != TYPE_DICTIONARY:
-		cfg.set_value(section, key, value)
-		return
-	var merged = d.duplicate()
-	merged["value"] = value
-	cfg.set_value(section, key, merged)
-
-# The MCM panel reads its sliders from the config file and offers no way to
-# push a value into it, so the preset is written there directly.
-func _write_config_values(path: String, fill: bool, alpha: float) -> bool:
-	if not FileAccess.file_exists(path):
-		return false
-	var cf := ConfigFile.new()
-	if cf.load(path) != OK:
-		return false
-	_cfg_set_value(cf, "Bool", "outline_body_fill", fill)
-	_cfg_set_value(cf, "Float", "fill_opacity", alpha)
-	return cf.save(path) == OK
 
 func _apply_defaults() -> void:
 	var saved = _read_state("thermal_enabled", null)

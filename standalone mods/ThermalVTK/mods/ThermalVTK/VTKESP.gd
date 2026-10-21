@@ -17,14 +17,11 @@ const CAP := 24
 
 var enabled: bool = false
 # MCM-driven params.
-var p_fill := true
-var p_fill_alpha := 0.05
 var p_decay := 8.0
 var p_dist := 60.0
 var p_thickness := 0.006
 var p_brightness := 0.6
-var p_style := 0
-var p_rim := 0.42
+var p_rim := 1.0
 var p_colors := {
 	"state_normal": States.DEFAULT_NORMAL,
 	"state_combat": States.DEFAULT_COMBAT,
@@ -287,12 +284,7 @@ func _labels_sync() -> void:
 			_label_free(id)
 
 func _label_make(id: int, e: Dictionary, node: Node, state: int) -> void:
-	var mesh = node.get("mesh")
-	var parent: Node = node
-	var y := 1.9
-	if mesh is Node3D:
-		parent = mesh
-		y = (mesh as Node3D).get_aabb().end.y + 0.1
+	var anchor := _anchor_above(node)
 	var lbl := Label3D.new()
 	lbl.text = States.label_text(state, bool(e.get("nomad", false)))
 	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -300,12 +292,23 @@ func _label_make(id: int, e: Dictionary, node: Node, state: int) -> void:
 	lbl.render_priority = 40
 	lbl.font_size = 32
 	lbl.outline_size = 12
-	lbl.position = Vector3(0.0, y, 0.0)
+	lbl.position = Vector3(0.0, float(anchor["y"]), 0.0)
 	lbl.visible = enabled
 	lbl.set_meta(Outline.NO_CONTOUR_META, true)
-	parent.add_child(lbl)
+	(anchor["parent"] as Node).add_child(lbl)
 	_labels[id] = lbl
 	_labels_state[id] = state
+
+# Where a label/marker hangs: above the bot's own mesh when it has one (so the
+# overlay on that mesh skips our tagged geometry), above the bot root otherwise.
+func _anchor_above(node: Node) -> Dictionary:
+	var mesh = node.get("mesh")
+	var parent: Node = node
+	var y := 1.9
+	if mesh is Node3D:
+		parent = mesh
+		y = (mesh as Node3D).get_aabb().end.y + 0.1
+	return {"parent": parent, "y": y}
 
 func _label_free(id: int) -> void:
 	if _labels.has(id):
@@ -346,12 +349,7 @@ func _markers_sync() -> void:
 			_marker_free(id)
 
 func _marker_make(id: int, node: Node) -> void:
-	var mesh = node.get("mesh")
-	var parent: Node = node
-	var y := 1.9
-	if mesh is Node3D:
-		parent = mesh
-		y = (mesh as Node3D).get_aabb().end.y + 0.1
+	var anchor := _anchor_above(node)
 	# A key-emitting mesh instead of a Label3D: the marker paints the nomad key
 	# colour, so the NVG overlay detects it and substitutes the display colour.
 	# A green Label3D was re-coloured by the thermal palette ramp instead.
@@ -370,18 +368,18 @@ func _marker_make(id: int, node: Node) -> void:
 	# default, so the calibration cycle can repaint the live markers.
 	mat.set_shader_parameter("nomad_key", _marker_key())
 	mi.material_override = mat
-	mi.position = Vector3(0.0, y, 0.0)
+	mi.position = Vector3(0.0, float(anchor["y"]), 0.0)
 	# The quad is billboarded inside the shader (MeshInstance3D has no
 	# billboard property in Godot 4). The default depth test is kept, so the
 	# marker does not read through walls.
-	parent.add_child(mi)
+	(anchor["parent"] as Node).add_child(mi)
 	_markers[id] = mi
 
 func _marker_free(id: int) -> void:
 	if _markers.has(id):
-		var lbl = _markers[id]
-		if is_instance_valid(lbl):
-			lbl.queue_free()
+		var mi = _markers[id]
+		if is_instance_valid(mi):
+			mi.queue_free()
 		_markers.erase(id)
 
 # The key the nomad marker paints: the calibration candidate while the
@@ -433,7 +431,7 @@ func _draw(ppos: Vector3) -> void:
 		cands.append({"id": id, "dist": dist})
 		if _frame % POLL_EVERY == 0:
 			Tracker.apply_state(e, _read_state(node))
-		opts_by_id[id] = _opts_for(e, node, dist, now)
+		opts_by_id[id] = _opts_for(e, node, now)
 	for id in _entries.keys():
 		if not valid.has(id):
 			_outline.clear(id)
@@ -459,33 +457,23 @@ func _draw(ppos: Vector3) -> void:
 	_dbg_keep = keep.size()
 	_dbg_applied = applied
 
-func _opts_for(e: Dictionary, node: Node, dist: float, now: float) -> Dictionary:
+func _opts_for(e: Dictionary, node: Node, now: float) -> Dictionary:
 	var cool := Tracker.cool_factor(e, now, p_decay)
 	var nomad := bool(e.get("nomad", false))
 	var cat: int = int(e.get("cat", States.NORMAL))
 	var key: Color = States.state_key(cat)
-	var fill: Color = States.fill_key(cat)
 	if p_cal_active:
-		# Calibration: the ring and the fill both paint the candidate, so the
-		# probe reads the candidate's post-NVG colour. Everything else (cool,
-		# style) stays as it is.
+		# Calibration: the ring paints the candidate, so the probe reads the
+		# candidate's post-NVG colour. Everything else (cool, rim) stays.
 		key = Calibration.candidate(p_cal_index)
-		fill = key
-	var foot_y: float = (node as Node3D).global_position.y
 	return {
 		"cat": cat,
 		"nomad": nomad,
 		"state_key": key,
 		"cool": cool,
-		"front_faces": p_style == 0,
-		"outline_style": p_style,
 		"rim": p_rim,
-		"foot_y": foot_y,
-		"body_height": 1.8,
 		"brightness": p_brightness,
 		"grow": p_thickness,
-		"fill_key": fill,
-		"fill_on": p_fill,
 	}
 
 func _player_pos() -> Variant:

@@ -1,20 +1,20 @@
 extends RefCounted
-# Owns one material_overlay + next_pass chain per NPC mesh and pushes shader
-# parameters only when they move (change gate). Overlay chains live on the
-# meshes themselves, so nothing here is a scene-tree child except through the
-# NPC meshes. Faction/state colours come in via `opts`; this file only draws.
+# Owns one material_overlay (the silhouette ring) per NPC mesh and pushes shader
+# parameters only when they move (change gate). Overlays live on the meshes
+# themselves, so nothing here is a scene-tree child except through the NPC
+# meshes. State colours come in via `opts`; this file only draws.
 
 const Shaders = preload("res://mods/ThermalVTK/VTKShaders.gd")
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 
 # Nodes the mod adds under a bot's subtree (the nomad marker, the debug label)
-# carry this meta: the sweep must skip them, or the body-fill overlay is
-# assigned on top of their own material and paints over the key they emit.
+# carry this meta: the sweep must skip them, or the ring overlay is assigned on
+# top of their own material and paints over the key they emit.
 const NO_CONTOUR_META := "vtk_no_contour"
 
-# id -> {"meshes": Array, "body": ShaderMaterial, "ring": ShaderMaterial,
-#        "front_faces": bool, "_c": ... change-gate cache}
+# id -> {"meshes": Array, "ring": ShaderMaterial,
+#        "node": Node, "child_count": int}
 var _items: Dictionary = {}
 
 func has(id: int) -> bool:
@@ -36,15 +36,11 @@ func _collect(node: Node, out: Array) -> void:
 	for c in node.get_children():
 		_collect(c, out)
 
-func _build_chain(front_faces: bool) -> Array:
-	var body_mat := ShaderMaterial.new()
-	body_mat.shader = Shaders.body()
-	body_mat.render_priority = 20
+func _build_ring() -> ShaderMaterial:
 	var ring_mat := ShaderMaterial.new()
-	ring_mat.shader = Shaders.ring(front_faces)
+	ring_mat.shader = Shaders.ring()
 	ring_mat.render_priority = 21
-	body_mat.next_pass = ring_mat
-	return [body_mat, ring_mat]
+	return ring_mat
 
 func apply(id: int, node: Node, opts: Dictionary) -> void:
 	var meshes: Array = []
@@ -53,19 +49,11 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 		Dbg.log("OUTLINE", "apply id=%d meshes=0 child_count=%d" % [id, node.get_child_count()])
 		return
 	Dbg.log("OUTLINE", "apply id=%d meshes=%d child_count=%d" % [id, meshes.size(), node.get_child_count()])
-	var front_faces := bool(opts.get("front_faces", true))
-	var chain := _build_chain(front_faces)
-	var body_mat: ShaderMaterial = chain[0]
-	var ring_mat: ShaderMaterial = chain[1]
-	# render_priority high so overlays draw after the world but before the
-	# weapon.
-	body_mat.render_priority = 20
-	ring_mat.render_priority = 21
+	var ring_mat := _build_ring()
 	for m in meshes:
-		(m as GeometryInstance3D).material_overlay = body_mat
+		(m as GeometryInstance3D).material_overlay = ring_mat
 	_items[id] = {
-		"meshes": meshes, "body": body_mat, "ring": ring_mat,
-		"front_faces": front_faces,
+		"meshes": meshes, "ring": ring_mat,
 		"node": node, "child_count": node.get_child_count(),
 	}
 	refresh(id, opts)
@@ -86,21 +74,11 @@ func _recollect(id: int, entry: Dictionary) -> void:
 	Dbg.log("OUTLINE", "recollect id=%d child_count=%d->%d meshes=%d" % [id, before, node.get_child_count(), fresh.size()])
 	if fresh.is_empty():
 		return
-	var body_mat: ShaderMaterial = entry["body"]
+	var ring_mat: ShaderMaterial = entry["ring"]
 	for m in fresh:
-		(m as GeometryInstance3D).material_overlay = body_mat
+		(m as GeometryInstance3D).material_overlay = ring_mat
 	entry["meshes"] = fresh
 	entry["child_count"] = node.get_child_count()
-
-# Swap the cull variant in place when the front/back style flips; the overlay
-# assignment does not change, only the shader resources.
-func _set_variants(id: int, entry: Dictionary, front_faces: bool) -> void:
-	if bool(entry.get("front_faces", front_faces)) == front_faces:
-		return
-	entry["front_faces"] = front_faces
-	(entry["body"] as ShaderMaterial).shader = Shaders.body()
-	(entry["ring"] as ShaderMaterial).shader = Shaders.ring(front_faces)
-	Dbg.log("OUTLINE", "variant id=%d front=%s" % [id, str(front_faces)])
 
 func refresh(id: int, opts: Dictionary) -> void:
 	var entry = _items.get(id)
@@ -109,16 +87,10 @@ func refresh(id: int, opts: Dictionary) -> void:
 	var node = entry.get("node")
 	if node != null and is_instance_valid(node) and node.get_child_count() != int(entry.get("child_count", -1)):
 		_recollect(id, entry)
-	_set_variants(id, entry, bool(opts.get("front_faces", true)))
 	var key: Color = opts.get("state_key", States.KEY_NORMAL)
 	var grow := float(opts.get("grow", 0.006))
-	var foot_y := float(opts.get("foot_y", 0.0))
-	var body_h := float(opts.get("body_height", 1.8))
 	var cool := float(opts.get("cool", 0.0))
-	var fill_key: Color = opts.get("fill_key", States.KEY_FILL_NORMAL)
-	var fill_on := bool(opts.get("fill_on", true))
 
-	var body_mat: ShaderMaterial = entry["body"]
 	var ring_mat: ShaderMaterial = entry["ring"]
 
 	if ring_mat.get_shader_parameter("state_key") != key \
@@ -127,32 +99,12 @@ func refresh(id: int, opts: Dictionary) -> void:
 		ring_mat.set_shader_parameter("state_key", key)
 		ring_mat.set_shader_parameter("grow", grow)
 
-	var rim := float(opts.get("rim", 0.42))
-	var style := int(opts.get("outline_style", 0))
-	if ring_mat.get_shader_parameter("outline_style") == null or int(ring_mat.get_shader_parameter("outline_style")) != style:
-		ring_mat.set_shader_parameter("outline_style", style)
-	if ring_mat.get_shader_parameter("rim_start") == null or not is_equal_approx(float(ring_mat.get_shader_parameter("rim_start")), rim):
-		ring_mat.set_shader_parameter("rim_start", rim)
-		ring_mat.set_shader_parameter("rim_end", rim + 0.4)
+	var rim := float(opts.get("rim", 1.0))
 	if ring_mat.get_shader_parameter("rim_power") == null or not is_equal_approx(float(ring_mat.get_shader_parameter("rim_power")), rim):
 		ring_mat.set_shader_parameter("rim_power", rim)
 
-	if body_mat.get_shader_parameter("cool") == null or not is_equal_approx(float(body_mat.get_shader_parameter("cool")), cool):
-		body_mat.set_shader_parameter("cool", cool)
 	if ring_mat.get_shader_parameter("cool") == null or not is_equal_approx(float(ring_mat.get_shader_parameter("cool")), cool):
 		ring_mat.set_shader_parameter("cool", cool)
-	if body_mat.get_shader_parameter("footY") == null or not is_equal_approx(float(body_mat.get_shader_parameter("footY")), foot_y):
-		body_mat.set_shader_parameter("footY", foot_y)
-	if body_mat.get_shader_parameter("bodyHeight") == null or not is_equal_approx(float(body_mat.get_shader_parameter("bodyHeight")), body_h):
-		body_mat.set_shader_parameter("bodyHeight", body_h)
-	if body_mat.get_shader_parameter("fill_key") != fill_key:
-		body_mat.set_shader_parameter("fill_key", fill_key)
-	# The body fill can be switched off entirely: the body pass then paints
-	# nothing (alpha 0) and only the ring draws. The key stays the pure fill
-	# key either way -- an off body writes no pixel, so the overlay never sees
-	# it and the NPC keeps its native thermal look.
-	if body_mat.get_shader_parameter("fill_on") == null or bool(body_mat.get_shader_parameter("fill_on")) != fill_on:
-		body_mat.set_shader_parameter("fill_on", fill_on)
 
 func clear(id: int) -> void:
 	var entry = _items.get(id)
