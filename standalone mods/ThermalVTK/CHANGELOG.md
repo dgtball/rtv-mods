@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.7.2] - 2026-10-21
+
+### Changed
+- The NPC outline is now always the clean silhouette look.
+- The corpse cooling time defaults to 30 s (adjustable up to 180 s).
+
+### Removed
+- The "Outline style", "Body fill" and "Fill opacity" settings: NPCs are outlined only, never filled.
+
 ## [1.7.1] - 2026-10-21
 
 ### Changed

@@ -1,6 +1,6 @@
 # ThermalVTK
 
-**Version:** 1.7.1
+**Version:** 1.7.2
 
 Standalone NVG / thermal-vision mod for Road to Vostok. It is the thermal
 feature of Vostok Toolkit, packaged on its own.
@@ -12,11 +12,10 @@ feature of Vostok Toolkit, packaged on its own.
 
 - Replaces the vanilla NVG overlay shader with an adjustable one (noise,
   brightness, world palette).
-- While NVG is worn, a single thermal view: NPCs get a coloured outline and a
-  body fill by their awareness state (idle, in combat, defending), with
-  friendly Nomads always green. The fill is translucent, its density has its
-  own slider, and the outline style picks a matching fill preset. The body
-  cools after death, dimming and fading out.
+- While NVG is worn, a single thermal view: NPCs get a coloured body outline
+  by their awareness state (idle, in combat, defending), with friendly Nomads
+  always green. The outline is a clean silhouette with an adjustable rim. The
+  body cools after death, dimming and fading out.
 - Mines light up while thermal vision is on.
 - World palettes (Classic, Amber, Forest, Ice) and winter auto-dimming.
 - A hotkey to turn the thermal layer on and off, and a hotkey to cycle the
