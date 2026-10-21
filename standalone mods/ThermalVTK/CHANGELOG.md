@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.7.4] - 2026-10-21
+
+### Fixed
+- The settings menu no longer keeps showing the old names and the options that were removed earlier.
+- The settings you change in the menu now survive a restart: they used to be dropped, along with your hotkey, every time the game started again.
+
 ## [1.7.3] - 2026-10-21
 
 ### Changed

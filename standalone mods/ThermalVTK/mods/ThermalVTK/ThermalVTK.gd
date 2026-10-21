@@ -10,11 +10,14 @@ const MOD_NAME := "ThermalVTK"
 const CONFIG_DIR := "user://MCM/thermal-vtk"
 const CONFIG_FILE := "user://MCM/thermal-vtk/config.ini"
 const STATE_FILE := "user://MCM/thermal-vtk/thermal_state.cfg"
+const MOD_CONFIG_FILE := "user://mod_config.cfg"
 const MCM_HELPERS := "res://ModConfigurationMenu/Scripts/Doink Oink/MCM_Helpers.tres"
 const PALETTE_COUNT := 4
 
 var _nvg: Node = null
 var _esp: Node = null
+# The file the settings are read from: the profile the mod loader has active.
+var _config_path: String = CONFIG_FILE
 var _key_thermal_toggle: int = 0
 var _key_palette_cycle: int = KEY_F6
 var _key_debug_probe: int = KEY_F7
@@ -210,8 +213,8 @@ func _register_mcm() -> void:
 		return
 	var cfg = ConfigFile.new()
 	var CAT := "01. ThermalVision"
-	cfg.set_value("Keycode", "key_thermal_toggle", {"name": "Hotkey: Toggle thermal vision", "default": 0, "default_type": "Keycode", "value": 0, "category": CAT, "menu_pos": 0, "tooltip": "Press in game to turn the thermal layer on and off."})
-	cfg.set_value("Keycode", "key_palette_cycle", {"name": "Hotkey: Cycle world palette", "default": KEY_F6, "default_type": "Keycode", "value": KEY_F6, "category": CAT, "menu_pos": 1, "tooltip": "Press in game to cycle the world thermal palette."})
+	cfg.set_value("Keycode", "key_thermal_toggle", {"name": "Hotkey: Toggle thermal vision", "default": 0, "default_type": "Keycode", "type": "Key", "value": 0, "category": CAT, "menu_pos": 0, "tooltip": "Press in game to turn the thermal layer on and off."})
+	cfg.set_value("Keycode", "key_palette_cycle", {"name": "Hotkey: Cycle world palette", "default": KEY_F6, "default_type": "Keycode", "type": "Key", "value": KEY_F6, "category": CAT, "menu_pos": 1, "tooltip": "Press in game to cycle the world thermal palette."})
 	cfg.set_value("Float", "nvg_noise", {"name": "NVG noise", "default": 4.0, "value": 4.0, "minRange": 0.0, "maxRange": 60.0, "step": 0.5, "category": CAT, "menu_pos": 2, "tooltip": "Grain amount over the NVG image. Lower is cleaner. Vanilla is fixed at 10."})
 	cfg.set_value("Float", "nvg_white", {"name": "NVG brightness", "default": 1.0, "value": 1.0, "minRange": 0.05, "maxRange": 1.0, "step": 0.05, "category": CAT, "menu_pos": 3, "tooltip": "Brightness of the NVG image. 1 = full brightness; lower darkens the whole overlay."})
 	cfg.set_value("Bool", "thermal_mines", {"name": "Mine highlighting", "default": true, "value": true, "category": CAT, "menu_pos": 5, "tooltip": "Highlight mines while thermal vision is on."})
@@ -232,23 +235,32 @@ func _register_mcm() -> void:
 
 	var CAT5 := "05. Diagnostics"
 	cfg.set_value("Bool", "debug_log", {"name": "Debug log", "default": false, "value": false, "category": CAT5, "menu_pos": 0, "tooltip": "Write a diagnostic log of the contour ESP to user://MCM/thermal-vtk/debug.log. For troubleshooting; leave off for normal play."})
-	cfg.set_value("Keycode", "key_debug_probe", {"name": "Hotkey: Debug key probe", "default": KEY_F7, "default_type": "Keycode", "value": KEY_F7, "category": CAT5, "menu_pos": 20, "tooltip": "Writes the colour under the crosshair to the debug log. Turn the debug log on first, then press it while aiming at an outlined NPC or the nomad marker. The view blinks for one frame."})
-	cfg.set_value("Keycode", "key_cal_cycle", {"name": "Hotkey: Calibration cycle", "default": KEY_F8, "default_type": "Keycode", "value": KEY_F8, "category": CAT5, "menu_pos": 21, "tooltip": "Debug tool: cycles a test colour for the outline and the nomad marker, so its colour under the night-vision helmet can be measured with the debug probe. Turn the debug log on first, then aim at an outlined NPC and press the probe key. Shift turns the calibration off."})
+	cfg.set_value("Keycode", "key_debug_probe", {"name": "Hotkey: Debug key probe", "default": KEY_F7, "default_type": "Keycode", "type": "Key", "value": KEY_F7, "category": CAT5, "menu_pos": 20, "tooltip": "Writes the colour under the crosshair to the debug log. Turn the debug log on first, then press it while aiming at an outlined NPC or the nomad marker. The view blinks for one frame."})
+	cfg.set_value("Keycode", "key_cal_cycle", {"name": "Hotkey: Calibration cycle", "default": KEY_F8, "default_type": "Keycode", "type": "Key", "value": KEY_F8, "category": CAT5, "menu_pos": 21, "tooltip": "Debug tool: cycles a test colour for the outline and the nomad marker, so its colour under the night-vision helmet can be measured with the debug probe. Turn the debug log on first, then aim at an outlined NPC and press the probe key. Shift turns the calibration off."})
 
 	cfg.set_value("Info", "version", _mod_version())
 	cfg.set_value("Info", "author", "CaptiveAI and opencode")
 	DirAccess.make_dir_recursive_absolute(CONFIG_DIR)
-	_sync_config(cfg)
+	# The default file is the seed MCM copies a fresh profile from.
+	_sync_config(cfg, CONFIG_FILE)
 	MCM.RegisterConfiguration(MOD_ID, MOD_NAME, CONFIG_DIR, "NVG thermal overlay: contour ESP, mine highlighting and world thermal view", _mcm_apply, self)
+	# MCM creates the profile file once and never refreshes it, so the menu
+	# would keep showing entries we removed or renamed. Merge the registration
+	# into the active profile too: the player's values stay, the labels and
+	# defaults come from the code.
+	_config_path = _active_config_path()
+	_sync_config(cfg, _config_path)
 	_mcm_apply(ConfigFile.new())
 
-# Merge the freshly declared keys into the on-disk config by KEY: drop sections
+# Merge the freshly declared keys into an on-disk config by KEY: drop sections
 # and keys that no longer exist in code, add new ones, but never overwrite a
-# user's saved "value". Info is always rewritten.
-func _sync_config(cfg: ConfigFile) -> void:
+# user's saved "value". The labels, ranges and defaults always come from the
+# code, so a renamed or removed setting stops showing up in the menu.
+# Info is always rewritten.
+func _sync_config(cfg: ConfigFile, path: String) -> void:
 	var existing := ConfigFile.new()
-	if FileAccess.file_exists(CONFIG_FILE):
-		existing.load(CONFIG_FILE)
+	if FileAccess.file_exists(path):
+		existing.load(path)
 		var stale_sections := []
 		for s in existing.get_sections():
 			if s != "Info" and not cfg.has_section(s):
@@ -274,12 +286,37 @@ func _sync_config(cfg: ConfigFile) -> void:
 				var old_v = existing.get_value(s, k, {})
 				var new_v = cfg.get_value(s, k, {})
 				if typeof(old_v) == TYPE_DICTIONARY and typeof(new_v) == TYPE_DICTIONARY:
-					var merged = new_v.duplicate()
+					# Start from the saved entry so the player's own extras
+					# survive (the modifier flags of a hotkey), then take every
+					# property the code declares from the registration.
+					var merged = old_v.duplicate()
+					for prop in new_v.keys():
+						if prop != "value":
+							merged[prop] = new_v[prop]
 					merged["value"] = old_v.get("value", new_v.get("value"))
 					existing.set_value(s, k, merged)
-		existing.save(CONFIG_FILE)
-	if not FileAccess.file_exists(CONFIG_FILE):
-		cfg.save(CONFIG_FILE)
+		existing.save(path)
+	if not FileAccess.file_exists(path):
+		cfg.save(path)
+
+# The mod loader can run several profiles and MCM keeps the settings of the
+# active one in "<profile>.ini" next to the default "config.ini". The menu
+# writes that file, so the mod has to read it as well, or the player's
+# settings are lost on every restart.
+func _active_profile_name() -> String:
+	var mc := ConfigFile.new()
+	if mc.load(MOD_CONFIG_FILE) != OK:
+		return "config"
+	var p := str(mc.get_value("settings", "active_profile", "config"))
+	if p == "" or p == "Default":
+		return "config"
+	return p
+
+func _config_path_for_profile(profile: String) -> String:
+	return "user://MCM/%s/%s.ini" % [MOD_ID, profile]
+
+func _active_config_path() -> String:
+	return _config_path_for_profile(_active_profile_name())
 
 func _mcm_key_val(cfg: ConfigFile, section: String, key: String, fallback):
 	if not cfg.has_section_key(section, key):
@@ -297,8 +334,8 @@ func _mcm_color_val(cfg: ConfigFile, key: String, fallback: Color) -> Color:
 	return v if v is Color else fallback
 
 func _mcm_apply(cfg: ConfigFile) -> void:
-	if cfg.get_sections().is_empty() and FileAccess.file_exists(CONFIG_FILE):
-		cfg.load(CONFIG_FILE)
+	if cfg.get_sections().is_empty() and FileAccess.file_exists(_config_path):
+		cfg.load(_config_path)
 	VTKDebug.set_enabled(bool(_mcm_key_val(cfg, "Bool", "debug_log", false)))
 	_ensure_nvg()
 	if _nvg == null or not is_instance_valid(_nvg):
