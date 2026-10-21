@@ -17,8 +17,10 @@ const DEFAULT_DEFEND := Color(0.62, 0.30, 0.95)
 
 # Detector keys the ring emits; the overlay detector matches them and swaps in
 # the category colour. The body-fill keys and the nomad key follow the same
-# rule. The overlay matches the CLOSEST key within 0.22, so every key -- the
-# outline, fill and nomad ones alike -- must stay more than 0.22 apart.
+# rule. The overlay matches the CLOSEST key within its radius -- tight for the
+# outline, state and nomad keys, wider for the body fill, whose pixel fades
+# away from the key while a corpse cools -- so every key -- the outline, fill
+# and nomad ones alike -- must stay more than the widest radius apart.
 const KEY_NORMAL := Color(1.0, 0.0, 0.0)
 const KEY_COMBAT := Color(0.0, 1.0, 1.0)
 const KEY_DEFEND := Color(1.0, 0.0, 1.0)

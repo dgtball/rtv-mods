@@ -123,6 +123,14 @@ float orbitDist(vec3 c, vec3 k)
 	return d;
 }
 
+// Detector radii. The mine, state and nomad keys are matched tightly: those
+// branches replace the pixel outright, so a loose radius would paint the
+// wrong colour over unrelated pixels. The body fill gets a wider radius: a
+// cooling corpse's fill fades by alpha, which drags the pixel away from the
+// pure key, so a tight radius would lose the fill while the body dissolves.
+const float DET_TOL_CORE = 0.22;
+const float DET_TOL_FILL = 0.40;
+
 void fragment()
 {
 	vec4 pixelColor = texture(screen_texture, SCREEN_UV);
@@ -137,6 +145,9 @@ void fragment()
 		// Pick whichever key is CLOSEST: with a wide tolerance two keys'
 		// ranges can overlap on a single pixel, and an if/elif chain would
 		// let an earlier check steal matches that belong to a later key.
+		// The fill has its own (wider) radius, so the keys are reduced in two
+		// groups: a pixel inside the fill radius but outside the tight one is
+		// still a fill.
 		float dMine = orbitDist(pixelColor.rgb, mineKey);
 		float dStN = orbitDist(pixelColor.rgb, stNormalKey);
 		float dStC = orbitDist(pixelColor.rgb, stCombatKey);
@@ -145,31 +156,37 @@ void fragment()
 		float dFiC = orbitDist(pixelColor.rgb, fillCombKey);
 		float dFiD = orbitDist(pixelColor.rgb, fillDefKey);
 		float dNom = orbitDist(pixelColor.rgb, nomadKey);
-		float minD = min(dMine, min(dStN, min(dStC, min(dStD, min(dFiN, min(dFiC, min(dFiD, dNom)))))));
+		float dCore = min(dMine, min(dStN, min(dStC, min(dStD, dNom))));
+		float dFill = min(dFiN, min(dFiC, dFiD));
+		bool coreHit = dCore < DET_TOL_CORE;
+		bool fillHit = dFill < DET_TOL_FILL;
 
 		{
 			float rawLuminance = dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114));
 			float luminance = clamp(rawLuminance * thermalDarken, 0.0, 1.0);
 			vec3 backgroundColor = ThermalPalette(luminance) * 0.7;
-			if (minD < 0.22) {
-				// Precedence: mine, state, nomad, fill. The fill is the last
-				// branch because it is translucent -- it mixes the display
-				// colour over the palette instead of replacing it.
-				if (minD == dMine) {
-					color = vec4(mineColor, pixelColor.a);
-				} else if (minD == dStN) {
-					color = vec4(stNormalColor * stateBright, pixelColor.a);
-				} else if (minD == dStC) {
-					color = vec4(stCombatColor * stateBright, pixelColor.a);
-				} else if (minD == dStD) {
-					color = vec4(stDefendColor * stateBright, pixelColor.a);
-				} else if (minD == dNom) {
-					color = vec4(nomadColor, pixelColor.a);
+			if (coreHit || fillHit) {
+				// Closest wins. Inside the core group the order is mine,
+				// state, nomad (exact ties only). The fill is separate: it is
+				// translucent -- it mixes the display colour over the palette
+				// instead of replacing it.
+				if (coreHit && dCore <= dFill) {
+					if (dCore == dMine) {
+						color = vec4(mineColor, pixelColor.a);
+					} else if (dCore == dStN) {
+						color = vec4(stNormalColor * stateBright, pixelColor.a);
+					} else if (dCore == dStC) {
+						color = vec4(stCombatColor * stateBright, pixelColor.a);
+					} else if (dCore == dStD) {
+						color = vec4(stDefendColor * stateBright, pixelColor.a);
+					} else {
+						color = vec4(nomadColor, pixelColor.a);
+					}
 				} else {
 					vec3 fillColor;
-					if (minD == dFiN) {
+					if (dFill == dFiN) {
 						fillColor = fillNormColor;
-					} else if (minD == dFiC) {
+					} else if (dFill == dFiC) {
 						fillColor = fillCombColor;
 					} else {
 						fillColor = fillDefColor;
