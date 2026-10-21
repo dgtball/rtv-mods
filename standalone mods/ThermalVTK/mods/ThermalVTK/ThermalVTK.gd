@@ -229,7 +229,7 @@ func _register_mcm() -> void:
 	cfg.set_value("Dropdown", "outline_style", {"name": "Outline style", "default": "front", "value": "front", "options": {"front": "Front-faces (ITH)", "back": "Back-faces"}, "category": CAT2, "menu_pos": 1, "tooltip": "Outline look. Front-faces is the clean silhouette; Back-faces is the older inflated look."})
 	cfg.set_value("Float", "outline_rim", {"name": "Outline rim", "default": 0.42, "value": 0.42, "minRange": 0.0, "maxRange": 1.0, "step": 0.02, "category": CAT2, "menu_pos": 2, "tooltip": "Edge band width (Front-faces) or edge sharpness (Back-faces) of the outline."})
 	cfg.set_value("Bool", "outline_body_fill", {"name": "Body fill", "default": true, "value": true, "category": CAT2, "menu_pos": 3, "tooltip": "Fill the NPC body with its state colour inside the outline."})
-	cfg.set_value("Float", "fill_opacity", {"name": "Fill opacity", "default": 0.05, "value": 0.05, "minRange": 0.0, "maxRange": 1.0, "step": 0.05, "category": CAT2, "menu_pos": 5, "tooltip": "How solid the body fill is. 0 = outline only."})
+	cfg.set_value("Float", "fill_opacity", {"name": "Fill opacity", "default": 0.05, "value": 0.05, "minRange": 0.0, "maxRange": 1.0, "step": 0.05, "category": CAT2, "menu_pos": 5, "tooltip": "How strong the body fill's state colour is. Turn Body fill off to show the outline alone."})
 	cfg.set_value("Float", "corpse_decay", {"name": "Corpse cooling time", "default": 8.0, "value": 8.0, "minRange": 0.0, "maxRange": 30.0, "step": 1.0, "category": CAT2, "menu_pos": 6, "tooltip": "Seconds a dead NPC's outline takes to cool from warm to cold."})
 	cfg.set_value("Float", "outline_thickness", {"name": "Outline thickness", "default": 0.006, "value": 0.006, "minRange": 0.001, "maxRange": 0.02, "step": 0.001, "category": CAT2, "menu_pos": 7, "tooltip": "How far the outline band grows beyond the body."})
 	cfg.set_value("Float", "outline_brightness", {"name": "Outline brightness", "default": 0.6, "value": 0.6, "minRange": 0.1, "maxRange": 3.0, "step": 0.1, "category": CAT2, "menu_pos": 8, "tooltip": "Brightness multiplier on the outline colour."})
@@ -246,7 +246,6 @@ func _register_mcm() -> void:
 	cfg.set_value("Bool", "debug_log", {"name": "Debug log", "default": false, "value": false, "category": CAT5, "menu_pos": 0, "tooltip": "Write a diagnostic log of the contour ESP to user://MCM/thermal-vtk/debug.log. For troubleshooting; leave off for normal play."})
 	cfg.set_value("Keycode", "key_cal_cycle", {"name": "Hotkey: Calibration cycle", "default": KEY_F8, "default_type": "Keycode", "value": KEY_F8, "category": CAT5, "menu_pos": 21, "tooltip": "Debug tool: cycles a test colour for the body fill and the nomad marker, so its colour under the night-vision helmet can be measured with the debug probe. Turn the debug log on first, then aim at a filled NPC and press the probe key. Shift turns the calibration off."})
 
-	cfg.set_value("Info", "version", _mod_version())
 	cfg.set_value("Info", "version", _mod_version())
 	cfg.set_value("Info", "author", "CaptiveAI and opencode")
 	DirAccess.make_dir_recursive_absolute(CONFIG_DIR)

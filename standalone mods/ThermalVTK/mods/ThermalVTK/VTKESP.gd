@@ -461,7 +461,6 @@ func _draw(ppos: Vector3) -> void:
 
 func _opts_for(e: Dictionary, node: Node, dist: float, now: float) -> Dictionary:
 	var cool := Tracker.cool_factor(e, now, p_decay)
-	var alpha := Tracker.distance_alpha(dist, p_dist)
 	var nomad := bool(e.get("nomad", false))
 	var cat: int = int(e.get("cat", States.NORMAL))
 	var key: Color = States.state_key(cat)
@@ -469,7 +468,7 @@ func _opts_for(e: Dictionary, node: Node, dist: float, now: float) -> Dictionary
 	if p_cal_active:
 		# Calibration: the ring and the fill both paint the candidate, so the
 		# probe reads the candidate's post-NVG colour. Everything else (cool,
-		# alpha, style) stays as it is.
+		# style) stays as it is.
 		key = Calibration.candidate(p_cal_index)
 		fill = key
 	var foot_y: float = (node as Node3D).global_position.y
@@ -477,7 +476,6 @@ func _opts_for(e: Dictionary, node: Node, dist: float, now: float) -> Dictionary
 		"cat": cat,
 		"nomad": nomad,
 		"state_key": key,
-		"alpha": alpha,
 		"cool": cool,
 		"front_faces": p_style == 0,
 		"outline_style": p_style,

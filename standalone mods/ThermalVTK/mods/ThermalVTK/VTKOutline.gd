@@ -58,7 +58,7 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 	var body_mat: ShaderMaterial = chain[0]
 	var ring_mat: ShaderMaterial = chain[1]
 	# render_priority high so overlays draw after the world but before the
-	# weapon (patched to priority 30 in Task 10).
+	# weapon.
 	body_mat.render_priority = 20
 	ring_mat.render_priority = 21
 	for m in meshes:

@@ -1,11 +1,10 @@
 extends RefCounted
 # Pure tracker state + maths: entry lifecycle, state-category change gate,
-# corpse cooling, distance fade, nearest-N cap, faction classification.
+# corpse cooling, nearest-N cap, faction classification.
 # `now` is a caller-supplied clock (seconds), so nothing here touches the tree
 # and every rule is headless-testable (test_tracker.gd).
 
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
-const FADE_START_RATIO := 0.5
 # Faction ints from the AI variant: 0 is the friendly faction (Nomads).
 const FACTION_NOMAD := 0
 const FACTION_HOSTILE := 1
@@ -57,15 +56,6 @@ static func cool_factor(e: Dictionary, now: float, decay_s: float) -> float:
 	if not bool(e.get("dead", false)) or decay_s <= 0.0:
 		return 0.0
 	return clampf((now - float(e.get("death_ts", 0.0))) / decay_s, 0.0, 1.0)
-
-# Full alpha inside FADE_START_RATIO of the range, then linear to 0 at max.
-static func distance_alpha(dist: float, max_dist: float) -> float:
-	if max_dist <= 0.0 or dist >= max_dist:
-		return 0.0
-	var fade_start: float = max_dist * FADE_START_RATIO
-	if dist <= fade_start:
-		return 1.0
-	return clampf(1.0 - (dist - fade_start) / (max_dist - fade_start), 0.0, 1.0)
 
 # candidates: Array of {"id": int, "dist": float}. Returns the nearest `cap` ids.
 static func pick_nearest(candidates: Array, cap: int) -> Array:

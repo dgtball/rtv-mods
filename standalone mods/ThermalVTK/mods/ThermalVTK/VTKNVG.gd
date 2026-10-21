@@ -59,7 +59,7 @@ const DET_ST_DEFEND := Color(1.00, 0.34, 1.00)
 # palette (a probe measured each raw fill/nomad key after the wash). Each value
 # is the measured post-NVG colour of the matching world key in VTKStates.gd, so
 # a fill detector can no longer sit inside another key's radius: the fill pool
-# stays 0.71 apart and the core pool (mine + states + nomad) 0.41 apart.
+# stays 0.71 apart and the core pool (mine + states + nomad) 0.48 apart.
 const DET_FILL_NORMAL := Color(0.961, 0.753, 0.184)
 const DET_FILL_COMBAT := Color(0.000, 0.149, 0.969)
 const DET_FILL_DEFEND := Color(1.000, 0.192, 0.624)

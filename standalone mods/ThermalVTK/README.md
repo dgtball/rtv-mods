@@ -16,7 +16,7 @@ feature of Vostok Toolkit, packaged on its own.
   body fill by their awareness state (idle, in combat, defending), with
   friendly Nomads always green. The fill is translucent, its density has its
   own slider, and the outline style picks a matching fill preset. The body
-  cools after death, dimming and fading out. Outlines fade with distance.
+  cools after death, dimming and fading out.
 - Mines light up while thermal vision is on.
 - World palettes (Classic, Amber, Forest, Ice) and winter auto-dimming.
 - A hotkey to turn the thermal layer on and off, and a hotkey to cycle the
