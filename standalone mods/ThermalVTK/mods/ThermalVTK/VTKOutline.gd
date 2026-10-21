@@ -109,6 +109,7 @@ func refresh(id: int, opts: Dictionary) -> void:
 	var body_h := float(opts.get("body_height", 1.8))
 	var cool := float(opts.get("cool", 0.0))
 	var fill_key: Color = opts.get("fill_key", States.KEY_FILL_NORMAL)
+	var fill_on := bool(opts.get("fill_on", true))
 
 	var body_mat: ShaderMaterial = entry["body"]
 	var ring_mat: ShaderMaterial = entry["ring"]
@@ -139,6 +140,12 @@ func refresh(id: int, opts: Dictionary) -> void:
 		body_mat.set_shader_parameter("bodyHeight", body_h)
 	if body_mat.get_shader_parameter("fill_key") != fill_key:
 		body_mat.set_shader_parameter("fill_key", fill_key)
+	# The body fill can be switched off entirely: the body pass then paints
+	# nothing (alpha 0) and only the ring draws. The key stays the pure fill
+	# key either way -- an off body writes no pixel, so the overlay never sees
+	# it and the NPC keeps its native thermal look.
+	if body_mat.get_shader_parameter("fill_on") == null or bool(body_mat.get_shader_parameter("fill_on")) != fill_on:
+		body_mat.set_shader_parameter("fill_on", fill_on)
 
 func clear(id: int) -> void:
 	var entry = _items.get(id)
