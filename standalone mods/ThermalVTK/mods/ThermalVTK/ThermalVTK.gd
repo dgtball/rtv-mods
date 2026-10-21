@@ -3,6 +3,7 @@ const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const VTKDebug = preload("res://mods/ThermalVTK/VTKDebug.gd")
 const Probe = preload("res://mods/ThermalVTK/VTKProbe.gd")
+const Calibration = preload("res://mods/ThermalVTK/VTKCalibration.gd")
 
 const MOD_ID := "thermal-vtk"
 const MOD_NAME := "ThermalVTK"
@@ -19,12 +20,15 @@ var _esp: Node = null
 var _key_thermal_toggle: int = 0
 var _key_palette_cycle: int = KEY_F6
 var _key_debug_probe: int = KEY_F7
+var _key_cal_cycle: int = KEY_F8
 var _thermal_enabled: bool = false
 var _mines_enabled: bool = true
 var _mcm_thermal_seen: int = -1
 var _mcm_palette_seen: int = -1
 var _outline_enabled: bool = true
 var _nvg_worn: bool = false
+var _cal_active: bool = false
+var _cal_index: int = 0
 
 func _ready() -> void:
 	_register_mcm()
@@ -61,6 +65,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			_probe_center()
 			get_viewport().set_input_as_handled()
 		return
+	if _key_cal_cycle != 0 and (k.keycode == _key_cal_cycle or k.physical_keycode == _key_cal_cycle):
+		# The calibration cycle is a debug tool: without the debug log the key
+		# stays free for the game, so nothing is consumed.
+		if VTKDebug.enabled:
+			_cal_step(k.shift_pressed)
+			get_viewport().set_input_as_handled()
+		return
 	if _key_thermal_toggle == 0:
 		return
 	if k.keycode == _key_thermal_toggle or k.physical_keycode == _key_thermal_toggle:
@@ -89,6 +100,32 @@ func _cycle_palette() -> void:
 	_nvg.set_palette_mode(mode)
 	_notify("World palette: " + PALETTE_NAMES[mode], Color(0.6, 0.8, 1.0))
 	_save_state("world_palette", mode)
+
+# Debug key calibration: the hotkey cycles the candidate keys, so their
+# colour under the night-vision helmet can be measured with the probe.
+# The first press turns the calibration on at the first candidate, every
+# further press advances it, and Shift turns it off again.
+func _cal_step(off: bool) -> void:
+	if off:
+		_cal_active = false
+		_cal_index = 0
+		_push_calibration()
+		VTKDebug.log("CAL", "off")
+		return
+	if _cal_active:
+		_cal_index = (_cal_index + 1) % Calibration.count()
+	else:
+		_cal_active = true
+		_cal_index = 0
+	_push_calibration()
+	VTKDebug.log("CAL", "candidate #%d %s" % [_cal_index, Calibration.label(_cal_index)])
+	if _esp == null or not is_instance_valid(_esp) or not bool(_esp.enabled):
+		VTKDebug.log("CAL", "the contour is off, nothing is painted")
+
+func _push_calibration() -> void:
+	if _esp == null or not is_instance_valid(_esp):
+		return
+	_esp.set_calibration(_cal_active, _cal_index)
 
 # Debug key probe: read the colour under the crosshair into the debug log.
 # The NVG overlay paints the thermal palette (or the green tint) over the whole
@@ -207,6 +244,7 @@ func _register_mcm() -> void:
 
 	var CAT5 := "05. Diagnostics"
 	cfg.set_value("Bool", "debug_log", {"name": "Debug log", "default": false, "value": false, "category": CAT5, "menu_pos": 0, "tooltip": "Write a diagnostic log of the contour ESP to user://MCM/thermal-vtk/debug.log. For troubleshooting; leave off for normal play."})
+	cfg.set_value("Keycode", "key_cal_cycle", {"name": "Hotkey: Calibration cycle", "default": KEY_F8, "default_type": "Keycode", "value": KEY_F8, "category": CAT5, "menu_pos": 21, "tooltip": "Debug tool: cycles a test colour for the body fill and the nomad marker, so its colour under the night-vision helmet can be measured with the debug probe. Turn the debug log on first, then aim at a filled NPC and press the probe key. Shift turns the calibration off."})
 
 	cfg.set_value("Info", "version", _mod_version())
 	cfg.set_value("Info", "version", _mod_version())
@@ -293,6 +331,7 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 	_key_thermal_toggle = int(_mcm_key_val(cfg, "Keycode", "key_thermal_toggle", 0))
 	_key_palette_cycle = int(_mcm_key_val(cfg, "Keycode", "key_palette_cycle", KEY_F6))
 	_key_debug_probe = int(_mcm_key_val(cfg, "Keycode", "key_debug_probe", KEY_F7))
+	_key_cal_cycle = int(_mcm_key_val(cfg, "Keycode", "key_cal_cycle", KEY_F8))
 	var mcm_thermal := bool(_mcm_key_val(cfg, "Bool", "thermal_enabled", false))
 	var mcm_i: int = 1 if mcm_thermal else 0
 	var saved = _read_state("thermal_enabled", null)

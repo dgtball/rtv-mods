@@ -8,6 +8,7 @@ const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Outline = preload("res://mods/ThermalVTK/VTKOutline.gd")
 const WeaponOcclusion = preload("res://mods/ThermalVTK/VTKWeaponOcclusion.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
+const Calibration = preload("res://mods/ThermalVTK/VTKCalibration.gd")
 const NomadMarkerShader := preload("res://mods/ThermalVTK/VTKNomadMarker.gdshader")
 
 # Polling cadence for state re-reads / fallback discovery (frames).
@@ -41,6 +42,10 @@ var _player: Node3D = null
 var _labels: Dictionary = {}
 var _labels_state: Dictionary = {}
 var _markers: Dictionary = {}
+# Debug key calibration: when it is on, every NPC is painted with the
+# candidate key so its post-NVG colour can be measured with the probe.
+var p_cal_active: bool = false
+var p_cal_index: int = 0
 # Shown when thermal vision, the NVG helmet and the contour ESP are all live
 # (the marker belongs to the contour, not the diagnostic log). Set from
 # ThermalVTK._apply_mode.
@@ -79,6 +84,14 @@ func set_enabled(on: bool) -> void:
 
 func npc_count() -> int:
 	return _entries.size()
+
+# Debug key calibration. The candidate key replaces the state key and the
+# fill key of every NPC, and the nomad marker repaints with it, so the probe
+# measures one candidate at a time.
+func set_calibration(active: bool, index: int) -> void:
+	p_cal_active = active
+	p_cal_index = index
+	_cal_apply_marker_key()
 
 # ---------------------------------------------------------------------------
 # Discovery
@@ -348,6 +361,9 @@ func _marker_make(id: int, node: Node) -> void:
 	var mat := ShaderMaterial.new()
 	mat.shader = NomadMarkerShader
 	mat.render_priority = 41
+	# The marker key is written here instead of being left to the shader
+	# default, so the calibration cycle can repaint the live markers.
+	mat.set_shader_parameter("nomad_key", _marker_key())
 	mi.material_override = mat
 	mi.position = Vector3(0.0, y, 0.0)
 	# The quad is billboarded inside the shader (MeshInstance3D has no
@@ -362,6 +378,25 @@ func _marker_free(id: int) -> void:
 		if is_instance_valid(lbl):
 			lbl.queue_free()
 		_markers.erase(id)
+
+# The key the nomad marker paints: the calibration candidate while the
+# calibration is on, the normal nomad key otherwise.
+func _marker_key() -> Color:
+	if p_cal_active:
+		return Calibration.candidate(p_cal_index)
+	return States.KEY_NOMAD
+
+# Rewrites the marker key on the live markers, so a calibration step repaints
+# them without waiting for the markers to be rebuilt.
+func _cal_apply_marker_key() -> void:
+	var key: Color = _marker_key()
+	for id in _markers.keys():
+		var mi = _markers[id]
+		if mi == null or not is_instance_valid(mi):
+			continue
+		var mat = mi.material_override
+		if mat is ShaderMaterial:
+			(mat as ShaderMaterial).set_shader_parameter("nomad_key", key)
 
 func _draw(ppos: Vector3) -> void:
 	var now := _now()
@@ -425,6 +460,13 @@ func _opts_for(e: Dictionary, node: Node, dist: float, now: float) -> Dictionary
 	var nomad := bool(e.get("nomad", false))
 	var cat: int = int(e.get("cat", States.NORMAL))
 	var key: Color = States.state_key(cat)
+	var fill: Color = States.fill_key(cat)
+	if p_cal_active:
+		# Calibration: the ring and the fill both paint the candidate, so the
+		# probe reads the candidate's post-NVG colour. Everything else (cool,
+		# alpha, style) stays as it is.
+		key = Calibration.candidate(p_cal_index)
+		fill = key
 	var foot_y: float = (node as Node3D).global_position.y
 	return {
 		"cat": cat,
@@ -439,7 +481,7 @@ func _opts_for(e: Dictionary, node: Node, dist: float, now: float) -> Dictionary
 		"body_height": 1.8,
 		"brightness": p_brightness,
 		"grow": p_thickness,
-		"fill_key": States.fill_key(cat),
+		"fill_key": fill,
 		"fill_on": p_fill,
 	}
 
