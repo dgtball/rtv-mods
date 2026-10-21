@@ -2,6 +2,7 @@ extends Node
 const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const VTKDebug = preload("res://mods/ThermalVTK/VTKDebug.gd")
+const Probe = preload("res://mods/ThermalVTK/VTKProbe.gd")
 
 const MOD_ID := "thermal-vtk"
 const MOD_NAME := "ThermalVTK"
@@ -15,6 +16,7 @@ var _nvg: Node = null
 var _esp: Node = null
 var _key_thermal_toggle: int = 0
 var _key_palette_cycle: int = KEY_F6
+var _key_debug_probe: int = KEY_F7
 var _thermal_enabled: bool = false
 var _mines_enabled: bool = true
 var _mcm_thermal_seen: int = -1
@@ -50,6 +52,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		_cycle_palette()
 		get_viewport().set_input_as_handled()
 		return
+	if _key_debug_probe != 0 and (k.keycode == _key_debug_probe or k.physical_keycode == _key_debug_probe):
+		# The probe is a debug tool: without the debug log the key stays free
+		# for the game, so nothing is consumed.
+		if VTKDebug.enabled:
+			_probe_center()
+			get_viewport().set_input_as_handled()
+		return
 	if _key_thermal_toggle == 0:
 		return
 	if k.keycode == _key_thermal_toggle or k.physical_keycode == _key_thermal_toggle:
@@ -78,6 +87,30 @@ func _cycle_palette() -> void:
 	_nvg.set_palette_mode(mode)
 	_notify("World palette: " + PALETTE_NAMES[mode], Color(0.6, 0.8, 1.0))
 	_save_state("world_palette", mode)
+
+# Debug key probe: read the colour under the crosshair into the debug log.
+# The NVG overlay paints the thermal palette (or the green tint) over the whole
+# frame, so the overlay rect is hidden for the sampled frame -- the raw scene
+# pixel underneath is what the key detector compares against.
+func _probe_center() -> void:
+	if not VTKDebug.enabled:
+		return
+	var vp := get_viewport()
+	if vp == null:
+		return
+	var nvg = _nvg
+	if nvg != null and is_instance_valid(nvg):
+		nvg.set_overlay_visible(false)
+	var rgb: Color = await Probe.read_center(vp)
+	if nvg != null and is_instance_valid(nvg):
+		nvg.set_overlay_visible(true)
+	if rgb.a <= 0.0:
+		VTKDebug.log("PROBE", "probe failed: no frame")
+		return
+	var hint := "raw-nvg-off"
+	if _nvg_active():
+		hint = "raw-thermal" if _thermal_enabled else "raw-nvg"
+	VTKDebug.log("PROBE", Probe.format(rgb, hint))
 
 func _apply_mode() -> void:
 	if _esp != null and is_instance_valid(_esp):
@@ -144,6 +177,7 @@ func _register_mcm() -> void:
 	var CAT := "01. ThermalVision"
 	cfg.set_value("Keycode", "key_thermal_toggle", {"name": "Hotkey: Toggle thermal vision", "default": 0, "default_type": "Keycode", "value": 0, "category": CAT, "menu_pos": 0, "tooltip": "Press in game to turn the thermal layer on and off."})
 	cfg.set_value("Keycode", "key_palette_cycle", {"name": "Hotkey: Cycle world palette", "default": KEY_F6, "default_type": "Keycode", "value": KEY_F6, "category": CAT, "menu_pos": 1, "tooltip": "Press in game to cycle the world thermal palette."})
+	cfg.set_value("Keycode", "key_debug_probe", {"name": "Hotkey: Debug key probe", "default": KEY_F7, "default_type": "Keycode", "value": KEY_F7, "category": CAT, "menu_pos": 20, "tooltip": "Writes the colour under the crosshair to the debug log. Turn the debug log on first, then press it while aiming at a filled NPC or the nomad marker. The view blinks for one frame."})
 	cfg.set_value("Float", "nvg_noise", {"name": "NVG noise", "default": 4.0, "value": 4.0, "minRange": 0.0, "maxRange": 60.0, "step": 0.5, "category": CAT, "menu_pos": 2, "tooltip": "Grain amount over the NVG image. Lower is cleaner. Vanilla is fixed at 10."})
 	cfg.set_value("Float", "nvg_white", {"name": "NVG brightness", "default": 1.0, "value": 1.0, "minRange": 0.05, "maxRange": 1.0, "step": 0.05, "category": CAT, "menu_pos": 3, "tooltip": "Brightness of the NVG image. 1 = full brightness; lower darkens the whole overlay."})
 	cfg.set_value("Bool", "thermal_enabled", {"name": "Thermal vision", "default": false, "value": false, "category": CAT, "menu_pos": 4, "tooltip": "Master switch for the thermal vision layer: the contour ESP and mine highlighting. Plain green NVG is unaffected while this is off."})
@@ -256,6 +290,7 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 		return
 	_key_thermal_toggle = int(_mcm_key_val(cfg, "Keycode", "key_thermal_toggle", 0))
 	_key_palette_cycle = int(_mcm_key_val(cfg, "Keycode", "key_palette_cycle", KEY_F6))
+	_key_debug_probe = int(_mcm_key_val(cfg, "Keycode", "key_debug_probe", KEY_F7))
 	var mcm_thermal := bool(_mcm_key_val(cfg, "Bool", "thermal_enabled", false))
 	var mcm_i: int = 1 if mcm_thermal else 0
 	var saved = _read_state("thermal_enabled", null)

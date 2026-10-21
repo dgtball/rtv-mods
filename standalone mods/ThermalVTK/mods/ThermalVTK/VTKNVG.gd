@@ -222,16 +222,17 @@ func _try_install_shader() -> void:
 	if not ("material" in target):
 		_installed = false
 		return
+	# Remember the rect even when the material is not ours: the debug probe
+	# hides it to read the raw scene under the overlay.
+	_nvg_mat_node = target
 	var mat = target.get("material")
 	if mat is ShaderMaterial and (mat as ShaderMaterial).shader == _shader:
-		_nvg_mat_node = target
 		_installed = true
 		return
 	if mat == null or not (mat is ShaderMaterial):
 		_installed = false
 		return
 	mat.shader = _shader
-	_nvg_mat_node = target
 	_installed = true
 	_apply_uniforms()
 
@@ -457,3 +458,14 @@ func set_palette_mode(mode: int) -> void:
 	set_palette = mode
 	_apply_uniforms()
 	_tick_cd = 0.0
+
+
+# Hide the NVG overlay for a single frame. The overlay paints the thermal
+# palette (or the green tint) over the whole frame, so a screen readback of a
+# key pixel shows the painted colour, not the scene colour the key detector
+# compares against. Hiding the rect leaves the raw scene visible.
+func set_overlay_visible(v: bool) -> void:
+	if _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
+		return
+	if _nvg_mat_node is CanvasItem:
+		(_nvg_mat_node as CanvasItem).visible = v
