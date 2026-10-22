@@ -1,22 +1,25 @@
 shader_type spatial;
 render_mode unshaded, cull_back, depth_draw_never, depth_test_disabled;
 
-// Depth-comparing variant of the silhouette ring. The auto depth test cannot
-// tell the scope lens from a wall: the lens sits centimetres from the eye and
-// z-culls every ring behind it. So the shader drops the auto test and does
-// its own comparison: an occluder closer than the fragment hides the ring,
-// unless the occluder is nearer than EXCLUDE_M metres - the band where only
-// camera-attached geometry (the scope lens, objects pressed against the
-// camera) can live. Uniform parity with VTKOutlineRing.gdshader matters: the
-// runtime flip keeps all state without re-reading opts.
+// Depth-comparing variant of the silhouette ring. One shader serves both
+// modes; the mode lives in uniforms:
+// - near_only = false (idle ring): the wall compare honours every occluder.
+// - near_only = true (x-ray ring): walls punch through, and only
+//   camera-attached geometry closer than the carve hides the ring — that is
+//   how the carried scope glass stops leaking x-ray from the outside while
+//   the ring survives in the magnified scope view.
+// carve is the metres-in-front-of-the-camera zone that never occludes. The
+// ESP drives both: scoped runs widen it (0.60, the aiming eye sits inside the
+// optic), free runs keep it at 0.10 so the idle ring hides behind the settled
+// scope glass. Uniform parity with the old ring pair: the runtime flip keeps
+// all state without re-reading opts.
 uniform vec3 state_key : source_color = vec3(1.0, 0.0, 0.0);
 uniform float grow : hint_range(0.0, 0.15, 0.001) = 0.006;
 uniform float rim_power : hint_range(0.0, 6.0, 0.1) = 1.0;
 uniform float cool : hint_range(0.0, 1.0, 0.01) = 0.0;
+uniform bool near_only = false;
+uniform float carve : hint_range(0.05, 1.0, 0.01) = 0.25;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
-
-// Occluders closer than this are camera-attached, not walls.
-const float EXCLUDE_M = 0.25;
 
 void vertex() {
 	VERTEX += NORMAL * grow;
@@ -43,7 +46,13 @@ void fragment() {
 	// The shell is grown along the normals, so the band over the model's own
 	// surface sits slightly behind the model front: the bias absorbs that.
 	float bias = max(grow * 4.0, 0.02);
-	if ((scene_m < frag_m - bias) && (scene_m > EXCLUDE_M)) {
+	if (near_only) {
+		// X-ray ring: walls stay punched through; anything the game mounts
+		// in front of the eye (the carried scope glass) still hides it.
+		if (scene_m < carve) {
+			ALPHA = 0.0;
+		}
+	} else if ((scene_m < frag_m - bias) && (scene_m > carve)) {
 		ALPHA = 0.0;
 	}
 }

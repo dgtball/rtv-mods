@@ -1,5 +1,6 @@
 extends Node
 const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
+const Settings = preload("res://mods/ThermalVTK/VTKSettings.gd")
 
 # Owns the NVG overlay shader, plus the thermal/mines layer that rides on it.
 #
@@ -62,12 +63,12 @@ const DET_ST_DEFEND := Color(1.00, 0.34, 1.00)
 const DET_NOMAD := Color(0.580, 0.973, 0.584)
 
 # settings
-var set_nvg_noise: float = 4.0
+var set_nvg_noise: float = 0.0
 var set_nvg_white: float = 1.0
 var set_thermal: bool = false
 var set_mines: bool = true
 # Mirrors the MCM outline distance; gates mine glow.
-var set_glow_distance: float = 150.0
+var set_glow_distance: float = 60.0
 var set_palette: int = 0
 var set_world: float = 1.70
 # Brightness of the state key the ESP outlines emit; the overlay uses it to
@@ -429,6 +430,20 @@ func _update_mine(id: int, thermal_on: bool, ppos: Vector3) -> void:
 
 func set_thermal_enabled(on: bool) -> void:
 	set_thermal = on
+	_apply_uniforms()
+	_tick_cd = 0.0
+
+
+# MCM snapshot in, settings out. Headless-safe: every setter here is a var
+# write, and _apply_uniforms guards against the missing tree.
+func apply_config(rec: Settings.Rec) -> void:
+	set_nvg_noise = rec.nvg_noise
+	set_nvg_white = rec.nvg_white
+	set_world = rec.world
+	set_state_brightness = rec.outline_brightness
+	set_glow_distance = rec.outline_distance
+	set_mines = rec.thermal_mines
+	set_state_colors(rec.state_colors())
 	_apply_uniforms()
 	_tick_cd = 0.0
 

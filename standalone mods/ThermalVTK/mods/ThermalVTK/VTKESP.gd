@@ -5,6 +5,7 @@ extends Node
 
 const Tracker = preload("res://mods/ThermalVTK/VTKTracker.gd")
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
+const Settings = preload("res://mods/ThermalVTK/VTKSettings.gd")
 const Outline = preload("res://mods/ThermalVTK/VTKOutline.gd")
 const WeaponOcclusion = preload("res://mods/ThermalVTK/VTKWeaponOcclusion.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
@@ -23,7 +24,7 @@ const SPRINT_SPEED := 4.0
 
 var enabled: bool = false
 # MCM-driven params.
-var p_decay := 8.0
+var p_decay := 30.0
 var p_dist := 60.0
 # The X-ray Triggers toggle state: on = a live trigger window swaps that bot's
 # ring to the x-ray shader (through walls). Off = windows are still tagged,
@@ -46,12 +47,7 @@ var p_nade_s := 6.0
 var p_nade_d := 60.0
 var p_thickness := 0.006
 var p_brightness := 0.6
-var p_rim := 1.0
-var p_colors := {
-	"state_normal": States.DEFAULT_NORMAL,
-	"state_combat": States.DEFAULT_COMBAT,
-	"state_defend": States.DEFAULT_DEFEND,
-}
+var p_rim := 2.0
 
 var _entries: Dictionary = {}
 var _pending: Array = []
@@ -64,7 +60,6 @@ var _hook_ids: Array = []
 # instead of relying on the meta being present in _ready(). One attempt per
 # half second until the hooks go through.
 var _hook_wait_cd: float = 0.0
-var _player: Node3D = null
 var _labels: Dictionary = {}
 var _labels_state: Dictionary = {}
 var _markers: Dictionary = {}
@@ -113,6 +108,31 @@ func set_enabled(on: bool) -> void:
 
 func npc_count() -> int:
 	return _entries.size()
+
+# MCM snapshot in, MCM-driven params out. Lives-ahead-of-the-tree safe: the
+# headless tests instantiate this node without the game around it.
+func apply_config(rec: Settings.Rec) -> void:
+	p_decay = rec.corpse_decay
+	p_dist = rec.outline_distance
+	p_trig = rec.outline_xray
+	p_fire_s = rec.fire_s
+	p_fire_d = rec.fire_d
+	p_voice_s = rec.voice_s
+	p_voice_d = rec.voice_d
+	p_idle_s = rec.idle_s
+	p_idle_d = rec.idle_d
+	p_move_s = rec.move_s
+	p_move_d = rec.move_d
+	p_run_d = rec.run_d
+	p_reload_s = rec.reload_s
+	p_reload_d = rec.reload_d
+	p_pain_s = rec.pain_s
+	p_pain_d = rec.pain_d
+	p_nade_s = rec.nade_s
+	p_nade_d = rec.nade_d
+	p_thickness = rec.outline_thickness
+	p_brightness = rec.outline_brightness
+	p_rim = rec.outline_rim
 
 # Debug key calibration. The candidate key replaces the state key and the
 # fill key of every NPC, and the nomad marker repaints with it, so the probe
@@ -341,7 +361,7 @@ func _process(delta: float) -> void:
 		return
 	_weapon.tick()
 	_outline.sync()
-	_outline.set_depth_bypass(_scoped_now())
+	_outline.set_scoped(_scoped_now())
 	_scope_probe(delta)
 	_labels_sync()
 	_markers_sync()

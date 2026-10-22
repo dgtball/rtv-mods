@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.10.2] - 2026-10-22
+
+### Changed
+- NVG noise defaults to off, so the picture starts clean; the slider can still bring the grain back.
+- The Distance tooltip now says the outline is simply hidden past the range (it never faded).
+
+### Fixed
+- The menu no longer loses or mislabels a setting when one moves or renamed: every entry is now declared once, and the same declaration drives the menu and the mod itself.
+
 ## [1.10.1] - 2026-10-22
 
 ### Fixed

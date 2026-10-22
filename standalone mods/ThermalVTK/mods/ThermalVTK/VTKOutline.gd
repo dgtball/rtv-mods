@@ -2,10 +2,10 @@ extends RefCounted
 # Owns one ring material per NPC and renders it on dedicated ghost shells
 # (sibling MeshInstance3D copies, the approach reference outline mods use):
 # same mesh/skin/skeleton, transform mirrored every frame, material_override,
-# no_depth_test on the node, shadow casting off. The ring shader ignores the
-# depth buffer, so the shells stay visible in the scope view as well.
-# Non-mesh geometry (MultiMesh/CSG) keeps a material_overlay on the source.
-# State colours come in via `opts`; this file only draws.
+# no_depth_test on the node, shadow casting off. The ring shader does its own
+# depth compare (the auto test cannot tell the scope glass from a wall), so
+# the shells survive the rig's own material pipeline and the scope view.
+# State colours and the x-ray flag come in via `opts`; this file only draws.
 
 const Shaders = preload("res://mods/ThermalVTK/VTKShaders.gd")
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
@@ -22,9 +22,16 @@ const SHELL_NAME := "VTK_Ring"
 #        "node": Node, "child_count": int}
 var _items: Dictionary = {}
 # While the scope view is active the band thins (SCOPE_RIM), so the magnified
-# view keeps a fine frame. The shader itself never changes on the scope flag.
+# view keeps a fine frame. The scope flag also widens the ring's carve, the
+# metres in front of the camera that never hide it: while aiming, the eye
+# sits inside the optic, so the lens/reticle geometry stops being a wall for
+# the ring; on a free run the carve narrows, and the settled scope glass
+# hides the ring like any other close occluder. The x-ray ring gets the wide
+# carve permanently: walls stay punched through, carried glass does not.
 const SCOPE_RIM := 6.0
-var _bypass: bool = false
+const CARVE_SCOPED := 0.60
+const CARVE_FREE := 0.10
+var _scoped: bool = false
 
 func has(id: int) -> bool:
 	return _items.has(id)
@@ -47,14 +54,20 @@ func _collect(node: Node, out: Array) -> void:
 
 func _build_ring() -> ShaderMaterial:
 	var ring_mat := ShaderMaterial.new()
-	ring_mat.shader = Shaders.ring(false)
+	ring_mat.shader = Shaders.ring()
 	ring_mat.render_priority = 21
+	# Seed from the current scope state: a bot discovered inside the scope
+	# view must not wait a frame for set_scoped/set_entry_xray to catch up.
+	ring_mat.set_shader_parameter("near_only", false)
+	ring_mat.set_shader_parameter("carve", CARVE_SCOPED if _scoped else CARVE_FREE)
 	return ring_mat
 
-# Event-driven per-entry swap: idle rings stay occluded; when the frame loop
-# passes opts["xray"] for a bot with a live trigger window, only that bot's
-# ring lights up through walls. Dedupe by the stored flag so per-frame opts
-# never reassign the same shader.
+# Event-driven per-entry flip: idle rings honour walls; when the frame loop
+# passes opts["xray"] for a bot with a live trigger window, that bot's ring
+# punches through walls while camera-attached glass keeps hiding it. The x-ray
+# flag moved from a shader swap to the near_only uniform here: one shader, no
+# lost uniforms on the flip. Dedupe by the stored flag so per-frame opts never
+# reassign the same uniforms.
 func set_entry_xray(id: int, on: bool) -> void:
 	var entry = _items.get(id)
 	if entry == null:
@@ -64,12 +77,20 @@ func set_entry_xray(id: int, on: bool) -> void:
 	entry["xray"] = on
 	var ring_mat: ShaderMaterial = entry["ring"]
 	if ring_mat != null:
-		ring_mat.shader = Shaders.ring(on)
+		ring_mat.set_shader_parameter("near_only", on)
+		ring_mat.set_shader_parameter("carve", CARVE_SCOPED if on else (CARVE_SCOPED if _scoped else CARVE_FREE))
 
-# The scope flag only drives the thin in-scope band; no shader swap happens.
-# No-op while the flag does not move.
-func set_depth_bypass(on: bool) -> void:
-	_bypass = on
+# The scope flag drives the thin in-scope band and pushes the widened carve to
+# every live ring material. No-op while the flag does not move.
+func set_scoped(on: bool) -> void:
+	if _scoped == on:
+		return
+	_scoped = on
+	var carve := CARVE_SCOPED if _scoped else CARVE_FREE
+	for id in _items:
+		var ring_mat = _items[id].get("ring")
+		if ring_mat != null and not bool(_items[id].get("xray", false)):
+			(ring_mat as ShaderMaterial).set_shader_parameter("carve", carve)
 
 func apply(id: int, node: Node, opts: Dictionary) -> void:
 	var meshes: Array = []
@@ -182,7 +203,7 @@ func refresh(id: int, opts: Dictionary) -> void:
 		ring_mat.set_shader_parameter("state_key", key)
 		ring_mat.set_shader_parameter("grow", grow)
 
-	var rim := SCOPE_RIM if _bypass else float(opts.get("rim", 1.0))
+	var rim := SCOPE_RIM if _scoped else float(opts.get("rim", 1.0))
 	if ring_mat.get_shader_parameter("rim_power") == null or not is_equal_approx(float(ring_mat.get_shader_parameter("rim_power")), rim):
 		ring_mat.set_shader_parameter("rim_power", rim)
 

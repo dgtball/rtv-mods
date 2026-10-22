@@ -4,7 +4,10 @@ extends RefCounted
 # materials are opaque and draw first, letting outlines paint over the gun.
 # Fix: patch each weapon material to output ALPHA = 1.0 (moves it into the
 # transparent pass) and depth_draw_always (keeps self-occlusion), then give it a
-# render_priority ABOVE the outlines (30 vs 20/21) so it draws last.
+# render_priority ABOVE the outlines (30 vs 20/21) so it draws last. The scope
+# glass patches the same way: it does not write depth in the main camera view,
+# so the draw order is the only thing that can erase rings and the rig's own
+# body behind its pixels.
 #
 # Driven once per frame by VTKESP while the contour ESP is active.
 
@@ -118,12 +121,6 @@ func _skip(mesh: MeshInstance3D, mat: Material) -> bool:
 		if sm.shader != null:
 			var sp: int = sm.shader.resource_path.find("PIP.gdshader")
 			if sp != -1:
-				return true
-			# The scope lens outputs ALPHA = 1.0 and draws depth. Vanilla it
-			# sorts before the outlines, so rings paint on top; patched to
-			# priority 30 the lens draws after them and erases the ring.
-			var sc: int = sm.shader.resource_path.find("Scope.gdshader")
-			if sc != -1:
 				return true
 	return false
 
