@@ -25,9 +25,13 @@ var enabled: bool = false
 # MCM-driven params.
 var p_decay := 8.0
 var p_dist := 60.0
-# X-ray trigger reveals (the "X-ray Triggers" MCM toggle): on top of the
-# always-on ESP, each source event rings its bot for a few seconds at its own
-# reveal distance, through walls (Immersive Threat Highlight idea).
+# X-ray ring (shader without the depth test) + the trigger reveals. Both
+# belong to the "X-ray Triggers" MCM toggle: on = through walls, off = the
+# occluded ring keeps walls and the scope mask in play.
+var p_xray := true
+# Trigger reveals (Immersive Threat Highlight idea): on top of the always-on
+# ESP, each source event rings its bot for a few seconds at its reveal
+# distance, through walls.
 var p_trig := true
 var p_fire_s := 5.0
 var p_fire_d := 100.0
@@ -60,6 +64,10 @@ var _outline := Outline.new()
 var _weapon := WeaponOcclusion.new()
 var _lib = null
 var _hook_ids: Array = []
+# RTVModLib_mounted late: other mods (Evolve, JCM) wait for _lib._is_ready
+# instead of relying on the meta being present in _ready(). One attempt per
+# half second until the hooks go through.
+var _hook_wait_cd: float = 0.0
 var _player: Node3D = null
 var _labels: Dictionary = {}
 var _labels_state: Dictionary = {}
@@ -160,13 +168,21 @@ func _now() -> float:
 # ---------------------------------------------------------------------------
 
 func _register_hooks() -> void:
-	if not Engine.has_meta("RTVModLib"):
-		Dbg.log("ESP", "hooks: RTVModLib absent, polling fallback")
+	if _hook_ids.size() > 0:
 		return
-	Dbg.log("ESP", "hooks: RTVModLib present")
+	if not Engine.has_meta("RTVModLib"):
+		Dbg.log("ESP", "hooks: RTVModLib absent, retrying")
+		return
 	_lib = Engine.get_meta("RTVModLib")
 	if _lib == null:
+		Dbg.log("ESP", "hooks: RTVModLib meta null, retrying")
 		return
+	# The lib mounts its frameworks late; hook registers scheduled before
+	# _is_ready never establish dispatch.
+	if not bool(_lib.get("_is_ready")):
+		Dbg.log("ESP", "hooks: RTVModLib not ready, retrying")
+		return
+	Dbg.log("ESP", "hooks: RTVModLib ready, registering")
 	# Hook names and arities match AI.gd's void methods.
 	_hook_ids.append(_lib.hook("ai-activate-pre", _on_ai_activate, 100))
 	_hook_ids.append(_lib.hook("ai-deactivate-post", _on_ai_deactivate, 100))
@@ -181,6 +197,7 @@ func _register_hooks() -> void:
 	_hook_ids.append(_lib.hook("ai-playreload-post", _on_ai_playreload, 100))
 	_hook_ids.append(_lib.hook("ai-playdamage-post", _on_ai_playdamage, 100))
 	_hook_ids.append(_lib.hook("ai-grenade-post", _on_ai_grenade, 100))
+	Dbg.log("ESP", "hooks: registered %d callbacks" % _hook_ids.size())
 
 func _caller() -> Node:
 	if _lib != null and _lib.has_method("_caller"):
@@ -292,6 +309,10 @@ func _read_state(node: Node) -> int:
 # ---------------------------------------------------------------------------
 
 func _process(delta: float) -> void:
+	_hook_wait_cd -= delta
+	if _hook_ids.is_empty() and _hook_wait_cd <= 0.0:
+		_hook_wait_cd = 0.5
+		_register_hooks()
 	if not enabled and not marker_visible:
 		# Both layers are off: free any lingering markers before parking, or they
 		# would stick until the map reloads (set_enabled's early-return skips the

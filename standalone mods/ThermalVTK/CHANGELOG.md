@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.1] - 2026-10-22
+
+### Fixed
+- X-ray Triggers actually detect sounds again: the mod declaration the loader reads was cut short, so the trigger hooks never attached (gunfire, shouts, footsteps and the rest).
+- The hook registration now waits for the mod library to finish initializing instead of giving up on the first frame.
+- "X-ray Triggers" off properly hides outlines behind walls again; on keeps the see-through ring plus the sound reveals.
+
 ## [1.9.0] - 2026-10-22
 
 ### Added

@@ -389,8 +389,10 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 		_esp.p_thickness = float(_mcm_key_val(cfg, "Float", "outline_thickness", 0.006))
 		_esp.p_brightness = float(_mcm_key_val(cfg, "Float", "outline_brightness", 0.6))
 		_esp.p_rim = float(_mcm_key_val(cfg, "Float", "outline_rim", 2.0))
-		# outline_xray is the "X-ray Triggers" toggle: event reveals live on top
-		# of the ESP; the ring shader itself stays x-ray permanently.
+		# outline_xray is the "X-ray Triggers" toggle: on = the ring ignores the
+		# depth buffer plus the event reveals knock through walls; off = the
+		# occluded ring keeps walls and the scope mask in play.
+		_esp.set_xray(bool(_mcm_key_val(cfg, "Bool", "outline_xray", true)))
 		_esp.p_trig = bool(_mcm_key_val(cfg, "Bool", "outline_xray", true))
 		_esp.p_fire_s = float(_mcm_key_val(cfg, "Float", "trigger_fire_time", 5.0))
 		_esp.p_fire_d = float(_mcm_key_val(cfg, "Float", "trigger_fire_dist", 100.0))
