@@ -117,6 +117,13 @@ func set_enabled(on: bool) -> void:
 func npc_count() -> int:
 	return _entries.size()
 
+# The X-ray toggle stored both meanings (ring shader + trigger events). The
+# outline object is created once at load, so pushing here always lands even
+# when apply runs before the map builds its first shell.
+func set_xray(on: bool) -> void:
+	p_xray = on
+	if _outline != null:
+		_outline.set_xray(on)
 # Debug key calibration. The candidate key replaces the state key and the
 # fill key of every NPC, and the nomad marker repaints with it, so the probe
 # measures one candidate at a time.
