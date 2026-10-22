@@ -16,6 +16,10 @@ const NomadMarkerShader := preload("res://mods/ThermalVTK/VTKNomadMarker.gdshade
 # Polling cadence for state re-reads / fallback discovery (frames).
 const POLL_EVERY := 12
 const CAP := 24
+# While the scope view is active the contour ignores the normal distance cap:
+# scoped targets sit far past it, and without this the ring simply never
+# reaches the model the crosshair is on.
+const SCOPE_RANGE := 300.0
 
 var enabled: bool = false
 # MCM-driven params.
@@ -249,6 +253,20 @@ func _dbg_tick(delta: float, msg: String) -> void:
 	_dbg_cd = 1.0
 	Dbg.log("ESP", msg)
 
+func _gd_cached() -> Resource:
+	if _probe_gd == null and ResourceLoader.exists(Paths.GAME_DATA):
+		_probe_gd = load(Paths.GAME_DATA)
+	return _probe_gd
+
+# The scope view itself (no PIP check: the ring must reach the target in both
+# scoped modes; with PIP on it is the overlay ring that needs it).
+func _scoped_now() -> bool:
+	var gd := _gd_cached()
+	if gd == null:
+		return false
+	var v = gd.get("isScoped")
+	return v != null and bool(v)
+
 # While the diagnostic log is on and the scope view is active, dump what the
 # camera sees (VTKScopeDebug): the ray walk reports the geometry between the
 # camera and whatever the crosshair reaches, with shaders and priorities.
@@ -259,14 +277,13 @@ func _scope_probe(delta: float) -> void:
 	if _scope_dbg_cd > 0.0:
 		return
 	_scope_dbg_cd = 0.5
-	if _probe_gd == null and ResourceLoader.exists(Paths.GAME_DATA):
-		_probe_gd = load(Paths.GAME_DATA)
-	if _probe_gd == null:
+	var gd := _gd_cached()
+	if gd == null:
 		return
-	var scoped_v = _probe_gd.get("isScoped")
+	var scoped_v = gd.get("isScoped")
 	if scoped_v == null or not bool(scoped_v):
 		return
-	ScopeDebug.scope_snapshot(_probe_gd, get_tree().get_nodes_in_group("Player"), self, _weapon)
+	ScopeDebug.scope_snapshot(gd, get_tree().get_nodes_in_group("Player"), self, _weapon)
 
 # ---------------------------------------------------------------------------
 # Debug state labels (only while the diagnostic log is on)
@@ -449,7 +466,8 @@ func _draw(ppos: Vector3) -> void:
 			Tracker.mark_dead(e, now)
 		var pos: Vector3 = (node as Node3D).global_position
 		var dist := ppos.distance_to(pos)
-		if dist > p_dist and not e.get("dead", false):
+		var limit := SCOPE_RANGE if _scoped_now() else p_dist
+		if dist > limit and not e.get("dead", false):
 			continue
 		e["dist"] = dist
 		cands.append({"id": id, "dist": dist})

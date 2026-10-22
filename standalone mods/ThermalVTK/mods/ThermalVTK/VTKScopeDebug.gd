@@ -116,7 +116,7 @@ static func _snapshot_entries(esp: Node) -> void:
 		if node == null or not is_instance_valid(node) or not node.is_inside_tree():
 			continue
 		shown += 1
-		var base := "bot name=%s dead=%s" % [str(node.name), str(bool(e.get("dead", false)))]
+		var base := "bot name=%s dead=%s dist=%.1f" % [str(node.name), str(bool(e.get("dead", false))), float(e.get("dist", -1.0))]
 		var items: Dictionary = outline._items
 		var it: Dictionary = items.get(id, {})
 		var meshes: Array = it.get("meshes", [])

@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.7.7] - 2026-10-22
+
+### Fixed
+- While aiming through a scope, NPC outlines now cover the target regardless of the contour distance limit, so distantscoped targets get their silhouette again.
+
 ## [1.7.5] - 2026-10-22
 
 ### Fixed
