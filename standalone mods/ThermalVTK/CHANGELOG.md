@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.7.10] - 2026-10-22
+
+### Fixed
+- The scope keeps its vanilla picture while the contour works in the scope view; only the lens screen gives way to it.
+
 ## [1.7.9] - 2026-10-22
 
 ### Fixed

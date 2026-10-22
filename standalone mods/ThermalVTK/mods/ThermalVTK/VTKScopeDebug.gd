@@ -26,7 +26,95 @@ static func scope_snapshot(gd: Resource, players: Array, esp: Node, weapon) -> v
 	Dbg.log("SCOPE", "snapshot scoped=%s pip=%s fov=%.1f" % [str(scoped), str(pip), cam.fov])
 	_snapshot_raywalk(cam, players)
 	_snapshot_entries(esp)
+	_snapshot_render(cam, esp)
 	_snapshot_ring(cam, weapon)
+
+# Mesh-level walk between the eye and the crosshair target: every geometry in
+# the scope cone reports its position, shader and render priority, so the
+# occluder drawing over the ring is found in the live scene, not guessed from
+# shaders alone.
+static func _snapshot_render(cam: Camera3D, esp: Node) -> void:
+	var target: Vector3 = Vector3.ZERO
+	var target_node: Node = null
+	var entries: Dictionary = esp._entries
+	var fwd: Vector3 = -cam.global_transform.basis.z
+	var best := -1.0
+	for id in entries.keys():
+		var e: Dictionary = entries[id]
+		var node = e.get("node")
+		if node == null or not is_instance_valid(node) or not node.is_inside_tree():
+			continue
+		var to_node: Vector3 = (node as Node3D).global_position - cam.global_position
+		var dot_val: float = to_node.normalized().dot(fwd)
+		if dot_val > best:
+			best = dot_val
+			target = (node as Node3D).global_position
+			target_node = node
+	if target_node == null or best < 0.95:
+		return
+	var seg: Vector3 = target - cam.global_position
+	var depth: float = seg.length()
+	var seg_dir := seg / depth
+	Dbg.log("SCOPE", "render cone to %s d=%.1f" % [str(target_node.name), depth])
+	_walk_render(esp.get_tree().root, cam, seg_dir, depth, target_node)
+
+static func _walk_render(n: Node, cam: Camera3D, seg_dir: Vector3, seg_len: float, target_node: Node) -> void:
+	if n == null or not is_instance_valid(n):
+		return
+	if n == target_node or n.is_ancestor_of(target_node):
+		for c in n.get_children():
+			_walk_render(c, cam, seg_dir, seg_len, target_node)
+		return
+	if n is MeshInstance3D:
+		var mi := n as MeshInstance3D
+		if mi.visible and mi.mesh != null:
+			var ab: AABB = mi.global_transform * mi.get_aabb()
+			var t := _ray_hit(seg_dir, ab, cam.global_position, seg_len)
+			if t > 0.15 and t < seg_len:
+				var mat: Material = mi.material_override
+				if mat == null:
+					mat = mi.get_surface_override_material(0)
+				if mat == null and mi.mesh.get_surface_count() > 0:
+					mat = mi.mesh.surface_get_material(0)
+				var shp := "(none)"
+				if mat is ShaderMaterial:
+					var sm := mat as ShaderMaterial
+					if sm.shader != null:
+						shp = sm.shader.resource_path if sm.shader.resource_path != "" else "(runtime)"
+				var prio: float = mat.render_priority if mat != null else 0.0
+				Dbg.log("SCOPE", "tri d=%.2f node=%s sh=%s prio=%.0f layers=%d" % [t, str(mi.name), shp, prio, mi.layers])
+	for c in n.get_children():
+		_walk_render(c, cam, seg_dir, seg_len, target_node)
+
+static func _ray_hit(dir: Vector3, ab: AABB, from: Vector3, far: float) -> float:
+	var tmin := -INF
+	var tmax := INF
+	var ox := [from.x, from.y, from.z]
+	var dx := [dir.x, dir.y, dir.z]
+	var lox := [ab.position.x, ab.position.y, ab.position.z]
+	var six := [ab.size.x, ab.size.y, ab.size.z]
+	for axis in 3:
+		var lo: float = lox[axis]
+		var hi: float = lo + six[axis]
+		if abs(dx[axis]) < 0.000001:
+			if ox[axis] < lo or ox[axis] > hi:
+				return -1.0
+			continue
+		var t1: float = (lo - ox[axis]) / dx[axis]
+		var t2: float = (hi - ox[axis]) / dx[axis]
+		if t1 > t2:
+			var tmp: float = t1
+			t1 = t2
+			t2 = tmp
+		if t1 > tmin:
+			tmin = t1
+		if t2 < tmax:
+			tmax = t2
+		if tmin > tmax:
+			return -1.0
+	if tmax < 0.0 or tmin > far:
+		return -1.0
+	return tmin if tmin > 0.0 else 0.0
 
 static func _snapshot_raywalk(cam: Camera3D, players: Array) -> void:
 	var space := cam.get_world_3d().direct_space_state
@@ -133,7 +221,7 @@ static func _snapshot_entries(esp: Node) -> void:
 				continue
 			if ov is ShaderMaterial:
 				var osm := ov as ShaderMaterial
-				Dbg.log("SCOPE", head + " overlay sh=%s prio=%d" % [str(osm.shader.resource_path) if osm.shader != null else "?", osm.render_priority])
+				Dbg.log("SCOPE", head + " overlay sh=%s prio=%d rim=%s" % [str(osm.shader.resource_path) if osm.shader != null else "?", osm.render_priority, str(osm.get_shader_parameter("rim_power"))])
 			else:
 				Dbg.log("SCOPE", head + " overlay=" + ov.get_class())
 

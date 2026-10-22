@@ -166,9 +166,14 @@ func _swap_glass(node: Node, on: bool) -> void:
 				var sm := mat as ShaderMaterial
 				if sm.shader == null:
 					continue
-				# Restore-eligible even without the token: after the swap the
-				# code reads depth_draw_never, only the map remembers it.
-				if not sm.shader.code.contains(GLASS_TOKEN) and not _glass_mats.has(sm):
+				# Only the lens screen. Its vanilla state is an invisible disc
+				# (ALPHA = 0) that writes depth and z-culls everything drawn
+				# after it; removing its write lets the ring through without
+				# touching the optic body, which stays a solid occluder.
+				var sp: String = sm.shader.resource_path
+				# After the swap the shader field holds our copy (runtime), the
+				# map of patched materials decides the eligibility then.
+				if not sp.ends_with("Mask.gdshader") and not _glass_mats.has(sm):
 					continue
 				if on:
 					if _glass_mats.has(sm):
