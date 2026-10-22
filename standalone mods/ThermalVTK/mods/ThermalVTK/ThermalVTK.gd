@@ -30,7 +30,9 @@ var _cal_active: bool = false
 var _cal_index: int = 0
 
 func _ready() -> void:
+	VTKDebug.log("LIFE", "autoload ready begin")
 	_register_mcm()
+	VTKDebug.log("LIFE", "autoload ready end")
 
 func _ensure_nvg() -> void:
 	if _nvg != null and is_instance_valid(_nvg):
@@ -223,6 +225,7 @@ func _register_mcm() -> void:
 	_config_path = _active_config_path()
 	_sync_config(cfg, _config_path)
 	_mcm_apply(ConfigFile.new())
+	VTKDebug.log("LIFE", "autoload mcm registered")
 
 # The settings the mod declares. MCM shows them and the mod merges them into
 # the config file, so the labels, the ranges and the defaults live here only.
@@ -358,6 +361,7 @@ func _mcm_color_val(cfg: ConfigFile, key: String, fallback: Color) -> Color:
 	return v if v is Color else fallback
 
 func _mcm_apply(cfg: ConfigFile) -> void:
+	VTKDebug.log("LIFE", "mcm apply begin")
 	if cfg.get_sections().is_empty() and FileAccess.file_exists(_config_path):
 		cfg.load(_config_path)
 	VTKDebug.set_enabled(bool(_mcm_key_val(cfg, "Bool", "debug_log", false)))

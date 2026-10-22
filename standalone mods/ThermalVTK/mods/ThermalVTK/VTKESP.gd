@@ -197,7 +197,11 @@ func _register_hooks() -> void:
 	_hook_ids.append(_lib.hook("ai-playreload-post", _on_ai_playreload, 100))
 	_hook_ids.append(_lib.hook("ai-playdamage-post", _on_ai_playdamage, 100))
 	_hook_ids.append(_lib.hook("ai-grenade-post", _on_ai_grenade, 100))
-	Dbg.log("ESP", "hooks: registered %d callbacks" % _hook_ids.size())
+	var bad: Array[int] = []
+	for h in _hook_ids:
+		if h is int and h < 0:
+			bad.append(h)
+	Dbg.log("ESP", "hooks: registered %d callbacks ids=%s bad=%s" % [_hook_ids.size(), str(_hook_ids), str(bad)])
 
 func _caller() -> Node:
 	if _lib != null and _lib.has_method("_caller"):
@@ -205,11 +209,13 @@ func _caller() -> Node:
 	return null
 
 func _on_ai_activate(_state: String) -> void:
+	Dbg.log("HOOK", "activate")
 	var n := _caller()
 	if is_instance_valid(n):
 		_register(n)
 
 func _on_ai_deactivate() -> void:
+	Dbg.log("HOOK", "deactivate")
 	var n := _caller()
 	if is_instance_valid(n):
 		var id := n.get_instance_id()
@@ -218,6 +224,7 @@ func _on_ai_deactivate() -> void:
 		Dbg.log("ESP", "deactivate id=%d" % id)
 
 func _on_ai_changestate(_state: String) -> void:
+	Dbg.log("HOOK", "changestate")
 	var n := _caller()
 	if not is_instance_valid(n):
 		return
@@ -229,6 +236,7 @@ func _on_ai_changestate(_state: String) -> void:
 		Dbg.log("ESP", "changestate id=%d state=%d" % [id, _read_state(n)])
 
 func _on_ai_death(_direction: Vector3 = Vector3.ZERO, _force: float = 0.0) -> void:
+	Dbg.log("HOOK", "death")
 	var n := _caller()
 	if not is_instance_valid(n):
 		return
@@ -268,11 +276,15 @@ func _on_ai_playdamage() -> void:
 	_trig_event("pain", p_pain_s, p_pain_d)
 
 func _on_ai_grenade(phase: int) -> void:
+	Dbg.log("HOOK", "grenade phase=%d" % phase)
 	if phase != 2:
 		return
 	_trig_event("grenade", p_nade_s, p_nade_d)
 
+# Telemetry around the trigger reveal: the tag itself and the registered id
+# go to the diagnostic log, so a crash during load leaves the last statement.
 func _trig_event(source: String, span: float, dist: float) -> void:
+	Dbg.log("HOOK", "play %s" % source)
 	if not p_trig or span <= 0.0:
 		return
 	var n := _caller()
