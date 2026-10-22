@@ -115,8 +115,16 @@ func _skip(mesh: MeshInstance3D, mat: Material) -> bool:
 		node = node.get_parent()
 	if mat is ShaderMaterial:
 		var sm: ShaderMaterial = mat as ShaderMaterial
-		if sm.shader != null and sm.shader.resource_path.find("PIP.gdshader") != -1:
-			return true
+		if sm.shader != null:
+			var sp: int = sm.shader.resource_path.find("PIP.gdshader")
+			if sp != -1:
+				return true
+			# The scope lens outputs ALPHA = 1.0 and draws depth. Vanilla it
+			# sorts before the outlines, so rings paint on top; patched to
+			# priority 30 the lens draws after them and erases the ring.
+			var sc: int = sm.shader.resource_path.find("Scope.gdshader")
+			if sc != -1:
+				return true
 	return false
 
 func _patch_base(src: BaseMaterial3D) -> BaseMaterial3D:

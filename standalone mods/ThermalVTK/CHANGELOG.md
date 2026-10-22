@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.7.5] - 2026-10-22
+
+### Fixed
+- NPC outlines are visible again when aiming through the glass of a magnifying scope.
+
 ## [1.7.4] - 2026-10-21
 
 ### Fixed
