@@ -1,11 +1,13 @@
 shader_type spatial;
-render_mode unshaded, cull_back, depth_draw_never;
+render_mode unshaded, cull_back, depth_draw_never, depth_test_disabled;
 
 // Silhouette ring. The mesh is grown along its normals; back faces are culled
 // so only the near shell survives, and the rim keeps a power curve on the edge
 // measure (|dot(NORMAL, VIEW)| small at the silhouette). rim_power is the edge
 // sharpness: 1.0 is a linear falloff, higher values tighten the band toward the
-// silhouette.
+// silhouette. The depth test is permanently disabled: the scope lens writes
+// depth a few centimetres from the eye and would z-cull every ring behind it,
+// and reference outline mods render the same x-ray way.
 uniform vec3 state_key : source_color = vec3(1.0, 0.0, 0.0);
 uniform float grow : hint_range(0.0, 0.15, 0.001) = 0.006;
 uniform float rim_power : hint_range(0.0, 6.0, 0.1) = 1.0;

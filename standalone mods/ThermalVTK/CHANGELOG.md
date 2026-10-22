@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.7.11] - 2026-10-22
+
+### Changed
+- Outlines are drawn the way proven outline mods do it: a dedicated ghost shell per mesh that ignores the depth buffer, so contours stay visible in scopes at every zoom.
+
 ## [1.7.10] - 2026-10-22
 
 ### Fixed

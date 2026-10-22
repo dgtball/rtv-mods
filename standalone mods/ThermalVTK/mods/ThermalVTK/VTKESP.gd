@@ -226,8 +226,8 @@ func _process(delta: float) -> void:
 			_markers.clear()
 		return
 	_weapon.tick()
-	_weapon.set_scope_glass(_scoped_now())
-	_outline.set_scope_mode(_scoped_now())
+	_outline.sync()
+	_outline.set_depth_bypass(_scoped_now())
 	_scope_probe(delta)
 	_labels_sync()
 	_markers_sync()
