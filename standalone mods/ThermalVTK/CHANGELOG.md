@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.8.0] - 2026-10-22
+
+### Added
+- "Show through walls" toggle for the outline ring (on by default; off makes walls and the scope mask hide the contour again).
+- Trigger mode inspired by Immersive Threat Highlight: outlines flash on gunfire, combat shouts, idle chatter, footsteps, reloads, pain cries and grenade throws for a few seconds, each with its own duration and reveal range; sprinting bots reveal further than walking ones.
+
+### Fixed
+- The Distance slider now crops the outline exactly where it is set, including while aiming through a scope.
+
 ## [1.7.11] - 2026-10-22
 
 ### Changed

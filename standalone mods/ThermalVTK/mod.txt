@@ -1,13 +1,13 @@
 [mod]
 name="ThermalVTK"
 id="thermal-vtk"
-version="1.7.11"
+version="1.8.0"
 
 [autoload]
 ThermalVTK="res://mods/ThermalVTK/ThermalVTK.gd"
 
 [hooks]
-res://Scripts/AI.gd = Activate, Deactivate, ChangeState, Death
+res://Scripts/AI.gd = Activate, Deactivate, ChangeState, Death, PlayFire, PlayCombat, PlayIdle, PlayFootstep, PlayReload, PlayDamage, Grenade
 
 [dependencies]
 optional=["mod_configuration_menu"]

@@ -16,15 +16,35 @@ const NomadMarkerShader := preload("res://mods/ThermalVTK/VTKNomadMarker.gdshade
 # Polling cadence for state re-reads / fallback discovery (frames).
 const POLL_EVERY := 12
 const CAP := 24
-# While the scope view is active the contour ignores the normal distance cap:
-# scoped targets sit far past it, and without this the ring simply never
-# reaches the model the crosshair is on.
-const SCOPE_RANGE := 300.0
+# Movement speeds above this threshold reveal the bot at the far (sprint)
+# distance instead of the walking one (the ITH walk/run/sprint idea).
+const RUN_SPEED := 2.0
+const SPRINT_SPEED := 4.0
 
 var enabled: bool = false
 # MCM-driven params.
 var p_decay := 8.0
 var p_dist := 60.0
+# X-ray ring (shader without the depth test): default on.
+var p_xray := true
+# Trigger mode (Immersive Threat Highlight idea): the ring shows on events
+# only. Per-source window seconds and reveal distance, at-event opacity 1.
+var p_trig := false
+var p_fire_s := 5.0
+var p_fire_d := 100.0
+var p_voice_s := 5.0
+var p_voice_d := 20.0
+var p_idle_s := 2.0
+var p_idle_d := 6.0
+var p_move_s := 1.5
+var p_move_d := 10.0
+var p_run_d := 20.0
+var p_reload_s := 2.0
+var p_reload_d := 12.0
+var p_pain_s := 3.0
+var p_pain_d := 15.0
+var p_nade_s := 6.0
+var p_nade_d := 60.0
 var p_thickness := 0.006
 var p_brightness := 0.6
 var p_rim := 1.0
@@ -153,6 +173,15 @@ func _register_hooks() -> void:
 	_hook_ids.append(_lib.hook("ai-deactivate-post", _on_ai_deactivate, 100))
 	_hook_ids.append(_lib.hook("ai-changestate-post", _on_ai_changestate, 100))
 	_hook_ids.append(_lib.hook("ai-death-post", _on_ai_death, 100))
+	# Trigger sources: every callback below is a cheap no-op unless the trigger
+	# mode draws from it. Declarated in mod.txt's [hooks] section.
+	_hook_ids.append(_lib.hook("ai-playfire-post", _on_ai_playfire, 100))
+	_hook_ids.append(_lib.hook("ai-playcombat-post", _on_ai_playcombat, 100))
+	_hook_ids.append(_lib.hook("ai-playidle-post", _on_ai_playidle, 100))
+	_hook_ids.append(_lib.hook("ai-playfootstep-post", _on_ai_playfootstep, 100))
+	_hook_ids.append(_lib.hook("ai-playreload-post", _on_ai_playreload, 100))
+	_hook_ids.append(_lib.hook("ai-playdamage-post", _on_ai_playdamage, 100))
+	_hook_ids.append(_lib.hook("ai-grenade-post", _on_ai_grenade, 100))
 
 func _caller() -> Node:
 	if _lib != null and _lib.has_method("_caller"):
@@ -191,6 +220,60 @@ func _on_ai_death(_direction: Vector3 = Vector3.ZERO, _force: float = 0.0) -> vo
 	if _entries.has(id):
 		Tracker.mark_dead(_entries[id], _now())
 		Dbg.log("ESP", "death id=%d" % id)
+
+# ---------------------------------------------------------------------------
+# Trigger sources (Immersive Threat Highlight idea): a shot, a shout, idle
+# chatter, steps, a reload, a pain cry and a thrown grenade each tag the
+# caller's entry with a timed reveal window.
+# ---------------------------------------------------------------------------
+
+func _on_ai_playfire() -> void:
+	_trig_event("fire", p_fire_s, p_fire_d)
+
+func _on_ai_playcombat() -> void:
+	_trig_event("voice", p_voice_s, p_voice_d)
+
+func _on_ai_playidle() -> void:
+	_trig_event("idle", p_idle_s, p_idle_d)
+
+func _on_ai_playfootstep() -> void:
+	var dist := p_move_d
+	var n := _caller()
+	if is_instance_valid(n):
+		var speed = n.get("movementSpeed")
+		if speed != null and float(speed) >= SPRINT_SPEED:
+			dist = p_run_d
+	_trig_event("move", p_move_s, dist)
+
+func _on_ai_playreload() -> void:
+	_trig_event("reload", p_reload_s, p_reload_d)
+
+func _on_ai_playdamage() -> void:
+	_trig_event("pain", p_pain_s, p_pain_d)
+
+func _on_ai_grenade(phase: int) -> void:
+	if phase != 2:
+		return
+	_trig_event("grenade", p_nade_s, p_nade_d)
+
+func _trig_event(source: String, span: float, dist: float) -> void:
+	if not p_trig or span <= 0.0:
+		return
+	var n := _caller()
+	if not is_instance_valid(n):
+		return
+	var id := n.get_instance_id()
+	if not _entries.has(id):
+		_register(n)
+	if _entries.has(id):
+		Tracker.tag_trig(_entries[id], source, dist, _now() + span, span)
+		Dbg.log("ESP", "trig id=%d source=%s span=%.1f dist=%.0f" % [id, source, span, dist])
+
+# ThermalVTK applies the MCM x-ray switch here: the outline module swaps its
+# ring shader without touching the uniforms.
+func set_xray(on: bool) -> void:
+	p_xray = on
+	_outline.set_xray(on)
 
 func _exit_tree() -> void:
 	for id in _labels.keys():
@@ -468,14 +551,33 @@ func _draw(ppos: Vector3) -> void:
 			Tracker.mark_dead(e, now)
 		var pos: Vector3 = (node as Node3D).global_position
 		var dist := ppos.distance_to(pos)
-		var limit := SCOPE_RANGE if _scoped_now() else p_dist
-		if dist > limit and not e.get("dead", false):
+		var limit := p_dist
+		var dead := bool(e.get("dead", false))
+		var trig_opts: Dictionary = {}
+		if p_trig and not dead:
+			# Trigger mode: the reveal distances own living bots; the slider
+			# no longer crops them (out-of-window bots just hide their shells,
+			# the timers keep running).
+			var ev: Dictionary = Tracker.pick_trig(e, now)
+			var show := false
+			var trig_cool := 1.0
+			if not ev.is_empty():
+				if dist <= float(ev.get("dist", 0.0)):
+					show = true
+					trig_cool = clampf(1.0 - Tracker.fade_factor(ev, now), 0.0, 1.0)
+			trig_opts["visible"] = show
+			if show:
+				trig_opts["cool"] = trig_cool
+		if dist > limit and not dead and trig_opts.is_empty():
 			continue
 		e["dist"] = dist
 		cands.append({"id": id, "dist": dist})
 		if _frame % POLL_EVERY == 0:
 			Tracker.apply_state(e, _read_state(node))
-		opts_by_id[id] = _opts_for(e, node, now)
+		var opts: Dictionary = _opts_for(e, node, now)
+		for k in trig_opts:
+			opts[k] = trig_opts[k]
+		opts_by_id[id] = opts
 	for id in _entries.keys():
 		if not valid.has(id):
 			_outline.clear(id)

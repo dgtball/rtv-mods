@@ -22,10 +22,12 @@ const SHELL_NAME := "VTK_Ring"
 #        "node": Node, "child_count": int}
 var _items: Dictionary = {}
 # While the scope view is active the band thins (SCOPE_RIM), so the magnified
-# view keeps a fine frame. The shader itself never changes any more: it always
-# ignores depth.
+# view keeps a fine frame. The shader itself never changes on the scope flag
+# any more: it always ignores depth.
 const SCOPE_RIM := 6.0
 var _bypass: bool = false
+# X-ray is how the ring stays alive in the scope view; user-tunable.
+var _xray: bool = true
 
 func has(id: int) -> bool:
 	return _items.has(id)
@@ -48,11 +50,23 @@ func _collect(node: Node, out: Array) -> void:
 
 func _build_ring() -> ShaderMaterial:
 	var ring_mat := ShaderMaterial.new()
-	ring_mat.shader = Shaders.ring()
+	ring_mat.shader = Shaders.ring(_xray)
 	ring_mat.render_priority = 21
 	return ring_mat
 
-# The same flag still drives the thin in-scope band; no shader swap happens.
+# Depth-tested vs x-ray ring. Same uniform set on both shaders, so the swap
+# keeps the state keys, grow and rim untouched.
+func set_xray(on: bool) -> void:
+	if on == _xray:
+		return
+	_xray = on
+	var shader: Shader = Shaders.ring(on)
+	for id in _items:
+		var ring_mat: ShaderMaterial = _items[id]["ring"]
+		if ring_mat != null:
+			ring_mat.shader = shader
+
+# The scope flag only drives the thin in-scope band; no shader swap happens.
 # No-op while the flag does not move.
 func set_depth_bypass(on: bool) -> void:
 	_bypass = on
@@ -172,6 +186,14 @@ func refresh(id: int, opts: Dictionary) -> void:
 
 	if ring_mat.get_shader_parameter("cool") == null or not is_equal_approx(float(ring_mat.get_shader_parameter("cool")), cool):
 		ring_mat.set_shader_parameter("cool", cool)
+
+	# Trigger mode drives per-frame visibility through opts; the shells are
+	# plain scene nodes, so the world cannot do it for us.
+	var show: bool = bool(opts.get("visible", true))
+	for pair in entry.get("pairs", []):
+		var shell = pair.get("shell")
+		if shell != null and is_instance_valid(shell):
+			shell.visible = show
 
 func clear(id: int) -> void:
 	var entry = _items.get(id)
