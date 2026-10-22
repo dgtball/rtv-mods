@@ -8,6 +8,8 @@ const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Outline = preload("res://mods/ThermalVTK/VTKOutline.gd")
 const WeaponOcclusion = preload("res://mods/ThermalVTK/VTKWeaponOcclusion.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
+const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
+const ScopeDebug = preload("res://mods/ThermalVTK/VTKScopeDebug.gd")
 const Calibration = preload("res://mods/ThermalVTK/VTKCalibration.gd")
 const NomadMarkerShader := preload("res://mods/ThermalVTK/VTKNomadMarker.gdshader")
 
@@ -51,6 +53,8 @@ var _dbg_cd: float = 0.0
 var _dbg_cand: int = 0
 var _dbg_keep: int = 0
 var _dbg_applied: int = 0
+var _scope_dbg_cd: float = 0.0
+var _probe_gd: Resource = null
 
 func _ready() -> void:
 	name = "VTKESP"
@@ -218,6 +222,7 @@ func _process(delta: float) -> void:
 			_markers.clear()
 		return
 	_weapon.tick()
+	_scope_probe(delta)
 	_labels_sync()
 	_markers_sync()
 	_frame += 1
@@ -243,6 +248,25 @@ func _dbg_tick(delta: float, msg: String) -> void:
 		return
 	_dbg_cd = 1.0
 	Dbg.log("ESP", msg)
+
+# While the diagnostic log is on and the scope view is active, dump what the
+# camera sees (VTKScopeDebug): the ray walk reports the geometry between the
+# camera and whatever the crosshair reaches, with shaders and priorities.
+func _scope_probe(delta: float) -> void:
+	if not Dbg.enabled:
+		return
+	_scope_dbg_cd -= delta
+	if _scope_dbg_cd > 0.0:
+		return
+	_scope_dbg_cd = 0.5
+	if _probe_gd == null and ResourceLoader.exists(Paths.GAME_DATA):
+		_probe_gd = load(Paths.GAME_DATA)
+	if _probe_gd == null:
+		return
+	var scoped_v = _probe_gd.get("isScoped")
+	if scoped_v == null or not bool(scoped_v):
+		return
+	ScopeDebug.scope_snapshot(_probe_gd, get_tree().get_nodes_in_group("Player"), self, _weapon)
 
 # ---------------------------------------------------------------------------
 # Debug state labels (only while the diagnostic log is on)
