@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.10.0] - 2026-10-22
+
+### Changed
+- With "X-ray Triggers" on, the outline lights through walls only while a sound event is live (gunfire, a shout, footsteps and the rest) instead of permanently; between events it behaves like the ordinary distance limited ring.
+- Sound-reveal timers are no longer tied to the toggle: with the debug log on, every live reveal shows its countdown on the NPC label whether the toggle is on or off.
+
+### Fixed
+- NPC outlines show through the scope glass again: the optics no longer hide the ring while the toggle is off.
+
 ## [1.9.1] - 2026-10-22
 
 ### Fixed

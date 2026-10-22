@@ -25,13 +25,9 @@ var enabled: bool = false
 # MCM-driven params.
 var p_decay := 8.0
 var p_dist := 60.0
-# X-ray ring (shader without the depth test) + the trigger reveals. Both
-# belong to the "X-ray Triggers" MCM toggle: on = through walls, off = the
-# occluded ring keeps walls and the scope mask in play.
-var p_xray := true
-# Trigger reveals (Immersive Threat Highlight idea): on top of the always-on
-# ESP, each source event rings its bot for a few seconds at its reveal
-# distance, through walls.
+# The X-ray Triggers toggle state: on = a live trigger window swaps that bot's
+# ring to the x-ray shader (through walls). Off = windows are still tagged,
+# but the ring never lights up through the wall; labels read them regardless.
 var p_trig := true
 var p_fire_s := 5.0
 var p_fire_d := 100.0
@@ -117,13 +113,6 @@ func set_enabled(on: bool) -> void:
 func npc_count() -> int:
 	return _entries.size()
 
-# The X-ray toggle stored both meanings (ring shader + trigger events). The
-# outline object is created once at load, so pushing here always lands even
-# when apply runs before the map builds its first shell.
-func set_xray(on: bool) -> void:
-	p_xray = on
-	if _outline != null:
-		_outline.set_xray(on)
 # Debug key calibration. The candidate key replaces the state key and the
 # fill key of every NPC, and the nomad marker repaints with it, so the probe
 # measures one candidate at a time.
@@ -292,7 +281,7 @@ func _on_ai_grenade(phase: int) -> void:
 # go to the diagnostic log, so a crash during load leaves the last statement.
 func _trig_event(source: String, span: float, dist: float) -> void:
 	Dbg.log("HOOK", "play %s" % source)
-	if not p_trig or span <= 0.0:
+	if span <= 0.0:
 		return
 	var n := _caller()
 	if not is_instance_valid(n):
@@ -447,12 +436,13 @@ func _labels_sync() -> void:
 # frame, so the countdown ticks live.
 func _label_text(e: Dictionary, node: Node, state: int) -> String:
 	var txt := States.label_text(state, bool(e.get("nomad", false)))
-	if p_trig:
-		var now := _now()
-		var ev: Dictionary = Tracker.pick_trig(e, now)
-		if not ev.is_empty():
-			var left: float = max(0.0, float(ev.get("expires", 0.0)) - now)
-			txt += "  [%s %.1fs %.0fm]" % [str(ev.get("source", "")), left, float(ev.get("dist", 0.0))]
+	# The countdown suffix is window-driven only: the X-ray toggle governs the
+	# ring flash, labels follow the debug log like every other readout.
+	var now := _now()
+	var ev: Dictionary = Tracker.pick_trig(e, now)
+	if not ev.is_empty():
+		var left: float = max(0.0, float(ev.get("expires", 0.0)) - now)
+		txt += "  [%s %.1fs %.0fm]" % [str(ev.get("source", "")), left, float(ev.get("dist", 0.0))]
 	return txt
 
 func _label_make(id: int, e: Dictionary, node: Node, txt: String) -> void:
@@ -600,14 +590,17 @@ func _draw(ppos: Vector3) -> void:
 		var limit := p_dist
 		var dead := bool(e.get("dead", false))
 		var trig_opts: Dictionary = {}
-		if p_trig and not dead:
-			# X-ray triggers are additive: inside the slider the normal ESP ring
-			# does the work already; a live window only extends past it, up to
-			# its own reveal distance, fading over the tail of its span.
+		if not dead:
+			# A live window is read by labels regardless of the toggle; the
+			# x-ray swap (through walls, past Distance up to the reveal range)
+			# happens only when the "X-ray Triggers" toggle is on.
 			var ev: Dictionary = Tracker.pick_trig(e, now)
-			if not ev.is_empty() and dist > limit and dist <= float(ev.get("dist", 0.0)):
+			if p_trig and not ev.is_empty() and dist <= float(ev.get("dist", 0.0)):
 				trig_opts["cool"] = clampf(1.0 - Tracker.fade_factor(ev, now), 0.0, 1.0)
+				trig_opts["xray"] = true
 		if dist > limit and not dead and trig_opts.is_empty():
+			# window may have just expired out here - clear the residue
+			_outline.set_entry_xray(id, false)
 			continue
 		e["dist"] = dist
 		cands.append({"id": id, "dist": dist})

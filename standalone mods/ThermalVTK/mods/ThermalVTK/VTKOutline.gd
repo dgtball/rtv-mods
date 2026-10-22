@@ -22,12 +22,9 @@ const SHELL_NAME := "VTK_Ring"
 #        "node": Node, "child_count": int}
 var _items: Dictionary = {}
 # While the scope view is active the band thins (SCOPE_RIM), so the magnified
-# view keeps a fine frame. The shader itself never changes on the scope flag
-# any more: it always ignores depth.
+# view keeps a fine frame. The shader itself never changes on the scope flag.
 const SCOPE_RIM := 6.0
 var _bypass: bool = false
-# X-ray is how the ring stays alive in the scope view; user-tunable.
-var _xray: bool = true
 
 func has(id: int) -> bool:
 	return _items.has(id)
@@ -50,21 +47,24 @@ func _collect(node: Node, out: Array) -> void:
 
 func _build_ring() -> ShaderMaterial:
 	var ring_mat := ShaderMaterial.new()
-	ring_mat.shader = Shaders.ring(_xray)
+	ring_mat.shader = Shaders.ring(false)
 	ring_mat.render_priority = 21
 	return ring_mat
 
-# Depth-tested vs x-ray ring. Same uniform set on both shaders, so the swap
-# keeps the state keys, grow and rim untouched.
-func set_xray(on: bool) -> void:
-	if on == _xray:
+# Event-driven per-entry swap: idle rings stay occluded; when the frame loop
+# passes opts["xray"] for a bot with a live trigger window, only that bot's
+# ring lights up through walls. Dedupe by the stored flag so per-frame opts
+# never reassign the same shader.
+func set_entry_xray(id: int, on: bool) -> void:
+	var entry = _items.get(id)
+	if entry == null:
 		return
-	_xray = on
-	var shader: Shader = Shaders.ring(on)
-	for id in _items:
-		var ring_mat: ShaderMaterial = _items[id]["ring"]
-		if ring_mat != null:
-			ring_mat.shader = shader
+	if bool(entry.get("xray", false)) == on:
+		return
+	entry["xray"] = on
+	var ring_mat: ShaderMaterial = entry["ring"]
+	if ring_mat != null:
+		ring_mat.shader = Shaders.ring(on)
 
 # The scope flag only drives the thin in-scope band; no shader swap happens.
 # No-op while the flag does not move.
@@ -85,6 +85,7 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 	_items[id] = {
 		"meshes": meshes, "pairs": pairs, "ring": ring_mat,
 		"node": node, "child_count": node.get_child_count(),
+		"xray": false,
 	}
 	refresh(id, opts)
 
@@ -165,6 +166,7 @@ func refresh(id: int, opts: Dictionary) -> void:
 	var entry = _items.get(id)
 	if entry == null:
 		return
+	set_entry_xray(id, bool(opts.get("xray", false)))
 	var node = entry.get("node")
 	if node != null and is_instance_valid(node) and node.get_child_count() != int(entry.get("child_count", -1)):
 		_recollect(id, entry)

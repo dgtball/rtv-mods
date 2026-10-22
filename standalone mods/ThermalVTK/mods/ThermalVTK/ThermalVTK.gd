@@ -235,7 +235,7 @@ func _mcm_config() -> ConfigFile:
 	cfg.set_value("Keycode", "key_thermal_toggle", {"name": "Thermal vision", "default": 0, "default_type": "Keycode", "type": "Key", "value": 0, "category": CAT, "menu_pos": 0, "tooltip": "Hotkey: press in game to turn the thermal layer on and off."})
 	cfg.set_value("Keycode", "key_palette_cycle", {"name": "World palette", "default": KEY_F6, "default_type": "Keycode", "type": "Key", "value": KEY_F6, "category": CAT, "menu_pos": 1, "tooltip": "Hotkey: cycle the world thermal palette."})
 	cfg.set_value("Bool", "outline_enabled", {"name": "NPC highlighting (ESP)", "default": true, "value": true, "category": CAT, "menu_pos": 2, "tooltip": "Draw state-coloured body outlines over NPCs while thermal vision is on. Off = full-screen thermal only."})
-	cfg.set_value("Bool", "outline_xray", {"name": "X-ray Triggers", "default": true, "value": true, "category": CAT, "menu_pos": 3, "tooltip": "On top of the ESP, event reveals knock out through walls: gunfire, shouts, idle chatter, footsteps, reloads, pain cries and grenade throws ring the NPC for a few seconds at their own reveal range (sliders in the X-ray Triggers tab)."})
+	cfg.set_value("Bool", "outline_xray", {"name": "X-ray Triggers", "default": true, "value": true, "category": CAT, "menu_pos": 3, "tooltip": "While on, the NPC ring lights up through walls only while a sound event is live: gunfire, shouts, idle chatter, footsteps, reloads, pain cries or grenade throws. Between events the outline stays a normal ring behind walls. The reveal timers themselves show on the debug labels regardless of this toggle."})
 	cfg.set_value("Bool", "thermal_mines", {"name": "Mine highlighting", "default": true, "value": true, "category": CAT, "menu_pos": 4, "tooltip": "Highlight mines while thermal vision is on."})
 	cfg.set_value("Float", "nvg_noise", {"name": "NVG noise", "default": 0.0, "value": 0.0, "minRange": 0.0, "maxRange": 60.0, "step": 0.5, "category": CAT, "menu_pos": 5, "tooltip": "Grain amount over the NVG image. Lower is cleaner. Vanilla is fixed at 10."})
 	cfg.set_value("Float", "nvg_white", {"name": "NVG brightness", "default": 1.0, "value": 1.0, "minRange": 0.05, "maxRange": 1.0, "step": 0.05, "category": CAT, "menu_pos": 6, "tooltip": "Brightness of the NVG image. 1 = full brightness; lower darkens the whole overlay."})
@@ -393,10 +393,9 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 		_esp.p_thickness = float(_mcm_key_val(cfg, "Float", "outline_thickness", 0.006))
 		_esp.p_brightness = float(_mcm_key_val(cfg, "Float", "outline_brightness", 0.6))
 		_esp.p_rim = float(_mcm_key_val(cfg, "Float", "outline_rim", 2.0))
-		# outline_xray is the "X-ray Triggers" toggle: on = the ring ignores the
-		# depth buffer plus the event reveals knock through walls; off = the
-		# occluded ring keeps walls and the scope mask in play.
-		_esp.set_xray(bool(_mcm_key_val(cfg, "Bool", "outline_xray", true)))
+		# outline_xray is the "X-ray Triggers" toggle: it gates only the ring
+		# flash through the wall. Trigger windows themselves (tags and the
+		# debug label countdown) run regardless of the toggle.
 		_esp.p_trig = bool(_mcm_key_val(cfg, "Bool", "outline_xray", true))
 		_esp.p_fire_s = float(_mcm_key_val(cfg, "Float", "trigger_fire_time", 5.0))
 		_esp.p_fire_d = float(_mcm_key_val(cfg, "Float", "trigger_fire_dist", 100.0))
