@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.8.1] - 2026-10-22
+
+### Added
+- With the debug log on, the floating NPC labels now also show the active trigger reveal and its live countdown (source, seconds left, range).
+
 ## [1.8.0] - 2026-10-22
 
 ### Added

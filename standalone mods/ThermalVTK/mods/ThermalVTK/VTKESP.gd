@@ -396,23 +396,36 @@ func _labels_sync() -> void:
 			_label_free(id)
 			continue
 		var state := _read_state(node)
+		var txt := _label_text(e, node, state)
 		if not _labels.has(id):
-			_label_make(id, e, node, state)
-		elif int(_labels_state.get(id, -1)) != state:
+			_label_make(id, e, node, txt)
+		else:
 			var lbl = _labels[id]
 			if is_instance_valid(lbl):
-				lbl.text = States.label_text(state, bool(e.get("nomad", false)))
+				lbl.text = txt
 				lbl.visible = enabled
-			_labels_state[id] = state
 	# Drop labels whose entry is gone (deactivate raced the loop above).
 	for id in _labels.keys():
 		if not _entries.has(id):
 			_label_free(id)
 
-func _label_make(id: int, e: Dictionary, node: Node, state: int) -> void:
+# Debug label text: the NPC's state (and, in trigger mode, the active reveal
+# window with its remaining seconds and configured range). Recomposed every
+# frame, so the countdown ticks live.
+func _label_text(e: Dictionary, node: Node, state: int) -> String:
+	var txt := States.label_text(state, bool(e.get("nomad", false)))
+	if p_trig:
+		var now := _now()
+		var ev: Dictionary = Tracker.pick_trig(e, now)
+		if not ev.is_empty():
+			var left: float = max(0.0, float(ev.get("expires", 0.0)) - now)
+			txt += "  [%s %.1fs %.0fm]" % [str(ev.get("source", "")), left, float(ev.get("dist", 0.0))]
+	return txt
+
+func _label_make(id: int, e: Dictionary, node: Node, txt: String) -> void:
 	var anchor := _anchor_above(node)
 	var lbl := Label3D.new()
-	lbl.text = States.label_text(state, bool(e.get("nomad", false)))
+	lbl.text = txt
 	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	lbl.no_depth_test = true
 	lbl.render_priority = 40
@@ -423,7 +436,7 @@ func _label_make(id: int, e: Dictionary, node: Node, state: int) -> void:
 	lbl.set_meta(Outline.NO_CONTOUR_META, true)
 	(anchor["parent"] as Node).add_child(lbl)
 	_labels[id] = lbl
-	_labels_state[id] = state
+	_labels_state[id] = 0
 
 # Where a label/marker hangs: above the bot's own mesh when it has one (so the
 # overlay on that mesh skips our tagged geometry), above the bot root otherwise.
