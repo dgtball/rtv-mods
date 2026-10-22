@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.9.0] - 2026-10-22
+
+### Added
+- The settings menu is reorganized into four blocks: Thermal vision, NPC, X-ray Triggers and Diagnostics.
+
+### Changed
+- "X-ray Triggers" now work on top of the NPC outlines instead of replacing them: inside the Distance slider the normal outlines stay solid, and each sound-based reveal (gunfire, shouts, chatter, footsteps, reloads, pain cries, grenade throws) additionally rings its NPC through walls at its own range for a few seconds, fading as the window closes.
+
+### Fixed
+- Settings values that moved between menu blocks are re-initialized with defaults.
+
 ## [1.8.1] - 2026-10-22
 
 ### Added

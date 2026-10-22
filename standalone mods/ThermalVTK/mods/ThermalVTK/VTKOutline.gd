@@ -26,8 +26,6 @@ var _items: Dictionary = {}
 # any more: it always ignores depth.
 const SCOPE_RIM := 6.0
 var _bypass: bool = false
-# X-ray is how the ring stays alive in the scope view; user-tunable.
-var _xray: bool = true
 
 func has(id: int) -> bool:
 	return _items.has(id)
@@ -50,21 +48,9 @@ func _collect(node: Node, out: Array) -> void:
 
 func _build_ring() -> ShaderMaterial:
 	var ring_mat := ShaderMaterial.new()
-	ring_mat.shader = Shaders.ring(_xray)
+	ring_mat.shader = Shaders.ring()
 	ring_mat.render_priority = 21
 	return ring_mat
-
-# Depth-tested vs x-ray ring. Same uniform set on both shaders, so the swap
-# keeps the state keys, grow and rim untouched.
-func set_xray(on: bool) -> void:
-	if on == _xray:
-		return
-	_xray = on
-	var shader: Shader = Shaders.ring(on)
-	for id in _items:
-		var ring_mat: ShaderMaterial = _items[id]["ring"]
-		if ring_mat != null:
-			ring_mat.shader = shader
 
 # The scope flag only drives the thin in-scope band; no shader swap happens.
 # No-op while the flag does not move.

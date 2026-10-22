@@ -25,11 +25,10 @@ var enabled: bool = false
 # MCM-driven params.
 var p_decay := 8.0
 var p_dist := 60.0
-# X-ray ring (shader without the depth test): default on.
-var p_xray := true
-# Trigger mode (Immersive Threat Highlight idea): the ring shows on events
-# only. Per-source window seconds and reveal distance, at-event opacity 1.
-var p_trig := false
+# X-ray trigger reveals (the "X-ray Triggers" MCM toggle): on top of the
+# always-on ESP, each source event rings its bot for a few seconds at its own
+# reveal distance, through walls (Immersive Threat Highlight idea).
+var p_trig := true
 var p_fire_s := 5.0
 var p_fire_d := 100.0
 var p_voice_s := 5.0
@@ -268,12 +267,6 @@ func _trig_event(source: String, span: float, dist: float) -> void:
 	if _entries.has(id):
 		Tracker.tag_trig(_entries[id], source, dist, _now() + span, span)
 		Dbg.log("ESP", "trig id=%d source=%s span=%.1f dist=%.0f" % [id, source, span, dist])
-
-# ThermalVTK applies the MCM x-ray switch here: the outline module swaps its
-# ring shader without touching the uniforms.
-func set_xray(on: bool) -> void:
-	p_xray = on
-	_outline.set_xray(on)
 
 func _exit_tree() -> void:
 	for id in _labels.keys():
@@ -568,19 +561,12 @@ func _draw(ppos: Vector3) -> void:
 		var dead := bool(e.get("dead", false))
 		var trig_opts: Dictionary = {}
 		if p_trig and not dead:
-			# Trigger mode: the reveal distances own living bots; the slider
-			# no longer crops them (out-of-window bots just hide their shells,
-			# the timers keep running).
+			# X-ray triggers are additive: inside the slider the normal ESP ring
+			# does the work already; a live window only extends past it, up to
+			# its own reveal distance, fading over the tail of its span.
 			var ev: Dictionary = Tracker.pick_trig(e, now)
-			var show := false
-			var trig_cool := 1.0
-			if not ev.is_empty():
-				if dist <= float(ev.get("dist", 0.0)):
-					show = true
-					trig_cool = clampf(1.0 - Tracker.fade_factor(ev, now), 0.0, 1.0)
-			trig_opts["visible"] = show
-			if show:
-				trig_opts["cool"] = trig_cool
+			if not ev.is_empty() and dist > limit and dist <= float(ev.get("dist", 0.0)):
+				trig_opts["cool"] = clampf(1.0 - Tracker.fade_factor(ev, now), 0.0, 1.0)
 		if dist > limit and not dead and trig_opts.is_empty():
 			continue
 		e["dist"] = dist

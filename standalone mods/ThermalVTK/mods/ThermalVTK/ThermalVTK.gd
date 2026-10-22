@@ -152,8 +152,8 @@ func _probe_center() -> void:
 
 func _apply_mode() -> void:
 	if _esp != null and is_instance_valid(_esp):
-		# The nomad marker belongs to the contour: it follows the same gate as
-		# the outlines, so switching the contour off hides it as well.
+		# The whole contour stack (ESP rings, x-ray trigger reveals, nomad
+		# marker) lives on the thermal layer: with the helmet off nothing runs.
 		var on := _thermal_enabled and _outline_enabled and _nvg_active()
 		_esp.set_enabled(on)
 		_esp.marker_visible = on
@@ -229,44 +229,45 @@ func _register_mcm() -> void:
 func _mcm_config() -> ConfigFile:
 	var cfg = ConfigFile.new()
 	var CAT := "01. ThermalVision"
-	cfg.set_value("Keycode", "key_thermal_toggle", {"name": "Hotkey: Toggle thermal vision", "default": 0, "default_type": "Keycode", "type": "Key", "value": 0, "category": CAT, "menu_pos": 0, "tooltip": "Press in game to turn the thermal layer on and off."})
-	cfg.set_value("Keycode", "key_palette_cycle", {"name": "Hotkey: Cycle world palette", "default": KEY_F6, "default_type": "Keycode", "type": "Key", "value": KEY_F6, "category": CAT, "menu_pos": 1, "tooltip": "Press in game to cycle the world thermal palette."})
-	cfg.set_value("Float", "nvg_noise", {"name": "NVG noise", "default": 4.0, "value": 4.0, "minRange": 0.0, "maxRange": 60.0, "step": 0.5, "category": CAT, "menu_pos": 2, "tooltip": "Grain amount over the NVG image. Lower is cleaner. Vanilla is fixed at 10."})
-	cfg.set_value("Float", "nvg_white", {"name": "NVG brightness", "default": 1.0, "value": 1.0, "minRange": 0.05, "maxRange": 1.0, "step": 0.05, "category": CAT, "menu_pos": 3, "tooltip": "Brightness of the NVG image. 1 = full brightness; lower darkens the whole overlay."})
-	cfg.set_value("Bool", "thermal_mines", {"name": "Mine highlighting", "default": true, "value": true, "category": CAT, "menu_pos": 5, "tooltip": "Highlight mines while thermal vision is on."})
-	cfg.set_value("Float", "thermal_world", {"default": 1.70, "value": 1.70, "minRange": 1.0, "maxRange": 4.0, "step": 0.05, "category": CAT, "menu_pos": 9, "tooltip": "How bright the surrounding world reads in thermal.", "name": "World brightness"})
+	cfg.set_value("Keycode", "key_thermal_toggle", {"name": "Thermal vision", "default": 0, "default_type": "Keycode", "type": "Key", "value": 0, "category": CAT, "menu_pos": 0, "tooltip": "Hotkey: press in game to turn the thermal layer on and off."})
+	cfg.set_value("Keycode", "key_palette_cycle", {"name": "World palette", "default": KEY_F6, "default_type": "Keycode", "type": "Key", "value": KEY_F6, "category": CAT, "menu_pos": 1, "tooltip": "Hotkey: cycle the world thermal palette."})
+	cfg.set_value("Bool", "outline_enabled", {"name": "NPC highlighting (ESP)", "default": true, "value": true, "category": CAT, "menu_pos": 2, "tooltip": "Draw state-coloured body outlines over NPCs while thermal vision is on. Off = full-screen thermal only."})
+	cfg.set_value("Bool", "outline_xray", {"name": "X-ray Triggers", "default": true, "value": true, "category": CAT, "menu_pos": 3, "tooltip": "On top of the ESP, event reveals knock out through walls: gunfire, shouts, idle chatter, footsteps, reloads, pain cries and grenade throws ring the NPC for a few seconds at their own reveal range (sliders in the X-ray Triggers tab)."})
+	cfg.set_value("Bool", "thermal_mines", {"name": "Mine highlighting", "default": true, "value": true, "category": CAT, "menu_pos": 4, "tooltip": "Highlight mines while thermal vision is on."})
+	cfg.set_value("Float", "nvg_noise", {"name": "NVG noise", "default": 0.0, "value": 0.0, "minRange": 0.0, "maxRange": 60.0, "step": 0.5, "category": CAT, "menu_pos": 5, "tooltip": "Grain amount over the NVG image. Lower is cleaner. Vanilla is fixed at 10."})
+	cfg.set_value("Float", "nvg_white", {"name": "NVG brightness", "default": 1.0, "value": 1.0, "minRange": 0.05, "maxRange": 1.0, "step": 0.05, "category": CAT, "menu_pos": 6, "tooltip": "Brightness of the NVG image. 1 = full brightness; lower darkens the whole overlay."})
+	cfg.set_value("Float", "thermal_world", {"default": 1.70, "value": 1.70, "minRange": 1.0, "maxRange": 4.0, "step": 0.05, "category": CAT, "menu_pos": 7, "tooltip": "How bright the surrounding world reads in thermal.", "name": "World brightness"})
 
-	var CAT2 := "02. ESP"
-	cfg.set_value("Bool", "outline_enabled", {"name": "ESP", "default": true, "value": true, "category": CAT2, "menu_pos": 0, "tooltip": "Draw state-coloured body outlines over NPCs. Off = full-screen thermal only."})
-	cfg.set_value("Float", "outline_distance", {"name": "Distance", "default": 60.0, "value": 60.0, "minRange": 0.0, "maxRange": 300.0, "step": 10.0, "category": CAT2, "menu_pos": 1, "tooltip": "Maximum distance for an outline. Past half of this the outline fades out."})
-	cfg.set_value("Float", "outline_rim", {"name": "Rim", "default": 2.0, "value": 2.0, "minRange": 0.0, "maxRange": 6.0, "step": 0.5, "category": CAT2, "menu_pos": 2, "tooltip": "Edge sharpness of the outline. 1.0 is a linear falloff; higher values tighten the band toward the silhouette."})
-	cfg.set_value("Float", "corpse_decay", {"name": "Cooling time", "default": 30.0, "value": 30.0, "minRange": 0.0, "maxRange": 180.0, "step": 1.0, "category": CAT2, "menu_pos": 6, "tooltip": "Seconds a dead NPC's outline takes to cool from warm to cold."})
-	cfg.set_value("Float", "outline_thickness", {"name": "Thickness", "default": 0.006, "value": 0.006, "minRange": 0.001, "maxRange": 0.02, "step": 0.001, "category": CAT2, "menu_pos": 7, "tooltip": "How far the outline band grows beyond the body."})
-	cfg.set_value("Float", "outline_brightness", {"name": "Brightness", "default": 0.6, "value": 0.6, "minRange": 0.1, "maxRange": 3.0, "step": 0.1, "category": CAT2, "menu_pos": 8, "tooltip": "Brightness multiplier on the outline colour."})
-	cfg.set_value("Bool", "outline_xray", {"name": "Show through walls", "default": true, "value": true, "category": CAT2, "menu_pos": 3, "tooltip": "Ring ignores the depth buffer: visible in scopes at every zoom and through walls, like reference outline mods. Off = walls and the scope mask hide the ring again."})
-	cfg.set_value("Bool", "trigger_mode", {"name": "Trigger mode", "default": false, "value": false, "category": CAT2, "menu_pos": 4, "tooltip": "Event-driven outlines inspired by Immersive Threat Highlight: the ring flashes on gunfire, shouts, idle chatter, footsteps, reloads, pain cries and grenades for a few seconds, then fades. Off = always-on ESP."})
-	cfg.set_value("Float", "trigger_fire_time", {"name": "Trigger: gunfire seconds", "default": 5.0, "value": 5.0, "minRange": 1.0, "maxRange": 15.0, "step": 0.5, "category": CAT2, "menu_pos": 9, "tooltip": "Trigger mode: how long the gun-shot reveal stays up."})
-	cfg.set_value("Float", "trigger_fire_dist", {"name": "Trigger: gunfire distance", "default": 100.0, "value": 100.0, "minRange": 1.0, "maxRange": 300.0, "step": 5.0, "category": CAT2, "menu_pos": 10, "tooltip": "Trigger mode: reveal range for a gun-shot."})
-	cfg.set_value("Float", "trigger_voice_time", {"name": "Trigger: shout seconds", "default": 5.0, "value": 5.0, "minRange": 1.0, "maxRange": 15.0, "step": 0.5, "category": CAT2, "menu_pos": 11, "tooltip": "Trigger mode: how long the combat-shout reveal stays up."})
-	cfg.set_value("Float", "trigger_voice_dist", {"name": "Trigger: shout distance", "default": 20.0, "value": 20.0, "minRange": 1.0, "maxRange": 60.0, "step": 1.0, "category": CAT2, "menu_pos": 12, "tooltip": "Trigger mode: reveal range for a combat shout."})
-	cfg.set_value("Float", "trigger_idle_time", {"name": "Trigger: idle voice seconds", "default": 2.0, "value": 2.0, "minRange": 1.0, "maxRange": 10.0, "step": 0.5, "category": CAT2, "menu_pos": 13, "tooltip": "Trigger mode: how long the idle-chatter reveal stays up."})
-	cfg.set_value("Float", "trigger_idle_dist", {"name": "Trigger: idle voice distance", "default": 6.0, "value": 6.0, "minRange": 1.0, "maxRange": 30.0, "step": 1.0, "category": CAT2, "menu_pos": 14, "tooltip": "Trigger mode: reveal range for idle chatter (whistling, muttering)."})
-	cfg.set_value("Float", "trigger_move_time", {"name": "Trigger: footsteps seconds", "default": 1.5, "value": 1.5, "minRange": 1.0, "maxRange": 10.0, "step": 0.5, "category": CAT2, "menu_pos": 15, "tooltip": "Trigger mode: how long the footstep reveal stays up."})
-	cfg.set_value("Float", "trigger_move_dist", {"name": "Trigger: walk distance", "default": 10.0, "value": 10.0, "minRange": 1.0, "maxRange": 40.0, "step": 1.0, "category": CAT2, "menu_pos": 16, "tooltip": "Trigger mode: reveal range for footsteps from a walking bot."})
-	cfg.set_value("Float", "trigger_run_dist", {"name": "Trigger: sprint distance", "default": 20.0, "value": 20.0, "minRange": 1.0, "maxRange": 60.0, "step": 1.0, "category": CAT2, "menu_pos": 17, "tooltip": "Trigger mode: reveal range for a sprinting bot's footsteps."})
-	cfg.set_value("Float", "trigger_reload_time", {"name": "Trigger: reload seconds", "default": 2.0, "value": 2.0, "minRange": 1.0, "maxRange": 10.0, "step": 0.5, "category": CAT2, "menu_pos": 18, "tooltip": "Trigger mode: how long the reload-sound reveal stays up."})
-	cfg.set_value("Float", "trigger_reload_dist", {"name": "Trigger: reload distance", "default": 12.0, "value": 12.0, "minRange": 1.0, "maxRange": 40.0, "step": 1.0, "category": CAT2, "menu_pos": 19, "tooltip": "Trigger mode: reveal range for a reload."})
-	cfg.set_value("Float", "trigger_pain_time", {"name": "Trigger: pain cry seconds", "default": 3.0, "value": 3.0, "minRange": 1.0, "maxRange": 10.0, "step": 0.5, "category": CAT2, "menu_pos": 20, "tooltip": "Trigger mode: how long the pain-cry reveal stays up after the bot takes damage."})
-	cfg.set_value("Float", "trigger_pain_dist", {"name": "Trigger: pain cry distance", "default": 15.0, "value": 15.0, "minRange": 1.0, "maxRange": 40.0, "step": 1.0, "category": CAT2, "menu_pos": 21, "tooltip": "Trigger mode: reveal range for a pain cry."})
-	cfg.set_value("Float", "trigger_nade_time", {"name": "Trigger: grenade seconds", "default": 6.0, "value": 6.0, "minRange": 1.0, "maxRange": 15.0, "step": 0.5, "category": CAT2, "menu_pos": 22, "tooltip": "Trigger mode: how long the grenade-throw reveal stays up."})
-	cfg.set_value("Float", "trigger_nade_dist", {"name": "Trigger: grenade distance", "default": 60.0, "value": 60.0, "minRange": 1.0, "maxRange": 120.0, "step": 5.0, "category": CAT2, "menu_pos": 23, "tooltip": "Trigger mode: reveal range for a thrown grenade."})
+	var CAT2 := "02. NPC"
+	cfg.set_value("Float", "outline_distance", {"name": "Distance", "default": 60.0, "value": 60.0, "minRange": 0.0, "maxRange": 300.0, "step": 10.0, "category": CAT2, "menu_pos": 0, "tooltip": "Maximum distance for an outline. Past half of this the outline fades out."})
+	cfg.set_value("Float", "outline_rim", {"name": "Rim", "default": 2.0, "value": 2.0, "minRange": 0.0, "maxRange": 6.0, "step": 0.5, "category": CAT2, "menu_pos": 1, "tooltip": "Edge sharpness of the outline. 1.0 is a linear falloff; higher values tighten the band toward the silhouette."})
+	cfg.set_value("Float", "outline_thickness", {"name": "Thickness", "default": 0.006, "value": 0.006, "minRange": 0.001, "maxRange": 0.02, "step": 0.001, "category": CAT2, "menu_pos": 2, "tooltip": "How far the outline band grows beyond the body."})
+	cfg.set_value("Float", "outline_brightness", {"name": "Brightness", "default": 0.6, "value": 0.6, "minRange": 0.1, "maxRange": 3.0, "step": 0.1, "category": CAT2, "menu_pos": 3, "tooltip": "Brightness multiplier on the outline colour."})
+	cfg.set_value("Float", "corpse_decay", {"name": "Cooling time", "default": 30.0, "value": 30.0, "minRange": 0.0, "maxRange": 180.0, "step": 1.0, "category": CAT2, "menu_pos": 4, "tooltip": "Seconds a dead NPC's outline takes to cool from warm to cold."})
 
-	var CAT3 := "03. Outline Colours"
-	cfg.set_value("Color", "state_normal", {"name": "Default", "default": Color(1.0, 0.72, 0.28), "value": Color(1.0, 0.72, 0.28), "allowAlpha": false, "category": CAT3, "menu_pos": 0, "tooltip": "Colour for NPCs that are idle, patrolling, looting or guarding."})
-	cfg.set_value("Color", "state_combat", {"name": "In combat", "default": Color(0.95, 0.18, 0.15), "value": Color(0.95, 0.18, 0.15), "allowAlpha": false, "category": CAT3, "menu_pos": 1, "tooltip": "Colour for NPCs in combat, hunting, attacking or throwing grenades."})
-	cfg.set_value("Color", "state_defend", {"name": "Defending", "default": Color(0.62, 0.30, 0.95), "value": Color(0.62, 0.30, 0.95), "allowAlpha": false, "category": CAT3, "menu_pos": 2, "tooltip": "Colour for NPCs taking cover, defending, ambushing or lurking."})
+	var CAT4 := "03. X-ray Triggers"
+	cfg.set_value("Float", "trigger_fire_time", {"name": "Gunfire seconds", "default": 5.0, "value": 5.0, "minRange": 1.0, "maxRange": 15.0, "step": 0.5, "category": CAT4, "menu_pos": 0, "tooltip": "How long the gun-shot reveal stays up."})
+	cfg.set_value("Float", "trigger_fire_dist", {"name": "Gunfire distance", "default": 100.0, "value": 100.0, "minRange": 1.0, "maxRange": 300.0, "step": 5.0, "category": CAT4, "menu_pos": 1, "tooltip": "Reveal range for a gun-shot."})
+	cfg.set_value("Float", "trigger_voice_time", {"name": "Shout seconds", "default": 5.0, "value": 5.0, "minRange": 1.0, "maxRange": 15.0, "step": 0.5, "category": CAT4, "menu_pos": 2, "tooltip": "How long the combat-shout reveal stays up."})
+	cfg.set_value("Float", "trigger_voice_dist", {"name": "Shout distance", "default": 20.0, "value": 20.0, "minRange": 1.0, "maxRange": 60.0, "step": 1.0, "category": CAT4, "menu_pos": 3, "tooltip": "Reveal range for a combat shout."})
+	cfg.set_value("Float", "trigger_idle_time", {"name": "Idle voice seconds", "default": 2.0, "value": 2.0, "minRange": 1.0, "maxRange": 10.0, "step": 0.5, "category": CAT4, "menu_pos": 4, "tooltip": "How long the idle-chatter reveal stays up."})
+	cfg.set_value("Float", "trigger_idle_dist", {"name": "Idle voice distance", "default": 6.0, "value": 6.0, "minRange": 1.0, "maxRange": 30.0, "step": 1.0, "category": CAT4, "menu_pos": 5, "tooltip": "Reveal range for idle chatter (whistling, muttering)."})
+	cfg.set_value("Float", "trigger_move_time", {"name": "Footsteps seconds", "default": 1.5, "value": 1.5, "minRange": 1.0, "maxRange": 10.0, "step": 0.5, "category": CAT4, "menu_pos": 6, "tooltip": "How long the footstep reveal stays up."})
+	cfg.set_value("Float", "trigger_move_dist", {"name": "Walk distance", "default": 10.0, "value": 10.0, "minRange": 1.0, "maxRange": 40.0, "step": 1.0, "category": CAT4, "menu_pos": 7, "tooltip": "Reveal range for footsteps from a walking bot."})
+	cfg.set_value("Float", "trigger_run_dist", {"name": "Sprint distance", "default": 20.0, "value": 20.0, "minRange": 1.0, "maxRange": 60.0, "step": 1.0, "category": CAT4, "menu_pos": 8, "tooltip": "Reveal range for a sprinting bot's footsteps."})
+	cfg.set_value("Float", "trigger_reload_time", {"name": "Reload seconds", "default": 2.0, "value": 2.0, "minRange": 1.0, "maxRange": 10.0, "step": 0.5, "category": CAT4, "menu_pos": 9, "tooltip": "How long the reload-sound reveal stays up."})
+	cfg.set_value("Float", "trigger_reload_dist", {"name": "Reload distance", "default": 12.0, "value": 12.0, "minRange": 1.0, "maxRange": 40.0, "step": 1.0, "category": CAT4, "menu_pos": 10, "tooltip": "Reveal range for a reload."})
+	cfg.set_value("Float", "trigger_pain_time", {"name": "Pain cry seconds", "default": 3.0, "value": 3.0, "minRange": 1.0, "maxRange": 10.0, "step": 0.5, "category": CAT4, "menu_pos": 11, "tooltip": "How long the pain-cry reveal stays up after the bot takes damage."})
+	cfg.set_value("Float", "trigger_pain_dist", {"name": "Pain cry distance", "default": 15.0, "value": 15.0, "minRange": 1.0, "maxRange": 40.0, "step": 1.0, "category": CAT4, "menu_pos": 12, "tooltip": "Reveal range for a pain cry."})
+	cfg.set_value("Float", "trigger_nade_time", {"name": "Grenade seconds", "default": 6.0, "value": 6.0, "minRange": 1.0, "maxRange": 15.0, "step": 0.5, "category": CAT4, "menu_pos": 13, "tooltip": "How long the grenade-throw reveal stays up."})
+	cfg.set_value("Float", "trigger_nade_dist", {"name": "Grenade distance", "default": 60.0, "value": 60.0, "minRange": 1.0, "maxRange": 120.0, "step": 5.0, "category": CAT4, "menu_pos": 14, "tooltip": "Reveal range for a thrown grenade."})
 
-	var CAT5 := "05. Diagnostics"
+	var CAT3 := CAT2
+	cfg.set_value("Color", "state_normal", {"name": "Default", "default": Color(1.0, 0.72, 0.28), "value": Color(1.0, 0.72, 0.28), "allowAlpha": false, "category": CAT3, "menu_pos": 5, "tooltip": "Colour for NPCs that are idle, patrolling, looting or guarding."})
+	cfg.set_value("Color", "state_combat", {"name": "In combat", "default": Color(0.95, 0.18, 0.15), "value": Color(0.95, 0.18, 0.15), "allowAlpha": false, "category": CAT3, "menu_pos": 6, "tooltip": "Colour for NPCs in combat, hunting, attacking or throwing grenades."})
+	cfg.set_value("Color", "state_defend", {"name": "Defending", "default": Color(0.62, 0.30, 0.95), "value": Color(0.62, 0.30, 0.95), "allowAlpha": false, "category": CAT3, "menu_pos": 7, "tooltip": "Colour for NPCs taking cover, defending, ambushing or lurking."})
+
+	var CAT5 := "04. Diagnostics"
 	cfg.set_value("Bool", "debug_log", {"name": "Debug log", "default": false, "value": false, "category": CAT5, "menu_pos": 0, "tooltip": "Write a diagnostic log of the contour ESP to user://MCM/thermal-vtk/debug.log. For troubleshooting; leave off for normal play."})
 	cfg.set_value("Keycode", "key_debug_probe", {"name": "Hotkey: Debug key probe", "default": KEY_F7, "default_type": "Keycode", "type": "Key", "value": KEY_F7, "category": CAT5, "menu_pos": 20, "tooltip": "Writes the colour under the crosshair to the debug log. Turn the debug log on first, then press it while aiming at an outlined NPC or the nomad marker. The view blinks for one frame."})
 	cfg.set_value("Keycode", "key_cal_cycle", {"name": "Hotkey: Calibration cycle", "default": KEY_F8, "default_type": "Keycode", "type": "Key", "value": KEY_F8, "category": CAT5, "menu_pos": 21, "tooltip": "Debug tool: cycles a test colour for the outline and the nomad marker, so its colour under the night-vision helmet can be measured with the debug probe. Turn the debug log on first, then aim at an outlined NPC and press the probe key. Shift turns the calibration off."})
@@ -388,8 +389,9 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 		_esp.p_thickness = float(_mcm_key_val(cfg, "Float", "outline_thickness", 0.006))
 		_esp.p_brightness = float(_mcm_key_val(cfg, "Float", "outline_brightness", 0.6))
 		_esp.p_rim = float(_mcm_key_val(cfg, "Float", "outline_rim", 2.0))
-		_esp.set_xray(bool(_mcm_key_val(cfg, "Bool", "outline_xray", true)))
-		_esp.p_trig = bool(_mcm_key_val(cfg, "Bool", "trigger_mode", false))
+		# outline_xray is the "X-ray Triggers" toggle: event reveals live on top
+		# of the ESP; the ring shader itself stays x-ray permanently.
+		_esp.p_trig = bool(_mcm_key_val(cfg, "Bool", "outline_xray", true))
 		_esp.p_fire_s = float(_mcm_key_val(cfg, "Float", "trigger_fire_time", 5.0))
 		_esp.p_fire_d = float(_mcm_key_val(cfg, "Float", "trigger_fire_dist", 100.0))
 		_esp.p_voice_s = float(_mcm_key_val(cfg, "Float", "trigger_voice_time", 5.0))
