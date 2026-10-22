@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.1] - 2026-10-22
+
+### Fixed
+- Trigger reveals and the debug label countdowns actually work in game now: sound events (footsteps, gunfire, shouts and the rest) were silently dropped before reaching the trigger system, so neither the wall flash nor the `[fire 4.2s]` suffix could ever appear.
+- The Distance setting crops NPC outlines exactly at its value again: outlines applied inside the range no longer linger past it, and setting Distance to the minimum hides every outline.
+- Cooling corpses no longer light up as freshly killed after cycling thermal vision (helmet off and on).
+
 ## [1.10.0] - 2026-10-22
 
 ### Changed

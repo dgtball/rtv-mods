@@ -96,7 +96,6 @@ func set_enabled(on: bool) -> void:
 	Dbg.log("ESP", "esp enabled=%s" % str(on))
 	if not enabled:
 		_outline.clear_all()
-		_entries.clear()
 		for id in _labels.keys():
 			_label_free(id)
 		_labels.clear()
@@ -105,9 +104,11 @@ func set_enabled(on: bool) -> void:
 			_marker_free(id)
 		_markers.clear()
 	else:
-		# Disabling wiped _entries; NPCs already in the scene never fire
-		# node_added again, so re-enabling must re-scan or every pre-existing
-		# NPC stays undiscovered (outline gone until the map reloads).
+		# The visuals are reset, the bookkeeping is not: wiping _entries here
+		# used to drop corpse death timestamps, and the next draw re-marked a
+		# dead flag with the current clock — every cooled body turned freshly
+		# killed again after cycling thermal vision (helmet off/on). Re-scan is
+		# harmless: _register no-ops for a known node.
 		_reseed(get_tree().current_scene)
 
 func npc_count() -> int:
@@ -200,8 +201,16 @@ func _register_hooks() -> void:
 	Dbg.log("ESP", "hooks: registered %d callbacks ids=%s bad=%s" % [_hook_ids.size(), str(_hook_ids), str(bad)])
 
 func _caller() -> Node:
-	if _lib != null and _lib.has_method("_caller"):
-		return _lib._caller
+	# modloader 3.4.2 exposes the dispatch source as a script variable, not a
+	# method: has_method("_caller") was always false in game, so every hook
+	# handler silently worked with a null node (trigger tags, death marks and
+	# the countdown labels never reached the entries). Object.get reads the
+	# variable directly and tolerates a missing key with null.
+	if _lib == null:
+		return null
+	var n = _lib.get("_caller")
+	if n is Node:
+		return n
 	return null
 
 func _on_ai_activate(_state: String) -> void:
@@ -601,6 +610,12 @@ func _draw(ppos: Vector3) -> void:
 		if dist > limit and not dead and trig_opts.is_empty():
 			# window may have just expired out here - clear the residue
 			_outline.set_entry_xray(id, false)
+			# Distance crops exactly at its value: an applied ring must not
+			# survive past the limit, so lowering Distance (or to zero) and
+			# bots walking out release their stale materials. clear() is a
+			# no-op when nothing is applied, and the next frame inside range
+			# re-applies.
+			_outline.clear(id)
 			continue
 		e["dist"] = dist
 		cands.append({"id": id, "dist": dist})
