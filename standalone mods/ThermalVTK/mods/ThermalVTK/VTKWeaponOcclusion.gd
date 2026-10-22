@@ -19,6 +19,15 @@ var _patched_base: Dictionary = {}
 var _dbg_patched: int = 0
 var _dbg_layer_skip: int = 0
 var _missing_logged: bool = false
+# Scope glass passthrough: the lens writes depth centimetres from the eye and
+# z-culls every ring behind it. While the scope view is live each lens
+# material swaps to a depth_draw_never copy (compiled once), and the vanilla
+# shader is restored on the way out. Only the lens is touched; walls, stones
+# and the scope body keep occluding the ring as usual.
+const GLASS_TOKEN := "depth_draw_always"
+var _glass_on: bool = false
+var _glass_mats: Dictionary = {}
+var _glass_shaders: Dictionary = {}
 
 func tick() -> void:
 	var tree := Engine.get_main_loop() as SceneTree
@@ -35,6 +44,9 @@ func tick() -> void:
 		_mgr = null
 		_patched_shaders.clear()
 		_patched_base.clear()
+		_glass_on = false
+		_glass_mats.clear()
+		_glass_shaders.clear()
 		_dbg_patched = 0
 		_dbg_layer_skip = 0
 		_missing_logged = false
@@ -126,6 +138,58 @@ func _skip(mesh: MeshInstance3D, mat: Material) -> bool:
 			if sc != -1:
 				return true
 	return false
+
+# Flips every lens material in the rig between the vanilla depth writer and
+# the never-write copy. Idempotent while the mode flag does not move.
+func set_scope_glass(on: bool) -> void:
+	if on == _glass_on:
+		return
+	_glass_on = on
+	if _mgr != null and is_instance_valid(_mgr):
+		_swap_glass(_mgr, on)
+	Dbg.log("WEAPON", "scope glass on=%s mats=%d" % [str(on), _glass_mats.size()])
+
+func _swap_glass(node: Node, on: bool) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if node is MeshInstance3D:
+		var mi := node as MeshInstance3D
+		if mi.mesh != null and (mi.layers & 2) != 0:
+			for i in mi.mesh.get_surface_count():
+				var mat: Material = mi.material_override
+				if mat == null:
+					mat = mi.get_surface_override_material(i)
+				if mat == null:
+					mat = mi.mesh.surface_get_material(i)
+				if mat == null or not (mat is ShaderMaterial):
+					continue
+				var sm := mat as ShaderMaterial
+				if sm.shader == null:
+					continue
+				# Restore-eligible even without the token: after the swap the
+				# code reads depth_draw_never, only the map remembers it.
+				if not sm.shader.code.contains(GLASS_TOKEN) and not _glass_mats.has(sm):
+					continue
+				if on:
+					if _glass_mats.has(sm):
+						continue
+					_glass_mats[sm] = sm.shader
+					sm.shader = _never_write(sm.shader)
+				elif _glass_mats.has(sm):
+					sm.shader = _glass_mats[sm]
+					_glass_mats.erase(sm)
+	for child in node.get_children():
+		_swap_glass(child, on)
+
+func _never_write(src: Shader) -> Shader:
+	if src == null:
+		return null
+	if _glass_shaders.has(src):
+		return _glass_shaders[src]
+	var out := Shader.new()
+	out.code = src.code.replace(GLASS_TOKEN, "depth_draw_never")
+	_glass_shaders[src] = out
+	return out
 
 func _patch_base(src: BaseMaterial3D) -> BaseMaterial3D:
 	var rid_id: int = src.get_rid().get_id()

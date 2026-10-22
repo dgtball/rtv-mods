@@ -16,11 +16,15 @@ const NO_CONTOUR_META := "vtk_no_contour"
 # id -> {"meshes": Array, "ring": ShaderMaterial,
 #        "node": Node, "child_count": int}
 var _items: Dictionary = {}
-# While the scope view is active the ring swaps to the depth-test-disabled
-# shader variant: the scope lens writes depth a few centimetres from the eye
-# and would z-cull every ring behind it. Uniforms are shared, so the swap
-# never loses state.
-var _bypass: bool = false
+# While the scope view is active the ring reads as a thin frame: rim_power
+# steps up to SCOPE_RIM (the slider default is 2.0). The ring itself stays
+# depth-tested everywhere; the scope glass is handled by removing the lens'
+# depth write instead, so nothing x-rays through walls here.
+const SCOPE_RIM := 6.0
+var _scope: bool = false
+
+func set_scope_mode(on: bool) -> void:
+	_scope = on
 
 func has(id: int) -> bool:
 	return _items.has(id)
@@ -43,20 +47,9 @@ func _collect(node: Node, out: Array) -> void:
 
 func _build_ring() -> ShaderMaterial:
 	var ring_mat := ShaderMaterial.new()
-	ring_mat.shader = Shaders.ring_scope() if _bypass else Shaders.ring()
+	ring_mat.shader = Shaders.ring()
 	ring_mat.render_priority = 21
 	return ring_mat
-
-# Flips every live ring between the depth-tested shader and the scope variant.
-# No-op while the flag does not move.
-func set_depth_bypass(on: bool) -> void:
-	if on == _bypass:
-		return
-	_bypass = on
-	for id in _items:
-		var ring_mat: ShaderMaterial = _items[id]["ring"]
-		if ring_mat != null and is_instance_valid(ring_mat):
-			ring_mat.shader = Shaders.ring_scope() if on else Shaders.ring()
 
 func apply(id: int, node: Node, opts: Dictionary) -> void:
 	var meshes: Array = []
@@ -115,7 +108,7 @@ func refresh(id: int, opts: Dictionary) -> void:
 		ring_mat.set_shader_parameter("state_key", key)
 		ring_mat.set_shader_parameter("grow", grow)
 
-	var rim := float(opts.get("rim", 1.0))
+	var rim := SCOPE_RIM if _scope else float(opts.get("rim", 1.0))
 	if ring_mat.get_shader_parameter("rim_power") == null or not is_equal_approx(float(ring_mat.get_shader_parameter("rim_power")), rim):
 		ring_mat.set_shader_parameter("rim_power", rim)
 

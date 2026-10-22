@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.9] - 2026-10-22
+
+### Fixed
+- In the scope view the outline no longer shows through walls, rocks or the scope's own parts; only the lens glass lets it through.
+
+### Changed
+- The outline reads as a thinner frame while in the scope view.
+
 ## [1.7.8] - 2026-10-22
 
 ### Fixed
