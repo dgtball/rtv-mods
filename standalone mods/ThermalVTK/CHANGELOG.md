@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.7.8] - 2026-10-22
+
+### Fixed
+- In the scope view the NPC outlines are no longer erased by the scope's own glass.
+
 ## [1.7.7] - 2026-10-22
 
 ### Fixed

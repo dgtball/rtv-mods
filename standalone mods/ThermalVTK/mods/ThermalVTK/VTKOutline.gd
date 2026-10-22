@@ -16,6 +16,11 @@ const NO_CONTOUR_META := "vtk_no_contour"
 # id -> {"meshes": Array, "ring": ShaderMaterial,
 #        "node": Node, "child_count": int}
 var _items: Dictionary = {}
+# While the scope view is active the ring swaps to the depth-test-disabled
+# shader variant: the scope lens writes depth a few centimetres from the eye
+# and would z-cull every ring behind it. Uniforms are shared, so the swap
+# never loses state.
+var _bypass: bool = false
 
 func has(id: int) -> bool:
 	return _items.has(id)
@@ -38,9 +43,20 @@ func _collect(node: Node, out: Array) -> void:
 
 func _build_ring() -> ShaderMaterial:
 	var ring_mat := ShaderMaterial.new()
-	ring_mat.shader = Shaders.ring()
+	ring_mat.shader = Shaders.ring_scope() if _bypass else Shaders.ring()
 	ring_mat.render_priority = 21
 	return ring_mat
+
+# Flips every live ring between the depth-tested shader and the scope variant.
+# No-op while the flag does not move.
+func set_depth_bypass(on: bool) -> void:
+	if on == _bypass:
+		return
+	_bypass = on
+	for id in _items:
+		var ring_mat: ShaderMaterial = _items[id]["ring"]
+		if ring_mat != null and is_instance_valid(ring_mat):
+			ring_mat.shader = Shaders.ring_scope() if on else Shaders.ring()
 
 func apply(id: int, node: Node, opts: Dictionary) -> void:
 	var meshes: Array = []
