@@ -154,6 +154,16 @@ static func _desc_collider(col: Variant, d: float) -> void:
 
 static func _mesh_surfaces(mi: MeshInstance3D, tag: String) -> void:
 	var head := tag + " m=" + str(mi.name) + " layers=" + str(mi.layers) + " vis=" + str(mi.is_visible_in_tree())
+	# Ancestry trail for the rig listing: names the attachment assembly even
+	# when it is not literally called "Attachments".
+	var p := mi.get_parent()
+	var hops := 0
+	while p != null and hops < 6:
+		head += " " + str(p.name)
+		if p.get("attachments") != null:
+			head += "(att)"
+		p = p.get_parent()
+		hops += 1
 	if mi.mesh == null:
 		Dbg.log("SCOPE", head + " mesh=null")
 		return

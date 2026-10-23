@@ -122,14 +122,16 @@ func _patch_node(node: Node, att_node: Node) -> void:
 func _patch_mesh(mesh: MeshInstance3D, att_node: Node) -> void:
 	if mesh.mesh == null:
 		return
-	if mesh.has_meta("VTK_OCC"):
-		return
 	if (mesh.layers & 2) == 0:
 		_dbg_layer_skip += 1
+		mesh.set_meta("VTK_OCC", true)
 		return
+	var first := not mesh.has_meta("VTK_OCC")
+	if first:
+		Dbg.log("WEAPON", "patch %s parent=%s att=%s under=%s" % [mesh.name, str(mesh.get_parent()), str(att_node), str(_under_attachments(mesh, att_node))])
+	mesh.set_meta("VTK_OCC", true)
 	if _under_attachments(mesh, att_node):
 		_patch_depth_never(mesh)
-		mesh.set_meta("VTK_OCC", true)
 		return
 	var count: int = mesh.mesh.get_surface_count()
 	for i in count:
@@ -153,7 +155,6 @@ func _patch_mesh(mesh: MeshInstance3D, att_node: Node) -> void:
 			new_mat.render_priority = 30
 			mesh.set_surface_override_material(i, new_mat)
 	_dbg_patched += count
-	mesh.set_meta("VTK_OCC", true)
 
 func _skip(mesh: MeshInstance3D, mat: Material, att_node: Node = null) -> bool:
 	var node: Node = mesh
