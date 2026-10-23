@@ -128,7 +128,17 @@ func _patch_mesh(mesh: MeshInstance3D, att_node: Node) -> void:
 		return
 	var first := not mesh.has_meta("VTK_OCC")
 	if first:
-		Dbg.log("WEAPON", "patch %s parent=%s att=%s under=%s" % [mesh.name, str(mesh.get_parent()), str(att_node), str(_under_attachments(mesh, att_node))])
+		var hops := 0
+		var n: Node = mesh
+		var trail := ""
+		while n != null and hops < 16:
+			var mark := "P" if "PIP" in n else ""
+			if att_node != null and n == att_node:
+				mark += "E"
+			trail += ("|" if hops > 0 else "") + str(n.name) + mark
+			n = n.get_parent()
+			hops += 1
+		Dbg.log("WEAPON", "patch %s att=%s under=%s chain=%s" % [mesh.name, str(att_node), str(_under_attachments(mesh, att_node)), trail])
 	mesh.set_meta("VTK_OCC", true)
 	if _under_attachments(mesh, att_node):
 		_patch_depth_never(mesh)
