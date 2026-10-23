@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.10.3] - 2026-10-23
+
+### Fixed
+- The mod failed to load on startup (a broken cross-file type reference from the 1.10.2 rewrite), so thermal vision never turned on and the hotkey did nothing.
+
 ## [1.10.2] - 2026-10-22
 
 ### Changed

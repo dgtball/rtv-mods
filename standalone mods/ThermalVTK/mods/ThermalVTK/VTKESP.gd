@@ -111,7 +111,7 @@ func npc_count() -> int:
 
 # MCM snapshot in, MCM-driven params out. Lives-ahead-of-the-tree safe: the
 # headless tests instantiate this node without the game around it.
-func apply_config(rec: Settings.Rec) -> void:
+func apply_config(rec) -> void:
 	p_decay = rec.corpse_decay
 	p_dist = rec.outline_distance
 	p_trig = rec.outline_xray

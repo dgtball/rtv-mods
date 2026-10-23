@@ -436,7 +436,7 @@ func set_thermal_enabled(on: bool) -> void:
 
 # MCM snapshot in, settings out. Headless-safe: every setter here is a var
 # write, and _apply_uniforms guards against the missing tree.
-func apply_config(rec: Settings.Rec) -> void:
+func apply_config(rec) -> void:
 	set_nvg_noise = rec.nvg_noise
 	set_nvg_white = rec.nvg_white
 	set_world = rec.world
