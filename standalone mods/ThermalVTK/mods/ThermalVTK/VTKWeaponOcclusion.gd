@@ -6,11 +6,19 @@ extends RefCounted
 # transparent pass) and depth_draw_always (keeps self-occlusion), then give it a
 # render_priority ABOVE the outlines (30 vs 20/21) so it draws last.
 #
-# The rig's "Attachments" subtree (sights, lasers) is skipped entirely: its
-# surfaces rely on their own alpha masks (the ocular mask is what shapes the
-# scope picture), and ALPHA = 1.0 turns them into an opaque black disc painted
-# over the picture. Rings need no patch there: the scope state already drives
-# their draw order (over the glass while aiming, under it otherwise).
+# The rig's "Attachments" subtree (sights, lasers) keeps its own alpha and
+# priorities: forcing ALPHA = 1.0 on its alpha-masked surfaces turns the
+# ocular into an opaque black disc painted over the scope picture. There is
+# one change though (1.11.4): the optic surface shaders (Scope/Mask/Objective/
+# Reticle/Alpha) render with depth_draw_always, and their near-plane depth
+# writes poison the transparent pass for every depth-tested overlay - the
+# green nomad marker above a bot's head failed its test across the whole
+# scope picture. Those shaders get depth_draw_always -> depth_draw_never
+# (token swap only: no blend, no ALPHA, no priority). Other Attachments
+# shaders (the laser beam) and everything outside Attachments are untouched.
+# Rings need no patch there: their shader compares against the depth texture
+# with depth_test_disabled, so the ring survives and follows the scope-driven
+# draw order (over the glass while aiming, under it otherwise).
 #
 # Driven once per frame by VTKESP while the contour ESP is active.
 
@@ -22,6 +30,10 @@ var _connected: bool = false
 var _mgr: Node = null
 var _patched_shaders: Dictionary = {}
 var _patched_base: Dictionary = {}
+var _depth_patched: Dictionary = {}
+# Optic surface shaders under Attachments: the ones whose depth_draw_always
+# writes near-plane depth into the transparent pass (see module header).
+const OPTIC_SHADERS := ["Scope.gdshader", "Mask.gdshader", "Objective.gdshader", "Reticle.gdshader", "Alpha.gdshader"]
 var _dbg_patched: int = 0
 var _dbg_layer_skip: int = 0
 var _missing_logged: bool = false
@@ -90,6 +102,9 @@ func _patch_mesh(mesh: MeshInstance3D) -> void:
 	if (mesh.layers & 2) == 0:
 		_dbg_layer_skip += 1
 		return
+	if _under_attachments(mesh):
+		_patch_depth_never(mesh)
+		return
 	var count: int = mesh.mesh.get_surface_count()
 	for i in count:
 		var mat: Material = mesh.get_surface_override_material(i)
@@ -131,6 +146,58 @@ func _skip(mesh: MeshInstance3D, mat: Material) -> bool:
 			if sp != -1:
 				return true
 	return false
+
+# True iff the mesh sits under an "Attachments" node WITHOUT a "PIP" node
+# above it (a PIP display quad inside an assembly must not get the depth
+# swap - the plain skip keeps it untouched).
+func _under_attachments(mesh: MeshInstance3D) -> bool:
+	var node: Node = mesh
+	var att := false
+	while node != null:
+		if "PIP" in node:
+			return false
+		if node.name == "Attachments":
+			att = true
+		node = node.get_parent()
+	return att
+
+# Depth-token swap only: alpha, blend and priorities stay vanilla, so the
+# alpha-mask hardware keeps shaping the scope picture; dropping the depth
+# writes unblocks depth-tested overlays (the nomad marker) inside it.
+func _patch_depth_never(mesh: MeshInstance3D) -> void:
+	var count: int = mesh.mesh.get_surface_count()
+	for i in count:
+		var mat: Material = mesh.get_surface_override_material(i)
+		if mat == null:
+			mat = mesh.mesh.surface_get_material(i)
+		if mat == null or not (mat is ShaderMaterial):
+			continue
+		var sm: ShaderMaterial = mat as ShaderMaterial
+		if sm.shader == null or not _optic_shader(sm.shader):
+			continue
+		var new_mat: ShaderMaterial = sm.duplicate() as ShaderMaterial
+		new_mat.shader = _depth_never_shader(sm.shader)
+		mesh.set_surface_override_material(i, new_mat)
+
+func _optic_shader(src: Shader) -> bool:
+	var fn: String = src.resource_path.substr(src.resource_path.rfind("/") + 1)
+	return OPTIC_SHADERS.has(fn)
+
+func _depth_never_shader(src: Shader) -> Shader:
+	if src == null:
+		return null
+	var rid_id: int = src.get_rid().get_id()
+	if rid_id in _depth_patched:
+		return _depth_patched[rid_id]
+	var code: String = src.code
+	var out := src
+	# Only the always-writes token blocks the transparent pass for other
+	# depth-tested overlays; anything else (incl. missing tokens) stays.
+	if code.begins_with("shader_type spatial") and code.find("depth_draw_always") != -1:
+		out = Shader.new()
+		out.code = code.replace("depth_draw_always", "depth_draw_never")
+	_depth_patched[rid_id] = out
+	return out
 
 func _patch_base(src: BaseMaterial3D) -> BaseMaterial3D:
 	var rid_id: int = src.get_rid().get_id()

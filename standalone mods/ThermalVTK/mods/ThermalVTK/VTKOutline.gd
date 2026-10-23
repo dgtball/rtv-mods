@@ -22,25 +22,29 @@ const SHELL_NAME := "VTK_Ring"
 #        "node": Node, "child_count": int}
 var _items: Dictionary = {}
 # While the scope view is active the band thins (SCOPE_RIM), so the magnified
-# view keeps a fine frame. The carve stays narrow in the scope as well: scope
-# metal sits in front of the ring and must hide it by the depth compare, in
-# and out of the scope. The glass lets the ring through by draw order, not by
-# the compare, so no carve widening is needed for the in-scope picture (1.11.3:
-# the wide scoped carve had exempted the scope metal from hiding the ring, and
-# the ring painted over the bezel). The x-ray ring shares the same narrow
-# carve: walls stay punched through by the near_only uniform.
+# view keeps a fine frame. The carve stays narrow: opaque scope hardware hides
+# the ring by the depth compare, in and out of the scope (1.11.4: the old
+# 0.10/0.60 values either spilled over the rim or exempted the rim entirely;
+# near eyeball bits are the only zone left exempt). The glass lets the ring
+# through by DRAW ORDER, not by depth (it supplies none to the compare).
+# The x-ray ring widens the carve only while its window is live: with the
+# compare disabled, the wide value is what keeps scope metal and glass from
+# vanishing the ring (or duplicating it over the PIP-on picture).
 const SCOPE_RIM := 6.0
-const CARVE_SCOPED := 0.10
-const CARVE_FREE := 0.10
-# Draw order against the scope glass (transparent pass, higher = later):
-# the ACOG lens itself sits at priority 1 and the tube at 11, so a ring at 21
-# paints OVER the glass (the in-scope picture) and a ring at 0 is painted
-# over by the lens (the weapon-lowered case, no bleed-through).
+const CARVE_SCOPED := 0.03
+const CARVE_FREE := 0.03
+const CARVE_XRAY := 0.60
+# Draw order against the scope optics (transparent pass, higher = later):
+# every optic glass/reticle surface sits at 0..1 (Scope/Reticle 1, Mask/
+# Objective 0) and the ACOG tube (Alpha) at 11, so a ring at 6 paints OVER the
+# glass (the in-scope picture) while the tube paints OVER the ring (the spill
+# beyond the lens goes away, 1.11.4). A ring at 0 is painted over by the whole
+# optic (the weapon-lowered case, no bleed-through).
 # With PIP on the scope picture is the optic camera's own render: the ring is
 # visible in the picture through the ghost shells, so the main-camera ring
-# drops under the glass, or the picture shows it twice (1.11.3).
+# drops under the glass, or the picture shows it twice.
 const RING_PRIO_FREE := 0
-const RING_PRIO_SCOPED := 21
+const RING_PRIO_SCOPED := 6
 var _scoped: bool = false
 # gameData.PIP: the picture-in-picture path. True when Settings keeps the
 # optic camera render enabled.
@@ -97,7 +101,7 @@ func set_entry_xray(id: int, on: bool) -> void:
 	var ring_mat: ShaderMaterial = entry["ring"]
 	if ring_mat != null:
 		ring_mat.set_shader_parameter("near_only", on)
-		ring_mat.set_shader_parameter("carve", CARVE_SCOPED)
+		ring_mat.set_shader_parameter("carve", CARVE_XRAY if on else CARVE_FREE)
 		# Walls stay punched through by the near_only uniform, and the draw
 		# order is the same scope rule as for idle rings: over the glass
 		# while aiming, under it with the weapon lowered.

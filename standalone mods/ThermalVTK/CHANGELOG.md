@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.4] - 2026-10-23
+
+### Fixed
+- The outline no longer paints past the edge of the magnified scope view: the sight's own housing stays on top of it.
+- The outline no longer flashes over the scope glass while an enemy is tracked through a wall with the picture-in-picture scope.
+- The green nomad marker is visible inside the magnified scope view again.
+
 ## [1.11.3] - 2026-10-23
 
 ### Fixed
