@@ -457,10 +457,18 @@ func _measure_mask_mesh(mi: MeshInstance3D, cam: Camera3D) -> Dictionary:
 			n += 1
 		if n == 0:
 			return {}
+		# The projected cloud tells the mask's topology: an annulus keeps its
+		# hole edge well away from the screen centre (window = hole edge),
+		# while a full disc has vertices at the centre (window = outer edge
+		# - the disc IS the picture plane).
+		var edge: float = rmin if rmin > 0.25 * rmax else rmax
+		edge *= 0.98
+		Dbg.log("SCOPE", "clip: mesh=%s verts=%d rmin=%.4f rmax=%.4f edge=%.4f center=%.2f,%.2f" % [str(mi.name), n, rmin, rmax, edge, cx / n, cy / n])
 		# Sane window: inside the screen, big enough to be the picture hole.
-		if rmin < 2.5 and rmax > 0.02:
-			return {"r": rmin, "rmax": rmax, "center": Vector2(cx / n, cy / n)}
+		if edge > 0.05 and edge < 2.5 and rmax > 0.02:
+			return {"r": edge, "rmax": rmax, "center": Vector2(cx / n, cy / n)}
 		return {}
+	return {}
 	return {}
 func _patch_tube(mesh: MeshInstance3D) -> void:
 	var count: int = mesh.mesh.get_surface_count()

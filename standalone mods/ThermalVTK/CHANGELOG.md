@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.14.1] - 2026-10-23
+
+### Fixed
+- The contour is back inside the scope picture: the window measurement now also handles optics whose picture plane is a full disc, so the clip boundary no longer collapses to the centre.
+
 ## [1.14.0] - 2026-10-23
 
 ### Fixed
