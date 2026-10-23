@@ -32,7 +32,7 @@ class Rec:
 	# X-ray Triggers: reveal window ranges ("_d") and durations ("_s").
 	var fire_d: float = 80.0
 	var fire_s: float = 2.0
-	var voice_d: float = 20.0
+	var voice_d: float = 5.0
 	var voice_s: float = 2.0
 	var idle_d: float = 5.0
 	var idle_s: float = 1.0
@@ -78,16 +78,16 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Float", "key": "outline_brightness", "name": "Brightness", "def": 0.6, "min": 0.1, "max": 3.0, "step": 0.1, "cat": "02. NPC", "pos": 3, "tip": "Brightness multiplier on the outline colour."},
 	{"sect": "Float", "key": "corpse_decay", "name": "Cooling time", "def": 90.0, "min": 0.0, "max": 180.0, "step": 1.0, "cat": "02. NPC", "pos": 4, "tip": "Seconds a dead NPC's outline takes to cool from warm to cold."},
 	{"sect": "Float", "key": "trigger_fire_dist", "name": "Gunfire distance", "def": 80.0, "min": 0.0, "max": 300.0, "step": 5.0, "cat": "03. X-ray Triggers", "pos": 0, "tip": "Reveal range for a gun-shot."},
-	{"sect": "Float", "key": "trigger_voice_dist", "name": "Shout distance", "def": 20.0, "min": 0.0, "max": 60.0, "step": 1.0, "cat": "03. X-ray Triggers", "pos": 1, "tip": "Reveal range for a combat shout."},
-	{"sect": "Float", "key": "trigger_idle_dist", "name": "Idle voice distance", "def": 5.0, "min": 0.0, "max": 30.0, "step": 1.0, "cat": "03. X-ray Triggers", "pos": 2, "tip": "Reveal range for idle chatter (whistling, muttering)."},
+	{"sect": "Float", "key": "trigger_voice_dist", "name": "Combat voice distance", "def": 5.0, "min": 0.0, "max": 60.0, "step": 1.0, "cat": "03. X-ray Triggers", "pos": 1, "tip": "Reveal range for a combat shout."},
+	{"sect": "Float", "key": "trigger_idle_dist", "name": "Voice distance", "def": 5.0, "min": 0.0, "max": 30.0, "step": 1.0, "cat": "03. X-ray Triggers", "pos": 2, "tip": "Reveal range for a calm bot's chatter (the periodic voice cycle)."},
 	{"sect": "Float", "key": "trigger_move_dist", "name": "Walk distance", "def": 5.0, "min": 0.0, "max": 40.0, "step": 1.0, "cat": "03. X-ray Triggers", "pos": 3, "tip": "Reveal range for footsteps from a walking bot."},
 	{"sect": "Float", "key": "trigger_run_dist", "name": "Sprint distance", "def": 8.0, "min": 0.0, "max": 60.0, "step": 1.0, "cat": "03. X-ray Triggers", "pos": 4, "tip": "Reveal range for a sprinting bot's footsteps."},
 	{"sect": "Float", "key": "trigger_reload_dist", "name": "Reload distance", "def": 2.0, "min": 0.0, "max": 40.0, "step": 1.0, "cat": "03. X-ray Triggers", "pos": 5, "tip": "Reveal range for a reload."},
 	{"sect": "Float", "key": "trigger_pain_dist", "name": "Pain cry distance", "def": 10.0, "min": 0.0, "max": 40.0, "step": 1.0, "cat": "03. X-ray Triggers", "pos": 6, "tip": "Reveal range for a pain cry."},
 	{"sect": "Float", "key": "trigger_nade_dist", "name": "Grenade distance", "def": 50.0, "min": 0.0, "max": 120.0, "step": 5.0, "cat": "03. X-ray Triggers", "pos": 7, "tip": "Reveal range for a thrown grenade."},
 	{"sect": "Float", "key": "trigger_fire_time", "name": "Gunfire seconds", "def": 2.0, "min": 1.0, "max": 15.0, "step": 0.5, "cat": "03. X-ray Triggers", "pos": 8, "tip": "How long the gun-shot reveal stays up."},
-	{"sect": "Float", "key": "trigger_voice_time", "name": "Shout seconds", "def": 2.0, "min": 1.0, "max": 15.0, "step": 0.5, "cat": "03. X-ray Triggers", "pos": 9, "tip": "How long the combat-shout reveal stays up."},
-	{"sect": "Float", "key": "trigger_idle_time", "name": "Idle voice seconds", "def": 1.0, "min": 1.0, "max": 10.0, "step": 0.5, "cat": "03. X-ray Triggers", "pos": 10, "tip": "How long the idle-chatter reveal stays up."},
+	{"sect": "Float", "key": "trigger_voice_time", "name": "Combat voice seconds", "def": 2.0, "min": 1.0, "max": 15.0, "step": 0.5, "cat": "03. X-ray Triggers", "pos": 9, "tip": "How long the combat-shout reveal stays up."},
+	{"sect": "Float", "key": "trigger_idle_time", "name": "Voice seconds", "def": 1.0, "min": 1.0, "max": 10.0, "step": 0.5, "cat": "03. X-ray Triggers", "pos": 10, "tip": "How long the calm-chatter reveal stays up."},
 	{"sect": "Float", "key": "trigger_move_time", "name": "Footsteps seconds", "def": 1.0, "min": 1.0, "max": 10.0, "step": 0.5, "cat": "03. X-ray Triggers", "pos": 11, "tip": "How long the footstep reveal stays up."},
 	{"sect": "Float", "key": "trigger_reload_time", "name": "Reload seconds", "def": 1.0, "min": 1.0, "max": 10.0, "step": 0.5, "cat": "03. X-ray Triggers", "pos": 12, "tip": "How long the reload-sound reveal stays up."},
 	{"sect": "Float", "key": "trigger_pain_time", "name": "Pain cry seconds", "def": 2.0, "min": 1.0, "max": 10.0, "step": 0.5, "cat": "03. X-ray Triggers", "pos": 13, "tip": "How long the pain-cry reveal stays up after the bot takes damage."},

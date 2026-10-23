@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.11.5] - 2026-10-23
+
+### Fixed
+- The green nomad marker is visible in every scope view; near hardware no longer erases it.
+- The outline no longer peeks past the rim right next to the lens edge.
+
+### Changed
+- Trigger settings renamed: the combat shout is now "Combat voice", the calm chatter is now "Voice"; combat voice reveal range defaults to 5 m.
+
 ## [1.11.4] - 2026-10-23
 
 ### Fixed

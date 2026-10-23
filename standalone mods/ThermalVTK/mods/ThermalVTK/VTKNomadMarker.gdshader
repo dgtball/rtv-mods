@@ -1,10 +1,13 @@
 shader_type spatial;
-render_mode unshaded, depth_draw_never, cull_disabled;
+render_mode unshaded, depth_draw_never, depth_test_disabled, cull_disabled;
 
 // Friendly-nomad marker. A KEY shader: it paints the nomad key colour, which
 // the NVG overlay detects and swaps for the green display colour. The mesh is a
-// billboarded diamond quad (VTKESP._marker_make). The marker is depth-tested
-// against the world like any other surface: it does not read through walls.
+// billboarded diamond quad (VTKESP._marker_make). The marker has NO depth
+// test (1.11.5): with it, any depth-writing near plane - the optic glass, the
+// tube, the patched gun body - erased the diamond across the whole scope
+// picture, and the marker vanished from the magnified view. Presence stays
+// ESP-driven: nomads while alive, gone on death.
 uniform vec3 nomad_key : source_color = vec3(0.02, 0.60, 0.24);
 
 void vertex() {

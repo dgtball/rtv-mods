@@ -22,17 +22,18 @@ const SHELL_NAME := "VTK_Ring"
 #        "node": Node, "child_count": int}
 var _items: Dictionary = {}
 # While the scope view is active the band thins (SCOPE_RIM), so the magnified
-# view keeps a fine frame. The carve stays narrow: opaque scope hardware hides
-# the ring by the depth compare, in and out of the scope (1.11.4: the old
-# 0.10/0.60 values either spilled over the rim or exempted the rim entirely;
-# near eyeball bits are the only zone left exempt). The glass lets the ring
-# through by DRAW ORDER, not by depth (it supplies none to the compare).
-# The x-ray ring widens the carve only while its window is live: with the
-# compare disabled, the wide value is what keeps scope metal and glass from
-# vanishing the ring (or duplicating it over the PIP-on picture).
+# view keeps a fine frame. The carve stays near-zero: opaque eye-attached
+# hardware (the eyepiece rim, centimetres from the lens, 1.11.5) must hide the
+# ring by the depth compare, in and out of the scope; at 0.03 the closest
+# centimetres of it were exempt, and the ring spilled past the lens. The
+# glass lets the ring through by DRAW ORDER, not by depth (it supplies none
+# to the compare). The x-ray ring widens the carve only while its window is
+# live: with the compare disabled, the wide value is what keeps scope metal
+# and glass from vanishing the ring (or duplicating it over the PIP-on
+# picture).
 const SCOPE_RIM := 6.0
-const CARVE_SCOPED := 0.03
-const CARVE_FREE := 0.03
+const CARVE_SCOPED := 0.005
+const CARVE_FREE := 0.005
 const CARVE_XRAY := 0.60
 # Draw order against the scope optics (transparent pass, higher = later):
 # every optic glass/reticle surface sits at 0..1 (Scope/Reticle 1, Mask/
