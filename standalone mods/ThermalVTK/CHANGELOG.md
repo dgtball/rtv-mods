@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.11.3] - 2026-10-23
+
+### Fixed
+- While aiming with the picture-in-picture scope, the outline no longer shows up twice: once in the magnified picture and once over the glass.
+- The outline no longer paints over the scope's metal rim and tube while aiming; it still shows inside the magnified picture.
+
 ## [1.11.2] - 2026-10-23
 
 ### Fixed

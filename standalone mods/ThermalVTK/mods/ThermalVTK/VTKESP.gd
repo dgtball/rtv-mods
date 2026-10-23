@@ -365,7 +365,7 @@ func _process(delta: float) -> void:
 		return
 	_weapon.tick()
 	_outline.sync()
-	_outline.set_scoped(_scoped_now())
+	_outline.set_scoped(_scoped_now(), _pip_now())
 	_scope_probe(delta)
 	_labels_sync()
 	_markers_sync()
@@ -398,13 +398,21 @@ func _gd_cached() -> Resource:
 		_probe_gd = load(Paths.GAME_DATA)
 	return _probe_gd
 
-# The scope view itself (no PIP check: the ring must reach the target in both
-# scoped modes; with PIP on it is the overlay ring that needs it).
+# The scope view itself; PIP rides along in the same read (1.11.3: with PIP
+# on the optic camera supplies the in-scope picture, and the main-camera
+# ring drops under the glass so the picture does not show it twice).
 func _scoped_now() -> bool:
 	var gd := _gd_cached()
 	if gd == null:
 		return false
 	var v = gd.get("isScoped")
+	return v != null and bool(v)
+
+func _pip_now() -> bool:
+	var gd := _gd_cached()
+	if gd == null:
+		return false
+	var v = gd.get("PIP")
 	return v != null and bool(v)
 
 # While the diagnostic log is on and the scope view is active, dump what the

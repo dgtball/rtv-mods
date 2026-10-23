@@ -22,22 +22,35 @@ const SHELL_NAME := "VTK_Ring"
 #        "node": Node, "child_count": int}
 var _items: Dictionary = {}
 # While the scope view is active the band thins (SCOPE_RIM), so the magnified
-# view keeps a fine frame. The scope flag also widens the ring's carve, the
-# metres in front of the camera that never hide it: while aiming, the eye
-# sits inside the optic, so the lens/reticle geometry stops being a wall for
-# the ring; on a free run the carve narrows, and the settled scope glass
-# hides the ring like any other close occluder. The x-ray ring gets the wide
-# carve permanently: walls stay punched through, carried glass does not.
+# view keeps a fine frame. The carve stays narrow in the scope as well: scope
+# metal sits in front of the ring and must hide it by the depth compare, in
+# and out of the scope. The glass lets the ring through by draw order, not by
+# the compare, so no carve widening is needed for the in-scope picture (1.11.3:
+# the wide scoped carve had exempted the scope metal from hiding the ring, and
+# the ring painted over the bezel). The x-ray ring shares the same narrow
+# carve: walls stay punched through by the near_only uniform.
 const SCOPE_RIM := 6.0
-const CARVE_SCOPED := 0.60
+const CARVE_SCOPED := 0.10
 const CARVE_FREE := 0.10
 # Draw order against the scope glass (transparent pass, higher = later):
 # the ACOG lens itself sits at priority 1 and the tube at 11, so a ring at 21
 # paints OVER the glass (the in-scope picture) and a ring at 0 is painted
 # over by the lens (the weapon-lowered case, no bleed-through).
+# With PIP on the scope picture is the optic camera's own render: the ring is
+# visible in the picture through the ghost shells, so the main-camera ring
+# drops under the glass, or the picture shows it twice (1.11.3).
 const RING_PRIO_FREE := 0
 const RING_PRIO_SCOPED := 21
 var _scoped: bool = false
+# gameData.PIP: the picture-in-picture path. True when Settings keeps the
+# optic camera render enabled.
+var _pip: bool = false
+
+# Draw order for every live ring: over the scope glass only while aiming
+# without PIP (there the main render IS the in-scope picture); with PIP the
+# optic camera supplies the picture, so the main ring stays under the glass.
+func _ring_prio() -> int:
+	return RING_PRIO_SCOPED if (_scoped and not _pip) else RING_PRIO_FREE
 
 func has(id: int) -> bool:
 	return _items.has(id)
@@ -61,7 +74,7 @@ func _collect(node: Node, out: Array) -> void:
 func _build_ring() -> ShaderMaterial:
 	var ring_mat := ShaderMaterial.new()
 	ring_mat.shader = Shaders.ring()
-	ring_mat.render_priority = RING_PRIO_SCOPED if _scoped else RING_PRIO_FREE
+	ring_mat.render_priority = _ring_prio()
 	# Seed from the current scope state: a bot discovered inside the scope
 	# view must not wait a frame for set_scoped/set_entry_xray to catch up.
 	ring_mat.set_shader_parameter("near_only", false)
@@ -84,21 +97,34 @@ func set_entry_xray(id: int, on: bool) -> void:
 	var ring_mat: ShaderMaterial = entry["ring"]
 	if ring_mat != null:
 		ring_mat.set_shader_parameter("near_only", on)
-		ring_mat.set_shader_parameter("carve", CARVE_SCOPED if on else (CARVE_SCOPED if _scoped else CARVE_FREE))
-		# An x-ray ring must survive the near glass too; an idle ring obeys
-		# the current scope draw order.
-		ring_mat.render_priority = RING_PRIO_SCOPED if on else (RING_PRIO_SCOPED if _scoped else RING_PRIO_FREE)
+		ring_mat.set_shader_parameter("carve", CARVE_SCOPED)
+		# Walls stay punched through by the near_only uniform, and the draw
+		# order is the same scope rule as for idle rings: over the glass
+		# while aiming, under it with the weapon lowered.
+		ring_mat.render_priority = _ring_prio()
 
-# The scope flag drives the thin in-scope band and pushes the widened carve
-# AND the draw order to every live ring material: while aiming the ring
-# paints over the scope glass, with the weapon lowered the glass paints over
-# the ring. No-op while the flag does not move.
-func set_scoped(on: bool) -> void:
-	if _scoped == on:
+# The scope flag drives the thin in-scope band and pushes the carve AND the
+# draw order to every live ring material: while aiming without PIP the ring
+# paints over the scope glass, otherwise the glass paints over the ring.
+# No-op while neither flag moves.
+func set_scoped(on: bool, pip := false) -> void:
+	if _scoped == on and _pip == pip:
 		return
 	_scoped = on
+	_pip = pip
+	_push_scope()
+
+# PIP comes from the settings menu and may flip while aiming: re-derive the
+# draw order only.
+func set_pip(on: bool) -> void:
+	if _pip == on:
+		return
+	_pip = on
+	_push_scope()
+
+func _push_scope() -> void:
 	var carve := CARVE_SCOPED if _scoped else CARVE_FREE
-	var prio := RING_PRIO_SCOPED if _scoped else RING_PRIO_FREE
+	var prio := _ring_prio()
 	for id in _items:
 		var ring_mat = _items[id].get("ring")
 		if ring_mat != null:
