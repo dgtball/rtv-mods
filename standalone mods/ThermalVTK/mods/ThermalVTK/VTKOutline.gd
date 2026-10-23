@@ -31,6 +31,12 @@ var _items: Dictionary = {}
 const SCOPE_RIM := 6.0
 const CARVE_SCOPED := 0.60
 const CARVE_FREE := 0.10
+# Draw order against the scope glass (transparent pass, higher = later):
+# the ACOG lens itself sits at priority 1 and the tube at 11, so a ring at 21
+# paints OVER the glass (the in-scope picture) and a ring at 0 is painted
+# over by the lens (the weapon-lowered case, no bleed-through).
+const RING_PRIO_FREE := 0
+const RING_PRIO_SCOPED := 21
 var _scoped: bool = false
 
 func has(id: int) -> bool:
@@ -55,7 +61,7 @@ func _collect(node: Node, out: Array) -> void:
 func _build_ring() -> ShaderMaterial:
 	var ring_mat := ShaderMaterial.new()
 	ring_mat.shader = Shaders.ring()
-	ring_mat.render_priority = 21
+	ring_mat.render_priority = RING_PRIO_SCOPED if _scoped else RING_PRIO_FREE
 	# Seed from the current scope state: a bot discovered inside the scope
 	# view must not wait a frame for set_scoped/set_entry_xray to catch up.
 	ring_mat.set_shader_parameter("near_only", false)
@@ -79,18 +85,26 @@ func set_entry_xray(id: int, on: bool) -> void:
 	if ring_mat != null:
 		ring_mat.set_shader_parameter("near_only", on)
 		ring_mat.set_shader_parameter("carve", CARVE_SCOPED if on else (CARVE_SCOPED if _scoped else CARVE_FREE))
+		# An x-ray ring must survive the near glass too; an idle ring obeys
+		# the current scope draw order.
+		ring_mat.render_priority = RING_PRIO_SCOPED if on else (RING_PRIO_SCOPED if _scoped else RING_PRIO_FREE)
 
-# The scope flag drives the thin in-scope band and pushes the widened carve to
-# every live ring material. No-op while the flag does not move.
+# The scope flag drives the thin in-scope band and pushes the widened carve
+# AND the draw order to every live ring material: while aiming the ring
+# paints over the scope glass, with the weapon lowered the glass paints over
+# the ring. No-op while the flag does not move.
 func set_scoped(on: bool) -> void:
 	if _scoped == on:
 		return
 	_scoped = on
 	var carve := CARVE_SCOPED if _scoped else CARVE_FREE
+	var prio := RING_PRIO_SCOPED if _scoped else RING_PRIO_FREE
 	for id in _items:
 		var ring_mat = _items[id].get("ring")
-		if ring_mat != null and not bool(_items[id].get("xray", false)):
-			(ring_mat as ShaderMaterial).set_shader_parameter("carve", carve)
+		if ring_mat != null:
+			(ring_mat as ShaderMaterial).render_priority = prio
+			if not bool(_items[id].get("xray", false)):
+				(ring_mat as ShaderMaterial).set_shader_parameter("carve", carve)
 
 func apply(id: int, node: Node, opts: Dictionary) -> void:
 	var meshes: Array = []

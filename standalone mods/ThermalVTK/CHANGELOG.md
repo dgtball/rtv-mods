@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.11.1] - 2026-10-23
+
+### Fixed
+- NPC outlines no longer bleed through the scope glass when the weapon is lowered; while aiming, outlines still show inside the scope picture as before. The outline's draw order now follows the aiming state: over the glass in the scope view, under it otherwise.
+
 ## [1.11.0] - 2026-10-23
 
 ### Added
