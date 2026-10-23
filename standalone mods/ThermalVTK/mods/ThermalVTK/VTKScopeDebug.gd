@@ -243,7 +243,7 @@ static func _snapshot_ring(cam: Camera3D, weapon) -> void:
 	if mgr == null or not is_instance_valid(mgr):
 		Dbg.log("SCOPE", "rig: no camera manager attached")
 		return
-	Dbg.log("SCOPE", "rig children=%d patched=%d depth=%d skipped=%d" % [mgr.get_child_count(), weapon._dbg_patched, weapon._dbg_depth, weapon._dbg_layer_skip])
+	Dbg.log("SCOPE", "rig children=%d patched=%d skipped=%d" % [mgr.get_child_count(), weapon._dbg_patched, weapon._dbg_layer_skip])
 	for child in mgr.get_children():
 		_list_front_meshes(child, cam)
 

@@ -8,17 +8,13 @@ extends RefCounted
 #
 # The rig's "Attachments" subtree (sights, lasers) keeps its own alpha and
 # priorities: forcing ALPHA = 1.0 on its alpha-masked surfaces turns the
-# ocular into an opaque black disc painted over the scope picture. There is
-# one change though (1.11.4): the optic surface shaders (Scope/Mask/Objective/
-# Reticle/Alpha) render with depth_draw_always, and their near-plane depth
-# writes poison the transparent pass for every depth-tested overlay - the
-# green nomad marker above a bot's head failed its test across the whole
-# scope picture. Those shaders get depth_draw_always -> depth_draw_never
-# (token swap only: no blend, no ALPHA, no priority). Other Attachments
-# shaders (the laser beam) and everything outside Attachments are untouched.
-# Rings need no patch there: their shader compares against the depth texture
-# with depth_test_disabled, so the ring survives and follows the scope-driven
-# draw order (over the glass while aiming, under it otherwise).
+# ocular into an opaque black disc painted over the scope picture. A depth-
+# token swap experiment (1.11.4-1.12.3) went further and darkened the lens
+# itself: the vanilla depth behaviour of the Scope/Mask/Objective shaders
+# shapes the scope picture, so the attachments subtree keeps its materials
+# EXACTLY vanilla (1.12.4). Neither the ring nor the nomad marker needs the
+# swap either: their shaders carry depth_test_disabled and draw by scope-
+# driven priority.
 #
 # Driven once per frame by VTKESP while the contour ESP is active.
 
@@ -30,15 +26,10 @@ var _connected: bool = false
 var _mgr: Node = null
 var _patched_shaders: Dictionary = {}
 var _patched_base: Dictionary = {}
-var _depth_patched: Dictionary = {}
-# Optic surface shaders under Attachments: the ones whose depth_draw_always
-# writes near-plane depth into the transparent pass (see module header).
-const OPTIC_SHADERS := ["Scope.gdshader", "Mask.gdshader", "Objective.gdshader", "Reticle.gdshader", "Alpha.gdshader"]
 # How often (frames) the cheap meta-guarded resweep re-walks the rigs; catches
 # meshes that landed after the add signal or before we attached.
 const RESWEEP_FRAMES := 90
 var _dbg_patched: int = 0
-var _dbg_depth: int = 0
 var _dbg_layer_skip: int = 0
 var _resweep_cd: int = 0
 var _missing_logged: bool = false
@@ -59,7 +50,6 @@ func tick() -> void:
 		_patched_shaders.clear()
 		_patched_base.clear()
 		_dbg_patched = 0
-		_dbg_depth = 0
 		_dbg_layer_skip = 0
 		_resweep_cd = 0
 		_missing_logged = false
@@ -89,7 +79,7 @@ func _setup() -> void:
 	_connected = true
 	for child in mgr.get_children():
 		_patch_rig(child)
-	Dbg.log("WEAPON", "occlusion attached rigs=%d patched=%d depth=%d layer_skipped=%d" % [mgr.get_child_count(), _dbg_patched, _dbg_depth, _dbg_layer_skip])
+	Dbg.log("WEAPON", "occlusion attached rigs=%d patched=%d layer_skipped=%d" % [mgr.get_child_count(), _dbg_patched, _dbg_layer_skip])
 
 func _on_child_added(node: Node) -> void:
 	_patch_rig.call_deferred(node)
@@ -122,26 +112,25 @@ func _patch_node(node: Node, att_node: Node) -> void:
 func _patch_mesh(mesh: MeshInstance3D, att_node: Node) -> void:
 	if mesh.mesh == null:
 		return
+	if mesh.has_meta("VTK_OCC"):
+		return
 	if (mesh.layers & 2) == 0:
 		_dbg_layer_skip += 1
 		mesh.set_meta("VTK_OCC", true)
 		return
-	var first := not mesh.has_meta("VTK_OCC")
-	if first:
-		var hops := 0
-		var n: Node = mesh
-		var trail := ""
-		while n != null and hops < 16:
-			var mark := "P" if "PIP" in n else ""
-			if att_node != null and n == att_node:
-				mark += "E"
-			trail += ("|" if hops > 0 else "") + str(n.name) + mark
-			n = n.get_parent()
-			hops += 1
-		Dbg.log("WEAPON", "patch %s att=%s under=%s chain=%s" % [mesh.name, str(att_node), str(_under_attachments(mesh, att_node)), trail])
+	var hops := 0
+	var n: Node = mesh
+	var trail := ""
+	while n != null and hops < 16:
+		var mark: String = "E" if (att_node != null and n == att_node) or n.name == "Attachments" else ""
+		trail += ("|" if hops > 0 else "") + str(n.name) + mark
+		n = n.get_parent()
+		hops += 1
+	Dbg.log("WEAPON", "patch %s chain=%s" % [mesh.name, trail])
 	mesh.set_meta("VTK_OCC", true)
 	if _under_attachments(mesh, att_node):
-		_patch_depth_never(mesh)
+		# Everything inside the assembly stays vanilla: the scope picture is
+		# shaped by the optic shaders' own depth behaviour (see module header).
 		return
 	var count: int = mesh.mesh.get_surface_count()
 	for i in count:
@@ -209,45 +198,6 @@ func _under_attachments(mesh: MeshInstance3D, att_node: Node) -> bool:
 			att = true
 		node = node.get_parent()
 	return att
-
-# Depth-token swap only: alpha, blend and priorities stay vanilla, so the
-# alpha-mask hardware keeps shaping the scope picture; dropping the depth
-# writes unblocks depth-tested overlays (the nomad marker) inside it.
-func _patch_depth_never(mesh: MeshInstance3D) -> void:
-	_dbg_depth += 1
-	var count: int = mesh.mesh.get_surface_count()
-	for i in count:
-		var mat: Material = mesh.get_surface_override_material(i)
-		if mat == null:
-			mat = mesh.mesh.surface_get_material(i)
-		if mat == null or not (mat is ShaderMaterial):
-			continue
-		var sm: ShaderMaterial = mat as ShaderMaterial
-		if sm.shader == null or not _optic_shader(sm.shader):
-			continue
-		var new_mat: ShaderMaterial = sm.duplicate() as ShaderMaterial
-		new_mat.shader = _depth_never_shader(sm.shader)
-		mesh.set_surface_override_material(i, new_mat)
-
-func _optic_shader(src: Shader) -> bool:
-	var fn: String = src.resource_path.substr(src.resource_path.rfind("/") + 1)
-	return OPTIC_SHADERS.has(fn)
-
-func _depth_never_shader(src: Shader) -> Shader:
-	if src == null:
-		return null
-	var rid_id: int = src.get_rid().get_id()
-	if rid_id in _depth_patched:
-		return _depth_patched[rid_id]
-	var code: String = src.code
-	var out := src
-	# Only the always-writes token blocks the transparent pass for other
-	# depth-tested overlays; anything else (incl. missing tokens) stays.
-	if code.begins_with("shader_type spatial") and code.find("depth_draw_always") != -1:
-		out = Shader.new()
-		out.code = code.replace("depth_draw_always", "depth_draw_never")
-	_depth_patched[rid_id] = out
-	return out
 
 func _patch_base(src: BaseMaterial3D) -> BaseMaterial3D:
 	var rid_id: int = src.get_rid().get_id()
@@ -335,3 +285,5 @@ func _patch_shader(src: Shader) -> Shader:
 	out.code = patched
 	_patched_shaders[rid_id] = out
 	return out
+# Optic assembly hardware keeps its materials vanilla - no swap machinery
+

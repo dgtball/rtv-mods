@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.13.0] - 2026-10-23
+
+### Fixed
+- The scope picture is back: an internal hardware experiment that reached the sights since the last two builds darkened the lens; it is withdrawn. The green nomad marker keeps working inside the scope without it.
+
 ## [1.12.3] - 2026-10-23
 
 ### Fixed
