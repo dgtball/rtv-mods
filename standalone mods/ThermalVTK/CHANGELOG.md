@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.12.3] - 2026-10-23
+
+### Fixed
+- Every scope's picture hardware is now actually patch-reached: the spare rule for picture-in-picture displays no longer mistakes the sights' own script signal for a display.
+
 ## [1.12.0] - 2026-10-23
 
 ### Added

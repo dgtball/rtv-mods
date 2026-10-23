@@ -169,7 +169,10 @@ func _patch_mesh(mesh: MeshInstance3D, att_node: Node) -> void:
 func _skip(mesh: MeshInstance3D, mat: Material, att_node: Node = null) -> bool:
 	var node: Node = mesh
 	while node != null:
-		if "PIP" in node:
+		# The PIP display quads are NODES named PIP; script members must not
+		# count - the optic assemblies carry Optic.gd, whose signal is also
+		# called PIP, and that used to gloss the whole Attachments subtree.
+		if node.name == "PIP":
 			return true
 		if att_node != null and node == att_node:
 			return true
@@ -189,13 +192,16 @@ func _skip(mesh: MeshInstance3D, mat: Material, att_node: Node = null) -> bool:
 
 # True iff the mesh sits inside the attachments assembly - the node the rig
 # script exports as `attachments`, or (as a fallback) one literally named
-# "Attachments" - without a "PIP" node above it. A PIP display quad inside an
-# assembly must not get the depth swap: the plain skip keeps it untouched.
+# "Attachments" - without a display quad named PIP above it: a PIP display
+# quad inside an assembly must not get the depth swap, the plain skip keeps
+# it untouched. Only the node NAME may match: script members (variables,
+# signals, methods) read false - the optic assemblies carry Optic.gd whose
+# signal is also called PIP.
 func _under_attachments(mesh: MeshInstance3D, att_node: Node) -> bool:
 	var node: Node = mesh
 	var att := false
 	while node != null:
-		if "PIP" in node:
+		if node.name == "PIP":
 			return false
 		if att_node != null and node == att_node:
 			att = true
