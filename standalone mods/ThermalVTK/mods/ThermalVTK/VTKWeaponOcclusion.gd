@@ -12,9 +12,13 @@ extends RefCounted
 # token swap experiment (1.11.4-1.12.3) went further and darkened the lens
 # itself: the vanilla depth behaviour of the Scope/Mask/Objective shaders
 # shapes the scope picture, so the attachments subtree keeps its materials
-# EXACTLY vanilla (1.12.4). Neither the ring nor the nomad marker needs the
-# swap either: their shaders carry depth_test_disabled and draw by scope-
-# driven priority.
+# EXACTLY vanilla (1.12.4) - with one carve-out (1.13.1): the optic TUBE
+# (Alpha.gdshader, the semi-transparent hardware around the picture circle)
+# gets a forced ALPHA = 1.0 copy, because its semi-transparent pixels let
+# the occluded ring bleed through at the lens rim. ALBEDO, shader math and
+# priority stay vanilla; only the final ALPHA write is overridden. Neither the ring
+# nor the nomad marker needs a swap: their shaders carry depth_test_disabled
+# and draw by scope-driven priority.
 #
 # Driven once per frame by VTKESP while the contour ESP is active.
 
@@ -26,6 +30,11 @@ var _connected: bool = false
 var _mgr: Node = null
 var _patched_shaders: Dictionary = {}
 var _patched_base: Dictionary = {}
+var _tubes: Dictionary = {}
+
+# The optic tube cover: semi-transparent hardware around the picture circle.
+# See the tube carve-out in the module header (1.13.1).
+const TUBE_SHADER := "res://Shaders/Alpha.gdshader"
 # How often (frames) the cheap meta-guarded resweep re-walks the rigs; catches
 # meshes that landed after the add signal or before we attached.
 const RESWEEP_FRAMES := 90
@@ -49,6 +58,7 @@ func tick() -> void:
 		_mgr = null
 		_patched_shaders.clear()
 		_patched_base.clear()
+		_tubes.clear()
 		_dbg_patched = 0
 		_dbg_layer_skip = 0
 		_resweep_cd = 0
@@ -131,6 +141,11 @@ func _patch_mesh(mesh: MeshInstance3D, att_node: Node) -> void:
 	if _under_attachments(mesh, att_node):
 		# Everything inside the assembly stays vanilla: the scope picture is
 		# shaped by the optic shaders' own depth behaviour (see module header).
+		# Carve-out: the tube's semi-transparent pixels hide nothing from the
+		# ring (it draws later and samples only the opaque-pass depth), so the
+		# tube renders with a forced ALPHA = 1.0 copy - opaque cover, same
+		# look otherwise.
+		_patch_tube(mesh)
 		return
 	var count: int = mesh.mesh.get_surface_count()
 	for i in count:
@@ -285,5 +300,56 @@ func _patch_shader(src: Shader) -> Shader:
 	out.code = patched
 	_patched_shaders[rid_id] = out
 	return out
-# Optic assembly hardware keeps its materials vanilla - no swap machinery
+
+# Tube carve-out (see module header): substitutes a forced-ALPHA copy for
+# the Alpha-shader surfaces. Priority and every other token stay vanilla.
+func _patch_tube(mesh: MeshInstance3D) -> void:
+	var count: int = mesh.mesh.get_surface_count()
+	for i in count:
+		var mat: Material = mesh.get_surface_override_material(i)
+		if mat == null:
+			mat = mesh.mesh.surface_get_material(i)
+		if mat == null or not (mat is ShaderMaterial):
+			continue
+		var sm: ShaderMaterial = mat as ShaderMaterial
+		if sm.shader == null or sm.shader.resource_path.find(TUBE_SHADER) == -1:
+			continue
+		var dup: ShaderMaterial = sm.duplicate() as ShaderMaterial
+		dup.shader = _tube_shader(sm.shader)
+		mesh.set_surface_override_material(i, dup)
+
+func _tube_shader(src: Shader) -> Shader:
+	if src == null:
+		return null
+	var rid_id: int = src.get_rid().get_id()
+	if rid_id in _tubes:
+		return _tubes[rid_id]
+	var code: String = src.code
+	var patched: String = code
+	var frag_start: int = code.find("void fragment()")
+	if frag_start < 0:
+		patched = code + "\nvoid fragment() {\n\tALPHA = 1.0;\n}\n"
+	else:
+		var brace_start: int = patched.find("{", frag_start)
+		var brace_end: int = -1
+		if brace_start >= 0:
+			var depth: int = 0
+			for idx in range(brace_start, patched.length()):
+				if patched[idx] == '{':
+					depth += 1
+				elif patched[idx] == '}':
+					depth -= 1
+					if depth == 0:
+						brace_end = idx
+						break
+		if brace_end < 0:
+			_tubes[rid_id] = src
+			return src
+		# Last assignment wins: the shader's own ALPHA write is overridden.
+		patched = patched.substr(0, brace_end) + "\n\tALPHA = 1.0;\n" + patched.substr(brace_end)
+	var out: Shader = src.duplicate() as Shader
+	out.code = patched
+	_tubes[rid_id] = out
+	return out
+
 

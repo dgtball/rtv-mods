@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.13.1] - 2026-10-23
+
+### Changed
+- The metal hardware around the scope's picture is now fully opaque, which hides the contour band that used to spill past the lens edge. The ring inside the picture, the nomad marker and the scope picture itself are unchanged.
+
 ## [1.13.0] - 2026-10-23
 
 ### Fixed
