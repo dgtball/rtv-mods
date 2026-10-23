@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.14.0] - 2026-10-23
+
+### Fixed
+- While aiming through a scope, the contour now stays inside the sight's picture window and no longer spills past the lens edge.
+
 ## [1.13.1] - 2026-10-23
 
 ### Changed

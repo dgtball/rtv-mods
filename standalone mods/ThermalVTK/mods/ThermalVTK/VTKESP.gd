@@ -367,7 +367,10 @@ func _process(delta: float) -> void:
 		return
 	_weapon.tick()
 	_outline.sync()
-	_outline.set_scoped(_scoped_now(), _pip_now())
+	var scoped := _scoped_now()
+	var pip := _pip_now()
+	_outline.set_scoped(scoped, pip)
+	_scope_clip_sync(scoped)
 	_scope_probe(delta)
 	_labels_sync()
 	_markers_sync()
@@ -416,6 +419,29 @@ func _pip_now() -> bool:
 		return false
 	var v = gd.get("PIP")
 	return v != null and bool(v)
+
+# Measure the scope picture window once per scope engage and hand it to the
+# outline: the ring clips itself to the window, so it stops spilling past the
+# lens edge. Re-measure on map scene changes (a new optic rig, not a new aim).
+var _clip_scoped: bool = false
+var _clip_scene_id: int = 0
+
+func _scope_clip_sync(scoped: bool) -> void:
+	var scene = get_tree().current_scene
+	var sid: int = 0
+	if scene != null:
+		sid = scene.get_instance_id()
+	if scoped and (not _clip_scoped or sid != _clip_scene_id):
+		var cam: Camera3D = get_viewport().get_camera_3d()
+		var clip: Dictionary = _weapon.measure_scope_clip(cam)
+		if not clip.is_empty():
+			_outline.set_scope_clip(clip.get("center", Vector2.ZERO), clip.get("r", 0.0))
+		else:
+			_outline.set_scope_clip(Vector2.ZERO, 0.0)
+		_clip_scene_id = sid
+	elif not scoped and _clip_scoped:
+		_outline.set_scope_clip(Vector2.ZERO, 0.0)
+	_clip_scoped = scoped
 
 # While the diagnostic log is on and the scope view is active, dump what the
 # camera sees (VTKScopeDebug): the ray walk reports the geometry between the

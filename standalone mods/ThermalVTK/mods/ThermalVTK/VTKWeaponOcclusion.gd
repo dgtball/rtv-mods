@@ -312,6 +312,7 @@ func _patch_shader(src: Shader) -> Shader:
 # paints over the periphery behind the housing. Off restores the vanilla
 # instances byte-perfect. Reticle/Mask/Objective are never touched.
 const TINT_SCOPE := "res://Shaders/Scope.gdshader"
+const MASK_SHADER := "res://Shaders/Mask.gdshader"
 var _tint_on: bool = false
 var _tint_mat: ShaderMaterial = null
 var _tint_cache: Dictionary = {}
@@ -381,6 +382,86 @@ func _restore_tint() -> void:
 				mesh.set_surface_override_material(i, saved[i])
 	_tint_cache.clear()
 	_tint_on = false
+
+# Measures the scope picture window in 2*SCREEN_UV-1 units by projecting the
+# optic's Mask-shader surface vertices through the aiming camera. The mask
+# disc is the window plane: its projected vertex cloud is an annulus, the
+# inner radius IS the visible picture edge - what the ring must stay inside.
+# Empty result = no mask found or out-of-range measure; the caller keeps the
+# clip off.
+func measure_scope_clip(cam: Camera3D) -> Dictionary:
+	if cam == null or not is_instance_valid(cam) or not cam.is_inside_tree():
+		return {}
+	if _mgr == null or not is_instance_valid(_mgr):
+		return {}
+	return _mask_walk(_mgr, cam)
+
+func _mask_walk(node: Node, cam: Camera3D) -> Dictionary:
+	if node == null or not is_instance_valid(node) or not node.is_inside_tree():
+		return {}
+	if node is MeshInstance3D:
+		var hit := _measure_mask_mesh(node as MeshInstance3D, cam)
+		if not hit.is_empty():
+			return hit
+	for child in node.get_children():
+		var res := _mask_walk(child, cam)
+		if not res.is_empty():
+			return res
+	return {}
+
+func _measure_mask_mesh(mi: MeshInstance3D, cam: Camera3D) -> Dictionary:
+	if mi.mesh == null:
+		return {}
+	var count: int = mi.mesh.get_surface_count()
+	for i in count:
+		var mat: Material = mi.get_surface_override_material(i)
+		if mat == null:
+			mat = mi.mesh.surface_get_material(i)
+		if mat == null or not (mat is ShaderMaterial):
+			continue
+		var sm: ShaderMaterial = mat as ShaderMaterial
+		if sm.shader == null or sm.shader.resource_path.find(MASK_SHADER) == -1:
+			continue
+		var arrays: Array = mi.mesh.surface_get_arrays(i)
+		if arrays.size() <= Mesh.ARRAY_VERTEX:
+			continue
+		var verts = arrays[Mesh.ARRAY_VERTEX]
+		if verts == null or verts.size() == 0:
+			continue
+		var step := 1
+		if verts.size() > 400:
+			step = int(verts.size() / 400) + 1
+		var size: Vector2 = cam.get_viewport().get_visible_rect().size
+		if size.x <= 0.0 or size.y <= 0.0:
+			return {}
+		var inv: Transform3D = cam.global_transform.affine_inverse()
+		var rmin := 1e9
+		var rmax := 0.0
+		var cx := 0.0
+		var cy := 0.0
+		var n := 0
+		for vi in range(0, verts.size(), step):
+			var w: Vector3 = mi.global_transform * (verts[vi] as Vector3)
+			var rel: Vector3 = inv * w
+			if rel.z > -0.01:
+				continue
+			var p: Vector2 = cam.unproject_position(w)
+			var ndc: Vector2 = p / size * 2.0 - Vector2.ONE
+			var rad: float = ndc.length()
+			if rad < rmin:
+				rmin = rad
+			if rad > rmax:
+				rmax = rad
+			cx += ndc.x
+			cy += ndc.y
+			n += 1
+		if n == 0:
+			return {}
+		# Sane window: inside the screen, big enough to be the picture hole.
+		if rmin < 2.5 and rmax > 0.02:
+			return {"r": rmin, "rmax": rmax, "center": Vector2(cx / n, cy / n)}
+		return {}
+	return {}
 func _patch_tube(mesh: MeshInstance3D) -> void:
 	var count: int = mesh.mesh.get_surface_count()
 	for i in count:

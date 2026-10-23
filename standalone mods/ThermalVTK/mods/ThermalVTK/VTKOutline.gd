@@ -84,6 +84,8 @@ func _build_ring() -> ShaderMaterial:
 	# view must not wait a frame for set_scoped/set_entry_xray to catch up.
 	ring_mat.set_shader_parameter("near_only", false)
 	ring_mat.set_shader_parameter("carve", CARVE_SCOPED if _scoped else CARVE_FREE)
+	ring_mat.set_shader_parameter("clipCenter", _clip_center)
+	ring_mat.set_shader_parameter("clipR", _clip_r)
 	return ring_mat
 
 # Event-driven per-entry flip: idle rings honour walls; when the frame loop
@@ -127,6 +129,21 @@ func set_pip(on: bool) -> void:
 	_pip = on
 	_push_scope()
 
+# The measured scope picture window (2*SCREEN_UV-1 units). r=0 keeps the
+# ring's screen clip off - outside the scope and whenever the measure found
+# nothing sane.
+var _clip_center: Vector2 = Vector2.ZERO
+var _clip_r: float = 0.0
+
+# Called when the scope view engages: the ESP measures the optic's mask disc
+# through the aiming camera and hands the window here. Every live ring gets
+# the clip and any ring built while it is active inherits it (apply's
+# refresh pushes _push_scope again).
+func set_scope_clip(center: Vector2, r: float) -> void:
+	_clip_center = center
+	_clip_r = r
+	_push_scope()
+
 func _push_scope() -> void:
 	var carve := CARVE_SCOPED if _scoped else CARVE_FREE
 	var prio := _ring_prio()
@@ -134,6 +151,8 @@ func _push_scope() -> void:
 		var ring_mat = _items[id].get("ring")
 		if ring_mat != null:
 			(ring_mat as ShaderMaterial).render_priority = prio
+			(ring_mat as ShaderMaterial).set_shader_parameter("clipCenter", _clip_center)
+			(ring_mat as ShaderMaterial).set_shader_parameter("clipR", _clip_r)
 			if not bool(_items[id].get("xray", false)):
 				(ring_mat as ShaderMaterial).set_shader_parameter("carve", carve)
 

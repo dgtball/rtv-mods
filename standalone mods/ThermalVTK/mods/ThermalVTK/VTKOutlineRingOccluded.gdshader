@@ -20,6 +20,12 @@ uniform float cool : hint_range(0.0, 1.0, 0.01) = 0.0;
 uniform bool near_only = false;
 uniform float carve : hint_range(0.05, 1.0, 0.01) = 0.25;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
+// The scope picture window: the ring draws only inside it while aiming.
+// Measured once per scope engage from the optic's Mask disc: the projected
+// vertex cloud of the mask surface gives the window boundary in 2*SCREEN_UV-1
+// units (clipCenter, clipR). clipR = 0.0 keeps this clip off (not aiming).
+uniform vec2 clipCenter = vec2(0.0, 0.0);
+uniform float clipR = 0.0;
 
 void vertex() {
 	VERTEX += NORMAL * grow;
@@ -34,6 +40,13 @@ float depth_metres(float ndc, vec2 uv, mat4 inv_proj) {
 }
 
 void fragment() {
+	// Screen-space clip to the scope picture window; off when clipR = 0.
+	if (clipR > 0.001) {
+		vec2 scr = SCREEN_UV * 2.0 - vec2(1.0);
+		if (length(scr - clipCenter) > clipR) {
+			discard;
+		}
+	}
 	// Same edge measure as the x-ray ring: |dot| small at the silhouette,
 	// abs() keeps the band symmetric.
 	float facing = abs(dot(normalize(NORMAL), normalize(VIEW)));
