@@ -312,6 +312,10 @@ func _trig_event(source: String, span: float, dist: float) -> void:
 	Dbg.log("HOOK", "play %s" % source)
 	if span <= 0.0:
 		return
+	# A zero reveal radius turns the source off (matches the outline's own
+	# 0 = hidden semantics): the sound never reaches the player.
+	if dist <= 0.0:
+		return
 	var n := _caller()
 	if not is_instance_valid(n):
 		return

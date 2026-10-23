@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.11.0] - 2026-10-23
+
+### Added
+- Every trigger distance slider now accepts 0: a zero range turns that source off (gunfire, shouts, idle chatter, footsteps, sprints, reloads, pain cries, grenades), matching the plain Distance slider's "0 = hidden" behaviour.
+- The per-source distances and durations now ship with tuned defaults (further apart and shorter windows overall); the cooling time default is 90 s.
+
+### Fixed
+- The mod failed to load on startup (a broken cross-file type reference from the 1.10.2 rewrite), so thermal vision never turned on and the hotkey did nothing.
+
 ## [1.10.3] - 2026-10-23
 
 ### Fixed
