@@ -57,8 +57,10 @@ static func mark_dead(e: Dictionary, now: float) -> void:
 # timed window; the ring lives for the window and fades over its tail.
 # ---------------------------------------------------------------------------
 
-# Event priority when several overlap: the loudest recent one wins.
-const TRIG_PRIORITY := {"fire": 6, "grenade": 5, "voice": 4, "pain": 3, "reload": 2, "move": 1, "idle": 0}
+# Event priority when several overlap: the loudest recent one wins. Walk and
+# Sprint are different footsteps of the same source (the label tells them
+# apart); sprint runs with reload's tier.
+const TRIG_PRIORITY := {"fire": 6, "grenade": 5, "voice": 4, "pain": 3, "reload": 2, "run": 2, "walk": 1, "idle": 0}
 # Vanilla state ints (AI.currentState) that mean the bot is running/sprinting;
 # used to key the movement reveal distance.
 const TRIG_RUN_STATES := [3, 4]

@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.12.0] - 2026-10-23
+
+### Added
+- The trigger label names the step kind: walking bots show Walk, sprinting ones show Sprint, so their two reveal ranges can be tuned apart with confidence.
+
 ## [1.11.6] - 2026-10-23
 
 ### Fixed

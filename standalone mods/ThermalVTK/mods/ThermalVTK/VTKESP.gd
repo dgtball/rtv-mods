@@ -286,13 +286,15 @@ func _on_ai_playidle() -> void:
 	_trig_event("idle", p_idle_s, p_idle_d)
 
 func _on_ai_playfootstep() -> void:
+	var source := "walk"
 	var dist := p_move_d
 	var n := _caller()
 	if is_instance_valid(n):
 		var speed = n.get("movementSpeed")
 		if speed != null and float(speed) >= SPRINT_SPEED:
+			source = "run"
 			dist = p_run_d
-	_trig_event("move", p_move_s, dist)
+	_trig_event(source, p_move_s, dist)
 
 func _on_ai_playreload() -> void:
 	_trig_event("reload", p_reload_s, p_reload_d)
