@@ -34,8 +34,13 @@ var _depth_patched: Dictionary = {}
 # Optic surface shaders under Attachments: the ones whose depth_draw_always
 # writes near-plane depth into the transparent pass (see module header).
 const OPTIC_SHADERS := ["Scope.gdshader", "Mask.gdshader", "Objective.gdshader", "Reticle.gdshader", "Alpha.gdshader"]
+# How often (frames) the cheap meta-guarded resweep re-walks the rigs; catches
+# meshes that landed after the add signal or before we attached.
+const RESWEEP_FRAMES := 90
 var _dbg_patched: int = 0
+var _dbg_depth: int = 0
 var _dbg_layer_skip: int = 0
+var _resweep_cd: int = 0
 var _missing_logged: bool = false
 
 func tick() -> void:
@@ -54,9 +59,15 @@ func tick() -> void:
 		_patched_shaders.clear()
 		_patched_base.clear()
 		_dbg_patched = 0
+		_dbg_depth = 0
 		_dbg_layer_skip = 0
+		_resweep_cd = 0
 		_missing_logged = false
 	elif _connected:
+		_resweep_cd -= 1
+		if _resweep_cd <= 0:
+			_resweep_cd = RESWEEP_FRAMES
+			_resweep(_mgr)
 		return
 	if scene.name != "Menu":
 		_setup()
@@ -78,7 +89,7 @@ func _setup() -> void:
 	_connected = true
 	for child in mgr.get_children():
 		_patch_rig(child)
-	Dbg.log("WEAPON", "occlusion attached rigs=%d patched=%d layer_skipped=%d" % [mgr.get_child_count(), _dbg_patched, _dbg_layer_skip])
+	Dbg.log("WEAPON", "occlusion attached rigs=%d patched=%d depth=%d layer_skipped=%d" % [mgr.get_child_count(), _dbg_patched, _dbg_depth, _dbg_layer_skip])
 
 func _on_child_added(node: Node) -> void:
 	_patch_rig.call_deferred(node)
@@ -86,24 +97,39 @@ func _on_child_added(node: Node) -> void:
 func _patch_rig(rig: Node) -> void:
 	if rig == null or not is_instance_valid(rig):
 		return
-	_patch_node(rig)
+	_patch_node(rig, null)
 
-func _patch_node(node: Node) -> void:
+# Periodic meta-guarded re-walk: patches exactly what the first pass missed
+# (a mesh that landed without an add signal, or while the feature detached).
+func _resweep(rig: Node) -> void:
+	if rig == null or not is_instance_valid(rig):
+		return
+	_patch_node(rig, null)
+
+func _patch_node(node: Node, att_node: Node) -> void:
 	if node == null or not is_instance_valid(node):
 		return
+	# The rig script carries the assembly as a real reference (the export
+	# `attachments: Node3D`), so name-based matching stays a fallback only.
+	var asm: Node = node.get("attachments")
+	if asm != null:
+		att_node = asm
 	if node is MeshInstance3D:
-		_patch_mesh(node as MeshInstance3D)
+		_patch_mesh(node as MeshInstance3D, att_node)
 	for child in node.get_children():
-		_patch_node(child)
+		_patch_node(child, att_node)
 
-func _patch_mesh(mesh: MeshInstance3D) -> void:
+func _patch_mesh(mesh: MeshInstance3D, att_node: Node) -> void:
 	if mesh.mesh == null:
+		return
+	if mesh.has_meta("VTK_OCC"):
 		return
 	if (mesh.layers & 2) == 0:
 		_dbg_layer_skip += 1
 		return
-	if _under_attachments(mesh):
+	if _under_attachments(mesh, att_node):
 		_patch_depth_never(mesh)
+		mesh.set_meta("VTK_OCC", true)
 		return
 	var count: int = mesh.mesh.get_surface_count()
 	for i in count:
@@ -112,7 +138,7 @@ func _patch_mesh(mesh: MeshInstance3D) -> void:
 			mat = mesh.mesh.surface_get_material(i)
 		if mat == null:
 			continue
-		if _skip(mesh, mat):
+		if _skip(mesh, mat, att_node):
 			continue
 		if mat is ShaderMaterial:
 			var sm: ShaderMaterial = mat as ShaderMaterial
@@ -127,11 +153,14 @@ func _patch_mesh(mesh: MeshInstance3D) -> void:
 			new_mat.render_priority = 30
 			mesh.set_surface_override_material(i, new_mat)
 	_dbg_patched += count
+	mesh.set_meta("VTK_OCC", true)
 
-func _skip(mesh: MeshInstance3D, mat: Material) -> bool:
+func _skip(mesh: MeshInstance3D, mat: Material, att_node: Node = null) -> bool:
 	var node: Node = mesh
 	while node != null:
 		if "PIP" in node:
+			return true
+		if att_node != null and node == att_node:
 			return true
 		# Sights and lasers keep their vanilla materials: their alpha masks
 		# shape the scope picture, and patching them paints an opaque disc
@@ -147,15 +176,18 @@ func _skip(mesh: MeshInstance3D, mat: Material) -> bool:
 				return true
 	return false
 
-# True iff the mesh sits under an "Attachments" node WITHOUT a "PIP" node
-# above it (a PIP display quad inside an assembly must not get the depth
-# swap - the plain skip keeps it untouched).
-func _under_attachments(mesh: MeshInstance3D) -> bool:
+# True iff the mesh sits inside the attachments assembly - the node the rig
+# script exports as `attachments`, or (as a fallback) one literally named
+# "Attachments" - without a "PIP" node above it. A PIP display quad inside an
+# assembly must not get the depth swap: the plain skip keeps it untouched.
+func _under_attachments(mesh: MeshInstance3D, att_node: Node) -> bool:
 	var node: Node = mesh
 	var att := false
 	while node != null:
 		if "PIP" in node:
 			return false
+		if att_node != null and node == att_node:
+			att = true
 		if node.name == "Attachments":
 			att = true
 		node = node.get_parent()
@@ -165,6 +197,7 @@ func _under_attachments(mesh: MeshInstance3D) -> bool:
 # alpha-mask hardware keeps shaping the scope picture; dropping the depth
 # writes unblocks depth-tested overlays (the nomad marker) inside it.
 func _patch_depth_never(mesh: MeshInstance3D) -> void:
+	_dbg_depth += 1
 	var count: int = mesh.mesh.get_surface_count()
 	for i in count:
 		var mat: Material = mesh.get_surface_override_material(i)

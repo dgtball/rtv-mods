@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.11.6] - 2026-10-23
+
+### Fixed
+- Scope picture hardware is now patch-reached reliably, whatever the rig calls its attachment node; optics stopped slipping past the first setup pass in some weapons.
+
 ## [1.11.5] - 2026-10-23
 
 ### Fixed
