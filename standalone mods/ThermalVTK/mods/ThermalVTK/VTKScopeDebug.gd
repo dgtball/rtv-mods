@@ -24,6 +24,8 @@ static func scope_snapshot(gd: Resource, players: Array, esp: Node, weapon) -> v
 		return
 	var fwd: Vector3 = -cam.global_transform.basis.z
 	Dbg.log("SCOPE", "snapshot scoped=%s pip=%s fov=%.1f" % [str(scoped), str(pip), cam.fov])
+	if weapon != null:
+		weapon.set_scope_tint(true)
 	_snapshot_raywalk(cam, players)
 	_snapshot_rim(cam)
 	_snapshot_entries(esp)
@@ -136,7 +138,7 @@ static func _snapshot_raywalk(cam: Camera3D, players: Array) -> void:
 			from = hit["position"] + fwd * 0.1
 			continue
 		_desc_collider(col, d)
-		if d > 80.0:
+		if d > 30.0:
 			return
 		from = hit["position"] + fwd * 0.1
 

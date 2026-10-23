@@ -59,6 +59,8 @@ func tick() -> void:
 		_patched_shaders.clear()
 		_patched_base.clear()
 		_tubes.clear()
+		_tint_cache.clear()
+		_tint_on = false
 		_dbg_patched = 0
 		_dbg_layer_skip = 0
 		_resweep_cd = 0
@@ -303,6 +305,82 @@ func _patch_shader(src: Shader) -> Shader:
 
 # Tube carve-out (see module header): substitutes a forced-ALPHA copy for
 # the Alpha-shader surfaces. Priority and every other token stay vanilla.
+# Diagnostic glass tint (1.13.2): while the scope debug snapshot runs, the
+# Scope-shader surfaces are replaced by a magenta debug material so the
+# user can see exactly where the optic glass sits on screen - if a spill
+# band lights up magenta, it paints over the glass; if it stays dark, it
+# paints over the periphery behind the housing. Off restores the vanilla
+# instances byte-perfect. Reticle/Mask/Objective are never touched.
+const TINT_SCOPE := "res://Shaders/Scope.gdshader"
+var _tint_on: bool = false
+var _tint_mat: ShaderMaterial = null
+var _tint_cache: Dictionary = {}
+
+func _tint_material() -> ShaderMaterial:
+	if _tint_mat != null:
+		return _tint_mat
+	var sh := Shader.new()
+	sh.code = "shader_type spatial;\nrender_mode unshaded, depth_draw_always;\nuniform vec4 tint_color : source_color = vec4(1.0, 0.0, 1.0, 1.0);\nvoid fragment() {\n\tALBEDO = tint_color.rgb;\n\tALPHA = tint_color.a;\n}\n"
+	var m := ShaderMaterial.new()
+	m.shader = sh
+	_tint_mat = m
+	return m
+
+func set_scope_tint(on: bool) -> void:
+	if on == _tint_on:
+		return
+	_tint_on = on
+	if not on:
+		_restore_tint()
+		return
+	var mgr := _mgr
+	if mgr != null and is_instance_valid(mgr):
+		_tint_walk(mgr)
+
+func _tint_world(root: Node) -> void:
+	_tint_walk(root)
+
+func _tint_walk(node: Node) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if node is MeshInstance3D:
+		var mi := node as MeshInstance3D
+		if mi.mesh == null:
+			return
+		var count: int = mi.mesh.get_surface_count()
+		for i in count:
+			var mat: Material = mi.get_surface_override_material(i)
+			if mat == null:
+				mat = mi.mesh.surface_get_material(i)
+			if mat == null or not (mat is ShaderMaterial):
+				continue
+			var sm: ShaderMaterial = mat as ShaderMaterial
+			if sm.shader == null or sm.shader.resource_path.find(TINT_SCOPE) == -1:
+				continue
+			var id: int = mi.get_instance_id()
+			if not _tint_cache.has(id):
+				_tint_cache[id] = []
+			var saved: Array = _tint_cache[id]
+			while saved.size() <= i:
+				saved.append(null)
+			if saved[i] == null:
+				saved[i] = mi.get_surface_override_material(i)
+			mi.set_surface_override_material(i, _tint_material())
+	for child in node.get_children():
+		_tint_walk(child)
+
+func _restore_tint() -> void:
+	for id in _tint_cache:
+		var mi: Object = instance_from_id(id)
+		if mi == null or not is_instance_valid(mi) or not (mi is MeshInstance3D):
+			continue
+		var mesh := mi as MeshInstance3D
+		var saved: Array = _tint_cache[id]
+		for i in saved.size():
+			if saved[i] != null:
+				mesh.set_surface_override_material(i, saved[i])
+	_tint_cache.clear()
+	_tint_on = false
 func _patch_tube(mesh: MeshInstance3D) -> void:
 	var count: int = mesh.mesh.get_surface_count()
 	for i in count:

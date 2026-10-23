@@ -422,6 +422,7 @@ func _pip_now() -> bool:
 # camera and whatever the crosshair reaches, with shaders and priorities.
 func _scope_probe(delta: float) -> void:
 	if not Dbg.enabled:
+		_weapon.set_scope_tint(false)
 		return
 	_scope_dbg_cd -= delta
 	if _scope_dbg_cd > 0.0:
@@ -432,6 +433,7 @@ func _scope_probe(delta: float) -> void:
 		return
 	var scoped_v = gd.get("isScoped")
 	if scoped_v == null or not bool(scoped_v):
+		_weapon.set_scope_tint(false)
 		return
 	ScopeDebug.scope_snapshot(gd, get_tree().get_nodes_in_group("Player"), self, _weapon)
 
