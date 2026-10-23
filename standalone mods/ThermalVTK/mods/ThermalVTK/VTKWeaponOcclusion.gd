@@ -4,10 +4,13 @@ extends RefCounted
 # materials are opaque and draw first, letting outlines paint over the gun.
 # Fix: patch each weapon material to output ALPHA = 1.0 (moves it into the
 # transparent pass) and depth_draw_always (keeps self-occlusion), then give it a
-# render_priority ABOVE the outlines (30 vs 20/21) so it draws last. The scope
-# glass patches the same way: it does not write depth in the main camera view,
-# so the draw order is the only thing that can erase rings and the rig's own
-# body behind its pixels.
+# render_priority ABOVE the outlines (30 vs 20/21) so it draws last.
+#
+# The rig's "Attachments" subtree (sights, lasers) is skipped entirely: its
+# surfaces rely on their own alpha masks (the ocular mask is what shapes the
+# scope picture), and ALPHA = 1.0 turns them into an opaque black disc painted
+# over the picture. Rings need no patch there: the scope state already drives
+# their draw order (over the glass while aiming, under it otherwise).
 #
 # Driven once per frame by VTKESP while the contour ESP is active.
 
@@ -114,6 +117,11 @@ func _skip(mesh: MeshInstance3D, mat: Material) -> bool:
 	var node: Node = mesh
 	while node != null:
 		if "PIP" in node:
+			return true
+		# Sights and lasers keep their vanilla materials: their alpha masks
+		# shape the scope picture, and patching them paints an opaque disc
+		# over it.
+		if node.name == "Attachments":
 			return true
 		node = node.get_parent()
 	if mat is ShaderMaterial:

@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.11.2] - 2026-10-23
+
+### Fixed
+- The scope picture no longer gets a dark opaque disc painted over it while the contour is on. Sights and lasers now keep their normal see-through look; the outline still behaves the same in and out of the scope view.
+
 ## [1.11.1] - 2026-10-23
 
 ### Fixed
