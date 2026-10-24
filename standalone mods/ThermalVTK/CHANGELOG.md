@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.17.3] - 2026-10-24
+
+### Fixed
+- Winter backgrounds no longer flood the thermal picture in red and cream: snowy scenes spread across the full palette again, so shadows read cold and only the brightest snow reads hot, both day and night.
+
 ## [1.17.2] - 2026-10-24
 
 ### Fixed
