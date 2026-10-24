@@ -27,6 +27,7 @@ const CANDIDATES: Array[Color] = [
 	Color(0.34, 0.02, 0.58),
 	Color(0.55, 0.10, 0.32),
 	Color(0.00, 0.60, 0.72),
+	Color(0.00, 0.10, 0.70),
 ]
 
 # Clamped index: anything outside the sweep falls back to the first candidate.
