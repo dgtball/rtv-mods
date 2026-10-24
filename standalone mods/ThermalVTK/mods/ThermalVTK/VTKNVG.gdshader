@@ -98,8 +98,12 @@ vec3 ThermalPalette(float t)
 		c4 = vec3(0.85, 0.95, 1.0);
 	} else {
 		c0 = vec3(0.0, 0.0, 0.03);
-		c1 = vec3(0.30, 0.12, 0.45);
-		c2 = vec3(0.55, 0.0, 0.08);
+		// The Classic ladder must ascend in luminance (dot(rgb, 0.299/0.587/0.114)).
+		// The old c1 (0.30,0.12,0.45) measured 0.211, outshining the old c2
+		// (0.55,0,0.08) at 0.174: in fog, where the whole frame compresses onto
+		// the 0.25-0.5 palette span, warmer spots read darker than cold ground.
+		c1 = vec3(0.24, 0.10, 0.38);
+		c2 = vec3(0.65, 0.0, 0.10);
 		c3 = vec3(0.9, 0.65, 0.0);
 		c4 = vec3(1.0, 1.0, 0.8);
 	}
