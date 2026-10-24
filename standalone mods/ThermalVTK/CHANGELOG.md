@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.17.4] - 2026-10-25
+
+### Changed
+- The debug key-calibration sweep offers eight candidates instead of eleven. Three experimental probes from the combat-key pass were retired: they broke the sweep's minimum-spacing rule, so the on-screen choices no longer include a candidate pair that cannot be told apart.
+
 ## [1.17.3] - 2026-10-24
 
 ### Fixed
