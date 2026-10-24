@@ -31,8 +31,9 @@ const KEY_NORMAL := Color(1.0, 0.0, 0.0)
 # (0,0.10,0.70) -> (0.05,0.07,0.11)) keeps hue stable but lands inside the
 # palette dark bands -- a 2D claim surface no guard can separate. A variant
 # with the dominant channel kept bright and only the secondary dimmed
-# (cand10 (0,0.55,1.00)) measured two clean anchor orbits (day
-# (0.20,0.32,0.50) / night (0.13,0.60,0.93)) and is parked for a later pass:
+# (cand10 (0,0.55,1.00)) measured two wash-stable but mutually divergent
+# anchor orbits (day (0.20,0.32,0.50) / night (0.13,0.60,0.93), ~0.52 apart)
+# and is documented here for a later pass:
 # it needs a day/night-lerped detector constant first, plus an Ice-palette
 # day claim check, and a day/night fix is scheduled before that. Until then
 # the wash guard in VTKNVG.gdshader is the mechanism, not a patch.

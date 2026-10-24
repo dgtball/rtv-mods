@@ -20,8 +20,15 @@ extends RefCounted
 # Measured 2026-10-24 (KEY_COMBAT dimming pass): cand08 (0,0.60,0.72) washed
 # into neutral gray and was claimed by palette midtones; cand09 (0,0.10,0.70)
 # washed near-black but claimed the palette dark bands; cand10 (0,0.55,1.00)
-# measured two clean anchor orbits and is parked in VTKStates for a later
-# detector rework. The candidates stay in the sweep as measured data.
+# measured two divergent wash-stable anchor orbits and its findings are
+# documented in VTKStates for a later detector rework. These three stay in
+# the sweep as measured data.
+#
+# The >= 0.22 pairwise rule above applies to the original eight candidates.
+# cand08-10 are appended measurement probes, not calibration picks: cand09
+# deliberately re-probes cand05's hue region deeper into blue (raw distance
+# cand05<->cand09 = 0.10), and only one candidate is active per session, so
+# no runtime claim can mix them.
 
 const CANDIDATES: Array[Color] = [
 	Color(0.60, 0.02, 0.02),
