@@ -27,18 +27,6 @@ func register(host: RefCounted, on_rebuild: Callable, on_key: Callable) -> void:
 	cfg.set_value("Keycode", "key_ui_toggle", {"name": "Hotkey: Toggle UI", "default": 0, "default_type": "Keycode", "value": 0, "category": CAT, "menu_pos": 0, "tooltip": "Press once to open/close the Loadouts UI."})
 	cfg.set_value("Dropdown", "language", {"name": "Language", "default": Loc.DEFAULT, "value": Loc.get_lang(), "options": {"en": "English", "ru": "Русский"}, "category": CAT, "menu_pos": 1, "tooltip": "Interface language of the Loadouts window. English is the source language."})
 	cfg.set_value("Bool", "auto_equip", {"name": "Auto-equip on pickup", "default": true, "value": true, "category": CAT, "menu_pos": 2, "tooltip": "When a picked-up item fits an empty equipment slot it is equipped right away. Stackables top up an already equipped stack; loading a save or starting a new game is left untouched."})
-	var TP := "02. ThermalVision"
-	cfg.set_value("Bool", "thermal_enabled", {"name": "Thermal vision", "default": false, "value": false, "category": TP, "menu_pos": 0, "tooltip": "Master switch for the thermal vision layer: bot heat glow, mines and the Nomad marker. Plain green NVG is unaffected while this is off."})
-	cfg.set_value("Bool", "thermal_mines", {"name": "Mine highlighting", "default": true, "value": true, "category": TP, "menu_pos": 1, "tooltip": "Highlight mines while thermal vision is on."})
-	cfg.set_value("Bool", "thermal_mark_nomads", {"name": "Mark friendly Nomads", "default": true, "value": true, "category": TP, "menu_pos": 2, "tooltip": "Draw a floating green marker over friendly Nomads so they are not shot by accident."})
-	cfg.set_value("Bool", "thermal_winter_auto", {"name": "Winter auto-dimming", "default": true, "value": true, "category": TP, "menu_pos": 3, "tooltip": "In winter (season 2) snow blows the thermal image out; dim the world so bots stay readable."})
-	cfg.set_value("Float", "thermal_winter_dim", {"name": "Winter dimming", "default": 0.55, "value": 0.55, "minRange": 0.2, "maxRange": 1.0, "step": 0.05, "category": TP, "menu_pos": 4, "tooltip": "Multiplier applied to world brightness while winter auto-dimming is active. Lower means darker snow."})
-	cfg.set_value("Float", "nvg_noise", {"name": "NVG noise", "default": 4.0, "value": 4.0, "minRange": 0.0, "maxRange": 60.0, "step": 0.5, "category": TP, "menu_pos": 5, "tooltip": "Grain amount over the NVG image. Lower is cleaner. Vanilla is fixed at 10."})
-	cfg.set_value("Float", "nvg_white", {"default": 1.0, "value": 1.0, "minRange": 0.05, "maxRange": 1.0, "step": 0.05, "category": TP, "menu_pos": 6, "tooltip": "Brightness of the NVG image. 1 = full brightness; lower darkens the whole overlay (helps cut shimmer in bright scenes).", "name": "NVG brightness"})
-	cfg.set_value("Int", "thermal_palette", {"default": 0, "value": 0, "minRange": 0, "maxRange": 5, "step": 1, "category": TP, "menu_pos": 7, "tooltip": "0 = Classic, 1 = White Hot (grey), 2 = Black Hot (inverted grey), 3 = Amber, 4 = Forest, 5 = Ice.", "name": "World palette"})
-	cfg.set_value("Float", "thermal_world", {"default": 1.70, "value": 1.70, "minRange": 1.0, "maxRange": 4.0, "step": 0.05, "category": TP, "menu_pos": 8, "tooltip": "How bright the surrounding world reads in thermal.", "name": "World brightness"})
-	cfg.set_value("Int", "thermal_bot_preset", {"default": 0, "value": 0, "minRange": 0, "maxRange": 3, "step": 1, "category": TP, "menu_pos": 9, "tooltip": "0 = Amber, 1 = White, 2 = Orange, 3 = Red. Living bots glow in this colour; a corpse cools from the head down before disappearing.", "name": "Bot colour"})
-	cfg.set_value("Float", "thermal_far_distance", {"default": 45.0, "value": 45.0, "minRange": 5.0, "maxRange": 300.0, "step": 5.0, "category": TP, "menu_pos": 10, "tooltip": "Bots and mines only glow within this distance; past it they read as ordinary scenery. 5 = only right beside you, 300 = the whole map.", "name": "Distance"})
 	var TR := "03. Travel"
 	cfg.set_value("Bool", "tp_unlocked_shelters_only", {"name": "Unlocked shelters only", "default": false, "value": false, "category": TR, "menu_pos": 0, "tooltip": "When enabled, teleporting to a locked shelter is refused."})
 	var KF := "04. KillFeed"
@@ -51,7 +39,6 @@ func register(host: RefCounted, on_rebuild: Callable, on_key: Callable) -> void:
 	cfg.set_value("Bool", "season_visuals", {"name": "Seasonal colours", "default": true, "value": true, "category": SN, "menu_pos": 3, "tooltip": "Recolour trees, grass and lighting for spring, summer and autumn. Turn off to keep vanilla colours while the season still changes."})
 	var DBG := "06. Debug"
 	cfg.set_value("Bool", "debug_log", {"name": "Mod debug log", "default": false, "value": false, "category": DBG, "menu_pos": 0, "tooltip": "Print mod diagnostics (item resolution, hooks, teleports, saves) to the game log. Off during normal play; turn on only to troubleshoot."})
-	cfg.set_value("Bool", "nvg_debug_probe", {"name": "NVG probe log", "default": false, "value": false, "category": DBG, "menu_pos": 1, "tooltip": "Write NVG/thermal probes to user://loadouts_debug.log and enable the F4 detection overlay. Leave off during normal play; turn on only to diagnose something."})
 	cfg.set_value("Info", "version", version())
 	cfg.set_value("Info", "author", "opencode")
 	var path = "user://MCM/vostok-toolkit"

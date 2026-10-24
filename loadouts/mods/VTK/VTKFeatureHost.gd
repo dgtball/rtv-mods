@@ -43,11 +43,10 @@ func travel() -> Node:
 		return null
 	return _travel
 
-func set_equip(enabled: bool, debug_probe: bool) -> void:
+func set_equip(enabled: bool) -> void:
 	if _hooks == null or not is_instance_valid(_hooks):
 		return
 	_hooks.set_equip_enabled(enabled)
-	_hooks.set_equip_debug(debug_probe)
 
 func set_hud(counter: bool, feed: bool) -> void:
 	_kc_mcm = counter
@@ -63,7 +62,7 @@ func set_travel_unlocked(only: bool) -> void:
 # автоэкип -> телепорт (термал удалён в 5.2.0).
 func apply_config(c: ConfigRec) -> void:
 	set_hud(c.kill_counter_enabled, c.kill_feed_enabled)
-	set_equip(c.auto_equip, c.nvg_debug_probe)
+	set_equip(c.auto_equip)
 	set_travel_unlocked(c.tp_unlocked_shelters_only)
 
 func _ensure_travel() -> void:
