@@ -22,7 +22,11 @@ const DEFAULT_DEFEND := Color(0.62, 0.30, 0.95)
 # key's detector can claim another key's pixel. The current minimum is well
 # above the radius.
 const KEY_NORMAL := Color(1.0, 0.0, 0.0)
-const KEY_COMBAT := Color(0.0, 1.0, 1.0)
+# Combat key, dimmed like KEY_NOMAD: two bright saturated channels are what
+# the NVG wash drives toward white, and a fully washed pixel (daylight sky,
+# snow) landed inside this key's detector radius -- the red sky band and the
+# snow speckles. One dominant channel survives the wash by construction.
+const KEY_COMBAT := Color(0.0, 0.60, 0.72)
 const KEY_DEFEND := Color(1.0, 0.0, 1.0)
 
 const CATEGORY_KEY_COLORS: Array[Color] = [KEY_NORMAL, KEY_COMBAT, KEY_DEFEND]
