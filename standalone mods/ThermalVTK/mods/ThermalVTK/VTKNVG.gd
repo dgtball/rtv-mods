@@ -108,6 +108,9 @@ var _scope_rotate: bool = false
 var _day_factor: float = 1.0
 var _day_mix: float = 0.0
 var _key_gain: float = 1.0
+# Winter snow trim on the background (see VTKDaylight.snow_trim). Not part of
+# the keys: substitution reads the washed pixel before the palette.
+var _snow_trim: float = 1.0
 var _vanilla_exposure: float = 3.0
 var _last_exposure: float = -1.0
 var _key_gain_registered: bool = false
@@ -271,7 +274,7 @@ func _apply_uniforms() -> void:
 		return
 	nvg_mat.set_shader_parameter("noise", set_nvg_noise)
 	nvg_mat.set_shader_parameter("thermalMode", set_thermal and _nvg_active())
-	nvg_mat.set_shader_parameter("thermalDarken", set_world)
+	nvg_mat.set_shader_parameter("thermalDarken", set_world * _snow_trim)
 	nvg_mat.set_shader_parameter("dayMix", _day_mix)
 	nvg_mat.set_shader_parameter("worldPaletteMode", set_palette)
 	nvg_mat.set_shader_parameter("highlightKnee", set_highlight_knee)
@@ -404,6 +407,10 @@ func _daylight_tick(delta: float) -> void:
 	if absf(mix - _day_mix) > 0.001:
 		_day_mix = mix
 		_push_day_mix()
+	var trim: float = Daylight.snow_trim(int(_sim_value("season", 1)), _game_flag("indoor"), _game_flag("shelter"), light)
+	if absf(trim - _snow_trim) > 0.001:
+		_snow_trim = trim
+		_apply_uniforms()
 
 
 # Called on NVG off / map change. No environment write: vanilla Deactivate()
@@ -412,6 +419,7 @@ func _reset_daylight() -> void:
 	_last_exposure = -1.0
 	_day_factor = 1.0
 	_day_mix = 0.0
+	_snow_trim = 1.0
 	_sim = null
 	_world = null
 	_env = null

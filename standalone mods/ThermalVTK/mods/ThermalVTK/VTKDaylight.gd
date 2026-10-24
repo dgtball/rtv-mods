@@ -13,6 +13,9 @@ const MIN_FACTOR := 0.33
 const RESPONSE := 1.5
 const INDOOR_FACTOR := 0.15
 const SNOW_BONUS := 0.15
+# Winter background trim, measured 2026-10-24 in the Minefield snow field.
+const SNOW_TRIM_DAY := 0.80
+const SNOW_TRIM_NIGHT := 0.60
 
 const WEATHER_FACTORS := {
 	"Neutral": 1.0,
@@ -53,6 +56,21 @@ static func light_level(time: float, weather: String, season: int, indoor: bool,
 # 1.0 at night (vanilla exposure untouched), MIN_FACTOR at full daylight.
 static func day_factor(light: float) -> float:
 	return lerpf(1.0, MIN_FACTOR, clampf(light, 0.0, 1.0))
+
+# Winter-only background trim for the thermal palette. Snow bounces far more
+# amplified light than any summer surface, so the whole winter frame lands in
+# the red-to-cream third of the palette: probes measured night dirt at
+# luminance 0.365 (t 0.62, red) and bright snow at 0.559 (t 0.95, cream) --
+# no cold colors left on screen. The trim multiplies the effective
+# thermalDarken so the same range re-spreads down the ladder: at night 0.60
+# the dirt reads t 0.37 (purple) and the snow tops out near t 0.57 (amber);
+# by day 0.80 gives the pinned snow headroom off the t = 1.0 ceiling. Keys
+# are unaffected: substitution happens before the palette. Blended by the
+# same light level that drives exposure, 1.0 everywhere else.
+static func snow_trim(season: int, indoor: bool, shelter: bool, light: float) -> float:
+	if season != 2 or indoor or shelter:
+		return 1.0
+	return lerpf(SNOW_TRIM_NIGHT, SNOW_TRIM_DAY, clampf(light, 0.0, 1.0))
 
 # 0 at night, 1 at full daylight: how hard the shader tone curve should lift
 # the background before the thermal palette.
