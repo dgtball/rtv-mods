@@ -16,6 +16,12 @@ extends RefCounted
 # so a washed candidate pixel cannot be claimed by another candidate's
 # detector; the final key set still has to clear the wider 0.40 world-key
 # spacing rule in the washed space (see VTKStates).
+#
+# Measured 2026-10-24 (KEY_COMBAT dimming pass): cand08 (0,0.60,0.72) washed
+# into neutral gray and was claimed by palette midtones; cand09 (0,0.10,0.70)
+# washed near-black but claimed the palette dark bands; cand10 (0,0.55,1.00)
+# measured two clean anchor orbits and is parked in VTKStates for a later
+# detector rework. The candidates stay in the sweep as measured data.
 
 const CANDIDATES: Array[Color] = [
 	Color(0.60, 0.02, 0.02),

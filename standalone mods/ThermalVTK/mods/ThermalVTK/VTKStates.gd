@@ -22,11 +22,21 @@ const DEFAULT_DEFEND := Color(0.62, 0.30, 0.95)
 # key's detector can claim another key's pixel. The current minimum is well
 # above the radius.
 const KEY_NORMAL := Color(1.0, 0.0, 0.0)
-# Combat key, dimmed like KEY_NOMAD: two bright saturated channels are what
-# the NVG wash drives toward white, and a fully washed pixel (daylight sky,
-# snow) landed inside this key's detector radius -- the red sky band and the
-# snow speckles. One dominant channel survives the wash by construction.
-const KEY_COMBAT := Color(0.0, 0.60, 0.72)
+# Bright by design (measured 2026-10-24 against three dimming candidates,
+# calibration cand08/09/10). The KEY_NOMAD lesson holds: a key survives the
+# wash with a dominant channel and two near-zero channels. Reducing this
+# key's dominant pair collapses the post-NVG pixel into neutral gray
+# (cand08 (0,0.60,0.72) -> (0.22,0.25,0.25), spread 0.03), which palette
+# midtones then claim; dropping the dominant light entirely (cand09
+# (0,0.10,0.70) -> (0.05,0.07,0.11)) keeps hue stable but lands inside the
+# palette dark bands -- a 2D claim surface no guard can separate. A variant
+# with the dominant channel kept bright and only the secondary dimmed
+# (cand10 (0,0.55,1.00)) measured two clean anchor orbits (day
+# (0.20,0.32,0.50) / night (0.13,0.60,0.93)) and is parked for a later pass:
+# it needs a day/night-lerped detector constant first, plus an Ice-palette
+# day claim check, and a day/night fix is scheduled before that. Until then
+# the wash guard in VTKNVG.gdshader is the mechanism, not a patch.
+const KEY_COMBAT := Color(0.0, 1.0, 1.0)
 const KEY_DEFEND := Color(1.0, 0.0, 1.0)
 
 const CATEGORY_KEY_COLORS: Array[Color] = [KEY_NORMAL, KEY_COMBAT, KEY_DEFEND]
