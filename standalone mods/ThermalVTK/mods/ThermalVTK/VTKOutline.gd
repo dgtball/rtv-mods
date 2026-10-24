@@ -2,10 +2,9 @@ extends RefCounted
 # Owns one ring material per NPC and renders it on dedicated ghost shells
 # (sibling MeshInstance3D copies, the approach reference outline mods use):
 # same mesh/skin/skeleton, transform mirrored every frame, material_override,
-# no_depth_test on the node, shadow casting off. The ring shader does its own
-# depth compare (the auto test cannot tell the scope glass from a wall), so
-# the shells survive the rig's own material pipeline and the scope view.
-# State colours and the x-ray flag come in via `opts`; this file only draws.
+# shadow casting off. The idle ring is a normal depth-tested overlay, so the
+# world and the sight hardware clip it; only a live x-ray window swaps to the
+# depth-free shader. State colours and the x-ray flag come in via `opts`.
 
 const Shaders = preload("res://mods/ThermalVTK/VTKShaders.gd")
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
@@ -22,40 +21,18 @@ const SHELL_NAME := "VTK_Ring"
 #        "node": Node, "child_count": int}
 var _items: Dictionary = {}
 # While the scope view is active the band thins (SCOPE_RIM), so the magnified
-# view keeps a fine frame. The carve stays near-zero: opaque eye-attached
-# hardware (the eyepiece rim, centimetres from the lens, 1.11.5) must hide the
-# ring by the depth compare, in and out of the scope; at 0.03 the closest
-# centimetres of it were exempt, and the ring spilled past the lens. The
-# glass lets the ring through by DRAW ORDER, not by depth (it supplies none
-# to the compare). The x-ray ring widens the carve only while its window is
-# live: with the compare disabled, the wide value is what keeps scope metal
-# and glass from vanishing the ring (or duplicating it over the PIP-on
-# picture).
+# view keeps a fine frame. The idle ring uses the normal depth test; the scope
+# Mask controls whether the sight glass writes depth, so the ring shows inside
+# the lens when the main camera is the picture and stays hidden inside it when
+# the optic camera supplies a PIP picture. The x-ray ring widens the carve only
+# while its window is live: with the depth test disabled, the wide value keeps
+# scope metal and glass from vanishing the ring.
 const SCOPE_RIM := 6.0
-const CARVE_SCOPED := 0.005
-const CARVE_FREE := 0.005
 const CARVE_XRAY := 0.60
-# Draw order against the scope optics (transparent pass, higher = later):
-# every optic glass/reticle surface sits at 0..1 (Scope/Reticle 1, Mask/
-# Objective 0) and the ACOG tube (Alpha) at 11, so a ring at 6 paints OVER the
-# glass (the in-scope picture) while the tube paints OVER the ring (the spill
-# beyond the lens goes away, 1.11.4). A ring at 0 is painted over by the whole
-# optic (the weapon-lowered case, no bleed-through).
-# With PIP on the scope picture is the optic camera's own render: the ring is
-# visible in the picture through the ghost shells, so the main-camera ring
-# drops under the glass, or the picture shows it twice.
-const RING_PRIO_FREE := 0
-const RING_PRIO_SCOPED := 6
 var _scoped: bool = false
 # gameData.PIP: the picture-in-picture path. True when Settings keeps the
 # optic camera render enabled.
 var _pip: bool = false
-
-# Draw order for every live ring: over the scope glass only while aiming
-# without PIP (there the main render IS the in-scope picture); with PIP the
-# optic camera supplies the picture, so the main ring stays under the glass.
-func _ring_prio() -> int:
-	return RING_PRIO_SCOPED if (_scoped and not _pip) else RING_PRIO_FREE
 
 func has(id: int) -> bool:
 	return _items.has(id)
@@ -79,21 +56,13 @@ func _collect(node: Node, out: Array) -> void:
 func _build_ring() -> ShaderMaterial:
 	var ring_mat := ShaderMaterial.new()
 	ring_mat.shader = Shaders.ring()
-	ring_mat.render_priority = _ring_prio()
-	# Seed from the current scope state: a bot discovered inside the scope
-	# view must not wait a frame for set_scoped/set_entry_xray to catch up.
-	ring_mat.set_shader_parameter("near_only", false)
-	ring_mat.set_shader_parameter("carve", CARVE_SCOPED if _scoped else CARVE_FREE)
-	ring_mat.set_shader_parameter("clipCenter", _clip_center)
-	ring_mat.set_shader_parameter("clipR", _clip_r)
 	return ring_mat
 
 # Event-driven per-entry flip: idle rings honour walls; when the frame loop
 # passes opts["xray"] for a bot with a live trigger window, that bot's ring
-# punches through walls while camera-attached glass keeps hiding it. The x-ray
-# flag moved from a shader swap to the near_only uniform here: one shader, no
-# lost uniforms on the flip. Dedupe by the stored flag so per-frame opts never
-# reassign the same uniforms.
+# swaps to the depth-free shader and punches through walls while the optic
+# hardware still hides it. Dedupe by the stored flag so per-frame opts never
+# rebuild the material.
 func set_entry_xray(id: int, on: bool) -> void:
 	var entry = _items.get(id)
 	if entry == null:
@@ -101,60 +70,32 @@ func set_entry_xray(id: int, on: bool) -> void:
 	if bool(entry.get("xray", false)) == on:
 		return
 	entry["xray"] = on
+	# A shader swap may reset uniforms; drop the push cache so the next refresh
+	# writes the state again.
+	entry["p_key"] = null
+	entry["p_grow"] = null
+	entry["p_rim"] = null
+	entry["p_cool"] = null
 	var ring_mat: ShaderMaterial = entry["ring"]
-	if ring_mat != null:
-		ring_mat.set_shader_parameter("near_only", on)
-		ring_mat.set_shader_parameter("carve", CARVE_XRAY if on else CARVE_FREE)
-		# Walls stay punched through by the near_only uniform, and the draw
-		# order is the same scope rule as for idle rings: over the glass
-		# while aiming, under it with the weapon lowered.
-		ring_mat.render_priority = _ring_prio()
-
-# The scope flag drives the thin in-scope band and pushes the carve AND the
-# draw order to every live ring material: while aiming without PIP the ring
-# paints over the scope glass, otherwise the glass paints over the ring.
-# No-op while neither flag moves.
-func set_scoped(on: bool, pip := false) -> void:
-	if _scoped == on and _pip == pip:
+	if ring_mat == null:
 		return
+	if on:
+		ring_mat.shader = Shaders.ring_xray()
+		ring_mat.set_shader_parameter("near_only", true)
+		ring_mat.set_shader_parameter("carve", CARVE_XRAY)
+	else:
+		ring_mat.shader = Shaders.ring()
+
+# The scope flag drives the thin in-scope band. The Mask depth-write toggle
+# lives in VTKWeaponOcclusion, driven from the same flags by VTKESP.
+func set_scoped(on: bool, pip := false) -> void:
 	_scoped = on
 	_pip = pip
-	_push_scope()
 
-# PIP comes from the settings menu and may flip while aiming: re-derive the
-# draw order only.
+# PIP comes from the settings menu and may flip while aiming; the Mask toggle
+# re-reads it on the next frame.
 func set_pip(on: bool) -> void:
-	if _pip == on:
-		return
 	_pip = on
-	_push_scope()
-
-# The measured scope picture window (2*SCREEN_UV-1 units). r=0 keeps the
-# ring's screen clip off - outside the scope and whenever the measure found
-# nothing sane.
-var _clip_center: Vector2 = Vector2.ZERO
-var _clip_r: float = 0.0
-
-# Called when the scope view engages: the ESP measures the optic's mask disc
-# through the aiming camera and hands the window here. Every live ring gets
-# the clip and any ring built while it is active inherits it (apply's
-# refresh pushes _push_scope again).
-func set_scope_clip(center: Vector2, r: float) -> void:
-	_clip_center = center
-	_clip_r = r
-	_push_scope()
-
-func _push_scope() -> void:
-	var carve := CARVE_SCOPED if _scoped else CARVE_FREE
-	var prio := _ring_prio()
-	for id in _items:
-		var ring_mat = _items[id].get("ring")
-		if ring_mat != null:
-			(ring_mat as ShaderMaterial).render_priority = prio
-			(ring_mat as ShaderMaterial).set_shader_parameter("clipCenter", _clip_center)
-			(ring_mat as ShaderMaterial).set_shader_parameter("clipR", _clip_r)
-			if not bool(_items[id].get("xray", false)):
-				(ring_mat as ShaderMaterial).set_shader_parameter("carve", carve)
 
 func apply(id: int, node: Node, opts: Dictionary) -> void:
 	var meshes: Array = []
@@ -189,6 +130,17 @@ func _make_shell(src: GeometryInstance3D, ring_mat: ShaderMaterial) -> Dictionar
 		shell.transform = mi.transform
 		shell.material_override = ring_mat
 		shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# Ghost shells must follow the source's visibility rules. The game LODs
+		# its rig with GeometryInstance3D.visibility_range_end (see AI.gd), which
+		# a sibling copy does not inherit: without this the hidden LOD's shell
+		# keeps drawing at every distance, doubling the transparent geometry.
+		shell.layers = mi.layers
+		shell.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
+		shell.visible = mi.visible
+		_mirror_range(mi, shell)
+		var fade = mi.get("visibility_range_fade_mode")
+		if fade != null:
+			shell.set("visibility_range_fade_mode", fade)
 		shell.set_meta(NO_CONTOUR_META, true)
 		var p := mi.get_parent()
 		if p == null:
@@ -196,10 +148,25 @@ func _make_shell(src: GeometryInstance3D, ring_mat: ShaderMaterial) -> Dictionar
 			return pair
 		p.add_child(shell)
 		pair["shell"] = shell
+		# Cached per-frame visibility: the refresh loop must not read every
+		# source, but a mesh hidden at spawn must keep its ring hidden too.
+		pair["v"] = mi.visible
 		return pair
 	src.material_overlay = ring_mat
 	pair["overlay"] = true
 	return pair
+
+# The game assigns LOD ranges in AI.Initialize(), after the rig is in the tree,
+# so the shell inherits a real range only if it is copied late enough. Run at
+# creation and on every recollect (rig rebuild), not per frame: reading every
+# source each frame cost more than the transient mismatch it prevented.
+func _mirror_range(src: GeometryInstance3D, shell: MeshInstance3D) -> void:
+	if shell.visibility_range_begin != src.visibility_range_begin:
+		shell.visibility_range_begin = src.visibility_range_begin
+		shell.visibility_range_begin_margin = src.visibility_range_begin_margin
+	if shell.visibility_range_end != src.visibility_range_end:
+		shell.visibility_range_end = src.visibility_range_end
+		shell.visibility_range_end_margin = src.visibility_range_end_margin
 
 # Mirror the rig by hand: pooled bots and LOD swaps move the sources, and the
 # shells are plain copies, not bone-driven children. Called from the ESP frame.
@@ -246,6 +213,14 @@ func _recollect(id: int, entry: Dictionary) -> void:
 	entry["pairs"] = pairs
 	entry["meshes"] = fresh
 	entry["child_count"] = node.get_child_count()
+	# Fresh shells copy their source's visible flag, which is wrong while the
+	# trigger layer is parked hidden. Re-apply the cached mode instead of
+	# paying for a per-frame loop.
+	if entry.get("vis") != null and not bool(entry["vis"]):
+		for pair in pairs:
+			var shell = pair.get("shell")
+			if shell != null and is_instance_valid(shell):
+				shell.visible = false
 
 func refresh(id: int, opts: Dictionary) -> void:
 	var entry = _items.get(id)
@@ -261,26 +236,37 @@ func refresh(id: int, opts: Dictionary) -> void:
 
 	var ring_mat: ShaderMaterial = entry["ring"]
 
-	if ring_mat.get_shader_parameter("state_key") != key \
-			or ring_mat.get_shader_parameter("grow") == null \
-			or not is_equal_approx(float(ring_mat.get_shader_parameter("grow")), grow):
+	# Compare the last pushed value instead of reading the uniform back: a
+	# get_shader_parameter round-trip per NPC per frame was pure overhead, and
+	# the state key only moves when the bot's category changes.
+	if entry.get("p_key") != key:
 		ring_mat.set_shader_parameter("state_key", key)
+		entry["p_key"] = key
+	if entry.get("p_grow") == null or not is_equal_approx(float(entry["p_grow"]), grow):
 		ring_mat.set_shader_parameter("grow", grow)
+		entry["p_grow"] = grow
 
 	var rim := SCOPE_RIM if _scoped else float(opts.get("rim", 1.0))
-	if ring_mat.get_shader_parameter("rim_power") == null or not is_equal_approx(float(ring_mat.get_shader_parameter("rim_power")), rim):
+	if entry.get("p_rim") == null or not is_equal_approx(float(entry["p_rim"]), rim):
 		ring_mat.set_shader_parameter("rim_power", rim)
+		entry["p_rim"] = rim
 
-	if ring_mat.get_shader_parameter("cool") == null or not is_equal_approx(float(ring_mat.get_shader_parameter("cool")), cool):
+	if entry.get("p_cool") == null or not is_equal_approx(float(entry["p_cool"]), cool):
 		ring_mat.set_shader_parameter("cool", cool)
+		entry["p_cool"] = cool
 
 	# Trigger mode drives per-frame visibility through opts; the shells are
-	# plain scene nodes, so the world cannot do it for us.
+	# plain scene nodes, so the world cannot do it for us. Per-frame range
+	# mirroring is not needed: AISpawner calls Initialize() (which assigns the
+	# LOD ranges) before our first draw, and _recollect re-copies on a rig
+	# rebuild. Reading every source each frame doubled the draw loop cost.
 	var show: bool = bool(opts.get("visible", true))
-	for pair in entry.get("pairs", []):
-		var shell = pair.get("shell")
-		if shell != null and is_instance_valid(shell):
-			shell.visible = show
+	if entry.get("vis") == null or bool(entry["vis"]) != show:
+		entry["vis"] = show
+		for pair in entry.get("pairs", []):
+			var shell = pair.get("shell")
+			if shell != null and is_instance_valid(shell):
+				shell.visible = show and bool(pair.get("v", true))
 
 func clear(id: int) -> void:
 	var entry = _items.get(id)

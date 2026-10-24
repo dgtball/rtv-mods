@@ -9,6 +9,8 @@ render_mode unshaded, depth_draw_never, depth_test_disabled, cull_disabled;
 // picture, and the marker vanished from the magnified view. Presence stays
 // ESP-driven: nomads while alive, gone on death.
 uniform vec3 nomad_key : source_color = vec3(0.02, 0.60, 0.24);
+// Same daylight key restore as the state rings.
+global uniform float vtk_key_gain = 1.0;
 
 void vertex() {
 	// Camera-facing billboard. MeshInstance3D has no billboard property in
@@ -28,6 +30,6 @@ void fragment() {
 	if (abs(p.x) + abs(p.y) > 1.0) {
 		discard;
 	}
-	ALBEDO = nomad_key;
+	ALBEDO = nomad_key * vtk_key_gain;
 	ALPHA = 1.0;
 }

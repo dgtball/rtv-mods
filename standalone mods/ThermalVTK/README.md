@@ -1,6 +1,6 @@
 # ThermalVTK
 
-**Version:** 1.14.1
+**Version:** 1.17.1
 
 Standalone NVG / thermal-vision mod for Road to Vostok. It is the thermal
 feature of Vostok Toolkit, packaged on its own.
@@ -17,7 +17,10 @@ feature of Vostok Toolkit, packaged on its own.
   always green. The outline is a clean silhouette with an adjustable rim. The
   body cools after death, dimming and fading out.
 - Mines light up while thermal vision is on.
-- World palettes (Classic, Amber, Forest, Ice) and winter auto-dimming.
+- World palettes (Classic, Amber, Forest, Ice) and daylight compensation: in
+  bright sun or snow the picture keeps detail instead of washing out, with no
+  effect at night and only a slight trim indoors. An extra *Highlight rolloff*
+  slider bends the brightest snow and sky down so they keep texture.
 - A hotkey to turn the thermal layer on and off, and a hotkey to cycle the
   world palette, each with an on-screen notification.
 

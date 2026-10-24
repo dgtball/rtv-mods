@@ -1,6 +1,7 @@
 extends Node
 const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
 const Settings = preload("res://mods/ThermalVTK/VTKSettings.gd")
+const Daylight = preload("res://mods/ThermalVTK/VTKDaylight.gd")
 
 # Owns the NVG overlay shader, plus the thermal/mines layer that rides on it.
 #
@@ -26,6 +27,7 @@ const Settings = preload("res://mods/ThermalVTK/VTKSettings.gd")
 const GAME_DATA_RES := Paths.GAME_DATA
 const NVG_SCRIPT_SUFFIX := "NVG.gd"
 const SHADER_RES := "res://mods/ThermalVTK/VTKNVG.gdshader"
+const KEY_GAIN_PARAM := &"vtk_key_gain"
 
 # Сколько кадров подряд пробовать поставить шейдер, если NVG-узел уже найден,
 # но его Overlay ещё не готов (ванильный _ready ждёт ~0.1 c). ~60 кадров.
@@ -71,6 +73,9 @@ var set_mines: bool = true
 var set_glow_distance: float = 60.0
 var set_palette: int = 0
 var set_world: float = 1.70
+# Daylight highlight rolloff knee (shader "highlightKnee"); 1.0 = off.
+var set_highlight_knee: float = 0.6
+var set_daylight: bool = true
 # Brightness of the state key the ESP outlines emit; the overlay uses it to
 # scale the substituted state colour.
 var set_state_brightness: float = 0.6
@@ -97,6 +102,20 @@ var _was_on: bool = false
 # matches a key's orbit; pushed only on change (see _process).
 var _scope_rotate: bool = false
 
+# Daylight compensation. `_last_exposure` is the value WE last wrote; if the
+# environment reads something else, the vanilla ResetCheck has written it and
+# that value becomes the new vanilla baseline.
+var _day_factor: float = 1.0
+var _day_mix: float = 0.0
+var _key_gain: float = 1.0
+var _vanilla_exposure: float = 3.0
+var _last_exposure: float = -1.0
+var _key_gain_registered: bool = false
+var _was_worn: bool = false
+var _sim: Node = null
+var _world: Node = null
+var _env: Environment = null
+
 
 func _ready() -> void:
 	name = "VTKNVG"
@@ -112,6 +131,7 @@ func _ready() -> void:
 	# Key materials emit the detector pixels. Mines use a plain
 	# unshaded+emission StandardMaterial3D.
 	_mat_mine = _key_material(MINE_KEY)
+	_register_key_gain()
 
 	get_tree().node_added.connect(_on_node_added)
 	_scene_ref = get_tree().current_scene
@@ -154,11 +174,14 @@ func _key_material(c: Color) -> StandardMaterial3D:
 
 # Repaint an existing key material. Must mirror _key_material exactly, otherwise
 # the emitted pixel stops matching the shader key and the category disappears.
+# The daylight gain lives here too: the key is scaled BEFORE the tonemap, and
+# the reduced exposure divides it back, so the detector sees the same pixel.
 func _key_set(m: StandardMaterial3D, c: Color) -> void:
 	if m == null:
 		return
-	m.albedo_color = c
+	m.albedo_color = Color(c.r * _key_gain, c.g * _key_gain, c.b * _key_gain, c.a)
 	m.emission = c
+	m.emission_energy_multiplier = _key_gain
 
 
 func _on_node_added(node: Node) -> void:
@@ -249,7 +272,9 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("noise", set_nvg_noise)
 	nvg_mat.set_shader_parameter("thermalMode", set_thermal and _nvg_active())
 	nvg_mat.set_shader_parameter("thermalDarken", set_world)
+	nvg_mat.set_shader_parameter("dayMix", _day_mix)
 	nvg_mat.set_shader_parameter("worldPaletteMode", set_palette)
+	nvg_mat.set_shader_parameter("highlightKnee", set_highlight_knee)
 	nvg_mat.set_shader_parameter("nvgWhite", set_nvg_white)
 	nvg_mat.set_shader_parameter("mineKey", DET_MINE)
 	nvg_mat.set_shader_parameter("stNormalKey", DET_ST_NORMAL)
@@ -287,6 +312,7 @@ func _process(delta: float) -> void:
 		_install_retry = 0
 		_reseed(_scene_ref)
 		_tick_cd = 0.0
+		_reset_daylight()
 	# Ограниченный ретрай: NVG-узел найден, но ванильный await-based _ready ещё
 	# не создал Overlay/материал. Ставим шейдер только по событию обнаружения,
 	# с коротким добором кадров, а не проверкой каждый кадр.
@@ -295,7 +321,8 @@ func _process(delta: float) -> void:
 		_try_install_shader()
 		if _installed:
 			_install_retry = 0
-	var on := set_thermal and _nvg_active()
+	var worn := _nvg_active()
+	var on := set_thermal and worn
 	# PIP off + aiming a magnifying scope is the only path that rotates colour
 	# channels; flag the overlay then so it matches whole key orbits. Cache and
 	# push on change only: _apply_uniforms is not called per frame.
@@ -312,6 +339,12 @@ func _process(delta: float) -> void:
 			var sm = _nvg_mat_node.get("material")
 			if sm is ShaderMaterial:
 				(sm as ShaderMaterial).set_shader_parameter("scopeRotate", _scope_rotate)
+	if worn != _was_worn:
+		_was_worn = worn
+		if not worn:
+			_reset_daylight()
+	if worn:
+		_daylight_tick(delta)
 	# Player position, fetched once per frame.
 	var ppos := _player_pos()
 
@@ -336,6 +369,126 @@ func _process(delta: float) -> void:
 	_retry_mines()
 
 
+# Write the compensated exposure every frame. The vanilla ResetCheck runs in
+# _physics_process and re-applies the device power on its own cadence; _process
+# runs after physics, so this value is the one the frame is rendered with.
+func _daylight_tick(delta: float) -> void:
+	if not set_daylight or not _installed:
+		return
+	var env := _environment()
+	if env == null:
+		return
+	var cur := env.tonemap_exposure
+	if _last_exposure < 0.0 or absf(cur - _last_exposure) > 0.002:
+		# The vanilla NVG only ever writes 2.0/2.5/3.0 while worn. A 1.0 here
+		# means its _ready has not run Activate() yet (save load): keep the
+		# last baseline instead of dropping the exposure for one frame.
+		if cur >= 1.9:
+			_vanilla_exposure = cur
+	var light := Daylight.light_level(
+		float(_sim_value("time", 1200.0)),
+		String(_sim_value("weather", "Neutral")),
+		int(_sim_value("season", 1)),
+		_game_flag("indoor"),
+		_game_flag("shelter"))
+	var target := Daylight.day_factor(light)
+	_day_factor = target if _last_exposure < 0.0 else Daylight.step(_day_factor, target, delta)
+	var want := _vanilla_exposure * _day_factor
+	if absf(want - cur) > 0.002:
+		env.tonemap_exposure = want
+	_last_exposure = want
+	var gain := Daylight.key_gain(_day_factor)
+	if absf(gain - _key_gain) > 0.001:
+		_set_key_gain(gain)
+	var mix := Daylight.day_mix(_day_factor)
+	if absf(mix - _day_mix) > 0.001:
+		_day_mix = mix
+		_push_day_mix()
+
+
+# Called on NVG off / map change. No environment write: vanilla Deactivate()
+# already restores 1.0, and a map change frees the old environment.
+func _reset_daylight() -> void:
+	_last_exposure = -1.0
+	_day_factor = 1.0
+	_day_mix = 0.0
+	_sim = null
+	_world = null
+	_env = null
+	_set_key_gain(1.0)
+	_push_day_mix()
+
+
+# MCM toggle off while NVG is worn: hand the exposure back immediately instead
+# of waiting for the next vanilla ResetCheck (up to ~0.17 s of dark picture).
+func _restore_exposure() -> void:
+	if _last_exposure >= 0.0:
+		var env := _environment()
+		if env != null and absf(env.tonemap_exposure - _last_exposure) <= 0.004:
+			env.tonemap_exposure = _vanilla_exposure
+	_reset_daylight()
+
+
+func _register_key_gain() -> void:
+	var names := RenderingServer.global_shader_parameter_get_list()
+	if not names.has(KEY_GAIN_PARAM):
+		RenderingServer.global_shader_parameter_add(KEY_GAIN_PARAM, RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 1.0)
+	_key_gain_registered = true
+	RenderingServer.global_shader_parameter_set(KEY_GAIN_PARAM, _key_gain)
+
+
+func _set_key_gain(g: float) -> void:
+	_key_gain = clampf(g, 0.01, 10.0)
+	_key_set(_mat_mine, MINE_KEY)
+	if _key_gain_registered:
+		RenderingServer.global_shader_parameter_set(KEY_GAIN_PARAM, _key_gain)
+
+
+func _push_day_mix() -> void:
+	if not _installed or _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
+		return
+	var mat = _nvg_mat_node.get("material")
+	if mat is ShaderMaterial:
+		(mat as ShaderMaterial).set_shader_parameter("dayMix", _day_mix)
+
+
+# The vanilla script reaches the environment through Map/World.environment.
+# Resolve it lazily and re-read the resource pointer: a map change may replace
+# it while the World node itself survives.
+func _environment() -> Environment:
+	if _world == null or not is_instance_valid(_world):
+		_world = get_node_or_null(Paths.WORLD)
+	if _world == null:
+		_env = null
+		return null
+	var we = _world.get("environment")
+	if we == null:
+		we = _world.get_node_or_null("WorldEnvironment")
+	if we == null:
+		_env = null
+		return null
+	var env = we.get("environment")
+	if env == null and we is Environment:
+		env = we
+	_env = env as Environment
+	return _env
+
+
+func _sim_value(key: String, fallback) -> Variant:
+	if _sim == null or not is_instance_valid(_sim):
+		_sim = get_node_or_null(Paths.SIMULATION)
+	if _sim == null:
+		return fallback
+	var v = _sim.get(key)
+	return fallback if v == null else v
+
+
+func _game_flag(name: String) -> bool:
+	if _game_data == null or not _game_data.has_method("get"):
+		return false
+	return bool(_game_data.get(name))
+
+
 # Покой при выключенном тепловизоре. Регистрация (node_added) продолжает идти
 # и при off, поэтому мёртвые записи мин всё равно надо чистить, иначе _mines рос бы
 # без границы.
@@ -353,6 +506,7 @@ func _clear_paint() -> void:
 		var e = _mines.get(id)
 		if e == null:
 			continue
+		e["painted"] = false
 		for m in e.get("meshes", []):
 			if is_instance_valid(m):
 				(m as GeometryInstance3D).material_override = null
@@ -423,6 +577,11 @@ func _update_mine(id: int, thermal_on: bool, ppos: Vector3) -> void:
 	var node = e["node"]
 	var dist := ppos.distance_to(node.global_position)
 	var show := thermal_on and set_mines and dist <= maxf(set_glow_distance, 1.0)
+	# material_override writes mark the instance dirty every frame. The paint
+	# only changes on a range crossing, so skip the write while it holds.
+	if bool(e.get("painted", false)) == show:
+		return
+	e["painted"] = show
 	for mesh in e["meshes"]:
 		if is_instance_valid(mesh):
 			mesh.material_override = _mat_mine if show else null
@@ -437,9 +596,14 @@ func set_thermal_enabled(on: bool) -> void:
 # MCM snapshot in, settings out. Headless-safe: every setter here is a var
 # write, and _apply_uniforms guards against the missing tree.
 func apply_config(rec) -> void:
+	var was_daylight := set_daylight
+	set_daylight = rec.daylight_compensation
+	if was_daylight and not set_daylight:
+		_restore_exposure()
 	set_nvg_noise = rec.nvg_noise
 	set_nvg_white = rec.nvg_white
 	set_world = rec.world
+	set_highlight_knee = rec.highlight_knee
 	set_state_brightness = rec.outline_brightness
 	set_glow_distance = rec.outline_distance
 	set_mines = rec.thermal_mines

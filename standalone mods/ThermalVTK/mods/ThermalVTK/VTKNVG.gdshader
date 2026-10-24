@@ -10,7 +10,10 @@ shader_type canvas_item;
 // (VTKNVG.gd DET_*). Keep the key lists in lockstep with VTKNVG.gd. The *Color
 // uniforms are the freely chosen substitution colours.
 
-uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_linear_mipmap;
+// filter_linear, not filter_linear_mipmap: the screen is sampled 1:1 through
+// SCREEN_UV, so mip 0 is the only one ever read. Requesting mipmaps makes the
+// renderer build a full-screen mip chain every frame for nothing.
+uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_linear;
 uniform vec4 tint : source_color = vec4(0.47, 0.67, 0.51, 1.0);
 uniform float noise : hint_range(0.0, 60.0, 1.0) = 4.0;
 uniform float vignette : hint_range(0.0, 1.0, 0.1) = 0.1;
@@ -22,6 +25,16 @@ uniform float goggleOutline : hint_range(0.0, 0.1, 0.01) = 0.05;
 uniform bool thermalMode = false;
 uniform bool scopeRotate = false;
 uniform float thermalDarken : hint_range(1.0, 4.0, 0.01) = 1.70;
+// 0 at night, 1 at full daylight. Daylight compensation lowers the exposure
+// (keeping snow/sky below the tonemap ceiling); this curve then lifts the now
+// darker background into the palette so the image stays readable. Applied to
+// the background only: detector keys are substituted before the palette.
+uniform float dayMix : hint_range(0.0, 1.0, 0.01) = 0.0;
+// Highlight rolloff knee for daylight: background brighter than this (snow,
+// sky, cloud decks) bends into a soft shoulder below white before the palette,
+// so it keeps gradient instead of clipping into one flat colour. 1.0 = off.
+// Night is unaffected either way: the shoulder only engages with daylight mix.
+uniform float highlightKnee : hint_range(0.3, 1.0, 0.05) = 0.6;
 uniform int worldPaletteMode = 0;
 // Final image brightness while NVG is on. Applied to the composited overlay, so
 // unlike the old Environment.tonemap_white poke it is actually visible.
@@ -97,6 +110,31 @@ vec3 ThermalPalette(float t)
 	return color;
 }
 
+// C1 highlight shoulder for daylight: luminance above the knee bends down
+// toward a bounded top, so the palette never receives a flat clipped value for
+// the brightest part of the frame. Must run on the UNCLAMPED luminance: once
+// clamped, snow and sky are both exactly 1.0 and the gradient between them is
+// already lost. strength = dayMix: at night the knee sits above 1.0 and the
+// curve is a no-op.
+// Shape: a milder uniform rescale above the knee (distance fog keeps its
+// gradient), then an exponential tail caps the truly hot pixels just below
+// white. Slope at the knee is not C1, but NVG noise hides a crease of this
+// size; the distance contrast is worth it.
+float hiShoulder(float x, float knee, float strength)
+{
+	float k = mix(1.0, knee, strength);
+	if (k >= 0.999 || x <= k) {
+		return x;
+	}
+	float slope = 0.75;
+	float top = k + slope * (1.0 - k);
+	float cap = min(0.98, top + 0.18);
+	if (x <= 1.0) {
+		return k + (x - k) * slope;
+	}
+	return top + (cap - top) * (1.0 - exp(-(x - 1.0) * slope / (cap - top)));
+}
+
 // PIP off + magnifying scope: the lens path rotates colour channels on screen,
 // so a key shows up as its three cyclic rotations. Match the orbit when that can
 // happen, plain distance otherwise (zero change off-scope / PIP on).
@@ -134,10 +172,30 @@ void fragment()
 		float dStC = orbitDist(pixelColor.rgb, stCombatKey);
 		float dStD = orbitDist(pixelColor.rgb, stDefendKey);
 		float dNom = orbitDist(pixelColor.rgb, nomadKey);
+		// Wash guard for the combat key. Combat is the only two-channel-
+		// saturated key, so a fully washed pixel (daylight sky, snow, cloud
+		// decks) converges onto its measured orbit and painted the whole sky
+		// combat-red plus red speckles on bright snow. The ring pixel keeps
+		// one channel behind by ~0.18 (see DET_ST_COMBAT in VTKNVG.gd); a
+		// white wash has all channels together. Spread below the margin
+		// cannot be the ring, whatever the scope rotation did to its orbit.
+		float washSpread = max(pixelColor.r, max(pixelColor.g, pixelColor.b))
+			- min(pixelColor.r, min(pixelColor.g, pixelColor.b));
+		if (washSpread < 0.10) {
+			dStC = 99.0;
+		}
 		float dCore = min(dMine, min(dStN, min(dStC, min(dStD, dNom))));
 
 		float rawLuminance = dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114));
-		float luminance = clamp(rawLuminance * thermalDarken, 0.0, 1.0);
+		// Shoulder BEFORE the clamp: the top of the range bends down while the
+		// gradient still exists; the clamp afterwards sees values that stop at
+		// the shoulder top, so snow, sky and truly hot pixels stay distinct.
+		float luminance = clamp(hiShoulder(rawLuminance * thermalDarken, highlightKnee, dayMix), 0.0, 1.0);
+		// Soft lift: full strength maps 0.1 -> 0.15, 0.5 -> 0.67, 1.0 -> 1.0.
+		if (dayMix > 0.0) {
+			float lifted = 1.0 - pow(1.0 - luminance, 1.6);
+			luminance = mix(luminance, lifted, dayMix);
+		}
 		vec3 backgroundColor = ThermalPalette(luminance) * 0.7;
 		if (dCore < DET_TOL_CORE) {
 			// Closest wins. Order (exact ties only): mine, state, nomad.
@@ -157,6 +215,16 @@ void fragment()
 		}
 	} else {
 		color = pixelColor * tint;
+		// The plain NVG branch runs without the thermal palette, so the same
+		// daylight trim needs its own soft lift to keep daylight readable.
+		if (dayMix > 0.0) {
+			float tintLum = max(dot(color.rgb, vec3(0.299, 0.587, 0.114)), 0.0001);
+			// Same order as the thermal branch: bend the highlights into the
+			// shoulder first, then lift the middle back up.
+			tintLum = hiShoulder(tintLum, highlightKnee, dayMix);
+			float liftedLum = 1.0 - pow(1.0 - min(tintLum, 1.0), 1.6);
+			color.rgb *= mix(1.0, liftedLum / tintLum, dayMix);
+		}
 		// Contour mode: no world palette, but mine keys are still painted onto
 		// mines so they stay readable here instead of reading as a plain
 		// tinted shell.

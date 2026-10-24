@@ -1,31 +1,22 @@
 shader_type spatial;
 render_mode unshaded, cull_back, depth_draw_never, depth_test_disabled;
 
-// Depth-comparing variant of the silhouette ring. One shader serves both
-// modes; the mode lives in uniforms:
-// - near_only = false (idle ring): the wall compare honours every occluder.
-// - near_only = true (x-ray ring): walls punch through, and only
-//   camera-attached geometry closer than the carve hides the ring — that is
-//   how the carried scope glass stops leaking x-ray from the outside while
-//   the ring survives in the magnified scope view.
-// carve is the metres-in-front-of-the-camera zone that never occludes. The
-// ESP drives both: scoped runs widen it (0.60, the aiming eye sits inside the
-// optic), free runs keep it at 0.10 so the idle ring hides behind the settled
-// scope glass. Uniform parity with the old ring pair: the runtime flip keeps
-// all state without re-reading opts.
+// X-ray silhouette ring. Walls punch through, and only camera-attached
+// geometry closer than the carve hides the ring - that is how the carried
+// scope hardware stops leaking x-ray from the outside while the ring survives
+// in the magnified scope view. The ESP sets near_only=true and carve=0.60 for
+// a live trigger window; idle rings use the depth-tested VTKOutlineRingDepth
+// shader instead.
 uniform vec3 state_key : source_color = vec3(1.0, 0.0, 0.0);
+// Matches the idle ring: the detector key is restored to its night-time
+// on-screen value while the background is compensated by VTKNVG.
+global uniform float vtk_key_gain = 1.0;
 uniform float grow : hint_range(0.0, 0.15, 0.001) = 0.006;
 uniform float rim_power : hint_range(0.0, 6.0, 0.1) = 1.0;
 uniform float cool : hint_range(0.0, 1.0, 0.01) = 0.0;
 uniform bool near_only = false;
 uniform float carve : hint_range(0.05, 1.0, 0.01) = 0.25;
 uniform sampler2D depth_tex : hint_depth_texture, filter_nearest;
-// The scope picture window: the ring draws only inside it while aiming.
-// Measured once per scope engage from the optic's Mask disc: the projected
-// vertex cloud of the mask surface gives the window boundary in 2*SCREEN_UV-1
-// units (clipCenter, clipR). clipR = 0.0 keeps this clip off (not aiming).
-uniform vec2 clipCenter = vec2(0.0, 0.0);
-uniform float clipR = 0.0;
 
 void vertex() {
 	VERTEX += NORMAL * grow;
@@ -40,18 +31,11 @@ float depth_metres(float ndc, vec2 uv, mat4 inv_proj) {
 }
 
 void fragment() {
-	// Screen-space clip to the scope picture window; off when clipR = 0.
-	if (clipR > 0.001) {
-		vec2 scr = SCREEN_UV * 2.0 - vec2(1.0);
-		if (length(scr - clipCenter) > clipR) {
-			discard;
-		}
-	}
 	// Same edge measure as the x-ray ring: |dot| small at the silhouette,
 	// abs() keeps the band symmetric.
 	float facing = abs(dot(normalize(NORMAL), normalize(VIEW)));
 	float edge = 1.0 - facing;
-	ALBEDO = state_key;
+	ALBEDO = state_key * vtk_key_gain;
 	ALPHA = pow(edge, rim_power) * (1.0 - cool);
 
 	float scene_m = depth_metres(texture(depth_tex, SCREEN_UV).r, SCREEN_UV, INV_PROJECTION_MATRIX);

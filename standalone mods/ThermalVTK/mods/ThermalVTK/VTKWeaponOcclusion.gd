@@ -4,21 +4,16 @@ extends RefCounted
 # materials are opaque and draw first, letting outlines paint over the gun.
 # Fix: patch each weapon material to output ALPHA = 1.0 (moves it into the
 # transparent pass) and depth_draw_always (keeps self-occlusion), then give it a
-# render_priority ABOVE the outlines (30 vs 20/21) so it draws last.
+# render_priority ABOVE the outline ring (30) so it draws last.
 #
 # The rig's "Attachments" subtree (sights, lasers) keeps its own alpha and
 # priorities: forcing ALPHA = 1.0 on its alpha-masked surfaces turns the
-# ocular into an opaque black disc painted over the scope picture. A depth-
-# token swap experiment (1.11.4-1.12.3) went further and darkened the lens
-# itself: the vanilla depth behaviour of the Scope/Mask/Objective shaders
-# shapes the scope picture, so the attachments subtree keeps its materials
-# EXACTLY vanilla (1.12.4) - with one carve-out (1.13.1): the optic TUBE
-# (Alpha.gdshader, the semi-transparent hardware around the picture circle)
-# gets a forced ALPHA = 1.0 copy, because its semi-transparent pixels let
-# the occluded ring bleed through at the lens rim. ALBEDO, shader math and
-# priority stay vanilla; only the final ALPHA write is overridden. Neither the ring
-# nor the nomad marker needs a swap: their shaders carry depth_test_disabled
-# and draw by scope-driven priority.
+# ocular into an opaque black disc painted over the scope picture. One
+# controlled exception: the Mask shader's depth write follows the scope mode.
+# With PIP off the Mask stops writing depth, so the depth-tested ring is
+# visible inside the lens; with PIP on it writes depth again, hiding the
+# main-camera ring inside the lens and leaving the optic camera's picture as
+# the only in-scope copy.
 #
 # Driven once per frame by VTKESP while the contour ESP is active.
 
@@ -30,14 +25,15 @@ var _connected: bool = false
 var _mgr: Node = null
 var _patched_shaders: Dictionary = {}
 var _patched_base: Dictionary = {}
-var _tubes: Dictionary = {}
-
-# The optic tube cover: semi-transparent hardware around the picture circle.
-# See the tube carve-out in the module header (1.13.1).
-const TUBE_SHADER := "res://Shaders/Alpha.gdshader"
+var _mask_shaders: Dictionary = {}
+var _mask_entries: Array = []
+var _scope_scoped: bool = false
+var _scope_pip: bool = false
+var _scope_ready: bool = false
 # How often (frames) the cheap meta-guarded resweep re-walks the rigs; catches
 # meshes that landed after the add signal or before we attached.
 const RESWEEP_FRAMES := 90
+const MASK_SHADER := "res://Shaders/Mask.gdshader"
 var _dbg_patched: int = 0
 var _dbg_layer_skip: int = 0
 var _resweep_cd: int = 0
@@ -58,9 +54,9 @@ func tick() -> void:
 		_mgr = null
 		_patched_shaders.clear()
 		_patched_base.clear()
-		_tubes.clear()
-		_tint_cache.clear()
-		_tint_on = false
+		_mask_shaders.clear()
+		_mask_entries.clear()
+		_scope_ready = false
 		_dbg_patched = 0
 		_dbg_layer_skip = 0
 		_resweep_cd = 0
@@ -141,13 +137,7 @@ func _patch_mesh(mesh: MeshInstance3D, att_node: Node) -> void:
 	Dbg.log("WEAPON", "patch %s chain=%s" % [mesh.name, trail])
 	mesh.set_meta("VTK_OCC", true)
 	if _under_attachments(mesh, att_node):
-		# Everything inside the assembly stays vanilla: the scope picture is
-		# shaped by the optic shaders' own depth behaviour (see module header).
-		# Carve-out: the tube's semi-transparent pixels hide nothing from the
-		# ring (it draws later and samples only the opaque-pass depth), so the
-		# tube renders with a forced ALPHA = 1.0 copy - opaque cover, same
-		# look otherwise.
-		_patch_tube(mesh)
+		_patch_mask_depth(mesh)
 		return
 	var count: int = mesh.mesh.get_surface_count()
 	for i in count:
@@ -215,6 +205,67 @@ func _under_attachments(mesh: MeshInstance3D, att_node: Node) -> bool:
 			att = true
 		node = node.get_parent()
 	return att
+
+# Scope mode drives the one attachment swap: the Mask is the depth barrier
+# above the lens. Without PIP the main camera is the picture, so the Mask must
+# not write depth or it would erase the ring inside the lens. With PIP the
+# optic camera supplies the picture; the Mask writes depth and hides the
+# main-camera ring inside the lens, so the picture does not show it twice.
+func set_scope_mode(scoped: bool, pip: bool) -> void:
+	if _scope_ready and scoped == _scope_scoped and pip == _scope_pip:
+		return
+	_scope_ready = true
+	_scope_scoped = scoped
+	_scope_pip = pip
+	_apply_mask_mode()
+
+func _apply_mask_mode() -> void:
+	var depthless: bool = _scope_scoped and not _scope_pip
+	var live: Array = []
+	for entry in _mask_entries:
+		var mesh = entry.get("mesh")
+		if mesh == null or not is_instance_valid(mesh):
+			continue
+		live.append(entry)
+		var mat: Material = entry.get("depthless") if depthless else entry.get("orig")
+		if mesh.get_surface_override_material(entry.get("index")) != mat:
+			mesh.set_surface_override_material(entry.get("index"), mat)
+	if live.size() != _mask_entries.size():
+		_mask_entries = live
+
+func _patch_mask_depth(mesh: MeshInstance3D) -> void:
+	var count: int = mesh.mesh.get_surface_count()
+	for i in count:
+		var mat: Material = mesh.get_surface_override_material(i)
+		if mat == null:
+			mat = mesh.mesh.surface_get_material(i)
+		if mat == null or not (mat is ShaderMaterial):
+			continue
+		var sm: ShaderMaterial = mat as ShaderMaterial
+		if sm.shader == null or sm.shader.resource_path.find(MASK_SHADER) == -1:
+			continue
+		var dup: ShaderMaterial = sm.duplicate() as ShaderMaterial
+		dup.shader = _mask_shader(sm.shader)
+		_mask_entries.append({
+			"mesh": mesh,
+			"index": i,
+			"orig": mat,
+			"depthless": dup,
+		})
+		if _scope_ready and _scope_scoped and not _scope_pip:
+			mesh.set_surface_override_material(i, dup)
+
+func _mask_shader(src: Shader) -> Shader:
+	if src == null:
+		return null
+	var rid_id: int = src.get_rid().get_id()
+	if rid_id in _mask_shaders:
+		return _mask_shaders[rid_id]
+	var code: String = src.code
+	var out := Shader.new()
+	out.code = code.replace("depth_draw_always", "depth_draw_never")
+	_mask_shaders[rid_id] = out
+	return out
 
 func _patch_base(src: BaseMaterial3D) -> BaseMaterial3D:
 	var rid_id: int = src.get_rid().get_id()
@@ -302,221 +353,5 @@ func _patch_shader(src: Shader) -> Shader:
 	out.code = patched
 	_patched_shaders[rid_id] = out
 	return out
-
-# Tube carve-out (see module header): substitutes a forced-ALPHA copy for
-# the Alpha-shader surfaces. Priority and every other token stay vanilla.
-# Diagnostic glass tint (1.13.2): while the scope debug snapshot runs, the
-# Scope-shader surfaces are replaced by a magenta debug material so the
-# user can see exactly where the optic glass sits on screen - if a spill
-# band lights up magenta, it paints over the glass; if it stays dark, it
-# paints over the periphery behind the housing. Off restores the vanilla
-# instances byte-perfect. Reticle/Mask/Objective are never touched.
-const TINT_SCOPE := "res://Shaders/Scope.gdshader"
-const MASK_SHADER := "res://Shaders/Mask.gdshader"
-var _tint_on: bool = false
-var _tint_mat: ShaderMaterial = null
-var _tint_cache: Dictionary = {}
-
-func _tint_material() -> ShaderMaterial:
-	if _tint_mat != null:
-		return _tint_mat
-	var sh := Shader.new()
-	sh.code = "shader_type spatial;\nrender_mode unshaded, depth_draw_always;\nuniform vec4 tint_color : source_color = vec4(1.0, 0.0, 1.0, 1.0);\nvoid fragment() {\n\tALBEDO = tint_color.rgb;\n\tALPHA = tint_color.a;\n}\n"
-	var m := ShaderMaterial.new()
-	m.shader = sh
-	_tint_mat = m
-	return m
-
-func set_scope_tint(on: bool) -> void:
-	if on == _tint_on:
-		return
-	_tint_on = on
-	if not on:
-		_restore_tint()
-		return
-	var mgr := _mgr
-	if mgr != null and is_instance_valid(mgr):
-		_tint_walk(mgr)
-
-func _tint_world(root: Node) -> void:
-	_tint_walk(root)
-
-func _tint_walk(node: Node) -> void:
-	if node == null or not is_instance_valid(node):
-		return
-	if node is MeshInstance3D:
-		var mi := node as MeshInstance3D
-		if mi.mesh == null:
-			return
-		var count: int = mi.mesh.get_surface_count()
-		for i in count:
-			var mat: Material = mi.get_surface_override_material(i)
-			if mat == null:
-				mat = mi.mesh.surface_get_material(i)
-			if mat == null or not (mat is ShaderMaterial):
-				continue
-			var sm: ShaderMaterial = mat as ShaderMaterial
-			if sm.shader == null or sm.shader.resource_path.find(TINT_SCOPE) == -1:
-				continue
-			var id: int = mi.get_instance_id()
-			if not _tint_cache.has(id):
-				_tint_cache[id] = []
-			var saved: Array = _tint_cache[id]
-			while saved.size() <= i:
-				saved.append(null)
-			if saved[i] == null:
-				saved[i] = mi.get_surface_override_material(i)
-			mi.set_surface_override_material(i, _tint_material())
-	for child in node.get_children():
-		_tint_walk(child)
-
-func _restore_tint() -> void:
-	for id in _tint_cache:
-		var mi: Object = instance_from_id(id)
-		if mi == null or not is_instance_valid(mi) or not (mi is MeshInstance3D):
-			continue
-		var mesh := mi as MeshInstance3D
-		var saved: Array = _tint_cache[id]
-		for i in saved.size():
-			if saved[i] != null:
-				mesh.set_surface_override_material(i, saved[i])
-	_tint_cache.clear()
-	_tint_on = false
-
-# Measures the scope picture window in 2*SCREEN_UV-1 units by projecting the
-# optic's Mask-shader surface vertices through the aiming camera. The mask
-# disc is the window plane: its projected vertex cloud is an annulus, the
-# inner radius IS the visible picture edge - what the ring must stay inside.
-# Empty result = no mask found or out-of-range measure; the caller keeps the
-# clip off.
-func measure_scope_clip(cam: Camera3D) -> Dictionary:
-	if cam == null or not is_instance_valid(cam) or not cam.is_inside_tree():
-		return {}
-	if _mgr == null or not is_instance_valid(_mgr):
-		return {}
-	return _mask_walk(_mgr, cam)
-
-func _mask_walk(node: Node, cam: Camera3D) -> Dictionary:
-	if node == null or not is_instance_valid(node) or not node.is_inside_tree():
-		return {}
-	if node is MeshInstance3D:
-		var hit := _measure_mask_mesh(node as MeshInstance3D, cam)
-		if not hit.is_empty():
-			return hit
-	for child in node.get_children():
-		var res := _mask_walk(child, cam)
-		if not res.is_empty():
-			return res
-	return {}
-
-func _measure_mask_mesh(mi: MeshInstance3D, cam: Camera3D) -> Dictionary:
-	if mi.mesh == null:
-		return {}
-	var count: int = mi.mesh.get_surface_count()
-	for i in count:
-		var mat: Material = mi.get_surface_override_material(i)
-		if mat == null:
-			mat = mi.mesh.surface_get_material(i)
-		if mat == null or not (mat is ShaderMaterial):
-			continue
-		var sm: ShaderMaterial = mat as ShaderMaterial
-		if sm.shader == null or sm.shader.resource_path.find(MASK_SHADER) == -1:
-			continue
-		var arrays: Array = mi.mesh.surface_get_arrays(i)
-		if arrays.size() <= Mesh.ARRAY_VERTEX:
-			continue
-		var verts = arrays[Mesh.ARRAY_VERTEX]
-		if verts == null or verts.size() == 0:
-			continue
-		var step := 1
-		if verts.size() > 400:
-			step = int(verts.size() / 400) + 1
-		var size: Vector2 = cam.get_viewport().get_visible_rect().size
-		if size.x <= 0.0 or size.y <= 0.0:
-			return {}
-		var inv: Transform3D = cam.global_transform.affine_inverse()
-		var rmin := 1e9
-		var rmax := 0.0
-		var cx := 0.0
-		var cy := 0.0
-		var n := 0
-		for vi in range(0, verts.size(), step):
-			var w: Vector3 = mi.global_transform * (verts[vi] as Vector3)
-			var rel: Vector3 = inv * w
-			if rel.z > -0.01:
-				continue
-			var p: Vector2 = cam.unproject_position(w)
-			var ndc: Vector2 = p / size * 2.0 - Vector2.ONE
-			var rad: float = ndc.length()
-			if rad < rmin:
-				rmin = rad
-			if rad > rmax:
-				rmax = rad
-			cx += ndc.x
-			cy += ndc.y
-			n += 1
-		if n == 0:
-			return {}
-		# The projected cloud tells the mask's topology: an annulus keeps its
-		# hole edge well away from the screen centre (window = hole edge),
-		# while a full disc has vertices at the centre (window = outer edge
-		# - the disc IS the picture plane).
-		var edge: float = rmin if rmin > 0.25 * rmax else rmax
-		edge *= 0.98
-		Dbg.log("SCOPE", "clip: mesh=%s verts=%d rmin=%.4f rmax=%.4f edge=%.4f center=%.2f,%.2f" % [str(mi.name), n, rmin, rmax, edge, cx / n, cy / n])
-		# Sane window: inside the screen, big enough to be the picture hole.
-		if edge > 0.05 and edge < 2.5 and rmax > 0.02:
-			return {"r": edge, "rmax": rmax, "center": Vector2(cx / n, cy / n)}
-		return {}
-	return {}
-	return {}
-func _patch_tube(mesh: MeshInstance3D) -> void:
-	var count: int = mesh.mesh.get_surface_count()
-	for i in count:
-		var mat: Material = mesh.get_surface_override_material(i)
-		if mat == null:
-			mat = mesh.mesh.surface_get_material(i)
-		if mat == null or not (mat is ShaderMaterial):
-			continue
-		var sm: ShaderMaterial = mat as ShaderMaterial
-		if sm.shader == null or sm.shader.resource_path.find(TUBE_SHADER) == -1:
-			continue
-		var dup: ShaderMaterial = sm.duplicate() as ShaderMaterial
-		dup.shader = _tube_shader(sm.shader)
-		mesh.set_surface_override_material(i, dup)
-
-func _tube_shader(src: Shader) -> Shader:
-	if src == null:
-		return null
-	var rid_id: int = src.get_rid().get_id()
-	if rid_id in _tubes:
-		return _tubes[rid_id]
-	var code: String = src.code
-	var patched: String = code
-	var frag_start: int = code.find("void fragment()")
-	if frag_start < 0:
-		patched = code + "\nvoid fragment() {\n\tALPHA = 1.0;\n}\n"
-	else:
-		var brace_start: int = patched.find("{", frag_start)
-		var brace_end: int = -1
-		if brace_start >= 0:
-			var depth: int = 0
-			for idx in range(brace_start, patched.length()):
-				if patched[idx] == '{':
-					depth += 1
-				elif patched[idx] == '}':
-					depth -= 1
-					if depth == 0:
-						brace_end = idx
-						break
-		if brace_end < 0:
-			_tubes[rid_id] = src
-			return src
-		# Last assignment wins: the shader's own ALPHA write is overridden.
-		patched = patched.substr(0, brace_end) + "\n\tALPHA = 1.0;\n" + patched.substr(brace_end)
-	var out: Shader = src.duplicate() as Shader
-	out.code = patched
-	_tubes[rid_id] = out
-	return out
-
+# Optic assembly hardware keeps its materials vanilla - no swap machinery
 

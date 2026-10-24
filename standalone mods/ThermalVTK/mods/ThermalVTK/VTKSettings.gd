@@ -19,10 +19,13 @@ class Rec:
 	var outline_enabled: bool = true
 	var outline_xray: bool = true
 	var thermal_mines: bool = true
+	var daylight_compensation: bool = true
 	# Thermal world.
 	var nvg_noise: float = 0.0
 	var nvg_white: float = 1.0
 	var world: float = 1.70
+	# Daylight highlight rolloff knee (1.0 = off).
+	var highlight_knee: float = 0.6
 	# NPC outlines.
 	var corpse_decay: float = 90.0
 	var outline_distance: float = 60.0
@@ -72,6 +75,8 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Float", "key": "nvg_noise", "name": "NVG noise", "def": 0.0, "min": 0.0, "max": 60.0, "step": 0.5, "cat": "01. ThermalVision", "pos": 5, "tip": "Grain amount over the NVG image. Lower is cleaner. Vanilla is fixed at 10."},
 	{"sect": "Float", "key": "nvg_white", "name": "NVG brightness", "def": 1.0, "min": 0.05, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 6, "tip": "Brightness of the NVG image. 1 = full brightness; lower darkens the whole overlay."},
 	{"sect": "Float", "key": "thermal_world", "name": "World brightness", "def": 1.70, "min": 1.0, "max": 4.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 7, "tip": "How bright the surrounding world reads in thermal."},
+	{"sect": "Bool", "key": "daylight_compensation", "name": "Daylight compensation", "def": true, "cat": "01. ThermalVision", "pos": 8, "tip": "In bright daylight, lower the game's exposure so snow and sky keep detail instead of washing out. No effect at night; interiors are only slightly trimmed."},
+	{"sect": "Float", "key": "thermal_highlight_knee", "name": "Highlight rolloff", "def": 0.6, "min": 0.3, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 9, "tip": "In daylight, background pixels brighter than this (snow, sky, clouds) bend into a softer highlight and keep their detail instead of washing out. Lower = stronger trim. Night is unaffected; 1.0 disables it."},
 	{"sect": "Float", "key": "outline_distance", "name": "Distance", "def": 60.0, "min": 0.0, "max": 300.0, "step": 10.0, "cat": "02. NPC", "pos": 0, "tip": "Maximum distance for an outline. Outlines are hidden past this range."},
 	{"sect": "Float", "key": "outline_rim", "name": "Rim", "def": 2.0, "min": 0.0, "max": 6.0, "step": 0.5, "cat": "02. NPC", "pos": 1, "tip": "Edge sharpness of the outline. 1.0 is a linear falloff; higher values tighten the band toward the silhouette."},
 	{"sect": "Float", "key": "outline_thickness", "name": "Thickness", "def": 0.006, "min": 0.001, "max": 0.02, "step": 0.001, "cat": "02. NPC", "pos": 2, "tip": "How far the outline band grows beyond the body."},
@@ -142,9 +147,11 @@ static func read(cfg: ConfigFile) -> Rec:
 	rec.outline_enabled = bool(_val(cfg, "Bool", "outline_enabled", rec.outline_enabled))
 	rec.outline_xray = bool(_val(cfg, "Bool", "outline_xray", rec.outline_xray))
 	rec.thermal_mines = bool(_val(cfg, "Bool", "thermal_mines", rec.thermal_mines))
+	rec.daylight_compensation = bool(_val(cfg, "Bool", "daylight_compensation", rec.daylight_compensation))
 	rec.nvg_noise = float(_val(cfg, "Float", "nvg_noise", rec.nvg_noise))
 	rec.nvg_white = float(_val(cfg, "Float", "nvg_white", rec.nvg_white))
 	rec.world = float(_val(cfg, "Float", "thermal_world", rec.world))
+	rec.highlight_knee = float(_val(cfg, "Float", "thermal_highlight_knee", rec.highlight_knee))
 	rec.corpse_decay = float(_val(cfg, "Float", "corpse_decay", rec.corpse_decay))
 	rec.outline_distance = float(_val(cfg, "Float", "outline_distance", rec.outline_distance))
 	rec.outline_thickness = float(_val(cfg, "Float", "outline_thickness", rec.outline_thickness))

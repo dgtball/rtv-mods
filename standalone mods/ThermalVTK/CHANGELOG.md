@@ -1,19 +1,36 @@
 # Changelog
 
-## [1.14.1] - 2026-10-23
+## [1.17.1] - 2026-10-24
 
 ### Fixed
-- The contour is back inside the scope picture: the window measurement now also handles optics whose picture plane is a full disc, so the clip boundary no longer collapses to the centre.
+- The open daytime sky no longer reads as combat-red: washed-out bright pixels (the sky, clouds, snow glints) can no longer be mistaken for the combat outline key. The red rim band at the eyepiece edge and the red speckles on bright snow came from the same mix-up and go away with it.
+- Distance contrast under daylight compensation is up: the highlight rolloff now keeps more of the midtone gradient, so the far forest and the fog band read as distinct shades again.
 
-## [1.14.0] - 2026-10-23
+## [1.17.0] - 2026-10-24
 
-### Fixed
-- While aiming through a scope, the contour now stays inside the sight's picture window and no longer spills past the lens edge.
+### Added
+- A "Highlight rolloff" setting: in daylight the brightest background (snow, sky, clouds) bends into a softer highlight, so it keeps texture and contrast instead of washing out into one flat white field. Night is unaffected.
 
-## [1.13.1] - 2026-10-23
+## [1.16.0] - 2026-10-23
+
+### Added
+- Daylight compensation: the night-vision picture keeps its detail in bright sun and on snow instead of washing out white. Night and interiors stay almost untouched, and the feature can be turned off in settings.
+
+## [1.15.1] - 2026-10-23
 
 ### Changed
-- The metal hardware around the scope's picture is now fully opaque, which hides the contour band that used to spill past the lens edge. The ring inside the picture, the nomad marker and the scope picture itself are unchanged.
+- Lighter on the frame with many NPCs in view: outlines no longer draw over body parts or distance variants the game itself hides, so rings stop piling up on models that are already invisible.
+- Mines only update their heat tint when they enter or leave the reveal range, instead of repainting every frame.
+
+### Fixed
+- Turning the thermal layer back on after a long pause no longer causes a one-time stutter.
+
+## [1.15.0] - 2026-10-23
+
+### Fixed
+- NPC outlines stay inside the magnified scope picture and no longer bleed onto the scope body or the lens rim.
+- X-ray reveals still show through walls while aiming, without leaking onto the scope housing.
+- Picture-in-picture scopes show the outline once instead of twice.
 
 ## [1.13.0] - 2026-10-23
 

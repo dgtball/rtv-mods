@@ -1,10 +1,13 @@
 extends RefCounted
-# Builds the outline shaders. One ring shader serves both modes: the x-ray
-# flag and the camera-attached carve (the metres in front of the camera that
-# never hide the ring) live in uniforms, so the runtime flip never loses state
-# and a retune is a parameter change, not a second resource.
+# Builds the outline shaders. The idle ring uses the normal depth test so the
+# world, the weapon and the sight hardware clip it; the x-ray ring swaps to the
+# depth-free variant only while a trigger window is live.
 
-const RING_OCCLUDED_SRC := preload("res://mods/ThermalVTK/VTKOutlineRingOccluded.gdshader")
+const RING_DEPTH_SRC := preload("res://mods/ThermalVTK/VTKOutlineRingDepth.gdshader")
+const RING_XRAY_SRC := preload("res://mods/ThermalVTK/VTKOutlineRingOccluded.gdshader")
 
 static func ring() -> Shader:
-	return RING_OCCLUDED_SRC
+	return RING_DEPTH_SRC
+
+static func ring_xray() -> Shader:
+	return RING_XRAY_SRC

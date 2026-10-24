@@ -24,10 +24,7 @@ static func scope_snapshot(gd: Resource, players: Array, esp: Node, weapon) -> v
 		return
 	var fwd: Vector3 = -cam.global_transform.basis.z
 	Dbg.log("SCOPE", "snapshot scoped=%s pip=%s fov=%.1f" % [str(scoped), str(pip), cam.fov])
-	if weapon != null:
-		weapon.set_scope_tint(true)
 	_snapshot_raywalk(cam, players)
-	_snapshot_rim(cam)
 	_snapshot_entries(esp)
 	_snapshot_render(cam, esp)
 	_snapshot_ring(cam, weapon)
@@ -138,41 +135,9 @@ static func _snapshot_raywalk(cam: Camera3D, players: Array) -> void:
 			from = hit["position"] + fwd * 0.1
 			continue
 		_desc_collider(col, d)
-		if d > 30.0:
+		if d > 80.0:
 			return
 		from = hit["position"] + fwd * 0.1
-
-# RIM rays: 8 diagonal casts around the forward axis at a fixed angular
-# radius, so the dump names the hardware at the picture-circle edge - the
-# zone where the occluded ring spills past the lens.
-static func _snapshot_rim(cam: Camera3D) -> void:
-	var space := cam.get_world_3d().direct_space_state
-	if space == null:
-		Dbg.log("SCOPE", "rim: no space state")
-		return
-	var fwd: Vector3 = -cam.global_transform.basis.z
-	var right: Vector3 = cam.global_transform.basis.x
-	var up: Vector3 = cam.global_transform.basis.y
-	var radius := 0.3
-	for i in 8:
-		var ang: float = TAU * float(i) / 8.0
-		var offset: Vector3 = (right * cos(ang) + up * sin(ang)) * radius
-		var dir: Vector3 = (fwd + offset).normalized()
-		var hit: Dictionary = space.intersect_ray(PhysicsRayQueryParameters3D.create(cam.global_position + dir * 0.05, cam.global_position + dir * 60.0))
-		if hit.is_empty():
-			Dbg.log("SCOPE", "rim%d: clear" % i)
-			continue
-		var d: float = cam.global_position.distance_to(hit["position"])
-		var col = hit.get("collider")
-		var head := "rim%d d=%.2f" % [i, d]
-		if col != null:
-			head += " class=%s node=%s" % [col.get_class(), str(col.name)]
-			var sc = col.get_script()
-			if sc != null:
-				head += " script=" + str(sc.resource_path)
-		Dbg.log("SCOPE", head)
-		if col is MeshInstance3D:
-			_mesh_surfaces(col as MeshInstance3D, "rim%d" % i)
 
 static func _desc_collider(col: Variant, d: float) -> void:
 	var head := "ray d=%.2f" % d

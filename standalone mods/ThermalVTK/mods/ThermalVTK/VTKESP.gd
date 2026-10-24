@@ -357,6 +357,12 @@ func _process(delta: float) -> void:
 		_hook_wait_cd = 0.5
 		_register_hooks()
 	if not enabled and not marker_visible:
+		_weapon.set_scope_mode(false, false)
+		# Parked: drop the rebuild log instead of letting it grow for the whole
+		# session. set_enabled(true) reseeds the live scene, so the parked ids
+		# add nothing; keeping them made the first enable drain a huge backlog.
+		if not _pending.is_empty():
+			_pending.clear()
 		# Both layers are off: free any lingering markers before parking, or they
 		# would stick until the map reloads (set_enabled's early-return skips the
 		# cleanup when the contour was already disabled).
@@ -366,20 +372,23 @@ func _process(delta: float) -> void:
 			_markers.clear()
 		return
 	_weapon.tick()
-	_outline.sync()
 	var scoped := _scoped_now()
 	var pip := _pip_now()
 	_outline.set_scoped(scoped, pip)
-	_scope_clip_sync(scoped)
+	_weapon.set_scope_mode(scoped and enabled, pip)
 	_scope_probe(delta)
 	_labels_sync()
 	_markers_sync()
 	_frame += 1
 	if not _pending.is_empty():
+		# node_added fires for every node that enters the tree, so each id can
+		# be tested on its own. Walking the subtree from every queued id was
+		# O(n * depth) on a fresh map: a parent is reported along with all of
+		# its descendants, which are then swept again from each of them.
 		for node_id in _pending:
 			var n := instance_from_id(node_id)
-			if n != null and is_instance_valid(n):
-				_scan(n)
+			if n != null and is_instance_valid(n) and n.is_inside_tree() and _is_bot(n):
+				_register(n)
 		_pending.clear()
 
 	var ppos_v = _player_pos()
@@ -403,9 +412,10 @@ func _gd_cached() -> Resource:
 		_probe_gd = load(Paths.GAME_DATA)
 	return _probe_gd
 
-# The scope view itself; PIP rides along in the same read (1.11.3: with PIP
-# on the optic camera supplies the in-scope picture, and the main-camera
-# ring drops under the glass so the picture does not show it twice).
+# The scope view itself; PIP rides along in the same read. Both flags go to
+# the outline and the weapon module: with PIP on the optic camera supplies the
+# in-scope picture, and the Mask depth write hides the main-camera ring inside
+# the lens, so the picture does not show it twice.
 func _scoped_now() -> bool:
 	var gd := _gd_cached()
 	if gd == null:
@@ -420,35 +430,11 @@ func _pip_now() -> bool:
 	var v = gd.get("PIP")
 	return v != null and bool(v)
 
-# Measure the scope picture window once per scope engage and hand it to the
-# outline: the ring clips itself to the window, so it stops spilling past the
-# lens edge. Re-measure on map scene changes (a new optic rig, not a new aim).
-var _clip_scoped: bool = false
-var _clip_scene_id: int = 0
-
-func _scope_clip_sync(scoped: bool) -> void:
-	var scene = get_tree().current_scene
-	var sid: int = 0
-	if scene != null:
-		sid = scene.get_instance_id()
-	if scoped and (not _clip_scoped or sid != _clip_scene_id):
-		var cam: Camera3D = get_viewport().get_camera_3d()
-		var clip: Dictionary = _weapon.measure_scope_clip(cam)
-		if not clip.is_empty():
-			_outline.set_scope_clip(clip.get("center", Vector2.ZERO), clip.get("r", 0.0))
-		else:
-			_outline.set_scope_clip(Vector2.ZERO, 0.0)
-		_clip_scene_id = sid
-	elif not scoped and _clip_scoped:
-		_outline.set_scope_clip(Vector2.ZERO, 0.0)
-	_clip_scoped = scoped
-
 # While the diagnostic log is on and the scope view is active, dump what the
 # camera sees (VTKScopeDebug): the ray walk reports the geometry between the
 # camera and whatever the crosshair reaches, with shaders and priorities.
 func _scope_probe(delta: float) -> void:
 	if not Dbg.enabled:
-		_weapon.set_scope_tint(false)
 		return
 	_scope_dbg_cd -= delta
 	if _scope_dbg_cd > 0.0:
@@ -459,7 +445,6 @@ func _scope_probe(delta: float) -> void:
 		return
 	var scoped_v = gd.get("isScoped")
 	if scoped_v == null or not bool(scoped_v):
-		_weapon.set_scope_tint(false)
 		return
 	ScopeDebug.scope_snapshot(gd, get_tree().get_nodes_in_group("Player"), self, _weapon)
 
