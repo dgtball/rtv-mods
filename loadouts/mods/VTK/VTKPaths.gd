@@ -11,7 +11,6 @@ const LOADER := "/root/Loader"
 const SIMULATION := "/root/Simulation"
 const DATABASE := "/root/Database"
 const CAMERA_MANAGER := "/root/Map/Core/Camera/Manager"
-const NVG := "/root/Map/Core/UI/NVG"
 
 # Свои автолоады. UI_ROOT уезжал по трём файлам литералом и был найден только
 # по ссылке в аудите; HOOKS - единственная дочерняя нода, до которой доходят
