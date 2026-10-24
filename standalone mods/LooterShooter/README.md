@@ -1,6 +1,6 @@
 # LooterShooter
 
-**Version:** 0.1.0
+**Version:** 0.1.1
 
 Standalone loot-rarity mod for Road to Vostok. Weapons and clothing found in
 containers and on bodies roll a per-instance rarity tier with passive affixes.

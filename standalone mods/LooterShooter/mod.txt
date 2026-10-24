@@ -1,7 +1,7 @@
 [mod]
 name="LooterShooter"
 id="looter-shooter"
-version="0.1.0"
+version="0.1.1"
 
 [autoload]
 LSH="res://mods/LooterShooter/LSHBoot.gd"

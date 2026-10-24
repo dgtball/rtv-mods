@@ -1,12 +1,17 @@
 extends "res://Scripts/SlotData.gd"
 
 @export var loot_tier: int = 0
-@export var loot_affixes: Array = []
+var loot_affixes: Array = []
 
 func Update(slotData) -> void:
 	super.Update(slotData)
-	loot_tier = slotData.loot_tier
-	loot_affixes = slotData.loot_affixes.duplicate(true)
+	if "loot_tier" in slotData:
+		loot_tier = slotData.loot_tier
+	if "loot_affixes" in slotData:
+		if slotData.loot_affixes is Array:
+			loot_affixes = slotData.loot_affixes.duplicate(true)
+		else:
+			loot_affixes = []
 
 func Reset() -> void:
 	super.Reset()
