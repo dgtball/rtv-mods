@@ -425,6 +425,7 @@ func _reset_daylight() -> void:
 	_env = null
 	_set_key_gain(1.0)
 	_push_day_mix()
+	_apply_uniforms()
 
 
 # MCM toggle off while NVG is worn: hand the exposure back immediately instead
