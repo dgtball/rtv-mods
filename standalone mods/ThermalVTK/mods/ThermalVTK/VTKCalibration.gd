@@ -25,10 +25,10 @@ extends RefCounted
 # the sweep as measured data.
 #
 # The >= 0.22 pairwise rule above applies to the original eight candidates.
-# cand08-10 are appended measurement probes, not calibration picks: cand09
-# deliberately re-probes cand05's hue region deeper into blue (raw distance
-# cand05<->cand09 = 0.10), and only one candidate is active per session, so
-# no runtime claim can mix them.
+# cand08-10 were appended measurement probes; each of them broke the >= 0.22
+# sweep rule, so they were never valid calibration picks and have been dropped
+# from CANDIDATES (measured values remain in the design docs as data). The
+# sweep's 0.22/0.40 rules above apply unchanged to the eight remaining picks.
 
 const CANDIDATES: Array[Color] = [
 	Color(0.60, 0.02, 0.02),
@@ -39,9 +39,6 @@ const CANDIDATES: Array[Color] = [
 	Color(0.02, 0.10, 0.60),
 	Color(0.34, 0.02, 0.58),
 	Color(0.55, 0.10, 0.32),
-	Color(0.00, 0.60, 0.72),
-	Color(0.00, 0.10, 0.70),
-	Color(0.00, 0.55, 1.00),
 ]
 
 # Clamped index: anything outside the sweep falls back to the first candidate.

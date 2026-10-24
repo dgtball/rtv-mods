@@ -33,7 +33,7 @@ const KEY_NORMAL := Color(1.0, 0.0, 0.0)
 # with the dominant channel kept bright and only the secondary dimmed
 # (cand10 (0,0.55,1.00)) measured two wash-stable but mutually divergent
 # anchor orbits (day (0.20,0.32,0.50) / night (0.13,0.60,0.93), ~0.52 apart)
-# and is documented here for a later pass:
+# and is documented in the design docs for a later detector pass:
 # it needs a day/night-lerped detector constant first, plus an Ice-palette
 # day claim check, and a day/night fix is scheduled before that. Until then
 # the wash guard in VTKNVG.gdshader is the mechanism, not a patch.
