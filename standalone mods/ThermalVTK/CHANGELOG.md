@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.17.2] - 2026-10-24
+
+### Fixed
+- The Classic thermal palette now gets brighter with every step up in heat: foggy days and other low-contrast scenes no longer show colder ground as a brighter shade than the warm spots on it.
+
 ## [1.17.1] - 2026-10-24
 
 ### Fixed
