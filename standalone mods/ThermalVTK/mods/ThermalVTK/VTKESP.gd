@@ -17,6 +17,9 @@ const NomadMarkerShader := preload("res://mods/ThermalVTK/VTKNomadMarker.gdshade
 # Polling cadence for state re-reads / fallback discovery (frames).
 const POLL_EVERY := 12
 const CAP := 24
+# Frames between line-of-sight raycasts per nomad. The id spreads the checks
+# across frames, so a squad of nomads costs one raycast every few frames.
+const LOS_EVERY := 6
 # Movement speeds above this threshold reveal the bot at the far (sprint)
 # distance instead of the walking one (the ITH walk/run/sprint idea).
 const RUN_SPEED := 2.0
@@ -62,6 +65,12 @@ var _want: Dictionary = {}
 var _want_ids: Array = []
 var _stale: Array = []
 var _dbg_draw_ms: float = 0.0
+# Test seam: when valid, it answers "is the diamond visible" and the camera
+# raycast is skipped entirely.
+var los_probe: Callable
+var _los_query: PhysicsRayQueryParameters3D = null
+var _los_exclude: Array[RID] = []
+var _los_player: Node = null
 var _pending: Array = []
 var _frame: int = 0
 var _outline := Outline.new()
@@ -538,11 +547,11 @@ func _label_free(id: int) -> void:
 
 func _markers_sync() -> void:
 	if not marker_visible:
-		for id in _markers.keys():
-			_marker_free(id)
-		_markers.clear()
+		_markers_free_all()
 		return
-	for id in _entries.keys():
+	for id in _ids_for_frame():
+		if not _entries.has(id):
+			continue
 		var e: Dictionary = _entries[id]
 		if not bool(e.get("nomad", false)):
 			if _markers.has(id):
@@ -556,14 +565,26 @@ func _markers_sync() -> void:
 		if bool(e.get("dead", false)) or bool(node.get("dead")):
 			_marker_free(id)
 			continue
-		if not _markers.has(id):
-			_marker_make(id, node)
+		var mi: MeshInstance3D = _markers.get(id)
+		if mi == null or not is_instance_valid(mi):
+			mi = _marker_make(id, node)
+			if mi == null:
+				continue
+		var win: Dictionary = e.get("win", Tracker.EMPTY_WINDOW)
+		var xray: bool = bool(e.get("xray_live", false)) and not win.is_empty()
+		if xray:
+			e["los"] = true
+		elif not e.has("los") or (_frame + id) % LOS_EVERY == 0:
+			e["los"] = _marker_los(e, mi)
+		mi.visible = bool(e.get("los", true))
 	for id in _markers.keys():
 		if not _entries.has(id):
 			_marker_free(id)
 
-func _marker_make(id: int, node: Node) -> void:
+func _marker_make(id: int, node: Node) -> MeshInstance3D:
 	var anchor := _anchor_above(node)
+	if not (anchor["parent"] is Node):
+		return null
 	# A key-emitting mesh instead of a Label3D: the marker paints the nomad key
 	# colour, so the NVG overlay detects it and substitutes the display colour.
 	# A green Label3D was re-coloured by the thermal palette ramp instead.
@@ -584,10 +605,12 @@ func _marker_make(id: int, node: Node) -> void:
 	mi.material_override = mat
 	mi.position = Vector3(0.0, float(anchor["y"]), 0.0)
 	# The quad is billboarded inside the shader (MeshInstance3D has no
-	# billboard property in Godot 4). The default depth test is kept, so the
-	# marker does not read through walls.
+	# billboard property in Godot 4). The depth test stays disabled for the
+	# scope picture (VTKNomadMarker.gdshader); visibility through walls is
+	# decided by _marker_los.
 	(anchor["parent"] as Node).add_child(mi)
 	_markers[id] = mi
+	return mi
 
 func _marker_free(id: int) -> void:
 	if _markers.has(id):
@@ -736,6 +759,65 @@ func _markers_free_all() -> void:
 	for id in _markers.keys():
 		_marker_free(id)
 	_markers.clear()
+
+func _marker_los(e: Dictionary, mi: MeshInstance3D) -> bool:
+	if los_probe.is_valid():
+		return bool(los_probe.call())
+	var cam := _camera() as Camera3D
+	if cam == null or not is_inside_tree():
+		return true
+	return _los_raycast(cam.global_position, mi.global_position, e)
+
+func _camera() -> Camera3D:
+	var vp := get_viewport()
+	if vp == null:
+		return null
+	return vp.get_camera_3d()
+
+func _los_raycast(from: Vector3, to: Vector3, e: Dictionary) -> bool:
+	var vp := get_viewport()
+	if vp == null:
+		return true
+	var world := vp.find_world_3d()
+	if world == null:
+		return true
+	var space := world.direct_space_state
+	if space == null:
+		return true
+	if _los_query == null:
+		_los_query = PhysicsRayQueryParameters3D.new()
+	_los_exclude.clear()
+	var p := _player_node()
+	if p != null:
+		_subtree_rids(p, _los_exclude)
+	var node = e.get("node")
+	if node is Node:
+		_subtree_rids(node, _los_exclude)
+	_los_query.from = from
+	_los_query.to = to
+	_los_query.exclude = _los_exclude
+	_los_query.collide_with_areas = false
+	_los_query.collide_with_bodies = true
+	_los_query.hit_from_inside = false
+	return space.intersect_ray(_los_query).is_empty()
+
+func _player_node() -> Node:
+	if _los_player != null and is_instance_valid(_los_player):
+		return _los_player
+	_los_player = null
+	for p in get_tree().get_nodes_in_group("Player"):
+		if p is Node3D:
+			_los_player = p
+			break
+	return _los_player
+
+func _subtree_rids(root: Node, out: Array[RID]) -> void:
+	if root == null or not is_instance_valid(root):
+		return
+	if root is CollisionObject3D:
+		out.append((root as CollisionObject3D).get_rid())
+	for c in root.get_children():
+		_subtree_rids(c, out)
 
 func _player_pos() -> Variant:
 	var players := get_tree().get_nodes_in_group("Player")

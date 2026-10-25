@@ -6,8 +6,10 @@ render_mode unshaded, depth_draw_never, depth_test_disabled, cull_disabled;
 // billboarded diamond quad (VTKESP._marker_make). The marker has NO depth
 // test (1.11.5): with it, any depth-writing near plane - the optic glass, the
 // tube, the patched gun body - erased the diamond across the whole scope
-// picture, and the marker vanished from the magnified view. Presence stays
-// ESP-driven: nomads while alive, gone on death.
+// picture, and the marker vanished from the magnified view. The depth test
+// stays disabled for the scope picture; walls and cover are handled by the ESP
+// line-of-sight raycast, not by the depth test. Presence stays ESP-driven:
+// nomads while alive, gone on death.
 uniform vec3 nomad_key : source_color = vec3(0.02, 0.60, 0.24);
 // Same daylight key restore as the state rings.
 global uniform float vtk_key_gain = 1.0;
