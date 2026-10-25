@@ -273,8 +273,9 @@ func _on_ai_changestate(_state: String) -> void:
 	if not _entries.has(id):
 		_register(n)
 	if _entries.has(id):
-		Tracker.apply_state(_entries[id], _read_state(n))
-		Dbg.log("ESP", "changestate id=%d state=%d" % [id, _read_state(n)])
+		var state := _read_state(n)
+		Tracker.apply_state(_entries[id], state)
+		Dbg.log("ESP", "changestate id=%d state=%d" % [id, state])
 
 func _on_ai_death(_direction: Vector3 = Vector3.ZERO, _force: float = 0.0) -> void:
 	Dbg.log("HOOK", "death")
@@ -327,12 +328,25 @@ func _on_ai_grenade(phase: int) -> void:
 # Telemetry around the trigger reveal: the tag itself and the registered id
 # go to the diagnostic log, so a crash during load leaves the last statement.
 func _trig_event(source: String, span: float, dist: float) -> void:
-	Dbg.log("HOOK", "play %s" % source)
+	if Dbg.enabled:
+		Dbg.log("HOOK", "play %s" % source)
 	if span <= 0.0:
 		return
 	# A zero reveal radius turns the source off (matches the outline's own
 	# 0 = hidden semantics): the sound never reaches the player.
 	if dist <= 0.0:
+		return
+	# Parked (thermal or both layers off): do not grow the registry from a
+	# sound event. Known entries keep their tags, so debug labels still read a
+	# window that was opened before the layer went off.
+	if not _any_layer():
+		var known := _caller()
+		if known == null or not is_instance_valid(known):
+			return
+		var kid: int = known.get_instance_id()
+		if not _entries.has(kid):
+			return
+		Tracker.tag_trig(_entries[kid], source, dist, _now() + span, span)
 		return
 	var n := _caller()
 	if not is_instance_valid(n):
@@ -342,7 +356,8 @@ func _trig_event(source: String, span: float, dist: float) -> void:
 		_register(n)
 	if _entries.has(id):
 		Tracker.tag_trig(_entries[id], source, dist, _now() + span, span)
-		Dbg.log("ESP", "trig id=%d source=%s span=%.1f dist=%.0f" % [id, source, span, dist])
+		if Dbg.enabled:
+			Dbg.log("ESP", "trig id=%d source=%s span=%.1f dist=%.0f" % [id, source, span, dist])
 
 func _exit_tree() -> void:
 	_labels_free_all()

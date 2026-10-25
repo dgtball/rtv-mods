@@ -131,10 +131,12 @@ func _patch_mesh(mesh: MeshInstance3D, att_node: Node) -> void:
 	var trail := ""
 	while n != null and hops < 16:
 		var mark: String = "E" if (att_node != null and n == att_node) or n.name == "Attachments" else ""
-		trail += ("|" if hops > 0 else "") + str(n.name) + mark
+		if Dbg.enabled:
+			trail += ("|" if hops > 0 else "") + str(n.name) + mark
 		n = n.get_parent()
 		hops += 1
-	Dbg.log("WEAPON", "patch %s chain=%s" % [mesh.name, trail])
+	if Dbg.enabled:
+		Dbg.log("WEAPON", "patch %s chain=%s" % [mesh.name, trail])
 	mesh.set_meta("VTK_OCC", true)
 	if _under_attachments(mesh, att_node):
 		_patch_mask_depth(mesh)
