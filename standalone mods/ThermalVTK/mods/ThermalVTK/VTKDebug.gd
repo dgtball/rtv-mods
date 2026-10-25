@@ -40,12 +40,6 @@ static func log(tag: String, msg: String) -> void:
 static func fmt(tag: String, msg: String) -> String:
 	return "[%s] %s" % [tag, msg]
 
-static func reset_for_tests() -> void:
-	enabled = false
-	if _file != null:
-		_file.close()
-		_file = null
-
 static func _now_str() -> String:
 	var dt := Time.get_datetime_dict_from_system()
 	return "%04d-%02d-%02d %02d:%02d:%02d" % [dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second]

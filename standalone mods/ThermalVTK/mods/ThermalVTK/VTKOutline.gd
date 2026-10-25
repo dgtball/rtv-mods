@@ -30,15 +30,9 @@ var _items: Dictionary = {}
 const SCOPE_RIM := 6.0
 const CARVE_XRAY := 0.60
 var _scoped: bool = false
-# gameData.PIP: the picture-in-picture path. True when Settings keeps the
-# optic camera render enabled.
-var _pip: bool = false
 
 func has(id: int) -> bool:
 	return _items.has(id)
-
-func material_of(id: int) -> Dictionary:
-	return _items.get(id, {})
 
 # Collect the NPC's paintable geometry. GeometryInstance3D (not just
 # MeshInstance3D) so MultiMesh/CSG parts are covered, and NO layer/visible
@@ -88,14 +82,8 @@ func set_entry_xray(id: int, on: bool) -> void:
 
 # The scope flag drives the thin in-scope band. The Mask depth-write toggle
 # lives in VTKWeaponOcclusion, driven from the same flags by VTKESP.
-func set_scoped(on: bool, pip := false) -> void:
+func set_scoped(on: bool) -> void:
 	_scoped = on
-	_pip = pip
-
-# PIP comes from the settings menu and may flip while aiming; the Mask toggle
-# re-reads it on the next frame.
-func set_pip(on: bool) -> void:
-	_pip = on
 
 func apply(id: int, node: Node, opts: Dictionary) -> void:
 	var meshes: Array = []
@@ -148,9 +136,6 @@ func _make_shell(src: GeometryInstance3D, ring_mat: ShaderMaterial) -> Dictionar
 			return pair
 		p.add_child(shell)
 		pair["shell"] = shell
-		# Cached per-frame visibility: the refresh loop must not read every
-		# source, but a mesh hidden at spawn must keep its ring hidden too.
-		pair["v"] = mi.visible
 		return pair
 	src.material_overlay = ring_mat
 	pair["overlay"] = true
@@ -167,18 +152,6 @@ func _mirror_range(src: GeometryInstance3D, shell: MeshInstance3D) -> void:
 	if shell.visibility_range_end != src.visibility_range_end:
 		shell.visibility_range_end = src.visibility_range_end
 		shell.visibility_range_end_margin = src.visibility_range_end_margin
-
-# Mirror the rig by hand: pooled bots and LOD swaps move the sources, and the
-# shells are plain copies, not bone-driven children. Called from the ESP frame.
-func sync() -> void:
-	for id in _items:
-		for pair in _items[id].get("pairs", []):
-			var src = pair.get("src")
-			var shell = pair.get("shell")
-			if shell == null or src == null:
-				continue
-			if is_instance_valid(src) and is_instance_valid(shell):
-				shell.transform = (src as Node3D).transform
 
 func _free_pairs(id: int) -> void:
 	var entry: Dictionary = _items[id]
@@ -213,14 +186,6 @@ func _recollect(id: int, entry: Dictionary) -> void:
 	entry["pairs"] = pairs
 	entry["meshes"] = fresh
 	entry["child_count"] = node.get_child_count()
-	# Fresh shells copy their source's visible flag, which is wrong while the
-	# trigger layer is parked hidden. Re-apply the cached mode instead of
-	# paying for a per-frame loop.
-	if entry.get("vis") != null and not bool(entry["vis"]):
-		for pair in pairs:
-			var shell = pair.get("shell")
-			if shell != null and is_instance_valid(shell):
-				shell.visible = false
 
 func refresh(id: int, opts: Dictionary) -> void:
 	var entry = _items.get(id)
@@ -255,19 +220,6 @@ func refresh(id: int, opts: Dictionary) -> void:
 		ring_mat.set_shader_parameter("cool", cool)
 		entry["p_cool"] = cool
 
-	# Trigger mode drives per-frame visibility through opts; the shells are
-	# plain scene nodes, so the world cannot do it for us. Per-frame range
-	# mirroring is not needed: AISpawner calls Initialize() (which assigns the
-	# LOD ranges) before our first draw, and _recollect re-copies on a rig
-	# rebuild. Reading every source each frame doubled the draw loop cost.
-	var show: bool = bool(opts.get("visible", true))
-	if entry.get("vis") == null or bool(entry["vis"]) != show:
-		entry["vis"] = show
-		for pair in entry.get("pairs", []):
-			var shell = pair.get("shell")
-			if shell != null and is_instance_valid(shell):
-				shell.visible = show and bool(pair.get("v", true))
-
 func clear(id: int) -> void:
 	var entry = _items.get(id)
 	if entry == null:
@@ -278,9 +230,3 @@ func clear(id: int) -> void:
 func clear_all() -> void:
 	for id in _items.keys():
 		clear(id)
-
-# Drop entries whose node is gone (targets no longer in `valid_ids`).
-func prune_missing(valid_ids: Dictionary) -> void:
-	for id in _items.keys():
-		if not valid_ids.has(id):
-			clear(id)

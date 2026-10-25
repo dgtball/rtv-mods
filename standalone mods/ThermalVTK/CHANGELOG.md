@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.0.0] - 2026-10-24
+
+### Changed
+- New default colours for the state contours: a yellow "normal" silhouette (default world's own tint now reads as yellow), a blue "defending" silhouette. The red combat contour stays unchanged. Existing profiles keep their custom values; only fresh or reset profiles get the new colours.
+
+## [1.17.5] - 2026-10-24
+
+### Fixed
+- The mod no longer writes its own error to the game log at startup.
+
+### Changed
+- Housekeeping only: dead code and duplicated defaults were removed. Nothing changes in game.
+
 ## [1.17.4] - 2026-10-25
 
 ### Changed

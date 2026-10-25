@@ -1,5 +1,7 @@
 extends RefCounted
 
+const States = preload("res://mods/ThermalVTK/VTKStates.gd")
+
 # Single source of truth for every mod setting. The DESCRIPTORS table drives
 # the MCM registration (labels, ranges, defaults), the profile merge
 # (ThermalVTK._sync_config) and the typed ConfigRec that the feature nodes
@@ -48,10 +50,11 @@ class Rec:
 	var pain_s: float = 2.0
 	var nade_d: float = 50.0
 	var nade_s: float = 2.0
-	# State colours.
-	var color_normal: Color = Color(1.0, 0.72, 0.28)
-	var color_combat: Color = Color(0.95, 0.18, 0.15)
-	var color_defend: Color = Color(0.62, 0.30, 0.95)
+	# State colours. The values live in VTKStates only; the shader keys and the
+	# defaults are one set, so a tuning change cannot land in half of them.
+	var color_normal: Color = States.DEFAULT_NORMAL
+	var color_combat: Color = States.DEFAULT_COMBAT
+	var color_defend: Color = States.DEFAULT_DEFEND
 
 	func state_colors() -> Dictionary:
 		return {
@@ -97,9 +100,9 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Float", "key": "trigger_reload_time", "name": "Reload seconds", "def": 1.0, "min": 1.0, "max": 10.0, "step": 0.5, "cat": "03. X-ray Triggers", "pos": 12, "tip": "How long the reload-sound reveal stays up."},
 	{"sect": "Float", "key": "trigger_pain_time", "name": "Pain cry seconds", "def": 2.0, "min": 1.0, "max": 10.0, "step": 0.5, "cat": "03. X-ray Triggers", "pos": 13, "tip": "How long the pain-cry reveal stays up after the bot takes damage."},
 	{"sect": "Float", "key": "trigger_nade_time", "name": "Grenade seconds", "def": 2.0, "min": 1.0, "max": 15.0, "step": 0.5, "cat": "03. X-ray Triggers", "pos": 14, "tip": "How long the grenade-throw reveal stays up."},
-	{"sect": "Color", "key": "state_normal", "name": "Default", "def": Color(1.0, 0.72, 0.28), "cat": "02. NPC", "pos": 5, "tip": "Colour for NPCs that are idle, patrolling, looting or guarding."},
-	{"sect": "Color", "key": "state_combat", "name": "In combat", "def": Color(0.95, 0.18, 0.15), "cat": "02. NPC", "pos": 6, "tip": "Colour for NPCs in combat, hunting, attacking or throwing grenades."},
-	{"sect": "Color", "key": "state_defend", "name": "Defending", "def": Color(0.62, 0.30, 0.95), "cat": "02. NPC", "pos": 7, "tip": "Colour for NPCs taking cover, defending, ambushing or lurking."},
+	{"sect": "Color", "key": "state_normal", "name": "Default", "def": States.DEFAULT_NORMAL, "cat": "02. NPC", "pos": 5, "tip": "Colour for NPCs that are idle, patrolling, looting or guarding."},
+	{"sect": "Color", "key": "state_combat", "name": "In combat", "def": States.DEFAULT_COMBAT, "cat": "02. NPC", "pos": 6, "tip": "Colour for NPCs in combat, hunting, attacking or throwing grenades."},
+	{"sect": "Color", "key": "state_defend", "name": "Defending", "def": States.DEFAULT_DEFEND, "cat": "02. NPC", "pos": 7, "tip": "Colour for NPCs taking cover, defending, ambushing or lurking."},
 	{"sect": "Bool", "key": "debug_log", "name": "Debug log", "def": false, "cat": "04. Diagnostics", "pos": 0, "tip": "Write a diagnostic log of the contour ESP to user://MCM/thermal-vtk/debug.log. For troubleshooting; leave off for normal play."},
 	{"sect": "Keycode", "key": "key_debug_probe", "name": "Hotkey: Debug key probe", "def": KEY_F7, "cat": "04. Diagnostics", "pos": 20, "tip": "Writes the colour under the crosshair to the debug log. Turn the debug log on first, then press it while aiming at an outlined NPC or the nomad marker. The view blinks for one frame."},
 	{"sect": "Keycode", "key": "key_cal_cycle", "name": "Hotkey: Calibration cycle", "def": KEY_F8, "cat": "04. Diagnostics", "pos": 21, "tip": "Debug tool: cycles a test colour for the outline and the nomad marker, so its colour under the night-vision helmet can be measured with the debug probe. Turn the debug log on first, then aim at an outlined NPC and press the probe key. Shift turns the calibration off."},

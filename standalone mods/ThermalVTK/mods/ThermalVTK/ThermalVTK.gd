@@ -186,20 +186,20 @@ func _notify(text: String, color: Color) -> void:
 # and rewrites its config wholesale, so writing the toggle there gets clobbered.
 # Read-modify-write so the two keys (thermal_enabled, world_palette) do not
 # clobber each other.
-func _save_state(key: String, v, path: String = STATE_FILE) -> void:
+func _save_state(key: String, v) -> void:
 	var sf := ConfigFile.new()
-	if FileAccess.file_exists(path):
-		sf.load(path)
+	if FileAccess.file_exists(STATE_FILE):
+		sf.load(STATE_FILE)
 	sf.set_value("state", key, v)
-	var err := sf.save(path)
+	var err := sf.save(STATE_FILE)
 	if err != OK:
 		push_warning("ThermalVTK: failed to save state '%s' (%d)" % [key, err])
 
-func _read_state(key: String, fallback, path: String = STATE_FILE):
-	if not FileAccess.file_exists(path):
+func _read_state(key: String, fallback):
+	if not FileAccess.file_exists(STATE_FILE):
 		return fallback
 	var sf := ConfigFile.new()
-	if sf.load(path) != OK:
+	if sf.load(STATE_FILE) != OK:
 		return fallback
 	return sf.get_value("state", key, fallback)
 

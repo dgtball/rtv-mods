@@ -11,10 +11,12 @@ const NORMAL_STATES: Array[int] = [0, 1, 2, 3, 4, 16]
 const COMBAT_STATES: Array[int] = [8, 9, 11, 13]
 const DEFEND_STATES: Array[int] = [5, 6, 7, 10, 12, 14, 15]
 
-const DEFAULT_NORMAL := Color(1.0, 0.72, 0.28)
+# The ONLY place the three default outline colours exist. VTKSettings derives
+# both the MCM defaults (DESCRIPTORS "def") and the typed Rec defaults from
+# here, and VTKNVG uses them as the fallback when a profile carries no colour.
+const DEFAULT_NORMAL := Color(0.98, 0.96, 0, 1)
 const DEFAULT_COMBAT := Color(0.95, 0.18, 0.15)
-const DEFAULT_DEFEND := Color(0.62, 0.30, 0.95)
-
+const DEFAULT_DEFEND := Color(0.11, 0.6, 0.96, 1)
 # Detector keys the ring emits; the overlay detector matches them and swaps in
 # the category colour. The overlay matches the CLOSEST key within its radius
 # (DET_TOL_CORE in VTKNVG.gdshader), so every key -- the three outline keys, the
@@ -54,8 +56,6 @@ static func state_key(cat: int) -> Color:
 		return KEY_NORMAL
 	return CATEGORY_KEY_COLORS[cat]
 
-const CATEGORY_KEYS: Array[String] = ["state_normal", "state_combat", "state_defend"]
-
 static var _map: Dictionary = {}
 
 static func _build() -> void:
@@ -71,23 +71,6 @@ static func _build() -> void:
 static func category_of(state: int) -> int:
 	_build()
 	return int(_map.get(state, NORMAL))
-
-static func category_key(cat: int) -> String:
-	if cat < 0 or cat >= CATEGORY_KEYS.size():
-		return CATEGORY_KEYS[NORMAL]
-	return CATEGORY_KEYS[cat]
-
-static func default_color(cat: int) -> Color:
-	match cat:
-		COMBAT:
-			return DEFAULT_COMBAT
-		DEFEND:
-			return DEFAULT_DEFEND
-		_:
-			return DEFAULT_NORMAL
-
-static func color_for(state: int) -> Color:
-	return default_color(category_of(state))
 
 const STATE_NAMES: Array[String] = [
 	"Idle", "Wander", "Loot", "Guard", "Patrol", "Cover", "Hide", "Ambush",

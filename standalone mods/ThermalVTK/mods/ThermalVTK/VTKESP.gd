@@ -106,9 +106,6 @@ func set_enabled(on: bool) -> void:
 		# harmless: _register no-ops for a known node.
 		_reseed(get_tree().current_scene)
 
-func npc_count() -> int:
-	return _entries.size()
-
 # MCM snapshot in, MCM-driven params out. Lives-ahead-of-the-tree safe: the
 # headless tests instantiate this node without the game around it.
 func apply_config(rec) -> void:
@@ -161,8 +158,11 @@ func _scan(n: Node) -> void:
 	for c in n.get_children():
 		_scan(c)
 
-# Same predicate VTKNVG uses: AI.gd is a Node3D with Activate(), `dead` and
-# `mesh`. Trader.gd has Activate() but no `dead`, so it stays out.
+# The bot predicate: AI.gd is a Node3D with Activate(), `dead` and `mesh`.
+# Trader.gd has Activate() but no `dead`, so it stays out. VTKNVG does not use
+# it -- that module only looks for NVG/Mine by script path, so the two sweeps
+# stay independent on purpose (they run in different modules and must not
+# couple through a shared predicate that a game update could break in one place).
 func _is_bot(n: Node) -> bool:
 	return n is Node3D and n.has_method("Activate") and "dead" in n and "mesh" in n
 
@@ -374,7 +374,7 @@ func _process(delta: float) -> void:
 	_weapon.tick()
 	var scoped := _scoped_now()
 	var pip := _pip_now()
-	_outline.set_scoped(scoped, pip)
+	_outline.set_scoped(scoped)
 	_weapon.set_scope_mode(scoped and enabled, pip)
 	_scope_probe(delta)
 	_labels_sync()

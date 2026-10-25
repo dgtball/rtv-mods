@@ -2,6 +2,7 @@ extends Node
 const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
 const Settings = preload("res://mods/ThermalVTK/VTKSettings.gd")
 const Daylight = preload("res://mods/ThermalVTK/VTKDaylight.gd")
+const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 
 # Owns the NVG overlay shader, plus the thermal/mines layer that rides on it.
 #
@@ -113,7 +114,13 @@ var _key_gain: float = 1.0
 var _snow_trim: float = 1.0
 var _vanilla_exposure: float = 3.0
 var _last_exposure: float = -1.0
-var _key_gain_registered: bool = false
+# Process-wide, not per instance: the global lives in RenderingServer, so a
+# rebuilt VTKNVG must not add it twice (a second add pushes "Condition
+# global_shader_variables.has(p_name) is true"). Static because there is no
+# usable existence probe in a shipping build: global_shader_parameter_get_list()
+# and global_shader_parameter_get() both log "This function should never be used
+# outside the editor" and the get() returns null even for a registered name.
+static var _key_gain_registered: bool = false
 var _was_worn: bool = false
 var _sim: Node = null
 var _world: Node = null
@@ -283,9 +290,11 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("stNormalKey", DET_ST_NORMAL)
 	nvg_mat.set_shader_parameter("stCombatKey", DET_ST_COMBAT)
 	nvg_mat.set_shader_parameter("stDefendKey", DET_ST_DEFEND)
-	nvg_mat.set_shader_parameter("stNormalColor", _state_colors.get("state_normal", Color(1.0, 0.72, 0.28)))
-	nvg_mat.set_shader_parameter("stCombatColor", _state_colors.get("state_combat", Color(0.95, 0.18, 0.15)))
-	nvg_mat.set_shader_parameter("stDefendColor", _state_colors.get("state_defend", Color(0.62, 0.30, 0.95)))
+	# Fallbacks are the VTKStates defaults, not copies: a profile without a
+	# colour section and a fresh profile paint the same three colours.
+	nvg_mat.set_shader_parameter("stNormalColor", _state_colors.get("state_normal", States.DEFAULT_NORMAL))
+	nvg_mat.set_shader_parameter("stCombatColor", _state_colors.get("state_combat", States.DEFAULT_COMBAT))
+	nvg_mat.set_shader_parameter("stDefendColor", _state_colors.get("state_defend", States.DEFAULT_DEFEND))
 	nvg_mat.set_shader_parameter("stateBright", set_state_brightness)
 	nvg_mat.set_shader_parameter("nomadKey", DET_NOMAD)
 	nvg_mat.set_shader_parameter("nomadColor", set_nomad_color)
@@ -439,10 +448,9 @@ func _restore_exposure() -> void:
 
 
 func _register_key_gain() -> void:
-	var names := RenderingServer.global_shader_parameter_get_list()
-	if not names.has(KEY_GAIN_PARAM):
+	if not _key_gain_registered:
 		RenderingServer.global_shader_parameter_add(KEY_GAIN_PARAM, RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 1.0)
-	_key_gain_registered = true
+		_key_gain_registered = true
 	RenderingServer.global_shader_parameter_set(KEY_GAIN_PARAM, _key_gain)
 
 
