@@ -30,6 +30,7 @@ var _items: Dictionary = {}
 const SCOPE_RIM := 6.0
 const CARVE_XRAY := 0.60
 var _scoped: bool = false
+var _clear_pool: Array = []
 
 func has(id: int) -> bool:
 	return _items.has(id)
@@ -229,4 +230,12 @@ func clear(id: int) -> void:
 
 func clear_all() -> void:
 	for id in _items.keys():
+		clear(id)
+
+func clear_not_in(keep: Dictionary) -> void:
+	_clear_pool.clear()
+	for id in _items:
+		if not keep.has(id):
+			_clear_pool.append(id)
+	for id in _clear_pool:
 		clear(id)
