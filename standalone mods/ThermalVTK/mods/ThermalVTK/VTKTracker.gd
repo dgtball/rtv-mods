@@ -57,6 +57,10 @@ static func mark_dead(e: Dictionary, now: float) -> void:
 # timed window; the ring lives for the window and fades over its tail.
 # ---------------------------------------------------------------------------
 
+# Returned instead of a fresh {} on the per-entry per-frame read: the ESP calls
+# pick_trig once per NPC per frame, and the empty dictionary was pure garbage.
+const EMPTY_WINDOW := {}
+
 # Event priority when several overlap: the loudest recent one wins. Walk and
 # Sprint are different footsteps of the same source (the label tells them
 # apart); sprint runs with reload's tier.
@@ -69,12 +73,11 @@ static func tag_trig(e: Dictionary, source: String, dist: float, expires_at: flo
 
 # The active window: highest priority among the unexpired, latest expiry
 # breaks ties. Expired windows are erased (the Dictionary stays clean).
-# Returns {} when the entry has nothing to show.
+# Returns EMPTY_WINDOW when the entry has nothing to show.
 static func pick_trig(e: Dictionary, now: float) -> Dictionary:
 	var trig: Dictionary = e.get("trig", {})
 	if trig.is_empty():
-		return {}
-	var best_source := ""
+		return EMPTY_WINDOW
 	var best: Dictionary = {}
 	var best_pri := -1
 	var best_exp := 0.0
@@ -87,12 +90,11 @@ static func pick_trig(e: Dictionary, now: float) -> Dictionary:
 		var pri: int = TRIG_PRIORITY.get(source, 0)
 		var exp: float = float(win.get("expires", 0.0))
 		if pri > best_pri or (pri == best_pri and exp > best_exp):
-			best_source = source
 			best = {"source": source, "dist": float(win.get("dist", 0.0)), "expires": exp, "span": float(win.get("span", 1.0))}
 			best_pri = pri
 			best_exp = exp
 	e["trig"] = trig
-	return best
+	return EMPTY_WINDOW if best.is_empty() else best
 
 # 1 right after the tag, 0 when the window is spent. Same shape as ITH's
 # remaining/duration alpha; callers feed it into the cold factor so the ring
@@ -110,11 +112,19 @@ static func cool_factor(e: Dictionary, now: float, decay_s: float) -> float:
 	return clampf((now - float(e.get("death_ts", 0.0))) / decay_s, 0.0, 1.0)
 
 # candidates: Array of {"id": int, "dist": float}. Returns the nearest `cap` ids.
-static func pick_nearest(candidates: Array, cap: int) -> Array:
+# `out` is filled and returned when it is an Array; the two-argument call
+# allocates a fresh result, so the per-frame ESP call can reuse its buffer.
+static func pick_nearest(candidates: Array, cap: int, out: Variant = null) -> Array:
+	var dst: Array = []
+	if out is Array:
+		dst = out
 	var sorted: Array = candidates.duplicate()
-	sorted.sort_custom(func(a, b): return float(a["dist"]) < float(b["dist"]))
-	var out: Array = []
+	sorted.sort_custom(_dist_less)
+	dst.clear()
 	var n: int = mini(cap, sorted.size())
 	for i in n:
-		out.append(sorted[i]["id"])
-	return out
+		dst.append(sorted[i]["id"])
+	return dst
+
+static func _dist_less(a: Dictionary, b: Dictionary) -> bool:
+	return float(a["dist"]) < float(b["dist"])
