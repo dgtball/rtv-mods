@@ -22,7 +22,10 @@ const CAP := 24
 const RUN_SPEED := 2.0
 const SPRINT_SPEED := 4.0
 
-var enabled: bool = false
+# Two independent layers share one collection pass. `enabled` is gone: the
+# contour layer gates rings and the marker, the x-ray layer gates reveals.
+var contour_layer: bool = false
+var xray_layer: bool = false
 # MCM-driven params.
 var p_decay := 30.0
 var p_dist := 60.0
@@ -62,7 +65,7 @@ var _dbg_draw_ms: float = 0.0
 var _pending: Array = []
 var _frame: int = 0
 var _outline := Outline.new()
-var _weapon := WeaponOcclusion.new()
+var _weapon = WeaponOcclusion.new()
 var _lib = null
 var _hook_ids: Array = []
 # RTVModLib_mounted late: other mods (Evolve, JCM) wait for _lib._is_ready
@@ -70,7 +73,6 @@ var _hook_ids: Array = []
 # half second until the hooks go through.
 var _hook_wait_cd: float = 0.0
 var _labels: Dictionary = {}
-var _labels_state: Dictionary = {}
 var _markers: Dictionary = {}
 # Debug key calibration: when it is on, every NPC is painted with the
 # candidate key so its post-NVG colour can be measured with the probe.
@@ -93,27 +95,23 @@ func _ready() -> void:
 	_reseed(get_tree().current_scene)
 	_register_hooks()
 
-func set_enabled(on: bool) -> void:
-	if enabled == on:
+func set_layers(contour: bool, xray: bool) -> void:
+	if contour_layer == contour and xray_layer == xray:
 		return
-	enabled = on
-	Dbg.log("ESP", "esp enabled=%s" % str(on))
-	if not enabled:
+	var any_before := _any_layer()
+	contour_layer = contour
+	xray_layer = xray
+	marker_visible = contour
+	Dbg.log("ESP", "layers contour=%s xray=%s" % [str(contour), str(xray)])
+	if not _any_layer():
 		_outline.clear_all()
-		for id in _labels.keys():
-			_label_free(id)
-		_labels.clear()
-		_labels_state.clear()
-		for id in _markers.keys():
-			_marker_free(id)
-		_markers.clear()
-	else:
-		# The visuals are reset, the bookkeeping is not: wiping _entries here
-		# used to drop corpse death timestamps, and the next draw re-marked a
-		# dead flag with the current clock — every cooled body turned freshly
-		# killed again after cycling thermal vision (helmet off/on). Re-scan is
-		# harmless: _register no-ops for a known node.
+		_labels_free_all()
+		_markers_free_all()
+	elif not any_before and is_inside_tree():
 		_reseed(get_tree().current_scene)
+
+func _any_layer() -> bool:
+	return contour_layer or xray_layer
 
 # MCM snapshot in, MCM-driven params out. Lives-ahead-of-the-tree safe: the
 # headless tests instantiate this node without the game around it.
@@ -338,13 +336,8 @@ func _trig_event(source: String, span: float, dist: float) -> void:
 		Dbg.log("ESP", "trig id=%d source=%s span=%.1f dist=%.0f" % [id, source, span, dist])
 
 func _exit_tree() -> void:
-	for id in _labels.keys():
-		_label_free(id)
-	_labels.clear()
-	_labels_state.clear()
-	for id in _markers.keys():
-		_marker_free(id)
-	_markers.clear()
+	_labels_free_all()
+	_markers_free_all()
 	if _lib != null:
 		for h in _hook_ids:
 			_lib.unhook(h)
@@ -365,20 +358,17 @@ func _process(delta: float) -> void:
 	if _hook_ids.is_empty() and _hook_wait_cd <= 0.0:
 		_hook_wait_cd = 0.5
 		_register_hooks()
-	if not enabled and not marker_visible:
+	if not _any_layer():
 		_weapon.set_scope_mode(false, false)
 		if not _pending.is_empty():
 			_pending.clear()
-		if not _markers.is_empty():
-			for id in _markers.keys():
-				_marker_free(id)
-			_markers.clear()
+		_markers_free_all()
 		return
 	_weapon.tick()
 	var scoped := _scoped_now()
 	var pip := _pip_now()
 	_outline.set_scoped(scoped)
-	_weapon.set_scope_mode(scoped and enabled, pip)
+	_weapon.set_scope_mode(scoped and _any_layer(), pip)
 	_scope_probe(delta)
 	_frame += 1
 	if not _pending.is_empty():
@@ -392,7 +382,7 @@ func _process(delta: float) -> void:
 	var ppos_v = _player_pos()
 	if ppos_v != null:
 		var ppos: Vector3 = ppos_v
-		if enabled:
+		if _any_layer():
 			_draw(ppos)
 	_labels_sync()
 	_markers_sync()
@@ -462,7 +452,6 @@ func _labels_sync() -> void:
 		for id in _labels.keys():
 			_label_free(id)
 		_labels.clear()
-		_labels_state.clear()
 		return
 	for id in _ids_for_frame():
 		if not _entries.has(id):
@@ -486,7 +475,7 @@ func _labels_sync() -> void:
 			var lbl = _labels[id]
 			if is_instance_valid(lbl):
 				lbl.text = txt
-				lbl.visible = enabled
+				lbl.visible = true
 	# Drop labels whose entry is gone (deactivate raced the loop above).
 	for id in _labels.keys():
 		if not _entries.has(id):
@@ -520,11 +509,10 @@ func _label_make(id: int, e: Dictionary, node: Node, txt: String) -> void:
 	lbl.font_size = 32
 	lbl.outline_size = 12
 	lbl.position = Vector3(0.0, float(anchor["y"]), 0.0)
-	lbl.visible = enabled
+	lbl.visible = true
 	lbl.set_meta(Outline.NO_CONTOUR_META, true)
 	(anchor["parent"] as Node).add_child(lbl)
 	_labels[id] = lbl
-	_labels_state[id] = 0
 
 # Where a label/marker hangs: above the bot's own mesh when it has one (so the
 # overlay on that mesh skips our tagged geometry), above the bot root otherwise.
@@ -543,7 +531,6 @@ func _label_free(id: int) -> void:
 		if is_instance_valid(lbl):
 			lbl.queue_free()
 		_labels.erase(id)
-	_labels_state.erase(id)
 
 # ---------------------------------------------------------------------------
 # Friendly-nomad diamond marker (while thermal + NVG are on)
@@ -667,11 +654,11 @@ func _draw(ppos: Vector3) -> void:
 		if not bool(e.get("dead", false)):
 			win = Tracker.pick_trig(e, now)
 		e["win"] = win
-		var xray: bool = p_trig and not win.is_empty() and dist <= float(win.get("dist", 0.0))
+		var xray: bool = xray_layer and p_trig and not win.is_empty() and dist <= float(win.get("dist", 0.0))
 		e["xray_live"] = xray
 		if _frame % POLL_EVERY == 0:
 			Tracker.apply_state(e, _read_state(node))
-		if dist <= p_dist:
+		if contour_layer and dist <= p_dist:
 			var c: Dictionary
 			if used < _cand_pool.size():
 				c = _cand_pool[used]

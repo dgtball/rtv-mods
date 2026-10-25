@@ -26,6 +26,7 @@ var _key_cal_cycle: int = KEY_F8
 var _thermal_enabled: bool = false
 var _mines_enabled: bool = true
 var _outline_enabled: bool = true
+var _xray_enabled: bool = true
 var _nvg_worn: bool = false
 var _cal_active: bool = false
 var _cal_index: int = 0
@@ -121,7 +122,7 @@ func _cal_step(off: bool) -> void:
 		_cal_index = 0
 	_push_calibration()
 	VTKDebug.log("CAL", "candidate #%d %s" % [_cal_index, Calibration.label(_cal_index)])
-	if _esp == null or not is_instance_valid(_esp) or not bool(_esp.enabled):
+	if _esp == null or not is_instance_valid(_esp) or not bool(_esp.contour_layer):
 		VTKDebug.log("CAL", "the contour is off, nothing is painted")
 
 func _push_calibration() -> void:
@@ -155,11 +156,10 @@ func _probe_center() -> void:
 
 func _apply_mode() -> void:
 	if _esp != null and is_instance_valid(_esp):
-		# The whole contour stack (ESP rings, x-ray trigger reveals, nomad
-		# marker) lives on the thermal layer: with the helmet off nothing runs.
-		var on := _thermal_enabled and _outline_enabled and _nvg_active()
-		_esp.set_enabled(on)
-		_esp.marker_visible = on
+		# Two independent layers on the thermal stack: the contour (rings and
+		# the nomad marker) and the x-ray reveals. Either one can run alone.
+		var on := _thermal_enabled and _nvg_active()
+		_esp.set_layers(on and _outline_enabled, on and _xray_enabled)
 
 func _nvg_active() -> bool:
 	if _nvg == null or not is_instance_valid(_nvg):
@@ -326,6 +326,7 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 	if _esp != null and is_instance_valid(_esp):
 		_esp.apply_config(rec)
 	_outline_enabled = rec.outline_enabled
+	_xray_enabled = rec.outline_xray
 	_apply_mode()
 
 
