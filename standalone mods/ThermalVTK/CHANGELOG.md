@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.1.0] - 2026-10-25
+
+### Added
+- X-ray Triggers now work on their own: shots, shouts and footsteps show through walls even with NPC highlighting switched off.
+
+### Changed
+- Less per-frame work when many NPCs are in view, so heavy fights cost fewer frames.
+- Reveal flashes no longer push nearby outlines out of view when the scene is crowded.
+- The debug log reports the ESP frame time.
+
+### Fixed
+- The friendly-nomad diamond no longer shows through walls and cover; a live X-ray reveal still shows it on purpose.
+- Corpses beyond the Distance setting are no longer outlined.
+
+
 ## [2.0.0] - 2026-10-24
 
 ### Changed
