@@ -50,6 +50,15 @@ var p_brightness := 0.6
 var p_rim := 2.0
 
 var _entries: Dictionary = {}
+var _ids_frame: Array = []
+var _ids_stamp: int = -1
+var _cand_pool: Array = []
+var _cand_refs: Array = []
+var _keep_pool: Array = []
+var _want: Dictionary = {}
+var _want_ids: Array = []
+var _stale: Array = []
+var _dbg_draw_ms: float = 0.0
 var _pending: Array = []
 var _frame: int = 0
 var _outline := Outline.new()
@@ -358,14 +367,8 @@ func _process(delta: float) -> void:
 		_register_hooks()
 	if not enabled and not marker_visible:
 		_weapon.set_scope_mode(false, false)
-		# Parked: drop the rebuild log instead of letting it grow for the whole
-		# session. set_enabled(true) reseeds the live scene, so the parked ids
-		# add nothing; keeping them made the first enable drain a huge backlog.
 		if not _pending.is_empty():
 			_pending.clear()
-		# Both layers are off: free any lingering markers before parking, or they
-		# would stick until the map reloads (set_enabled's early-return skips the
-		# cleanup when the contour was already disabled).
 		if not _markers.is_empty():
 			for id in _markers.keys():
 				_marker_free(id)
@@ -377,36 +380,36 @@ func _process(delta: float) -> void:
 	_outline.set_scoped(scoped)
 	_weapon.set_scope_mode(scoped and enabled, pip)
 	_scope_probe(delta)
-	_labels_sync()
-	_markers_sync()
 	_frame += 1
 	if not _pending.is_empty():
-		# node_added fires for every node that enters the tree, so each id can
-		# be tested on its own. Walking the subtree from every queued id was
-		# O(n * depth) on a fresh map: a parent is reported along with all of
-		# its descendants, which are then swept again from each of them.
 		for node_id in _pending:
 			var n := instance_from_id(node_id)
 			if n != null and is_instance_valid(n) and n.is_inside_tree() and _is_bot(n):
 				_register(n)
 		_pending.clear()
-
+	# Collection before the consumers: labels and markers read the flags and
+	# the window this pass stores on the record.
 	var ppos_v = _player_pos()
-	if ppos_v == null:
-		_dbg_tick(delta, "no player in group Player")
-		return
-	var ppos: Vector3 = ppos_v
-	if enabled:
-		_draw(ppos)
-	_dbg_tick(delta, "entries=%d cand=%d keep=%d applied=%d ppos=%.1f,%.1f,%.1f" % [_entries.size(), _dbg_cand, _dbg_keep, _dbg_applied, ppos.x, ppos.y, ppos.z])
+	if ppos_v != null:
+		var ppos: Vector3 = ppos_v
+		if enabled:
+			_draw(ppos)
+	_labels_sync()
+	_markers_sync()
+	_dbg_tick(delta, ppos_v)
 
-func _dbg_tick(delta: float, msg: String) -> void:
+func _dbg_tick(delta: float, ppos: Variant) -> void:
 	_dbg_cd -= delta
 	if _dbg_cd > 0.0:
 		return
 	_dbg_cd = 1.0
-	Dbg.log("ESP", msg)
-
+	if not Dbg.enabled:
+		return
+	var where := "no player in group Player"
+	if ppos != null:
+		var p: Vector3 = ppos
+		where = "ppos=%.1f,%.1f,%.1f" % [p.x, p.y, p.z]
+	Dbg.log("ESP", "entries=%d cand=%d keep=%d applied=%d draw=%.2fms %s" % [_entries.size(), _dbg_cand, _dbg_keep, _dbg_applied, _dbg_draw_ms, where])
 func _gd_cached() -> Resource:
 	if _probe_gd == null and ResourceLoader.exists(Paths.GAME_DATA):
 		_probe_gd = load(Paths.GAME_DATA)
@@ -461,7 +464,9 @@ func _labels_sync() -> void:
 		_labels.clear()
 		_labels_state.clear()
 		return
-	for id in _entries.keys():
+	for id in _ids_for_frame():
+		if not _entries.has(id):
+			continue
 		var e: Dictionary = _entries[id]
 		var node = e.get("node")
 		if node == null or not is_instance_valid(node) or not node.is_inside_tree():
@@ -495,7 +500,11 @@ func _label_text(e: Dictionary, node: Node, state: int) -> String:
 	# The countdown suffix is window-driven only: the X-ray toggle governs the
 	# ring flash, labels follow the debug log like every other readout.
 	var now := _now()
-	var ev: Dictionary = Tracker.pick_trig(e, now)
+	var ev: Dictionary = Tracker.EMPTY_WINDOW
+	if e.has("win"):
+		ev = e["win"]
+	else:
+		ev = Tracker.pick_trig(e, now)
 	if not ev.is_empty():
 		var left: float = max(0.0, float(ev.get("expires", 0.0)) - now)
 		txt += "  [%s %.1fs %.0fm]" % [str(ev.get("source", "")), left, float(ev.get("dist", 0.0))]
@@ -619,102 +628,127 @@ func _cal_apply_marker_key() -> void:
 		if mat is ShaderMaterial:
 			(mat as ShaderMaterial).set_shader_parameter("nomad_key", key)
 
+func _ids_for_frame() -> Array:
+	if _ids_stamp != _frame:
+		_ids_frame = _entries.keys()
+		_ids_stamp = _frame
+	return _ids_frame
+
+func _want_add(id: int) -> void:
+	if not _want.has(id):
+		_want[id] = true
+		_want_ids.append(id)
+
 func _draw(ppos: Vector3) -> void:
+	var t0: int = 0
+	if Dbg.enabled:
+		t0 = Time.get_ticks_usec()
 	var now := _now()
-	# Prune invalid entries first
-	for id in _entries.keys():
+	_ids_frame = _entries.keys()
+	_ids_stamp = _frame
+	_stale.clear()
+	_want.clear()
+	_want_ids.clear()
+	var used := 0
+	for id in _ids_frame:
+		if not _entries.has(id):
+			continue
 		var e: Dictionary = _entries[id]
 		var node = e.get("node")
 		if node == null or not is_instance_valid(node) or not node.is_inside_tree():
 			_outline.clear(id)
-			_entries.erase(id)
-	var cands: Array = []
-	var opts_by_id: Dictionary = {}
-	var valid: Dictionary = {}
-	for id in _entries.keys():
-		var e: Dictionary = _entries[id]
-		var node = e.get("node")
-		if node == null or not is_instance_valid(node) or not node.is_inside_tree():
+			_stale.append(id)
 			continue
-		valid[id] = true
-		# Mark death from the node itself when the ai-death-post hook missed:
-		# the hook is unreliable in game, and without this the corpse never cools.
 		if not bool(e.get("dead", false)) and bool(node.get("dead")):
 			Tracker.mark_dead(e, now)
-		var pos: Vector3 = (node as Node3D).global_position
-		var dist := ppos.distance_to(pos)
-		var limit := p_dist
-		var dead := bool(e.get("dead", false))
-		var trig_opts: Dictionary = {}
-		if not dead:
-			# A live window is read by labels regardless of the toggle; the
-			# x-ray swap (through walls, past Distance up to the reveal range)
-			# happens only when the "X-ray Triggers" toggle is on.
-			var ev: Dictionary = Tracker.pick_trig(e, now)
-			if p_trig and not ev.is_empty() and dist <= float(ev.get("dist", 0.0)):
-				trig_opts["cool"] = clampf(1.0 - Tracker.fade_factor(ev, now), 0.0, 1.0)
-				trig_opts["xray"] = true
-		if dist > limit and not dead and trig_opts.is_empty():
-			# window may have just expired out here - clear the residue
-			_outline.set_entry_xray(id, false)
-			# Distance crops exactly at its value: an applied ring must not
-			# survive past the limit, so lowering Distance (or to zero) and
-			# bots walking out release their stale materials. clear() is a
-			# no-op when nothing is applied, and the next frame inside range
-			# re-applies.
-			_outline.clear(id)
-			continue
+		var dist: float = ppos.distance_to((node as Node3D).global_position)
 		e["dist"] = dist
-		cands.append({"id": id, "dist": dist})
+		var win: Dictionary = Tracker.EMPTY_WINDOW
+		if not bool(e.get("dead", false)):
+			win = Tracker.pick_trig(e, now)
+		e["win"] = win
+		var xray: bool = p_trig and not win.is_empty() and dist <= float(win.get("dist", 0.0))
+		e["xray_live"] = xray
 		if _frame % POLL_EVERY == 0:
 			Tracker.apply_state(e, _read_state(node))
-		var opts: Dictionary = _opts_for(e, node, now)
-		for k in trig_opts:
-			opts[k] = trig_opts[k]
-		opts_by_id[id] = opts
-	for id in _entries.keys():
-		if not valid.has(id):
-			_outline.clear(id)
-	var keep: Array = Tracker.pick_nearest(cands, CAP)
-	if keep.size() < cands.size():
-		for c in cands:
-			if c["id"] not in keep:
-				valid.erase(c["id"])
-				_outline.clear(c["id"])
-	var applied := 0
+		if dist <= p_dist:
+			var c: Dictionary
+			if used < _cand_pool.size():
+				c = _cand_pool[used]
+			else:
+				c = {}
+				_cand_pool.append(c)
+			c["id"] = id
+			c["dist"] = dist
+			used += 1
+		if xray:
+			_want_add(id)
+	for id in _stale:
+		_entries.erase(id)
+	_cand_refs.resize(used)
+	for i in used:
+		_cand_refs[i] = _cand_pool[i]
+	var keep: Array = Tracker.pick_nearest(_cand_refs, CAP, _keep_pool)
 	for id in keep:
-		if not valid.has(id) or not _entries.has(id):
+		_want_add(id)
+	var applied := 0
+	for id in _want_ids:
+		if not _entries.has(id):
 			continue
 		var e: Dictionary = _entries[id]
 		var node = e.get("node")
-		var opts: Dictionary = opts_by_id[id]
-		if not _outline.has(id):
-			_outline.apply(id, node, opts)
-		else:
+		if node == null or not is_instance_valid(node):
+			continue
+		var opts = e.get("opts")
+		if opts == null:
+			opts = {}
+			e["opts"] = opts
+		_fill_opts(opts, e, now)
+		if _outline.has(id):
 			_outline.refresh(id, opts)
+		else:
+			_outline.apply(id, node, opts)
 		applied += 1
-	_dbg_cand = cands.size()
+	_outline.clear_not_in(_want)
+	_dbg_cand = used
 	_dbg_keep = keep.size()
 	_dbg_applied = applied
+	if Dbg.enabled:
+		_dbg_draw_ms = float(Time.get_ticks_usec() - t0) / 1000.0
 
 func _opts_for(e: Dictionary, node: Node, now: float) -> Dictionary:
+	var opts: Dictionary = {}
+	_fill_opts(opts, e, now)
+	return opts
+
+func _fill_opts(opts: Dictionary, e: Dictionary, now: float) -> void:
 	var cool := Tracker.cool_factor(e, now, p_decay)
-	var nomad := bool(e.get("nomad", false))
+	var win: Dictionary = e.get("win", Tracker.EMPTY_WINDOW)
+	var xray := bool(e.get("xray_live", false))
+	if xray and not win.is_empty():
+		cool = clampf(1.0 - Tracker.fade_factor(win, now), 0.0, 1.0)
 	var cat: int = int(e.get("cat", States.NORMAL))
 	var key: Color = States.state_key(cat)
 	if p_cal_active:
-		# Calibration: the ring paints the candidate, so the probe reads the
-		# candidate's post-NVG colour. Everything else (cool, rim) stays.
 		key = Calibration.candidate(p_cal_index)
-	return {
-		"cat": cat,
-		"nomad": nomad,
-		"state_key": key,
-		"cool": cool,
-		"rim": p_rim,
-		"brightness": p_brightness,
-		"grow": p_thickness,
-	}
+	opts["cat"] = cat
+	opts["nomad"] = bool(e.get("nomad", false))
+	opts["state_key"] = key
+	opts["cool"] = cool
+	opts["rim"] = p_rim
+	opts["brightness"] = p_brightness
+	opts["grow"] = p_thickness
+	opts["xray"] = xray
+
+func _labels_free_all() -> void:
+	for id in _labels.keys():
+		_label_free(id)
+	_labels.clear()
+
+func _markers_free_all() -> void:
+	for id in _markers.keys():
+		_marker_free(id)
+	_markers.clear()
 
 func _player_pos() -> Variant:
 	var players := get_tree().get_nodes_in_group("Player")
