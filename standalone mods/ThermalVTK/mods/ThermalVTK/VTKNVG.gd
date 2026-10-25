@@ -94,6 +94,9 @@ var _mat_mine: StandardMaterial3D = null
 
 var _mines: Dictionary = {}
 var _mine_watch: Dictionary = {}
+var _dirty: bool = true
+var _script_kind: Dictionary = {}
+const MINE_RETRY_LIMIT := 50
 var _pending: Array[int] = []
 var _tick_cd: float = 0.0
 var _scene_ref: Node = null
@@ -159,14 +162,13 @@ func _reseed(scene: Node) -> void:
 func _scan_node(n: Node) -> void:
 	if n == null:
 		return
-	var s = n.get_script()
-	var path: String = "" if s == null else String(s.resource_path)
-	if path.ends_with(NVG_SCRIPT_SUFFIX) and (_nvg_root == null or not is_instance_valid(_nvg_root)):
+	var kind := _script_kind_for(n)
+	if kind == 1 and (_nvg_root == null or not is_instance_valid(_nvg_root)):
 		_nvg_root = n
 		_try_install_shader()
 		if not _installed:
 			_install_retry = INSTALL_RETRY_FRAMES
-	elif path.ends_with("Mine.gd"):
+	elif kind == 2:
 		_register_mine(n)
 	for c in n.get_children():
 		_scan_node(c)
@@ -213,16 +215,15 @@ func _deferred_check(node_id: int) -> void:
 	var n := instance_from_id(node_id)
 	if n == null or not is_instance_valid(n) or not n.is_inside_tree():
 		return
-	var s = n.get_script()
-	var path: String = "" if s == null else String(s.resource_path)
+	var kind := _script_kind_for(n)
 
-	if path.ends_with(NVG_SCRIPT_SUFFIX):
+	if kind == 1:
 		_nvg_root = n
 		_try_install_shader()
 		if not _installed:
 			_install_retry = INSTALL_RETRY_FRAMES
 		return
-	if path.ends_with("Mine.gd"):
+	if kind == 2:
 		_register_mine(n)
 		return
 
@@ -258,6 +259,7 @@ func _try_install_shader() -> void:
 	var mat = target.get("material")
 	if mat is ShaderMaterial and (mat as ShaderMaterial).shader == _shader:
 		_installed = true
+		_dirty = true
 		return
 	if mat == null or not (mat is ShaderMaterial):
 		_installed = false
@@ -268,6 +270,7 @@ func _try_install_shader() -> void:
 
 
 func _apply_uniforms() -> void:
+	_dirty = false
 	# The key materials are what actually emit the detector's key pixels on
 	# screen, pinned to the key constants.
 	#
@@ -319,6 +322,7 @@ func _process(delta: float) -> void:
 		_scene_ref = get_tree().current_scene
 		_mines.clear()
 		_mine_watch.clear()
+		_script_kind.clear()
 		_nvg_root = null
 		_installed = false
 		_install_retry = 0
@@ -353,6 +357,7 @@ func _process(delta: float) -> void:
 				(sm as ShaderMaterial).set_shader_parameter("scopeRotate", _scope_rotate)
 	if worn != _was_worn:
 		_was_worn = worn
+		_dirty = true
 		if not worn:
 			_reset_daylight()
 	if worn:
@@ -376,7 +381,8 @@ func _process(delta: float) -> void:
 		return
 	_tick_cd = TICK
 
-	_apply_uniforms()
+	if _dirty:
+		_apply_uniforms()
 
 	_retry_mines()
 
@@ -419,7 +425,7 @@ func _daylight_tick(delta: float) -> void:
 	var trim: float = Daylight.snow_trim(int(_sim_value("season", 1)), _game_flag("indoor"), _game_flag("shelter"), light)
 	if absf(trim - _snow_trim) > 0.001:
 		_snow_trim = trim
-		_apply_uniforms()
+		_dirty = true
 
 
 # Called on NVG off / map change. No environment write: vanilla Deactivate()
@@ -434,7 +440,7 @@ func _reset_daylight() -> void:
 	_env = null
 	_set_key_gain(1.0)
 	_push_day_mix()
-	_apply_uniforms()
+	_dirty = true
 
 
 # MCM toggle off while NVG is worn: hand the exposure back immediately instead
@@ -510,10 +516,15 @@ func _game_flag(name: String) -> bool:
 # и при off, поэтому мёртвые записи мин всё равно надо чистить, иначе _mines рос бы
 # без границы.
 func _off_frame_upkeep() -> void:
-	for id in _mines.keys():
-		var e = _mines.get(id)
+	if _mines.is_empty():
+		return
+	var drop: Array = []
+	for id in _mines:
+		var e = _mines[id]
 		if e == null or not is_instance_valid(e.get("node")):
-			_mines.erase(id)
+			drop.append(id)
+	for id in drop:
+		_mines.erase(id)
 
 
 # Снимает покраску на переходе on->off ровно один раз: material_override в null
@@ -541,6 +552,10 @@ func _register_mine(node: Node) -> void:
 	var id := node.get_instance_id()
 	if _mines.has(id):
 		return
+	# Do not overwrite an existing parked entry: its retry counter has to
+	# survive a re-register while the visual is still building.
+	if _mine_watch.has(id):
+		return
 	# The visual usually lives under an exported "mine" Node3D, but not every
 	# mine has one -- fall back to the node itself so those still get picked up.
 	# The exported "mine" points at the INNER detail (the tiny orange piece that
@@ -557,7 +572,7 @@ func _register_mine(node: Node) -> void:
 		# A freshly spawned mine can still be building its visual (own _ready, a
 		# timer, an async load), so an empty sweep is not proof there is nothing
 		# to paint. Park it and retry on later ticks instead of dropping it.
-		_mine_watch[id] = node
+		_mine_watch[id] = {"node": node, "tries": 0}
 		return
 	_mine_watch.erase(id)
 	_mines[id] = {"node": node, "meshes": meshes}
@@ -566,13 +581,43 @@ func _register_mine(node: Node) -> void:
 func _retry_mines() -> void:
 	if _mine_watch.is_empty():
 		return
-	for id in _mine_watch.keys():
-		var n = _mine_watch[id]
-		if not is_instance_valid(n):
-			_mine_watch.erase(id)
+	var drop: Array = []
+	for id in _mine_watch:
+		var w: Dictionary = _mine_watch[id]
+		var n = w.get("node")
+		if n == null or not is_instance_valid(n):
+			drop.append(id)
 			continue
-		_register_mine(n)
+		var meshes: Array = []
+		_collect_meshes(n, meshes)
+		if not meshes.is_empty():
+			_mines[id] = {"node": n, "meshes": meshes}
+			drop.append(id)
+			continue
+		var tries := int(w.get("tries", 0)) + 1
+		w["tries"] = tries
+		if tries >= MINE_RETRY_LIMIT:
+			drop.append(id)
+	for id in drop:
+		_mine_watch.erase(id)
 
+
+func _script_kind_for(n: Node) -> int:
+	var s = n.get_script()
+	if s == null:
+		return 0
+	var sid: int = s.get_instance_id()
+	var cached = _script_kind.get(sid)
+	if cached != null:
+		return int(cached)
+	var path := String(s.resource_path)
+	var kind := 0
+	if path.ends_with(NVG_SCRIPT_SUFFIX):
+		kind = 1
+	elif path.ends_with("Mine.gd"):
+		kind = 2
+	_script_kind[sid] = kind
+	return kind
 
 func _collect_meshes(node: Node, out: Array) -> void:
 	# GeometryInstance3D rather than MeshInstance3D: some visuals are MultiMesh
@@ -606,7 +651,7 @@ func _update_mine(id: int, thermal_on: bool, ppos: Vector3) -> void:
 
 func set_thermal_enabled(on: bool) -> void:
 	set_thermal = on
-	_apply_uniforms()
+	_dirty = true
 	_tick_cd = 0.0
 
 
@@ -625,7 +670,7 @@ func apply_config(rec) -> void:
 	set_glow_distance = rec.outline_distance
 	set_mines = rec.thermal_mines
 	set_state_colors(rec.state_colors())
-	_apply_uniforms()
+	_dirty = true
 	_tick_cd = 0.0
 
 
@@ -636,12 +681,12 @@ func set_mines_enabled(on: bool) -> void:
 
 func set_state_colors(colors: Dictionary) -> void:
 	_state_colors = colors
-	_apply_uniforms()
+	_dirty = true
 
 
 func set_palette_mode(mode: int) -> void:
 	set_palette = mode
-	_apply_uniforms()
+	_dirty = true
 	_tick_cd = 0.0
 
 
