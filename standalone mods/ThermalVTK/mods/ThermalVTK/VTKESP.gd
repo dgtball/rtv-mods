@@ -12,7 +12,7 @@ const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
 const ScopeDebug = preload("res://mods/ThermalVTK/VTKScopeDebug.gd")
 const Calibration = preload("res://mods/ThermalVTK/VTKCalibration.gd")
-const NomadMarkerShader := preload("res://mods/ThermalVTK/VTKNomadMarker.gdshader")
+
 
 # Polling cadence for state re-reads / fallback discovery (frames).
 const POLL_EVERY := 12
@@ -153,7 +153,6 @@ func apply_config(rec) -> void:
 func set_calibration(active: bool, index: int) -> void:
 	p_cal_active = active
 	p_cal_index = index
-	_cal_apply_marker_key()
 
 # ---------------------------------------------------------------------------
 # Discovery
@@ -409,7 +408,6 @@ func _process(delta: float) -> void:
 		if _any_layer():
 			_draw(ppos)
 	_labels_sync()
-	_markers_sync()
 	_dbg_tick(delta, ppos_v)
 
 func _dbg_tick(delta: float, ppos: Variant) -> void:
@@ -560,99 +558,6 @@ func _label_free(id: int) -> void:
 # Friendly-nomad diamond marker (while thermal + NVG are on)
 # ---------------------------------------------------------------------------
 
-func _markers_sync() -> void:
-	if not marker_visible:
-		_markers_free_all()
-		return
-	for id in _ids_for_frame():
-		if not _entries.has(id):
-			continue
-		var e: Dictionary = _entries[id]
-		if not bool(e.get("nomad", false)):
-			if _markers.has(id):
-				_marker_free(id)
-			continue
-		var node = e.get("node")
-		if node == null or not is_instance_valid(node) or not node.is_inside_tree():
-			_marker_free(id)
-			continue
-		# Dead nomads keep their entry (for cooling) but drop the marker.
-		if bool(e.get("dead", false)) or bool(node.get("dead")):
-			_marker_free(id)
-			continue
-		var mi: MeshInstance3D = _markers.get(id)
-		if mi == null or not is_instance_valid(mi):
-			mi = _marker_make(id, node)
-			if mi == null:
-				continue
-		var win: Dictionary = e.get("win", Tracker.EMPTY_WINDOW)
-		var xray: bool = bool(e.get("xray_live", false)) and not win.is_empty()
-		if xray:
-			e["los"] = true
-		elif not e.has("los") or (_frame + id) % LOS_EVERY == 0:
-			e["los"] = _marker_los(e, mi)
-		mi.visible = bool(e.get("los", true))
-	for id in _markers.keys():
-		if not _entries.has(id):
-			_marker_free(id)
-
-func _marker_make(id: int, node: Node) -> MeshInstance3D:
-	var anchor := _anchor_above(node)
-	if not (anchor["parent"] is Node):
-		return null
-	# A key-emitting mesh instead of a Label3D: the marker paints the nomad key
-	# colour, so the NVG overlay detects it and substitutes the display colour.
-	# A green Label3D was re-coloured by the thermal palette ramp instead.
-	var mi := MeshInstance3D.new()
-	var quad := QuadMesh.new()
-	quad.size = Vector2(0.18, 0.18)
-	mi.mesh = quad
-	# Keep the contour collector off our own geometry: the marker is a child of
-	# the bot mesh, so the sweep would otherwise hand it the body-fill overlay
-	# and paint over the nomad key before the overlay could substitute it.
-	mi.set_meta(Outline.NO_CONTOUR_META, true)
-	var mat := ShaderMaterial.new()
-	mat.shader = NomadMarkerShader
-	mat.render_priority = 41
-	# The marker key is written here instead of being left to the shader
-	# default, so the calibration cycle can repaint the live markers.
-	mat.set_shader_parameter("nomad_key", _marker_key())
-	mi.material_override = mat
-	mi.position = Vector3(0.0, float(anchor["y"]), 0.0)
-	# The quad is billboarded inside the shader (MeshInstance3D has no
-	# billboard property in Godot 4). The depth test stays disabled for the
-	# scope picture (VTKNomadMarker.gdshader); visibility through walls is
-	# decided by _marker_los.
-	(anchor["parent"] as Node).add_child(mi)
-	_markers[id] = mi
-	return mi
-
-func _marker_free(id: int) -> void:
-	if _markers.has(id):
-		var mi = _markers[id]
-		if is_instance_valid(mi):
-			mi.queue_free()
-		_markers.erase(id)
-
-# The key the nomad marker paints: the calibration candidate while the
-# calibration is on, the normal nomad key otherwise.
-func _marker_key() -> Color:
-	if p_cal_active:
-		return Calibration.candidate(p_cal_index)
-	return States.KEY_NOMAD
-
-# Rewrites the marker key on the live markers, so a calibration step repaints
-# them without waiting for the markers to be rebuilt.
-func _cal_apply_marker_key() -> void:
-	var key: Color = _marker_key()
-	for id in _markers.keys():
-		var mi = _markers[id]
-		if mi == null or not is_instance_valid(mi):
-			continue
-		var mat = mi.material_override
-		if mat is ShaderMaterial:
-			(mat as ShaderMaterial).set_shader_parameter("nomad_key", key)
-
 func _ids_for_frame() -> Array:
 	if _ids_stamp != _frame:
 		_ids_frame = _entries.keys()
@@ -772,16 +677,18 @@ func _labels_free_all() -> void:
 
 func _markers_free_all() -> void:
 	for id in _markers.keys():
-		_marker_free(id)
+		var m = _markers[id]
+		if m is Node and is_instance_valid(m):
+			(m as Node).queue_free()
 	_markers.clear()
 
-func _marker_los(e: Dictionary, mi: MeshInstance3D) -> bool:
+func _nomad_los(e: Dictionary, anchor_world: Vector3) -> bool:
 	if los_probe.is_valid():
 		return bool(los_probe.call())
 	var cam := _camera() as Camera3D
 	if cam == null or not is_inside_tree():
 		return true
-	return _los_raycast(cam.global_position, mi.global_position, e)
+	return _los_raycast(cam.global_position, anchor_world, e)
 
 func _camera() -> Camera3D:
 	var vp := get_viewport()

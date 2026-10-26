@@ -44,12 +44,7 @@ const KEY_DEFEND := Color(1.0, 0.0, 1.0)
 
 const CATEGORY_KEY_COLORS: Array[Color] = [KEY_NORMAL, KEY_COMBAT, KEY_DEFEND]
 
-# Friendly-nomad marker key (green display colour proposed by the overlay).
-# The rule above applies: it must stay clear of the mine key, or a washed
-# nomad marker reads as a mine. Calibrated: a green whose red and blue stay
-# near zero survives the NVG wash as green, where a bright green
-# (0.6, 1.0, 0.6) washed out to pure white and lost the marker.
-const KEY_NOMAD := Color(0.02, 0.60, 0.24)
+
 
 static func state_key(cat: int) -> Color:
 	if cat < 0 or cat >= CATEGORY_KEY_COLORS.size():

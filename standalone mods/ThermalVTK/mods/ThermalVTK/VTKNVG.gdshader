@@ -2,8 +2,8 @@ shader_type canvas_item;
 
 // NVG / thermal overlay. Replaces the vanilla NVG ColorRect shader (see
 // VTKNVG.gd for why the swap is safe). The whole frame is read back through
-// the false-colour thermal palette; the mine, the three contour state keys
-// and the nomad marker key are pulled out by comparing the screen against the
+// the false-colour thermal palette; the mine and the three contour state keys
+// are pulled out by comparing the screen against the
 // *Key uniforms. Those keys are NOT the raw colours the world-space shaders
 // emit -- the vanilla NVG world processing washes bright keys toward white
 // before this shader ever sees them -- but the measured post-NVG values
@@ -54,9 +54,8 @@ uniform vec3 stCombatColor : source_color = vec3(0.95, 0.18, 0.15);
 uniform vec3 stDefendColor : source_color = vec3(0.62, 0.30, 0.95);
 uniform float stateBright : hint_range(0.1, 3.0, 0.05) = 0.6;
 
-// Body-fill / nomad detector targets removed in 1.7.2: the fill is gone.
-uniform vec3 nomadKey : source_color = vec3(0.580, 0.973, 0.584);
-uniform vec3 nomadColor : source_color = vec3(0.30, 1.0, 0.35);
+// Body-fill and friendly-nomad detector removed in 2.2.0: both now draw as a 2D overlay
+// outside this screen-space key substitution, so the overlay no longer needs them.
 
 uniform vec3 mineColor : source_color = vec3(0.7, 0.1, 0.07);
 
@@ -175,7 +174,6 @@ void fragment()
 		float dStN = orbitDist(pixelColor.rgb, stNormalKey);
 		float dStC = orbitDist(pixelColor.rgb, stCombatKey);
 		float dStD = orbitDist(pixelColor.rgb, stDefendKey);
-		float dNom = orbitDist(pixelColor.rgb, nomadKey);
 		// Wash guard for the combat key. Combat is the only two-channel-
 		// saturated key, so a fully washed pixel (daylight sky, snow, cloud
 		// decks) converges onto its measured orbit and painted the whole sky
@@ -188,7 +186,7 @@ void fragment()
 		if (washSpread < 0.10) {
 			dStC = 99.0;
 		}
-		float dCore = min(dMine, min(dStN, min(dStC, min(dStD, dNom))));
+		float dCore = min(dMine, min(dStN, min(dStC, dStD)));
 
 		float rawLuminance = dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114));
 		// Shoulder BEFORE the clamp: the top of the range bends down while the
@@ -202,7 +200,7 @@ void fragment()
 		}
 		vec3 backgroundColor = ThermalPalette(luminance) * 0.7;
 		if (dCore < DET_TOL_CORE) {
-			// Closest wins. Order (exact ties only): mine, state, nomad.
+			// Closest wins. Order (exact ties only): mine, states.
 			if (dCore == dMine) {
 				color = vec4(mineColor, pixelColor.a);
 			} else if (dCore == dStN) {
@@ -212,7 +210,7 @@ void fragment()
 			} else if (dCore == dStD) {
 				color = vec4(stDefendColor * stateBright, pixelColor.a);
 			} else {
-				color = vec4(nomadColor, pixelColor.a);
+				color = vec4(backgroundColor, pixelColor.a);
 			}
 		} else {
 			color = vec4(backgroundColor, pixelColor.a);

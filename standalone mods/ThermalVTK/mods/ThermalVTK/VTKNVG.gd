@@ -59,12 +59,6 @@ const DET_ST_NORMAL := Color(1.00, 0.21, 0.16)
 const DET_ST_COMBAT := Color(0.82, 1.00, 1.00)
 const DET_ST_DEFEND := Color(1.00, 0.34, 1.00)
 
-# Fill / nomad detector targets. The nomad value was calibrated in-game
-# against the vanilla NVG palette (a probe measured the raw nomad key after the
-# wash). It is the measured post-NVG colour of KEY_NOMAD in VTKStates.gd, so the
-# nomad detector cannot sit inside another key's radius.
-const DET_NOMAD := Color(0.580, 0.973, 0.584)
-
 # settings
 var set_nvg_noise: float = 0.0
 var set_nvg_white: float = 1.0
@@ -80,8 +74,7 @@ var set_daylight: bool = true
 # Brightness of the state key the ESP outlines emit; the overlay uses it to
 # scale the substituted state colour.
 var set_state_brightness: float = 0.6
-# Display colour of the friendly-nomad marker.
-var set_nomad_color: Color = Color(0.30, 1.0, 0.35)
+
 var _state_colors: Dictionary = {}
 var _game_data: Resource = null
 var _shader: Shader = null
@@ -299,8 +292,7 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("stCombatColor", _state_colors.get("state_combat", States.DEFAULT_COMBAT))
 	nvg_mat.set_shader_parameter("stDefendColor", _state_colors.get("state_defend", States.DEFAULT_DEFEND))
 	nvg_mat.set_shader_parameter("stateBright", set_state_brightness)
-	nvg_mat.set_shader_parameter("nomadKey", DET_NOMAD)
-	nvg_mat.set_shader_parameter("nomadColor", set_nomad_color)
+
 	nvg_mat.set_shader_parameter("scopeRotate", _scope_rotate)
 
 
