@@ -37,15 +37,17 @@ func _draw() -> void:
 	var font := get_theme_default_font()
 	if font == null:
 		return
-	# Items: name/distance followed by state/reloading/vs; health bar under.
+	# Items: header under the diamond, state, then health bar; trigger suffix is
+	# pushed down below the bot's projected feet so the lines never overlap.
 	for it in _items:
+		var color: Color = it["color"]
 		var anchor: Vector3 = it["anchor"]
 		if cam.is_position_behind(anchor):
 			continue
 		var screen := cam.unproject_position(anchor)
-		var color: Color = it["color"]
 		var header: String = str(it["header"])
-		var status_txt: String = str(it["status"]) + str(it["suffix"])
+		var status_txt: String = str(it["status"])
+		var suffix_txt: String = str(it["suffix"])
 		var frac: float = clampf(float(it["health"]), 0.0, 1.0)
 		var alpha: float = 1.0
 		var dist_m: float = float(it["dist"]) if it.has("dist") else 0.0
@@ -53,20 +55,29 @@ func _draw() -> void:
 		if dist_cap > 0.0:
 			alpha = clampf(1.0 - (dist_m / dist_cap) * 0.3, 0.7, 1.0)
 		var c: Color = Color(color.r, color.g, color.b, color.a * alpha)
-		# header line
-		var origin_h := Vector2(screen.x - font.get_string_size(header, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x / 2.0, screen.y)
+		# header line, kept below the diamond so they don't collide.
+		var head_y := screen.y + 18.0
+		var origin_h := Vector2(screen.x - font.get_string_size(header, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x / 2.0, head_y)
 		draw_string_outline(font, origin_h, header, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, 4, Color(0.0, 0.0, 0.0, 0.85))
 		draw_string(font, origin_h, header, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, c)
-		# status line
-		var origin_s := Vector2(screen.x - font.get_string_size(status_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x / 2.0, screen.y + FONT_SIZE + 2)
+		# State (reloading / vs) underneath the name.
+		var origin_s := Vector2(screen.x - font.get_string_size(status_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x / 2.0, head_y + FONT_SIZE + 2)
 		draw_string_outline(font, origin_s, status_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, 4, Color(0.0, 0.0, 0.0, 0.85))
-		draw_string(font, origin_s, status_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, c, 0)
-		# health bar
-		var bar_y := screen.y + (FONT_SIZE + 2) * 2 + 2
+		draw_string(font, origin_s, status_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, c)
+		# Health bar under the state line.
+		var bar_y := head_y + (FONT_SIZE + 2) * 2 + 2
 		var bar := Rect2(screen.x - HEALTH_WIDTH / 2.0, bar_y, HEALTH_WIDTH, 3.0)
 		draw_rect(bar.grow(0.5), Color(0.0, 0.0, 0.0, 0.6))
 		draw_rect(Rect2(bar.position, Vector2(bar.size.x * frac, bar.size.y)), Color(Color.RED.lerp(Color.GREEN, frac), alpha))
-	# Diamonds (friendly nomads).
+		# Trigger suffix below the bot's projected feet.
+		if suffix_txt != "":
+			var feet_anchor: Vector3 = it["feet"] if it.has("feet") else anchor
+			if not cam.is_position_behind(feet_anchor):
+				var feet_screen := cam.unproject_position(feet_anchor)
+				var origin_f := Vector2(screen.x - font.get_string_size(suffix_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x / 2.0, feet_screen.y + 4.0)
+				draw_string_outline(font, origin_f, suffix_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, 4, Color(0.0, 0.0, 0.0, 0.85))
+				draw_string(font, origin_f, suffix_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, Color(1.0, 1.0, 1.0, 0.9))
+	# Friendly-nomad diamonds (plumbob silhouette).
 	var diamond_color := Color(0.30, 1.0, 0.35)
 	for d in _diamonds:
 		var vis: bool = bool(d["visible"])
@@ -76,13 +87,13 @@ func _draw() -> void:
 		if cam.is_position_behind(anchor):
 			continue
 		var p := cam.unproject_position(anchor)
-		var r := 18.0
 		if p.x != p.x or p.y != p.y:
 			continue
+		var r := 18.0
 		var poly := PackedVector2Array([p + Vector2(0.0, -r), p + Vector2(r, 0.0), p + Vector2(0.0, r), p + Vector2(-r, 0.0)])
 		if poly[0] == poly[1] or poly[1] == poly[2] or poly[2] == poly[3] or poly[3] == poly[0]:
 			continue
 		draw_colored_polygon(poly, diamond_color)
 		var outline_pts := PackedVector2Array([p + Vector2(0.0, -r), p + Vector2(r, 0.0), p + Vector2(0.0, r), p + Vector2(-r, 0.0), p + Vector2(0.0, -r)])
-		draw_polyline(outline_pts, Color(0.0, 0.0, 0.0, 0.85), 1.2)
+		draw_polyline(outline_pts, Color(0.0, 0.0, 0.0, 0.85), 1.5)
 		draw_line(p + Vector2(0.0, r), p + Vector2(0.0, r + 7.0), Color(diamond_color.r, diamond_color.g, diamond_color.b, 0.9), 1.5)
