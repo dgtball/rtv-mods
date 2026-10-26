@@ -21,6 +21,7 @@ class Rec:
 	var outline_enabled: bool = true
 	var outline_xray: bool = true
 	var thermal_mines: bool = true
+	var nomad_marker: bool = true
 	var daylight_compensation: bool = true
 	# Thermal world.
 	var nvg_noise: float = 0.0
@@ -75,6 +76,7 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Bool", "key": "outline_enabled", "name": "NPC highlighting (ESP)", "def": true, "cat": "01. ThermalVision", "pos": 2, "tip": "Draw state-coloured body outlines over NPCs while thermal vision is on. Off = full-screen thermal only."},
 	{"sect": "Bool", "key": "outline_xray", "name": "X-ray Triggers", "def": true, "cat": "01. ThermalVision", "pos": 3, "tip": "While on, the NPC ring lights up through walls only while a sound event is live: gunfire, shouts, idle chatter, footsteps, reloads, pain cries or grenade throws. Between events the outline stays a normal ring behind walls. The reveal timers themselves show on the debug labels regardless of this toggle."},
 	{"sect": "Bool", "key": "thermal_mines", "name": "Mine highlighting", "def": true, "cat": "01. ThermalVision", "pos": 4, "tip": "Highlight mines while thermal vision is on."},
+	{"sect": "Bool", "key": "nomad_marker", "name": "Friendly-nomad diamond", "def": true, "cat": "01. ThermalVision", "pos": 10, "tip": "Draw a small diamond over friendly nomads while thermal vision is on. Independent of the debug log."},
 	{"sect": "Float", "key": "nvg_noise", "name": "NVG noise", "def": 0.0, "min": 0.0, "max": 60.0, "step": 0.5, "cat": "01. ThermalVision", "pos": 5, "tip": "Grain amount over the NVG image. Lower is cleaner. Vanilla is fixed at 10."},
 	{"sect": "Float", "key": "nvg_white", "name": "NVG brightness", "def": 1.0, "min": 0.05, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 6, "tip": "Brightness of the NVG image. 1 = full brightness; lower darkens the whole overlay."},
 	{"sect": "Float", "key": "thermal_world", "name": "World brightness", "def": 1.70, "min": 1.0, "max": 4.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 7, "tip": "How bright the surrounding world reads in thermal."},
@@ -150,6 +152,7 @@ static func read(cfg: ConfigFile) -> Rec:
 	rec.outline_enabled = bool(_val(cfg, "Bool", "outline_enabled", rec.outline_enabled))
 	rec.outline_xray = bool(_val(cfg, "Bool", "outline_xray", rec.outline_xray))
 	rec.thermal_mines = bool(_val(cfg, "Bool", "thermal_mines", rec.thermal_mines))
+	rec.nomad_marker = bool(_val(cfg, "Bool", "nomad_marker", rec.nomad_marker))
 	rec.daylight_compensation = bool(_val(cfg, "Bool", "daylight_compensation", rec.daylight_compensation))
 	rec.nvg_noise = float(_val(cfg, "Float", "nvg_noise", rec.nvg_noise))
 	rec.nvg_white = float(_val(cfg, "Float", "nvg_white", rec.nvg_white))
