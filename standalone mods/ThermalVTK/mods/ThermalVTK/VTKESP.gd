@@ -609,6 +609,9 @@ func _overlay_sync(now: float) -> void:
 			var node = e.get("node")
 			if node == null or not is_instance_valid(node) or not node.is_inside_tree():
 				continue
+			# Dead NPCs keep their entry for cooling but must never be labeled.
+			if bool(e.get("dead", false)) or bool(node.get("dead")):
+				continue
 			var dist: float = float(e.get("dist", 0.0))
 			var node_var = node.get("variant")
 			var max_h := 1.0
