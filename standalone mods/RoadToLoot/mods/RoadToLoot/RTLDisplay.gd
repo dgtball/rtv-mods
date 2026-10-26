@@ -5,6 +5,7 @@ const Store = preload("res://mods/RoadToLoot/RTLStore.gd")
 const Roll = preload("res://mods/RoadToLoot/RTLRoll.gd")
 const Pool = preload("res://mods/RoadToLoot/RTLPool.gd")
 const Sidecar = preload("res://mods/RoadToLoot/RTLSidecar.gd")
+const Text = preload("res://mods/RoadToLoot/RTLText.gd")
 
 const BORDER_NAME := "_rtl_border"
 const BORDER_TAG := "rtl_border"
@@ -212,7 +213,7 @@ func apply_tooltip(hint) -> void:
 	box.add_child(header)
 	for a in Store.affixes(item.slotData):
 		var line = Label.new()
-		line.text = Roll.format_affix(a)
+		line.text = Text.format_affix(a, tier)
 		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		box.add_child(line)
 	parent.add_child(box)
