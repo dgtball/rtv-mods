@@ -5,6 +5,7 @@ extends Node
 
 const Tracker = preload("res://mods/ThermalVTK/VTKTracker.gd")
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
+const VTKLabels = preload("res://mods/ThermalVTK/VTKLabels.gd")
 const Settings = preload("res://mods/ThermalVTK/VTKSettings.gd")
 const Outline = preload("res://mods/ThermalVTK/VTKOutline.gd")
 const WeaponOcclusion = preload("res://mods/ThermalVTK/VTKWeaponOcclusion.gd")
@@ -32,6 +33,10 @@ var xray_layer: bool = false
 # MCM-driven params.
 var p_decay := 30.0
 var p_dist := 60.0
+var p_nomad_marker: bool = true
+var p_color_normal: Color = States.DEFAULT_NORMAL
+var p_color_combat: Color = States.DEFAULT_COMBAT
+var p_color_defend: Color = States.DEFAULT_DEFEND
 # The X-ray Triggers toggle state: on = a live trigger window swaps that bot's
 # ring to the x-ray shader (through walls). Off = windows are still tagged,
 # but the ring never lights up through the wall; labels read them regardless.
@@ -83,6 +88,9 @@ var _hook_ids: Array = []
 var _hook_wait_cd: float = 0.0
 var _labels: Dictionary = {}
 var _markers: Dictionary = {}
+var _overlay_layer: CanvasLayer = null
+var _overlay: Control = null
+var _gd_cache: Resource = null
 # Debug key calibration: when it is on, every NPC is painted with the
 # candidate key so its post-NVG colour can be measured with the probe.
 var p_cal_active: bool = false
@@ -98,11 +106,19 @@ var _dbg_applied: int = 0
 var _scope_dbg_cd: float = 0.0
 var _probe_gd: Resource = null
 
+const OverlayLayer = preload("res://mods/ThermalVTK/VTKLabelLayer.gd")
+
 func _ready() -> void:
 	name = "VTKESP"
 	get_tree().node_added.connect(_on_node_added)
 	_reseed(get_tree().current_scene)
 	_register_hooks()
+	_overlay_layer = CanvasLayer.new()
+	_overlay_layer.name = "VTKESP_Overlay"
+	_overlay_layer.layer = 1
+	add_child(_overlay_layer)
+	_overlay = OverlayLayer.new()
+	_overlay_layer.add_child(_overlay)
 
 func set_layers(contour: bool, xray: bool) -> void:
 	if contour_layer == contour and xray_layer == xray:
@@ -127,6 +143,10 @@ func _any_layer() -> bool:
 func apply_config(rec) -> void:
 	p_decay = rec.corpse_decay
 	p_dist = rec.outline_distance
+	p_nomad_marker = rec.nomad_marker
+	p_color_normal = rec.color_normal
+	p_color_combat = rec.color_combat
+	p_color_defend = rec.color_defend
 	p_trig = rec.outline_xray
 	p_fire_s = rec.fire_s
 	p_fire_d = rec.fire_d
@@ -361,6 +381,10 @@ func _trig_event(source: String, span: float, dist: float) -> void:
 func _exit_tree() -> void:
 	_labels_free_all()
 	_markers_free_all()
+	if _overlay_layer != null:
+		_overlay_layer.queue_free()
+		_overlay_layer = null
+		_overlay = null
 	if _lib != null:
 		for h in _hook_ids:
 			_lib.unhook(h)
@@ -385,7 +409,10 @@ func _process(delta: float) -> void:
 		_weapon.set_scope_mode(false, false)
 		if not _pending.is_empty():
 			_pending.clear()
+		_labels_free_all()
 		_markers_free_all()
+		if _overlay != null:
+			_overlay.clear()
 		return
 	_weapon.tick()
 	var scoped := _scoped_now()
@@ -407,7 +434,8 @@ func _process(delta: float) -> void:
 		var ppos: Vector3 = ppos_v
 		if _any_layer():
 			_draw(ppos)
-	_labels_sync()
+	var now := _now()
+	_overlay_sync(now)
 	_dbg_tick(delta, ppos_v)
 
 func _dbg_tick(delta: float, ppos: Variant) -> void:
@@ -645,6 +673,132 @@ func _draw(ppos: Vector3) -> void:
 	_dbg_applied = applied
 	if Dbg.enabled:
 		_dbg_draw_ms = float(Time.get_ticks_usec() - t0) / 1000.0
+
+
+func _head_world(node: Node) -> Vector3:
+	var mesh = node.get("mesh")
+	if mesh is Node3D:
+		var m := mesh as Node3D
+		var y: float = float(m.get_aabb().end.y) + 0.1
+		return m.global_position + Vector3(0.0, y, 0.0)
+	return (node as Node3D).global_position + Vector3(0.0, 1.9, 0.0)
+
+func _overlay_sync(now: float) -> void:
+	if _overlay == null:
+		return
+	var cam := _camera()
+	var gd := _gd_cached()
+	var menu_on := false
+	if gd != null:
+		menu_on = bool(gd.get("menu")) or bool(gd.get("settings")) or bool(gd.get("isDead")) or bool(gd.get("isTransitioning"))
+	if cam == null or menu_on or (not _any_layer() and not Dbg.enabled):
+		_overlay.clear()
+		return
+	var items: Array = []
+	var diamonds: Array = []
+	if Dbg.enabled:
+		for id in _want:
+			if not _entries.has(id):
+				continue
+			var e: Dictionary = _entries[id]
+			var node = e.get("node")
+			if node == null or not is_instance_valid(node) or not node.is_inside_tree():
+				continue
+			var dist: float = float(e.get("dist", 0.0))
+			var node_var = node.get("variant")
+			var max_h := 1.0
+			var hp := 1.0
+			if node_var != null:
+				var mh = node_var.get("health")
+				if mh != null:
+					max_h = float(mh)
+				if max_h <= 0.0:
+					max_h = 1.0
+				var h = node.get("health")
+				if h != null:
+					hp = float(h)
+			var name: String = ""
+			var nickname := ""
+			if node.has_method("get"):
+				var n = node.get("nickname")
+				if n != null:
+					nickname = str(n)
+			if node_var != null:
+				var vn = node_var.get("name")
+				if vn != null:
+					name = VTKLabels.name_of(str(vn), nickname)
+			if name == "":
+				name = str(node.name)
+			var reloading: bool = false
+			var r = node.get("reload")
+			if r != null:
+				reloading = bool(r)
+			var state_int := 0
+			var st = node.get("currentState")
+			if st != null:
+				state_int = int(st)
+			# "vs" target resolution, mirroring _state_text.
+			var vs := ""
+			var fighting_states: Array = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+			var sensor = node.get("sensor")
+			if fighting_states.has(state_int) and is_instance_valid(sensor) and is_instance_valid(sensor.priority):
+				var target = sensor.priority
+				if target.is_in_group("Player"):
+					vs = "vs you"
+				elif is_instance_valid(target.owner) and target.owner.get("variant") != null:
+					var towner_var = target.owner.get("variant")
+					var tname: String = (str(towner_var.get("name")) if towner_var.get("name") != null else str(target.owner.name))
+					var tnick := ""
+					if target.owner.get("nickname") != null:
+						tnick = str(target.owner.get("nickname"))
+					vs = "vs " + VTKLabels.name_of(tname, tnick)
+			var win: Dictionary = e.get("win", Tracker.EMPTY_WINDOW)
+			var cat: int = int(e.get("cat", States.NORMAL))
+			var disp_color: Color = p_color_normal
+			if cat == States.COMBAT:
+				disp_color = p_color_combat
+			elif cat == States.DEFEND:
+				disp_color = p_color_defend
+			items.append({
+				"anchor": _head_world(node),
+				"header": VTKLabels.header(name, dist),
+				"status": VTKLabels.status(state_int, reloading, vs),
+				"suffix": VTKLabels.trigger_suffix(win, now),
+				"color": disp_color,
+				"health": VTKLabels.health_frac(hp, max_h),
+				"dist": dist,
+				"dist_cap": p_dist,
+			})
+	# friendly-nomad diamonds, gated by contour and independent toggle
+	if marker_visible and p_nomad_marker and contour_layer:
+		for id in _entries:
+			if not _entries.has(id):
+				continue
+			var e: Dictionary = _entries[id]
+			var node = e.get("node")
+			if node == null or not is_instance_valid(node) or not node.is_inside_tree():
+				continue
+			if not bool(e.get("nomad", false)):
+				continue
+			if bool(e.get("dead", false)) or bool(node.get("dead")):
+				continue
+			var anchor: Vector3 = _head_world(node)
+			var xray_live: bool = bool(e.get("xray_live", false))
+			var win: Dictionary = e.get("win", Tracker.EMPTY_WINDOW)
+			var los: bool = false
+			if xray_live and not win.is_empty():
+				los = true
+				e["los"] = true
+			elif not e.has("los") or (_frame + int(id)) % LOS_EVERY == 0:
+				los = _nomad_los(e, anchor)
+				e["los"] = los
+			else:
+				los = bool(e.get("los", true))
+			diamonds.append({"anchor": anchor, "visible": los})
+	if items.is_empty() and diamonds.is_empty():
+		_overlay.clear()
+	else:
+		_overlay.set_frame(items, diamonds)
 
 func _opts_for(e: Dictionary, node: Node, now: float) -> Dictionary:
 	var opts: Dictionary = {}
