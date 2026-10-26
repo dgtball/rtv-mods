@@ -8,6 +8,7 @@ const Display = preload("res://mods/RoadToLoot/RTLDisplay.gd")
 const Roll = preload("res://mods/RoadToLoot/RTLRoll.gd")
 const Store = preload("res://mods/RoadToLoot/RTLStore.gd")
 const Category = preload("res://mods/RoadToLoot/RTLCategory.gd")
+const Sidecar = preload("res://mods/RoadToLoot/RTLSidecar.gd")
 
 const MCM_HELPERS := "res://ModConfigurationMenu/Scripts/Doink Oink/MCM_Helpers.tres"
 
@@ -140,6 +141,7 @@ func on_item_initialize(_source, data) -> void:
 	if t <= 0:
 		return
 	Store.stamp(item.slotData, t, Store.affixes(data))
+	Sidecar.commit_slot(item.slotData)
 	_display.paint(item)
 
 func _input(event: InputEvent) -> void:
@@ -158,6 +160,7 @@ func reroll_item(item) -> bool:
 		r = {"tier": Roll.pick_tier(Roll.tier_weights(ctx, _cfg.freq_mult, 1), randf()),
 			 "affixes": Roll.build_affixes(Category.of_item(item.slotData.itemData), 1, item.slotData.itemData, [], RandomNumberGenerator.new())}
 	Store.stamp(item.slotData, r["tier"], r["affixes"])
+	Sidecar.commit_slot(item.slotData)
 	_display.paint(item)
 	_display.invalidate_tooltip()
 	return true
@@ -166,6 +169,9 @@ func tag_created_loot(item) -> void:
 	var slotData = _created_slot()
 	if slotData == null or slotData.itemData == null:
 		return
+	var uid: String = str(slotData.itemData.file) + "-" + str(randi())
+	var plate: int = randi() % 10 + 1
+	Sidecar.populate(slotData, {"uid": uid, "plate": plate})
 	_roll_into(slotData, {"item": item, "rarity_roll": _caller_rarity_roll()})
 
 func _created_slot():
@@ -182,6 +188,9 @@ func _created_slot():
 func tag_ai_loot(slotData) -> void:
 	if slotData == null or slotData.itemData == null:
 		return
+	var uid: String = str(slotData.itemData.file) + "-" + str(randi())
+	var plate: int = randi() % 10 + 1
+	Sidecar.populate(slotData, {"uid": uid, "plate": plate})
 	var ctx := {"rarity_roll": _caller_rarity_roll()}
 	_roll_into(slotData, ctx)
 
@@ -299,6 +308,7 @@ func _apply_grid(kind: String, grid, data: Dictionary) -> void:
 		if not (entry is Dictionary):
 			continue
 		Store.stamp(item.slotData, int(entry.get("t", 0)), entry.get("a", []))
+		Sidecar.commit_slot(item.slotData)
 		_display.paint(item)
 
 func _apply_slots(kind: String, equipment, data: Dictionary) -> void:
@@ -317,6 +327,7 @@ func _apply_slots(kind: String, equipment, data: Dictionary) -> void:
 		if not (entry is Dictionary):
 			continue
 		Store.stamp(item.slotData, int(entry.get("t", 0)), entry.get("a", []))
+		Sidecar.commit_slot(item.slotData)
 		_display.paint(item)
 
 # A missing interface means the grids do not exist yet: keep the previous file
