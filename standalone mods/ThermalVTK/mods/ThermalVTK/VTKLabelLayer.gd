@@ -76,8 +76,12 @@ func _draw() -> void:
 		if cam.is_position_behind(anchor):
 			continue
 		var p := cam.unproject_position(anchor)
-		var r := 6.0
+		var r := 13.0
+		if p.x != p.x or p.y != p.y:
+			continue
 		var poly := PackedVector2Array([p + Vector2(0.0, -r), p + Vector2(r, 0.0), p + Vector2(0.0, r), p + Vector2(-r, 0.0)])
+		if poly[0] == poly[1] or poly[1] == poly[2] or poly[2] == poly[3] or poly[3] == poly[0]:
+			continue
 		draw_colored_polygon(poly, diamond_color)
 		var outline_pts := PackedVector2Array([p + Vector2(0.0, -r), p + Vector2(r, 0.0), p + Vector2(0.0, r), p + Vector2(-r, 0.0), p + Vector2(0.0, -r)])
 		draw_polyline(outline_pts, Color(0.0, 0.0, 0.0, 0.85), 1.2)
