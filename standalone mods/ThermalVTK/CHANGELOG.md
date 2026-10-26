@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0] - 2026-10-26
+
+### Changed
+- NPC nametags (shown together with the debug log) are now drawn as a 2D overlay, so they stay crisp and follow their own colour instead of being repainted by the thermal palette.
+### Added
+- An independent toggle for the friendly-nomad diamond (MCM, under the thermal vision section) — on by default.
+
 ## [2.1.0] - 2026-10-25
 
 ### Added
