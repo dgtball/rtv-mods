@@ -86,8 +86,6 @@ var _hook_ids: Array = []
 # instead of relying on the meta being present in _ready(). One attempt per
 # half second until the hooks go through.
 var _hook_wait_cd: float = 0.0
-var _labels: Dictionary = {}
-var _markers: Dictionary = {}
 var _overlay_layer: CanvasLayer = null
 var _overlay: Control = null
 var _gd_cache: Resource = null
@@ -130,8 +128,7 @@ func set_layers(contour: bool, xray: bool) -> void:
 	Dbg.log("ESP", "layers contour=%s xray=%s" % [str(contour), str(xray)])
 	if not _any_layer():
 		_outline.clear_all()
-		_labels_free_all()
-		_markers_free_all()
+		_overlay.clear()
 	elif not any_before and is_inside_tree():
 		_reseed(get_tree().current_scene)
 
@@ -280,7 +277,6 @@ func _on_ai_deactivate() -> void:
 	if is_instance_valid(n):
 		var id := n.get_instance_id()
 		_entries.erase(id)
-		_label_free(id)
 		Dbg.log("ESP", "deactivate id=%d" % id)
 
 func _on_ai_changestate(_state: String) -> void:
@@ -379,8 +375,7 @@ func _trig_event(source: String, span: float, dist: float) -> void:
 			Dbg.log("ESP", "trig id=%d source=%s span=%.1f dist=%.0f" % [id, source, span, dist])
 
 func _exit_tree() -> void:
-	_labels_free_all()
-	_markers_free_all()
+	_overlay.clear()
 	if _overlay_layer != null:
 		_overlay_layer.queue_free()
 		_overlay_layer = null
@@ -409,8 +404,7 @@ func _process(delta: float) -> void:
 		_weapon.set_scope_mode(false, false)
 		if not _pending.is_empty():
 			_pending.clear()
-		_labels_free_all()
-		_markers_free_all()
+		_overlay.clear()
 		if _overlay != null:
 			_overlay.clear()
 		return
@@ -496,95 +490,6 @@ func _scope_probe(delta: float) -> void:
 # ---------------------------------------------------------------------------
 # Debug state labels are shown whenever the diagnostic log is on, regardless of
 # thermal vision or the NVG helmet: they are a diagnostic, not a gameplay layer.
-
-func _labels_sync() -> void:
-	if not Dbg.enabled:
-		for id in _labels.keys():
-			_label_free(id)
-		_labels.clear()
-		return
-	for id in _ids_for_frame():
-		if not _entries.has(id):
-			continue
-		var e: Dictionary = _entries[id]
-		var node = e.get("node")
-		if node == null or not is_instance_valid(node) or not node.is_inside_tree():
-			_label_free(id)
-			continue
-		# Dead NPCs keep their entry (for cooling) but drop the label: a corpse
-		# with a state readout is noise. Read the node's own `dead` too, so the
-		# label goes even if the death hook did not fire.
-		if bool(e.get("dead", false)) or bool(node.get("dead")):
-			_label_free(id)
-			continue
-		var state := _read_state(node)
-		var txt := _label_text(e, node, state)
-		if not _labels.has(id):
-			_label_make(id, e, node, txt)
-		else:
-			var lbl = _labels[id]
-			if is_instance_valid(lbl):
-				lbl.text = txt
-				lbl.visible = true
-	# Drop labels whose entry is gone (deactivate raced the loop above).
-	for id in _labels.keys():
-		if not _entries.has(id):
-			_label_free(id)
-
-# Debug label text: the NPC's state (and, in trigger mode, the active reveal
-# window with its remaining seconds and configured range). Recomposed every
-# frame, so the countdown ticks live.
-func _label_text(e: Dictionary, node: Node, state: int) -> String:
-	var txt := States.label_text(state, bool(e.get("nomad", false)))
-	# The countdown suffix is window-driven only: the X-ray toggle governs the
-	# ring flash, labels follow the debug log like every other readout.
-	var now := _now()
-	var ev: Dictionary = Tracker.EMPTY_WINDOW
-	if e.has("win"):
-		ev = e["win"]
-	else:
-		ev = Tracker.pick_trig(e, now)
-	if not ev.is_empty():
-		var left: float = max(0.0, float(ev.get("expires", 0.0)) - now)
-		txt += "  [%s %.1fs %.0fm]" % [str(ev.get("source", "")), left, float(ev.get("dist", 0.0))]
-	return txt
-
-func _label_make(id: int, e: Dictionary, node: Node, txt: String) -> void:
-	var anchor := _anchor_above(node)
-	var lbl := Label3D.new()
-	lbl.text = txt
-	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	lbl.no_depth_test = true
-	lbl.render_priority = 40
-	lbl.font_size = 32
-	lbl.outline_size = 12
-	lbl.position = Vector3(0.0, float(anchor["y"]), 0.0)
-	lbl.visible = true
-	lbl.set_meta(Outline.NO_CONTOUR_META, true)
-	(anchor["parent"] as Node).add_child(lbl)
-	_labels[id] = lbl
-
-# Where a label/marker hangs: above the bot's own mesh when it has one (so the
-# overlay on that mesh skips our tagged geometry), above the bot root otherwise.
-func _anchor_above(node: Node) -> Dictionary:
-	var mesh = node.get("mesh")
-	var parent: Node = node
-	var y := 1.9
-	if mesh is Node3D:
-		parent = mesh
-		y = (mesh as Node3D).get_aabb().end.y + 0.1
-	return {"parent": parent, "y": y}
-
-func _label_free(id: int) -> void:
-	if _labels.has(id):
-		var lbl = _labels[id]
-		if is_instance_valid(lbl):
-			lbl.queue_free()
-		_labels.erase(id)
-
-# ---------------------------------------------------------------------------
-# Friendly-nomad diamond marker (while thermal + NVG are on)
-# ---------------------------------------------------------------------------
 
 func _ids_for_frame() -> Array:
 	if _ids_stamp != _frame:
@@ -823,18 +728,6 @@ func _fill_opts(opts: Dictionary, e: Dictionary, now: float) -> void:
 	opts["brightness"] = p_brightness
 	opts["grow"] = p_thickness
 	opts["xray"] = xray
-
-func _labels_free_all() -> void:
-	for id in _labels.keys():
-		_label_free(id)
-	_labels.clear()
-
-func _markers_free_all() -> void:
-	for id in _markers.keys():
-		var m = _markers[id]
-		if m is Node and is_instance_valid(m):
-			(m as Node).queue_free()
-	_markers.clear()
 
 func _nomad_los(e: Dictionary, anchor_world: Vector3) -> bool:
 	if los_probe.is_valid():
