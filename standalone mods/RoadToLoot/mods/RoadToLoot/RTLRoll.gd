@@ -1,6 +1,7 @@
 extends RefCounted
 
 const Pool = preload("res://mods/RoadToLoot/RTLPool.gd")
+const Log = preload("res://mods/RoadToLoot/RTLLog.gd")
 
 const CONTEXT_WEIGHTS := {
 	"default": [0.60, 0.30, 0.09, 0.01],
@@ -53,8 +54,9 @@ static func build_affixes(category: String, tier: int, item_data: Dictionary, bl
 	if n <= 0:
 		return out
 	# candidates filtered by release (Pool.entries already filters by ACTIVE_RELEASE)
+	var pool_all := Pool.entries(category)
 	var candidates: Array = []
-	for e in Pool.entries(category):
+	for e in pool_all:
 		if e["ranges"].has(tier):
 			candidates.append(e)
 
@@ -63,15 +65,15 @@ static func build_affixes(category: String, tier: int, item_data: Dictionary, bl
 	for e in candidates:
 		var need: String = e.get("needs", "")
 		var ok: bool = true
-		if need == "damage":
-			ok = float(item_data.get("damage", 0)) > 0
-		elif need == "capacity":
-			ok = float(item_data.get("capacity", 0)) > 0
+		if need == "capacity":
+			var v = item_data.get("capacity")
+			ok = float(v if v != null else 0) > 0
 		elif need == "insulation":
-			ok = float(item_data.get("insulation", 0)) > 0
+			var v = item_data.get("insulation")
+			ok = float(v if v != null else 0) > 0
 		elif need == "armor":
-			var t: String = str(item_data.get("type", ""))
-			ok = (t == "Armor" or t == "Helmet")
+			var v = item_data.get("type")
+			ok = (str(v if v != null else "") == "Armor" or str(v if v != null else "") == "Helmet")
 		if ok:
 			filtered.append(e)
 	candidates = filtered
@@ -131,46 +133,3 @@ static func _roll_one(e: Dictionary, tier: int, rng: RandomNumberGenerator) -> D
 		elif unit == "rate":
 			value = snappedf(value, 0.01)
 	return {"stat": e["stat"], "value": value, "unit": unit}
-
-static func format_affix(a: Dictionary) -> String:
-	var unit: String = a.get("unit", "pct")
-	var value: float = float(a.get("value", 0.0))
-	var stat: String = a.get("stat", "")
-	var label := stat.capitalize().replace("_", " ")
-	match unit:
-		"pct":
-			var pct := int(round(value * 100.0))
-			var sign := "+" if pct >= 0 else ""
-			return sign + str(pct) + "% " + label
-		"rate":
-			return "Regen +" + str(value) + " HP/s"
-		"hp":
-			return "+" + str(int(round(value))) + " Max HP"
-		"kg":
-			return "+" + str(int(round(value))) + " kg " + label
-		"flat":
-			return "+" + str(int(round(value))) + " " + label
-		"mult":
-			return label + " x" + str(value)
-	return label + " " + str(value)
-
-# format_delta(stat, value, tier) -> String
-# tier используется только для форматирования; знак определяется по имени стата
-static func format_delta(stat: String, value: float, tier: int) -> String:
-	var label := stat.capitalize().replace("_", " ")
-	# drain-статы всегда отрицательные (уменьшают ресурс)
-	var is_drain: bool = stat.to_lower().contains("drain")
-
-	if stat == "regen" or stat == "low_hp_regen":
-		return "+%.2f Regen" % snappedf(value, 0.01)
-	elif stat == "carry":
-		return "+%d Carry" % int(round(value))
-	elif stat == "protection":
-		return "+%d Protection" % int(round(value))
-	elif is_drain:
-		var pct := int(round(abs(value) * 100.0))
-		return "-%d%% %s" % [pct, label]
-	else:
-		var pct := int(round(value * 100.0))
-		var sign := "+" if pct >= 0 else ""
-		return sign + str(pct) + "% " + label
