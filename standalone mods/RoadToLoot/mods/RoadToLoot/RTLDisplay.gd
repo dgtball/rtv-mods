@@ -23,6 +23,7 @@ var _rows_root = null
 var _rows: Array = []
 var _merged_values: Array = []
 var _last_rows_item_id: int = 0
+var _last_merge_item_id: int = 0
 var _warned_hidden: bool = false
 var _warned_template: bool = false
 
@@ -220,6 +221,7 @@ func invalidate_tooltip() -> void:
 # stale affix list never shows up under a plain info panel.
 func clear_tooltip() -> void:
 	_last_tooltip_item_id = 0
+	_last_merge_item_id = 0
 	_clear_all()
 
 # affix stat -> суммарное значение. Сумма живёт в чистой модели строк,
@@ -246,17 +248,24 @@ func _base_value(item, stat: String) -> float:
 # Возвращает статы, вписанные в ванильные строки: своим строкам они не нужны.
 # Строка не найдена/скрыта или база нулевая — стат остаётся в списке как своя строка.
 func _apply_merges(parent, item, tier: int) -> Array:
-	_clear_merges()
+	var iid: int = item.get_instance_id()
+	if _last_merge_item_id != iid:
+		_clear_merges()
+		_last_merge_item_id = iid
+	else:
+		_clear_merges_values()
 	var out: Array = []
-	var by_stat: Dictionary = _affix_map(item)
+	var by_stat: Dictionary = Rows.totals(Store.affixes(item.slotData))
 	var color := _border_color(tier)
 	for stat in Pool.MERGED:
 		if not by_stat.has(stat):
 			continue
-		var row = parent.find_child(str(Pool.MERGED[stat]), false, false)
+		var row_name: String = str(Pool.MERGED[stat])
+		var row = parent.find_child(row_name, false, false)
 		if row == null or not (row is Label) or row.get_child_count() == 0 or not row.visible:
 			continue
-		var base: float = _base_value(item, stat)
+		var base_key: String = Pool.MERGED_BASE.get(stat, stat)
+		var base: float = _base_value(item, base_key)
 		if base <= 0.0:
 			continue
 		var value = row.get_child(0)
@@ -269,6 +278,10 @@ func _apply_merges(parent, item, tier: int) -> Array:
 # Ваниль не сбрасывает modulate у значений: без этого цифра осталась бы
 # покрашенной после перехода на предмет без тира.
 func _clear_merges() -> void:
+	_clear_merges_values()
+	_last_merge_item_id = 0
+
+func _clear_merges_values() -> void:
 	for v in _merged_values:
 		if is_instance_valid(v):
 			v.modulate = Color(1, 1, 1, 1)
