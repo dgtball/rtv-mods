@@ -80,7 +80,7 @@ static func build_config() -> ConfigFile:
 	var cfg := ConfigFile.new()
 	var cat := "01. Display"
 	cfg.set_value("Bool", "paint_cells", {"name": "Paint item cells", "default": true, "value": true, "category": cat, "menu_pos": 0, "tooltip": "Tint the inventory cell by loot rarity."})
-	cfg.set_value("Bool", "show_affix_block", {"name": "Show affix block in tooltip", "default": true, "value": true, "category": cat, "menu_pos": 1, "tooltip": "List the rolled affixes below the item tooltip."})
+	cfg.set_value("Bool", "show_affix_block", {"name": "Show affixes in tooltip", "default": true, "value": true, "category": cat, "menu_pos": 1, "tooltip": "Merge the rolled affixes into the item stat list."})
 	cfg.set_value("Float", "border_width", {"name": "Border width", "default": 2.0, "value": 2.0, "minRange": 1.0, "maxRange": 6.0, "step": 1.0, "category": cat, "menu_pos": 2, "tooltip": "Thickness of the rarity border."})
 	cfg.set_value("Dropdown", "tier_palette", {"name": "Rarity palette", "default": 0, "value": 0, "options": {"0": "Default (blue/purple/gold)", "1": "High contrast"}, "category": cat, "menu_pos": 3, "tooltip": "Colour set for the rarity tiers."})
 	cfg.set_value("Bool", "hide_vanilla_rarity", {"name": "Hide vanilla rarity line", "default": false, "value": false, "category": cat, "menu_pos": 4, "tooltip": "Hide the vanilla rarity word; the mod's own rarity line still shows."})
@@ -95,7 +95,7 @@ static func build_config() -> ConfigFile:
 	cfg.set_value("Int", "debug_force_tier", {"name": "Force tier (0=off)", "default": 0, "value": 0, "minRange": 0, "maxRange": 3, "step": 1, "category": dbg, "menu_pos": 1, "tooltip": "1=Common, 2=Rare, 3=Legendary."})
 	cfg.set_value("Keycode", "debug_reroll_key", {"name": "Re-roll hovered item", "default": 0, "default_type": "Keycode", "value": 0, "category": dbg, "menu_pos": 2, "tooltip": "Press to re-roll the item under the cursor."})
 	cfg.set_value("Bool", "log_rolls", {"name": "Log rolls", "default": false, "value": false, "category": dbg, "menu_pos": 3, "tooltip": "Print every loot roll to the log."})
-	cfg.set_value("Info", "version", "0.2.25")
+	cfg.set_value("Info", "version", "0.2.29")
 
 	return cfg
 
@@ -224,6 +224,9 @@ func roll_for(itemData, ctx: Dictionary, rng: RandomNumberGenerator) -> Dictiona
 	var weights: Array = Roll.tier_weights(ctx_dict, _cfg.freq_mult, _debug.force_tier())
 	var tier: int = Roll.pick_tier(weights, rng.randf())
 	var affixes: Array = Roll.build_affixes(cat, tier, itemData, [], rng)
+	Log.line("ROLL affix=" + str(affixes.size()))
+	if _debug.should_log():
+		Log.line("DEBUG roll_for cat=" + cat + " tier=" + str(tier) + " name=" + str(itemData.get("name")) + " type=" + str(itemData.get("type")) + " path=" + str(itemData.get("resource_path")))
 	return {"tier": tier, "affixes": affixes}
 func _iface() -> Node:
 	var tree := get_tree()
@@ -307,7 +310,13 @@ func _apply_grid(kind: String, grid, data: Dictionary) -> void:
 		var entry = data.get(kind + "|" + file + "|" + str(n))
 		if not (entry is Dictionary):
 			continue
-		Store.stamp(item.slotData, int(entry.get("t", 0)), entry.get("a", []))
+		var entry_tier: int = int(entry.get("t", 0))
+		if entry_tier <= 0:
+			continue
+		# Never clobber a freshly stamped tier with stale saved data.
+		if Store.tier(item.slotData) > 0:
+			continue
+		Store.stamp(item.slotData, entry_tier, entry.get("a", []))
 		Sidecar.commit_slot(item.slotData)
 		_display.paint(item)
 
@@ -326,7 +335,13 @@ func _apply_slots(kind: String, equipment, data: Dictionary) -> void:
 		var entry = data.get(kind + "|" + str(itemData.file) + "|" + str(slot.name))
 		if not (entry is Dictionary):
 			continue
-		Store.stamp(item.slotData, int(entry.get("t", 0)), entry.get("a", []))
+		var entry_tier: int = int(entry.get("t", 0))
+		if entry_tier <= 0:
+			continue
+		# Never clobber a freshly stamped tier with stale saved data.
+		if Store.tier(item.slotData) > 0:
+			continue
+		Store.stamp(item.slotData, entry_tier, entry.get("a", []))
 		Sidecar.commit_slot(item.slotData)
 		_display.paint(item)
 
