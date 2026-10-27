@@ -17,8 +17,6 @@ const POOL: Array = [
 		"ranges": {1: [5, 10], 2: [8, 14], 3: [10, 20]}, "release": 2},
 	{"stat": "low_hp_damage", "category": "weapon", "unit": "pct", "weight": 0.7,
 		"ranges": {1: [15, 25], 2: [25, 35], 3: [35, 50]}, "release": 2},
-	{"stat": "condition", "category": "weapon", "unit": "pct", "weight": 0.8,
-		"ranges": {1: [5, 12], 2: [12, 25], 3: [20, 50]}, "release": 2, "needs": "damage"},
 
 	# clothing, release=1 (0.3.0)
 	{"stat": "regen", "category": "clothing", "unit": "rate", "weight": 1.0,
@@ -45,12 +43,27 @@ const POOL: Array = [
 		"ranges": {1: [3, 6], 2: [5, 9], 3: [8, 12]}, "release": 2},
 	{"stat": "protection", "category": "clothing", "unit": "flat", "weight": 0.5,
 		"ranges": {2: [1, 1], 3: [1, 1]}, "release": 2, "needs": "armor"},
-	{"stat": "condition", "category": "clothing", "unit": "pct", "weight": 0.8,
-		"ranges": {1: [5, 12], 2: [12, 25], 3: [20, 50]}, "release": 2},
+]
+
+# MERGED: аффикс вписывается суммой в ванильную строку тултипа, своей строки не получает.
+const MERGED := {
+	"damage": "Damage",
+	"carry": "Capacity",
+	"insulation": "Insulation",
+	"protection": "Protection",
+}
+
+# ROW_ORDER: порядок собственных строк тултипа. Слитые статы сюда не входят.
+# Порядок фиксирован, чтобы список не переставлялся от предмета к предмету.
+const ROW_ORDER := [
+	"recoil", "fire_rate", "low_hp_damage",
+	"regen", "low_hp_regen",
+	"stamina_drain", "thirst_drain", "hunger_drain", "sanity_drain",
+	"noise", "sprint",
 ]
 
 # ACTIVE_RELEASE: 1 = 0.3.0 только статы релиза 1 (§6 D23)
-const ACTIVE_RELEASE: int = 1
+const ACTIVE_RELEASE: int = 2
 
 const UNITS := ["pct", "hp", "kg", "flat", "rate", "mult"]
 const CATEGORIES := ["weapon", "clothing"]

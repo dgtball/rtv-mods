@@ -1,7 +1,7 @@
 extends RefCounted
 
 const KNOWN_STATS := ["regen", "low_hp_regen", "carry", "stamina_drain",
-	"insulation", "thirst_drain", "hunger_drain", "sanity_drain", "condition",
+	"insulation", "thirst_drain", "hunger_drain", "sanity_drain",
 	"damage", "recoil", "fire_rate", "low_hp_damage"]
 
 static func clothing_totals(slots: Array) -> Dictionary:
