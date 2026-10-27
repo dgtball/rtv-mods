@@ -312,14 +312,16 @@ func _build_rows(parent, specs: Array) -> void:
 		row.visible = true
 		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.text = str(spec["label"])
+		# add_child до замера: отсоединённая копия не видит тему сцены, и ширина
+		# подписи считалась бы фолбэк-шрифтом, а не Lora 12 из Theme.tres.
+		parent.add_child(row)
+		parent.move_child(row, index)
+		index += 1
 		var value = row.get_child(0)
 		var shift: float = _text_width(row, row.text) - template_w
 		value.offset_left = template_value.offset_left + shift
 		value.offset_right = value.offset_left + ROW_VALUE_MIN_W
 		value.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		parent.add_child(row)
-		parent.move_child(row, index)
-		index += 1
 		_rows.append(row)
 		_write_row(row, spec)
 

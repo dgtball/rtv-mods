@@ -224,7 +224,6 @@ func roll_for(itemData, ctx: Dictionary, rng: RandomNumberGenerator) -> Dictiona
 	var weights: Array = Roll.tier_weights(ctx_dict, _cfg.freq_mult, _debug.force_tier())
 	var tier: int = Roll.pick_tier(weights, rng.randf())
 	var affixes: Array = Roll.build_affixes(cat, tier, itemData, [], rng)
-	Log.line("ROLL affix=" + str(affixes.size()))
 	if _debug.should_log():
 		Log.line("DEBUG roll_for cat=" + cat + " tier=" + str(tier) + " name=" + str(itemData.get("name")) + " type=" + str(itemData.get("type")) + " path=" + str(itemData.get("resource_path")))
 	return {"tier": tier, "affixes": affixes}

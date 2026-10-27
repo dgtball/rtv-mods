@@ -33,14 +33,15 @@ static func stat_value(stat: String, value: float, unit: String) -> String:
 
 # Сумма аффикса с ванильной базой. Формат повторяет ванильные строки:
 # Damage — голое число, Insulation — "+N", Capacity — "+Nkg", Protection — "Level N".
+# int() отсекает, а не округляет: так же считает ванильный Tooltip.
 static func merged_value(stat: String, value: float, base: float) -> String:
 	match stat:
 		"damage":
-			return str(int(round(base * (1.0 + value))))
+			return str(int(base * (1.0 + value)))
 		"insulation":
-			return "+%d" % int(round(base * (1.0 + value)))
+			return "+%d" % int(base * (1.0 + value))
 		"carry":
-			return "+%dkg" % int(round(base + value))
+			return "+%dkg" % int(base + value)
 		"protection":
-			return "Level %d" % int(round(base + value))
-	return str(int(round(base + value)))
+			return "Level %d" % int(base + value)
+	return str(int(base + value))

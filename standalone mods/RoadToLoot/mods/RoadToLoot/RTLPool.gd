@@ -68,7 +68,7 @@ const ROW_ORDER := [
 	"noise", "sprint",
 ]
 
-# ACTIVE_RELEASE: 1 = 0.3.0 только статы релиза 1 (§6 D23)
+# ACTIVE_RELEASE: активный релиз пула. 2 = 0.3.0: статы релизов 1 и 2 (§6 D23)
 const ACTIVE_RELEASE: int = 2
 
 const UNITS := ["pct", "hp", "kg", "flat", "rate", "mult"]

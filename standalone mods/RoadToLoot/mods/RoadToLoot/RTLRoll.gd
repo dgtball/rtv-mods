@@ -1,7 +1,6 @@
 extends RefCounted
 
 const Pool = preload("res://mods/RoadToLoot/RTLPool.gd")
-const Log = preload("res://mods/RoadToLoot/RTLLog.gd")
 
 const CONTEXT_WEIGHTS := {
 	"default": [0.60, 0.30, 0.09, 0.01],
@@ -54,9 +53,8 @@ static func build_affixes(category: String, tier: int, item_data: Dictionary, bl
 	if n <= 0:
 		return out
 	# candidates filtered by release (Pool.entries already filters by ACTIVE_RELEASE)
-	var pool_all := Pool.entries(category)
 	var candidates: Array = []
-	for e in pool_all:
+	for e in Pool.entries(category):
 		if e["ranges"].has(tier):
 			candidates.append(e)
 
