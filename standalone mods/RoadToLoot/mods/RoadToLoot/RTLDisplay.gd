@@ -304,16 +304,34 @@ func _sync_rows(parent, item, tier: int, item_id: int, merged: Array) -> void:
 		_write_row(_rows[i], specs[i])
 	_rows_root = parent
 
-# Клон ванильной строки Capacity: шрифт, кегль и сдвиг значения достаются
-# бесплатно. Сдвиг пересчитывается от ширины текста, как это сделано в сцене.
+# Клон ванильной строки для наших аффиксов. У оружия ваниль может не показывать Capacity,
+# поэтому ищем любой подходящий шаблон с дочерним Label Value.
 func _build_rows(parent, specs: Array) -> void:
 	if specs.is_empty():
 		return
 	var template = parent.find_child("Capacity", false, false)
 	if template == null or not (template is Label) or template.get_child_count() == 0:
+		template = parent.find_child("Damage", false, false)
+	if template == null or not (template is Label) or template.get_child_count() == 0:
+		template = parent.find_child("Weight", false, false)
+	if template == null or not (template is Label) or template.get_child_count() == 0:
+		for child in parent.get_children():
+			if not (child is Label):
+				continue
+			if not child.visible or child.get_child_count() == 0:
+				continue
+			var val = child.get_child(0)
+			if not (val is Label):
+				continue
+			var tname: String = str(child.name)
+			if tname == "Title" or tname == "Type" or tname == "Separator" or tname == "Info" or tname == "Nested" or tname == "Rarity":
+				continue
+			template = child
+			break
+	if template == null or not (template is Label) or template.get_child_count() == 0:
 		if not _warned_template:
 			_warned_template = true
-			Log.warn("tooltip: no Capacity row to clone; affix rows skipped")
+			Log.warn("tooltip: no stat row to clone; affix rows skipped")
 		return
 	var template_value = template.get_child(0)
 	var template_w: float = _text_width(template, template.text)

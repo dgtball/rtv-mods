@@ -1,6 +1,7 @@
 extends RefCounted
 
 const STAT_LABELS := {
+	"carry": "Capacity",
 	"low_hp_regen": "Low HP Regen",
 	"low_hp_damage": "Low HP Damage",
 	"fire_rate": "Fire Rate",
