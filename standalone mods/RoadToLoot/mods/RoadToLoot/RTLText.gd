@@ -72,11 +72,13 @@ static func stat_value(stat: String, value: float, unit: String) -> String:
 			return "%s%d" % [prefix, int(round(absf(value)))]
 
 # Сумма аффикса с ванильной базой. Формат повторяет ванильные строки:
-# Damage/Insulation — голое число, Capacity — "+Nkg", Protection — "Level N".
+# Damage — голое число, Insulation — "+N", Capacity — "+Nkg", Protection — "Level N".
 static func merged_value(stat: String, value: float, base: float) -> String:
 	match stat:
-		"damage", "insulation":
+		"damage":
 			return str(int(round(base * (1.0 + value))))
+		"insulation":
+			return "+%d" % int(round(base * (1.0 + value)))
 		"carry":
 			return "+%dkg" % int(round(base + value))
 		"protection":

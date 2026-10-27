@@ -53,6 +53,12 @@ const MERGED := {
 	"protection": "Protection",
 }
 
+# MERGED_BASE: имя поля ItemData, если оно расходится с именем стата.
+# Единственное расхождение — carry: база строки Capacity лежит в `capacity`.
+const MERGED_BASE := {
+	"carry": "capacity",
+}
+
 # ROW_ORDER: порядок собственных строк тултипа. Слитые статы сюда не входят.
 # Порядок фиксирован, чтобы список не переставлялся от предмета к предмету.
 const ROW_ORDER := [

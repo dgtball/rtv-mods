@@ -2,15 +2,15 @@ extends RefCounted
 
 const Log = preload("res://mods/RoadToLoot/RTLLog.gd")
 const Store = preload("res://mods/RoadToLoot/RTLStore.gd")
-const Roll = preload("res://mods/RoadToLoot/RTLRoll.gd")
 const Pool = preload("res://mods/RoadToLoot/RTLPool.gd")
-const Sidecar = preload("res://mods/RoadToLoot/RTLSidecar.gd")
 const Text = preload("res://mods/RoadToLoot/RTLText.gd")
+const Rows = preload("res://mods/RoadToLoot/RTLRows.gd")
 
 const BORDER_NAME := "_rtl_border"
 const BORDER_TAG := "rtl_border"
-const PASSIVE_BOX_NAME := "_rtl_passive_box"
-const PASSIVE_TAG := "rtl_passive"
+const ROW_NAME := "_rtl_stat"
+const ROW_TAG := "rtl_stat"
+const ROW_VALUE_MIN_W := 40.0
 const COLORS_DEFAULT := {1: Color(0.35, 0.6, 1.0), 2: Color(0.7, 0.4, 1.0), 3: Color(1.0, 0.8, 0.2)}
 const COLORS_CONTRAST := {1: Color(0.1, 0.75, 1.0), 2: Color(1.0, 0.2, 0.9), 3: Color(1.0, 0.95, 0.1)}
 
@@ -18,9 +18,13 @@ var _cfg = null
 var _host = null
 var _scan_frames_remaining: int = 0
 var _last_tooltip_item_id: int = 0
-var _last_tooltip_box_item_id: int = 0
 var _did_inspect_tooltip: bool = false
-var _box = null
+var _rows_root = null
+var _rows: Array = []
+var _merged_values: Array = []
+var _last_rows_item_id: int = 0
+var _warned_hidden: bool = false
+var _warned_template: bool = false
 
 func configure(cfg) -> void:
 	_cfg = cfg
@@ -164,64 +168,33 @@ func apply_tooltip(hint) -> void:
 		item = hint
 	var item_id: int = item.get_instance_id() if item is Object else 0
 	if item == null or item.slotData == null:
-		_drop_block()
+		_clear_all()
 		return
 	var tier: int = Store.tier(item.slotData)
 	if tier > 0 and _last_tooltip_item_id != item_id:
 		_last_tooltip_item_id = item_id
 		Log.line("apply_tooltip item=" + str(item) + " tier=" + str(tier))
 	if tier <= 0:
-		_drop_block()
+		_clear_all()
 		return
 	if _cfg != null and not _cfg.show_affix_block:
-		_drop_block()
+		_clear_all()
 		return
-	# Read sidecar data for uid/plate (available for T3 tooltip display)
-	var sidecar_data: Dictionary = Sidecar.read(item.slotData)
 	var type_node = tooltip.get("type")
 	if type_node == null:
-		type_node = tooltip.find_child("Type", true, false)
-	var parent = type_node.get_parent() if type_node != null else null
+		type_node = tooltip.get_node_or_null("Panel/Margin/Elements/Type")
+	var parent = type_node.get_parent() if type_node != null else tooltip.get_node_or_null("Panel/Margin/Elements")
 	if parent == null:
-		parent = tooltip.find_child("Elements", true, false)
-	if parent == null:
-		_drop_block()
+		_clear_all()
 		if not _did_inspect_tooltip:
 			_did_inspect_tooltip = true
-			Log.line("apply_tooltip: no parent (type=" + str(type_node) + ")")
+			Log.line("apply_tooltip: no Elements (tooltip=" + str(tooltip) + ")")
 			_inspect_tooltip(tooltip)
 		return
-
-	# The tooltip is refreshed several times per second while hovering. The
-	# block is ours, so leave it alone once it is built for this item: clearing
-	# it here made it disappear before the tooltip delay even elapsed. The check
-	# is on our own reference plus its parent, not on the node name: a
-	# queued-for-deletion sibling makes Godot rename the replacement to
-	# `_rtl_passive_box2`, and a name lookup then never matched again (the block
-	# grew on every refresh). The parent check covers a rebuilt tooltip: the old
-	# box is still alive but no longer inside the body we are writing into.
-	if _box != null and is_instance_valid(_box) and _last_tooltip_box_item_id == item_id and _box.get_parent() == parent:
-		return
-	_drop_block()
-	var box = VBoxContainer.new()
-	box.name = PASSIVE_BOX_NAME
-	box.set_meta(PASSIVE_TAG, true)
-	box.mouse_filter = Control.MOUSE_FILTER_PASS
-	var header = Label.new()
-	header.text = "Passive - " + str(Pool.TIER_NAMES.get(tier, ""))
-	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(header)
-	for a in Store.affixes(item.slotData):
-		var line = Label.new()
-		line.text = Text.format_affix(a, tier)
-		line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		box.add_child(line)
-	parent.add_child(box)
-	if type_node != null:
-		parent.move_child(box, type_node.get_index() + 1)
-	_box = box
-	_last_tooltip_box_item_id = item_id
-	Log.line("inserted passive box: " + str(item) + " tier=" + str(tier) + " type=" + str(type_node) + " parent=" + str(parent))
+	# Ванильный Update() перезапускается каждые 10 физических кадров и каждый раз
+	# возвращает ванильные тексты, поэтому сумма пересчитывается на каждом вызове.
+	var merged: Array = _apply_merges(parent, item, tier)
+	_sync_rows(parent, item, tier, item_id, merged)
 
 # Tooltip.Update() is void -> the hook hands us `item`. The Item knows its
 # Interface (set in Item.Initialize) and the Interface owns the Tooltip node.
@@ -239,38 +212,158 @@ func _tooltip_node(hint) -> Node:
 		return null
 	return iface.get("tooltip")
 
-# Drop the block so the next hover builds it again (used by the debug re-roll).
+# Строки пересобираются при следующем наведении (используется отладочным рероллом).
 func invalidate_tooltip() -> void:
-	_last_tooltip_box_item_id = 0
+	_last_rows_item_id = 0
 
-# Info tooltips reuse the same nodes as item tooltips; clear the block so a
+# Info tooltips reuse the same nodes as item tooltips; clear the rows so a
 # stale affix list never shows up under a plain info panel.
 func clear_tooltip() -> void:
 	_last_tooltip_item_id = 0
-	_drop_block()
+	_clear_all()
 
-# Remove our block from the tooltip. Detaching before queue_free() is what
-# keeps the name free: a node queued for deletion still occupies its sibling
-# slot until the end of the frame, so a box added right after it gets renamed.
-func _drop_block() -> void:
-	_last_tooltip_box_item_id = 0
-	var old = _box
-	_box = null
-	if old == null or not is_instance_valid(old):
+# affix stat -> суммарное значение. Сумма живёт в чистой модели строк,
+# чтобы тултип и строки не разошлись в округлении.
+func _affix_map(item) -> Dictionary:
+	return Rows.totals(Store.affixes(item.slotData))
+
+# Ванильная база строки: ItemData.damage/capacity/insulation/protection.
+# Имя поля берётся из MERGED_BASE: у carry база лежит в `capacity`.
+func _base_value(item, stat: String) -> float:
+	if item == null or not ("slotData" in item) or item.slotData == null:
+		return 0.0
+	if not ("itemData" in item.slotData):
+		return 0.0
+	var data = item.slotData.itemData
+	if data == null:
+		return 0.0
+	var field: String = str(Pool.MERGED_BASE.get(stat, stat))
+	if not (field in data):
+		return 0.0
+	var raw = data.get(field)
+	return float(raw) if raw != null else 0.0
+
+# Возвращает статы, вписанные в ванильные строки: своим строкам они не нужны.
+# Строка не найдена/скрыта или база нулевая — стат остаётся в списке как своя строка.
+func _apply_merges(parent, item, tier: int) -> Array:
+	_clear_merges()
+	var out: Array = []
+	var by_stat: Dictionary = _affix_map(item)
+	var color := _border_color(tier)
+	for stat in Pool.MERGED:
+		if not by_stat.has(stat):
+			continue
+		var row = parent.find_child(str(Pool.MERGED[stat]), false, false)
+		if row == null or not (row is Label) or row.get_child_count() == 0 or not row.visible:
+			continue
+		var base: float = _base_value(item, stat)
+		if base <= 0.0:
+			continue
+		var value = row.get_child(0)
+		value.text = Text.merged_value(stat, float(by_stat[stat]), base)
+		value.modulate = color
+		_merged_values.append(value)
+		out.append(stat)
+	return out
+
+# Ваниль не сбрасывает modulate у значений: без этого цифра осталась бы
+# покрашенной после перехода на предмет без тира.
+func _clear_merges() -> void:
+	for v in _merged_values:
+		if is_instance_valid(v):
+			v.modulate = Color(1, 1, 1, 1)
+	_merged_values.clear()
+
+func _sync_rows(parent, item, tier: int, item_id: int, merged: Array) -> void:
+	var built: Dictionary = Rows.build(Store.affixes(item.slotData), merged, _border_color(tier))
+	var specs: Array = built["rows"]
+	if _cfg != null and _cfg.debug_enabled and not built["skipped"].is_empty() and not _warned_hidden:
+		_warned_hidden = true
+		Log.line("tooltip: affix stats not shown: " + str(built["skipped"]))
+	if _rows_root != parent or _last_rows_item_id != item_id or _rows.size() != specs.size():
+		_remove_rows()
+		_sweep_rows(parent)
+		_build_rows(parent, specs)
+		_rows_root = parent
+		_last_rows_item_id = item_id
 		return
-	var parent = old.get_parent()
-	if parent != null:
-		parent.remove_child(old)
-		_sweep_boxes(parent)
-	old.queue_free()
+	for i in range(specs.size()):
+		_write_row(_rows[i], specs[i])
+	_rows_root = parent
 
-# Leftovers from an earlier tooltip object (or from the rename bug) would stay
-# in the tree otherwise: find_child() by name cannot see a renamed box.
-func _sweep_boxes(parent) -> void:
+# Клон ванильной строки Capacity: шрифт, кегль и сдвиг значения достаются
+# бесплатно. Сдвиг пересчитывается от ширины текста, как это сделано в сцене.
+func _build_rows(parent, specs: Array) -> void:
+	if specs.is_empty():
+		return
+	var template = parent.find_child("Capacity", false, false)
+	if template == null or not (template is Label) or template.get_child_count() == 0:
+		if not _warned_template:
+			_warned_template = true
+			Log.warn("tooltip: no Capacity row to clone; affix rows skipped")
+		return
+	var template_value = template.get_child(0)
+	var template_w: float = _text_width(template, template.text)
+	var index: int = _rows_index(parent)
+	for spec in specs:
+		var row = template.duplicate()
+		row.name = ROW_NAME
+		row.set_meta(ROW_TAG, true)
+		row.visible = true
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.text = str(spec["label"])
+		var value = row.get_child(0)
+		var shift: float = _text_width(row, row.text) - template_w
+		value.offset_left = template_value.offset_left + shift
+		value.offset_right = value.offset_left + ROW_VALUE_MIN_W
+		value.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		parent.add_child(row)
+		parent.move_child(row, index)
+		index += 1
+		_rows.append(row)
+		_write_row(row, spec)
+
+func _write_row(row, spec: Dictionary) -> void:
+	if row == null or not is_instance_valid(row) or row.get_child_count() == 0:
+		return
+	row.text = str(spec["label"])
+	var value = row.get_child(0)
+	value.text = str(spec["value"])
+	value.modulate = spec["color"]
+
+func _text_width(node, text: String) -> float:
+	var font = node.get_theme_font("font")
+	if font == null:
+		return 0.0
+	return font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, node.get_theme_font_size("font_size")).x
+
+# Строки идут на место блока: перед Nested, иначе в конец списка.
+func _rows_index(parent) -> int:
+	var nested = parent.find_child("Nested", false, false)
+	if nested != null:
+		return nested.get_index()
+	return parent.get_child_count()
+
+func _remove_rows() -> void:
+	_last_rows_item_id = 0
+	_rows.clear()
+	var parent = _rows_root
+	_rows_root = null
+	if parent == null or not is_instance_valid(parent):
+		return
+	_sweep_rows(parent)
+
+# remove_child до queue_free: удаляемый узел занимает слот до конца кадра,
+# и замена с тем же именем получает суффикс `_rtl_stat2`.
+func _sweep_rows(parent) -> void:
 	for child in parent.get_children():
-		if child != null and child.has_meta(PASSIVE_TAG):
+		if child != null and child.has_meta(ROW_TAG):
 			parent.remove_child(child)
 			child.queue_free()
+
+func _clear_all() -> void:
+	_remove_rows()
+	_clear_merges()
 
 func reroll_hovered(tree: SceneTree) -> bool:
 	var iface = tree.get_root().get_node_or_null("Map/Core/UI/Interface")

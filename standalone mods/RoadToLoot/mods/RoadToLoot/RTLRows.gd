@@ -9,11 +9,24 @@ const Text = preload("res://mods/RoadToLoot/RTLText.gd")
 # Статы, которые не показываются в тултипе вовсе (§D2 спеки).
 const HIDDEN := ["condition"]
 
+# affix stat -> сумма значений. Два ролла одного стата (легаси-сейв,
+# ручная правка) складываются, а не перезаписываются.
+static func totals(affixes: Array) -> Dictionary:
+	var out: Dictionary = {}
+	for a in affixes:
+		if not (a is Dictionary):
+			continue
+		var stat: String = str(a.get("stat", ""))
+		if stat == "":
+			continue
+		out[stat] = float(out.get(stat, 0.0)) + float(a.get("value", 0.0))
+	return out
+
 # affixes: [{stat, value, unit}] из RTLStore.affixes()
 # merged: статы, уже вписанные в ванильные строки — своей строки им не нужно.
 # Возвращает {rows: [{stat, label, value, color}], skipped: [stat]}.
 static func build(affixes: Array, merged: Array, color: Color) -> Dictionary:
-	var values: Dictionary = {}
+	var values: Dictionary = totals(affixes)
 	var units: Dictionary = {}
 	for a in affixes:
 		if not (a is Dictionary):
@@ -21,7 +34,6 @@ static func build(affixes: Array, merged: Array, color: Color) -> Dictionary:
 		var stat: String = str(a.get("stat", ""))
 		if stat == "":
 			continue
-		values[stat] = float(values.get(stat, 0.0)) + float(a.get("value", 0.0))
 		if not units.has(stat):
 			units[stat] = str(a.get("unit", "pct"))
 	var rows: Array = []
