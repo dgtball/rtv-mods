@@ -1,6 +1,6 @@
 extends RefCounted
 
-const KNOWN_STATS := ["regen", "low_hp_regen", "carry", "stamina_drain",
+const KNOWN_STATS := ["regen", "low_hp_regen", "capacity", "stamina_drain",
 	"insulation", "thirst_drain", "hunger_drain", "sanity_drain",
 	"damage", "recoil", "fire_rate", "low_hp_damage"]
 

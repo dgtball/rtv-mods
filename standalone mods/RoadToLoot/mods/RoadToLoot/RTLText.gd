@@ -1,7 +1,7 @@
 extends RefCounted
 
 const STAT_LABELS := {
-	"carry": "Capacity",
+	"capacity": "Capacity",
 	"low_hp_regen": "Low HP Regen",
 	"low_hp_damage": "Low HP Damage",
 	"fire_rate": "Fire Rate",
@@ -41,7 +41,7 @@ static func merged_value(stat: String, value: float, base: float) -> String:
 			return str(int(base * (1.0 + value)))
 		"insulation":
 			return "+%d" % int(base * (1.0 + value))
-		"carry":
+		"capacity":
 			return "+%dkg" % int(base + value)
 		"protection":
 			return "Level %d" % int(base + value)

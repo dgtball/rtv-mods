@@ -676,6 +676,7 @@ func _overlay_sync(now: float) -> void:
 				"health": VTKLabels.health_frac(hp, max_h),
 				"dist": dist,
 				"dist_cap": p_dist,
+				"feet": node.global_position,
 			})
 	# friendly-nomad diamonds, gated by contour and independent toggle
 	if marker_visible and p_nomad_marker and contour_layer:

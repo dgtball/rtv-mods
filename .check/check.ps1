@@ -173,11 +173,11 @@ if ($fail -ne 0) {
 
 Write-Host "Parse check passed: $($scripts.Count) scripts"
 
-# Прогон каждого теста файлом обязателен: молча пропущенный файл выглядел бы как
-# зелёный прогон, поэтому отсутствие проверяем явно.
+# пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅ
+# пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ.
 $tests = @("res://tests/test_draft.gd", "res://tests/test_picker.gd", "res://tests/test_hooks.gd", "res://tests/test_feed.gd", "res://tests/test_spawn.gd", "res://tests/test_notes.gd", "res://tests/test_deposits.gd", "res://tests/test_data.gd", "res://tests/test_equip.gd", "res://tests/test_composite.gd", "res://tests/test_travel.gd", "res://tests/test_items.gd", "res://tests/test_config.gd", "res://tests/test_session.gd", "res://tests/test_seasons.gd", "res://tests/test_states.gd", "res://tests/test_tracker.gd", "res://tests/test_shaders.gd", "res://tests/test_outline.gd", "res://tests/test_debug.gd", "res://tests/test_weapon.gd",
         "res://tests/test_esp.gd", "res://tests/test_preset.gd", "res://tests/test_profile.gd", "res://tests/test_lsh_slotdata.gd", "res://tests/test_lsh_pool.gd", "res://tests/test_lsh_roll.gd", "res://tests/test_lsh_category.gd", "res://tests/test_lsh_config.gd", "res://tests/test_probe.gd", "res://tests/test_calibration.gd", "res://tests/test_settings.gd", "res://tests/test_daylight.gd", "res://tests/test_daylight_runtime.gd", "res://tests/test_nvg.gd", "res://tests/test_labels.gd", "res://tests/test_label_layout.gd",
-        "res://tests/test_rtl_pool.gd", "res://tests/test_rtl_roll.gd", "res://tests/test_rtl_stats.gd", "res://tests/test_rtl_text.gd", "res://tests/test_rtl_rows.gd", "res://tests/test_sidecar.gd", "res://tests/test_store.gd", "res://tests/test_apply.gd")
+        "res://tests/test_rtl_pool.gd", "res://tests/test_rtl_roll.gd", "res://tests/test_rtl_stats.gd", "res://tests/test_rtl_text.gd", "res://tests/test_rtl_rows.gd", "res://tests/test_rtl_category.gd", "res://tests/test_sidecar.gd", "res://tests/test_store.gd", "res://tests/test_apply.gd")
 foreach ($t in $tests) {
     $tp = Join-Path $proj ($t -replace '^res://', '' -replace '/', '\')
     if (-not (Test-Path -LiteralPath $tp -PathType Leaf)) { throw "Test script missing: $t" }
@@ -191,9 +191,9 @@ foreach ($t in $tests) {
     # runner would spin forever instead of letting the verdict logic fire.
     $tout = & $Godot --headless --path $proj --script $t --quit-after 600 2>&1 | Out-String
     Write-Host $tout.Trim()
-    # Код возврата ненадёжен: авария внутри _init() прерывает сценарий до quit(),
-    # и Godot выходит с 0, хотя тест не отработал. Поэтому вердикт выносится по
-    # трём признакам сразу: есть строка успеха, нет "FAIL", нет ошибок скрипта.
+    # пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ _init() пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ quit(),
+    # пїЅ Godot пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ 0, пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ. пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ
+    # пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅ "FAIL", пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
     $ok_line = $tout -match "tests passed"
     $broke = ($tout -match "FAIL") -or ($tout -match "SCRIPT ERROR|Parse Error|Invalid call|Failed to load script")
     if (($LASTEXITCODE -ne 0) -or $broke -or (-not $ok_line)) {
@@ -207,5 +207,4 @@ if ($fail -ne 0) {
     Write-Warning "Tests failed: $fail file(s)"
     exit 1
 }
-Write-Host "Tests passed: $($tests.Count) file(s)"" res://tests/test_rtl_category.gd\
-        " res://tests/test_rtl_category.gd\,
+Write-Host "Tests passed: $($tests.Count) file(s)"

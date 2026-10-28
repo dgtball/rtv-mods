@@ -1,6 +1,6 @@
 extends SceneTree
 
-const Pool = preload("res://mods/RoadToLoot/RTLPool.gd")
+const Cat = preload("res://mods/RoadToLoot/RTLCategory.gd")
 
 var fails := 0
 
@@ -12,61 +12,41 @@ func ck(cond: bool, msg: String) -> void:
 		print("FAIL  ", msg)
 
 func _init() -> void:
-	ck(Pool.ACTIVE_RELEASE == 2, "ACTIVE_RELEASE == 2")
-
-	# --- condition снят с обеих категорий ---
-	ck(not Pool.affix_ids("weapon").has("condition"), "weapon: condition removed")
-	ck(not Pool.affix_ids("clothing").has("condition"), "clothing: condition removed")
-	ck(Pool.entry("weapon", "condition").is_empty(), "weapon: no condition entry")
-	ck(Pool.entry("clothing", "condition").is_empty(), "clothing: no condition entry")
-	ck(Pool.POOL.size() == 15, "POOL: 15 entries")
-
-	# --- релизный гейт: 4 оружейных, 11 одежды ---
-	ck(Pool.entries("weapon").size() == 4, "weapon pool: 4 entries")
-	ck(Pool.entries("clothing").size() == 11, "clothing pool: 11 entries")
-
-	# --- статы, снятые в 0.3.0 ---
-	for gone in ["sway", "penetration", "durability", "max_hp", "condition"]:
-		ck(not Pool.affix_ids("weapon").has(gone) and not Pool.affix_ids("clothing").has(gone),
-			gone + " gone")
-
-	# --- MERGED: только те, у кого есть ванильная строка ---
-	var merge_keys: Array = Pool.MERGED.keys()
-	merge_keys.sort()
-	ck(merge_keys == ["capacity", "damage", "insulation", "protection"], "MERGED keys: " + str(merge_keys))
-	ck(Pool.MERGED["capacity"] == "Capacity", "MERGED capacity -> Capacity")
-	ck(Pool.MERGED["damage"] == "Damage", "MERGED damage -> Damage")
-	ck(Pool.MERGED["insulation"] == "Insulation", "MERGED insulation -> Insulation")
-	ck(Pool.MERGED["protection"] == "Protection", "MERGED protection -> Protection")
-
-	# --- MERGED_BASE: поле ItemData, из которого берётся база ---
-	# Имя стата и имя поля расходятся только у capacity.
-	ck(str(Pool.MERGED_BASE.get("capacity", "capacity")) == "capacity", "MERGED_BASE capacity -> capacity")
-	for stat in Pool.MERGED.keys():
-		var field: String = str(Pool.MERGED_BASE.get(stat, stat))
-		ck(field != "", "base field for " + str(stat))
-	ck(Pool.MERGED_BASE.keys().size() == 1, "MERGED_BASE: only capacity is remapped")
-
-	# --- ROW_ORDER: без слитых статов, без повторов ---
-	var seen: Array = []
-	for stat in Pool.ROW_ORDER:
-		ck(not Pool.MERGED.has(stat), "ROW_ORDER has no merged stat: " + str(stat))
-		ck(not seen.has(stat), "ROW_ORDER unique: " + str(stat))
-		seen.append(stat)
-
-	# --- каждому стату пула назначено правило отображения ---
-	for cat in ["weapon", "clothing"]:
-		for e in Pool.entries(cat):
-			var stat: String = str(e["stat"])
-			ck(Pool.MERGED.has(stat) or Pool.ROW_ORDER.has(stat), "display rule for " + cat + "/" + stat)
-
-	# --- и обратное: ROW_ORDER не выдумывает статов ---
-	var pool_stats: Array = Pool.affix_ids("weapon") + Pool.affix_ids("clothing")
-	for stat in Pool.ROW_ORDER:
-		ck(pool_stats.has(stat), "ROW_ORDER stat exists in pool: " + str(stat))
-
-	var problems: Array = Pool.validate()
-	ck(problems.is_empty(), "validate(): " + str(problems))
+	# оружие
+	ck(Cat.of_item({"type": "Weapon", "slots": ["Primary"]}) == Cat.WEAPON, "rifle -> weapon")
+	ck(Cat.of_item({"type": "Weapon", "slots": ["Primary", "Secondary"]}) == Cat.WEAPON, "pistol -> weapon")
+	ck(Cat.of_item({"type": "Knife", "slots": ["Knife"]}) == Cat.WEAPON, "knife -> weapon")
+	# путь ресурса больше ничего не решает: ствол KAR-21 лежит в /Weapons/, но это вложение
+	ck(Cat.of_item({"type": "Attachment", "slots": [],
+		"resource_path": "res://Items/Weapons/KAR-21/KAR-21_Barrel.tres"}) == Cat.OTHER,
+		"weapon path does not make a weapon")
+	# одежда
+	ck(Cat.of_item({"type": "Clothing", "slots": ["Torso"]}) == Cat.CLOTHING, "clothing torso -> clothing")
+	ck(Cat.of_item({"type": "Clothing", "slots": ["Head"]}) == Cat.CLOTHING, "clothing head -> clothing")
+	ck(Cat.of_item({"type": "Backpack", "slots": ["Backpack"]}) == Cat.CLOTHING, "backpack -> clothing")
+	ck(Cat.of_item({"type": "Rig", "slots": ["Rig"]}) == Cat.CLOTHING, "rig -> clothing")
+	ck(Cat.of_item({"type": "Helmet", "slots": ["Helmet"]}) == Cat.CLOTHING, "helmet -> clothing")
+	ck(Cat.of_item({"type": "Belt Pouch", "slots": ["Belt"]}) == Cat.CLOTHING, "belt pouch -> clothing")
+	# прочее
+	ck(Cat.of_item({"type": "Armor", "slots": []}) == Cat.OTHER, "armor plate -> other")
+	ck(Cat.of_item({"type": "Attachment", "slots": []}) == Cat.OTHER, "attachment -> other")
+	ck(Cat.of_item({"type": "Grenade", "slots": ["Grenade_1", "Grenade_2"]}) == Cat.OTHER, "grenade -> other")
+	ck(Cat.of_item({"type": "Electronics", "slots": ["Light"]}) == Cat.OTHER, "flashlight -> other")
+	ck(Cat.of_item({"type": "Misc", "slots": ["Map"]}) == Cat.OTHER, "map -> other")
+	ck(Cat.of_item({"type": "Fishing", "slots": ["Primary", "Secondary"]}) == Cat.OTHER, "fishing rod -> other")
+	ck(Cat.of_item({"type": "Instrument", "slots": ["Primary", "Secondary"]}) == Cat.OTHER, "guitar -> other")
+	# грязный вход
+	ck(Cat.of_item(null) == Cat.OTHER, "null -> other")
+	ck(Cat.of_item({}) == Cat.OTHER, "empty dict -> other")
+	ck(Cat.of_item({"type": " Misc", "slots": []}) == Cat.OTHER, "leading space type -> other")
+	ck(Cat.of_item({"slots": ["Primary"]}) == Cat.WEAPON, "missing type, weapon slot -> weapon")
+	# rollable
+	ck(Cat.rollable({"type": "Weapon", "slots": ["Primary"]}), "rifle rollable")
+	ck(Cat.rollable({"type": "Knife", "slots": ["Knife"]}), "knife rollable")
+	ck(Cat.rollable({"type": "Belt Pouch", "slots": ["Belt"]}), "belt pouch rollable")
+	ck(not Cat.rollable({"type": "Armor", "slots": []}), "armor plate not rollable")
+	ck(not Cat.rollable({"type": "Attachment", "slots": []}), "attachment not rollable")
+	ck(not Cat.rollable(null), "null not rollable")
 
 	print("")
 	if fails > 0:
