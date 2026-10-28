@@ -1,6 +1,7 @@
 extends RefCounted
 
 const Pool = preload("res://mods/RoadToLoot/RTLPool.gd")
+const Category = preload("res://mods/RoadToLoot/RTLCategory.gd")
 
 const CONTEXT_WEIGHTS := {
 	"default": [0.60, 0.30, 0.09, 0.01],
@@ -47,32 +48,38 @@ static func pick_tier(weights: Array, r: float) -> int:
 static func affix_count(tier: int) -> int:
 	return clampi(tier, 0, 3)
 
-static func build_affixes(category: String, tier: int, item_data: Dictionary, blocked: Array, rng: RandomNumberGenerator) -> Array:
+static func _needs_ok(need: String, item_data) -> bool:
+	if need == "":
+		return true
+	if need == "armor":
+		var t: String = ""
+		if item_data != null:
+			var raw = item_data.get("type")
+			if raw != null:
+				t = str(raw).strip_edges()
+		return t == "Armor" or t == "Helmet"
+	if item_data == null:
+		return false
+	var v = item_data.get(need)
+	return v != null and float(v) > 0.0
+
+static func build_affixes(category: String, tier: int, item_data, blocked: Array, rng: RandomNumberGenerator) -> Array:
 	var out: Array = []
 	var n: int = affix_count(tier)
 	if n <= 0:
 		return out
 	# candidates filtered by release (Pool.entries already filters by ACTIVE_RELEASE)
 	var candidates: Array = []
-	for e in Pool.entries(category):
+	var all_e = Pool.entries(category)
+	for e in all_e:
 		if e["ranges"].has(tier):
 			candidates.append(e)
 
 	# Apply needs filters
 	var filtered: Array = []
 	for e in candidates:
-		var need: String = e.get("needs", "")
-		var ok: bool = true
-		if need == "capacity":
-			var v = item_data.get("capacity")
-			ok = float(v if v != null else 0) > 0
-		elif need == "insulation":
-			var v = item_data.get("insulation")
-			ok = float(v if v != null else 0) > 0
-		elif need == "armor":
-			var v = item_data.get("type")
-			ok = (str(v if v != null else "") == "Armor" or str(v if v != null else "") == "Helmet")
-		if ok:
+		var need: String = str(e.get("needs", ""))
+		if _needs_ok(need, item_data):
 			filtered.append(e)
 	candidates = filtered
 

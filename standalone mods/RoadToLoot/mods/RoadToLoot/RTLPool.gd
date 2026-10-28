@@ -23,7 +23,7 @@ const POOL: Array = [
 		"ranges": {1: [0.01, 0.02], 2: [0.02, 0.05], 3: [0.04, 0.08]}, "release": 1},
 	{"stat": "low_hp_regen", "category": "clothing", "unit": "rate", "weight": 0.5,
 		"ranges": {1: [0.03, 0.03], 2: [0.05, 0.05], 3: [0.08, 0.08]}, "release": 1},
-	{"stat": "carry", "category": "clothing", "unit": "kg", "weight": 0.9,
+	{"stat": "capacity", "category": "clothing", "unit": "kg", "weight": 0.9,
 		"ranges": {1: [2, 5], 2: [5, 8], 3: [8, 10]}, "release": 1, "needs": "capacity"},
 	{"stat": "stamina_drain", "category": "clothing", "unit": "pct", "weight": 0.9,
 		"ranges": {1: [8, 15], 2: [12, 22], 3: [18, 30]}, "release": 1},
@@ -48,15 +48,14 @@ const POOL: Array = [
 # MERGED: аффикс вписывается суммой в ванильную строку тултипа, своей строки не получает.
 const MERGED := {
 	"damage": "Damage",
-	"carry": "Capacity",
+	"capacity": "Capacity",
 	"insulation": "Insulation",
 	"protection": "Protection",
 }
 
-# MERGED_BASE: имя поля ItemData, если оно расходится с именем стата.
-# Единственное расхождение — carry: база строки Capacity лежит в `capacity`.
+# MERGED_BASE: имя поля ItemData
 const MERGED_BASE := {
-	"carry": "capacity",
+	"capacity": "capacity",
 }
 
 # ROW_ORDER: порядок собственных строк тултипа. Слитые статы сюда не входят.
