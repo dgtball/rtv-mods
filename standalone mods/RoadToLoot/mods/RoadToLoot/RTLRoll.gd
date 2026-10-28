@@ -83,6 +83,13 @@ static func build_affixes(category: String, tier: int, item_data, blocked: Array
 			filtered.append(e)
 	candidates = filtered
 
+	# Маска категории: нож не усиливает отдачу и темп (RTL не знает имён типов)
+	filtered = []
+	for e in candidates:
+		if Category.stat_allowed(item_data, str(e["stat"])):
+			filtered.append(e)
+	candidates = filtered
+
 	# Exclude blocked (stats whose applier failed arity self-check)
 	if not blocked.is_empty():
 		filtered = []

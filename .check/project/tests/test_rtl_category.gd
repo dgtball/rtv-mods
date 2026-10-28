@@ -48,6 +48,14 @@ func _init() -> void:
 	ck(not Cat.rollable({"type": "Attachment", "slots": []}), "attachment not rollable")
 	ck(not Cat.rollable(null), "null not rollable")
 
+	# маска ножа
+	ck(not Cat.stat_allowed({"type": "Knife", "slots": ["Knife"]}, "recoil"), "knife: recoil masked")
+	ck(not Cat.stat_allowed({"type": "Knife", "slots": ["Knife"]}, "fire_rate"), "knife: fire_rate masked")
+	ck(Cat.stat_allowed({"type": "Knife", "slots": ["Knife"]}, "damage"), "knife: damage allowed")
+	ck(Cat.stat_allowed({"type": "Knife", "slots": ["Knife"]}, "low_hp_damage"), "knife: low_hp_damage allowed")
+	ck(Cat.stat_allowed({"type": "Weapon", "slots": ["Primary"]}, "recoil"), "rifle: recoil allowed")
+	ck(Cat.stat_allowed(null, "recoil"), "null item: no mask")
+
 	print("")
 	if fails > 0:
 		print("FAILED: %d" % fails)

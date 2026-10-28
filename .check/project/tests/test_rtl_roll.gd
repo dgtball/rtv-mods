@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Pool = preload("res://mods/RoadToLoot/RTLPool.gd")
+const Roll = preload("res://mods/RoadToLoot/RTLRoll.gd")
 
 var fails := 0
 
@@ -67,6 +68,18 @@ func _init() -> void:
 
 	var problems: Array = Pool.validate()
 	ck(problems.is_empty(), "validate(): " + str(problems))
+
+	# нож: пул урезан до damage + low_hp_damage
+	var knife := {"type": "Knife", "slots": ["Knife"], "damage": 20.0}
+	var rng2 := RandomNumberGenerator.new()
+	rng2.seed = 5
+	var kn: Array = Roll.build_affixes("weapon", 3, knife, [], rng2)
+	var kn_stats: Array = []
+	for a in kn:
+		kn_stats.append(a["stat"])
+	ck(not kn_stats.has("recoil"), "knife: no recoil: " + str(kn_stats))
+	ck(not kn_stats.has("fire_rate"), "knife: no fire_rate: " + str(kn_stats))
+	ck(kn.size() == 2, "knife tier=3: damage + low_hp_damage: " + str(kn_stats))
 
 	print("")
 	if fails > 0:

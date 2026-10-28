@@ -7,6 +7,8 @@ const OTHER := "other"
 const WEAPON_SLOTS := ["Primary", "Secondary", "Knife"]
 const CLOTHING_SLOTS := ["Backpack", "Rig", "Helmet", "Head", "Torso", "Legs", "Belt", "Feet", "Hands"]
 const NON_WEAPON_TYPES := ["Fishing", "Instrument"]
+const KNIFE_TYPE := "Knife"
+const KNIFE_BLOCKED := ["recoil", "fire_rate"]
 
 static func _field_str(itemData, field: String) -> String:
 	if itemData == null:
@@ -47,3 +49,10 @@ static func of_item(itemData) -> String:
 
 static func rollable(itemData) -> bool:
 	return of_item(itemData) != OTHER
+
+static func stat_allowed(itemData, stat: String) -> bool:
+	if itemData == null:
+		return true
+	if not KNIFE_BLOCKED.has(stat):
+		return true
+	return _field_str(itemData, "type") != KNIFE_TYPE
