@@ -1,26 +1,61 @@
-# Loadouts — правила сборки и версионирования
+# Road to Vostok mods — правила сборки и версионирования
 
-## Структура
+## Раскладка репозитория
+
+Один репозиторий — несколько модов. Папка мода — `mods/<slug>/`, где slug = поле `id` из её `mod.txt`; внутри мода ровно один свой префикс имён папок `mods/<Folder>/` (он же — namespace внутри `.vmz`).
+
+Скриптов `.gd` под `mods/` — 58: `vostok-toolkit` 25, `thermal-vtk` 18, `road-to-loot` 13, `jcm-freeze` 2. Сверять перед сборкой: `Get-ChildItem -Recurse -Filter *.gd D:\RTVMOD\mods | Measure-Object`.
 
 | Путь | Назначение |
 |---|---|
-| `loadouts/` | исходники мода, ровно то, что пакуется |
-| `loadouts/mods/VTK/` | двадцать четыре скрипта мода, префикс `VTK` |
-| `loadouts/mods/VTK/VTKSurface.gd` | слоёные SVG-поверхности: статический `RefCounted`, прелоадится `const` из `VTKUI.gd` |
-| `loadouts/mods/VTK/VTKNotes.gd` | логика Notes: группировка предметов, признак сдачи, построение строк иконок, прогресс вкладов (variant A); чистые функции тестируются headless |
-| `loadouts/mods/VTK/VTKDeposits.gd` | чистая логика леджера вкладов (`task_key`/`normalize_slots`/`coverage`/`apply`/`clear_task`/`prune_missing`/`is_covered`); headless-тест `test_deposits.gd` |
-| `loadouts/mods/VTK/VTKItemStore.gd` | каталог предметов: список, индекс `resource_path`, кеши info и иконок; статический `RefCounted`, как `VTKSurface`; headless-тест `test_items.gd` |
-| `loadouts/mods/VTK/VTKTeleportTab.gd` | вкладка «Телепорт»: экземпляр `RefCounted`, владеет тремя боксами; `travel`/`game_data` — аргументы, `hover`/`motion` (`_attach_row_hover`/`_attach_motion`) — инъекция Callable из `VTKUI.gd` |
-| `loadouts/mods/VTK/VTKFeatureHost.gd` | хост фич: владеет ленивыми узлами (`_hooks`/`_nvg_node`/`_travel`/`_kc_node`/`_feed_node`/`_hud_canvas`) и тумблерами; создаётся с родителем-VTKUI, потому что дети обязаны лежать под `/root/VTKUI`; применяет весь разобранный MCM-конфиг разом через `apply_config` |
-| `loadouts/mods/VTK/VTKConfig.gd` | типизированный срез MCM-конфига: 19 полей с дефолтами и `read(cfg)`; статический `RefCounted`, без состояния сцены; headless-тест `test_config.gd` |
-| `loadouts/mods/VTK/VTKMCMBridge.gd` | мост MCM: регистрация настроек, свёртка `config.ini`, разбор в `VTKConfig` и делегирование в хост; `rebuild_ui`/`set_key_ui_toggle` — инъекция Callable из `VTKUI.gd` |
-| `loadouts/mods/VTK/VTKSetsRail.gd` | вкладка «Сеты», рейл-половина: список сетов, выбор активного, захват хоткея и превью состава; экземпляр `RefCounted`, создаётся с родителем-VTKUI (`VTKSetsRail.new(self)`) ради общих сцен; `_ui` — ссылка на узел VTKUI, `refresh_rail` — инъекция Callable из `VTKUI.gd` |
-| `loadouts/mods/VTK/VTKLoadoutSession.gd` | состояние редактора сета: владеет черновиком (`draft`), страницей мастера, целью шага 1, фильтрами и поиском шага 2, открытой панелью обвесов и последним положенным предметом; чистый `RefCounted` без `load()`/путей внутрь игры, headless-тест `test_session.gd` |
-| `loadouts/mods/VTK/VTKEditor.gd` | редактор сета (мастер шагов): экземпляр `RefCounted`, создаётся с родителем-VTKUI (`Editor.new(self)`); владеет сеткой экипировки, каталогом шага 2, оверлеем обвесов и страницей «Готово»; поля VTKUI читает через `_ui.`, `refresh` делегирует обратно; тестов нет — UI-сборка |
-| `pack.ps1` | сборка `Loadouts.vmz`; `.gd` при упаковке чистится от построчных `#`-комментариев, пустых строк и CR (вес ~на 40% меньше), исходники не меняются |
-| `Loadouts.vmz` | артефакт сборки |
-| `.check/` | стенд парсинга GDScript, в пак не попадает |
-| `RTVcopy/` | копия игры для сверки, в пак не попадает |
+| `README.md` | корневой индекс: по одному блоку на мод — описание и актуальная версия |
+| `pack.ps1` | единственный сборщик: `pack.ps1 -Mod <slug>` или `-All`; артефакты кладёт в `dist/` под историческими именами `Loadouts.vmz`/`ThermalVTK.vmz`/`RoadToLoot.vmz`/`Freeze.vmz`; `.gd` при упаковке чистится от построчных `#`-комментариев, пустых строк и CR (вес ~на 40% меньше), исходники не меняются |
+| `AGENTS.md` | этот документ: правила, общие для всех модов репозитория |
+| `.check/` | headless-стенд: парсинг/компиляция `.gd` и тесты; в пак не попадает |
+| `docs/` | макеты UI и планы/спеки фич |
+| `mods/vostok-toolkit/` | мод Vostok Toolkit (VTK): сеты, deposits, NVG, счётчик убийств, телепорт |
+| `mods/thermal-vtk/` | мод ThermalVTK: тепловизор и контурный ESP |
+| `mods/road-to-loot/` | мод Road To Loot (RTL): генерация лута с аффиксами |
+| `mods/jcm-freeze/` | мод jcm-freeze |
+
+Внутри папки мода — только:
+
+| Файл/папка | Что это |
+|---|---|
+| `mod.txt` | имя, `id`, `version`, автолоад, `[hooks]`; единственное место с версией |
+| `mods/<Folder>/` | исходники мода, ровно то, что пакуется (`VTK`, `ThermalVTK`, `RoadToLoot`, `jcm-freeze` — списки в `$mods` у `pack.ps1` и `check.ps1`) |
+| `README.md` | карточка мода: сборка при упаковке синхронизирует в ней строку версии с `mod.txt` |
+| `CHANGELOG.md` | история изменений для игроков (у каждого мода свой) |
+| `REFACTOR_SPEC.md` | только у `road-to-loot` |
+
+Правила раскладки:
+
+1. slug мода = поле `id` из его `mod.txt`: `vostok-toolkit`, `thermal-vtk`, `road-to-loot`, `jcm-freeze`.
+2. Новая фича мода живёт в его папке; на корне ничего от мода не лежит.
+3. Новый мод = новая папка `mods/<slug>/` с `mod.txt` и `mods/<Folder>/` плюс по одной строке в `$mods`-таблицах `check.ps1` (Slug/Folder/Tests) и `pack.ps1` (Slug/Folder/Artifact).
+4. Тесты — только в `.check/project/tests/<slug>/`, имена `test_*.gd`; файл-опора для тестов лежит рядом с ними (`rtl_probe_save.gd`/`rtl_probe_slot.gd` у road-to-loot). Сейчас 41 файл: 15 `vostok-toolkit` + 17 `thermal-vtk` + 9 `road-to-loot`; у `jcm-freeze` headless-тестов нет.
+5. Релиз — тег `<slug>-<version>`.
+6. `version.txt` для трёх модов с файлом версии (у `jcm-freeze` его нет) генерируется сборкой в `mods/<slug>/mods/<Folder>/version.txt` и отслеживается git — в рантайме `res://mod.txt` общий на все установленные моды, файл страхует от чужого `mod.txt`.
+7. Артефакты сборки — только в `dist/`; в папку модов игры копируются оттуда.
+
+Игнорируется git (не трекается, могут лежать локально): `dist/` — сборка, `RTVcopy/` — копия игры для сверки, `tools/` — бинарник Godot, `referens/`, `tmp_probe/`, `superpowers/`, `.superpowers/`, `.docs/`.
+
+## Скрипты vostok-toolkit
+
+| Путь | Назначение |
+|---|---|
+| `mods/vostok-toolkit/mods/VTK/` | двадцать пять скриптов мода, префикс `VTK` |
+| `mods/vostok-toolkit/mods/VTK/VTKSurface.gd` | слоёные SVG-поверхности: статический `RefCounted`, прелоадится `const` из `VTKUI.gd` |
+| `mods/vostok-toolkit/mods/VTK/VTKNotes.gd` | логика Notes: группировка предметов, признак сдачи, построение строк иконок, прогресс вкладов (variant A); чистые функции тестируются headless |
+| `mods/vostok-toolkit/mods/VTK/VTKDeposits.gd` | чистая логика леджера вкладов (`task_key`/`normalize_slots`/`coverage`/`apply`/`clear_task`/`prune_missing`/`is_covered`); headless-тест `test_deposits.gd` |
+| `mods/vostok-toolkit/mods/VTK/VTKItemStore.gd` | каталог предметов: список, индекс `resource_path`, кеши info и иконок; статический `RefCounted`, как `VTKSurface`; headless-тест `test_items.gd` |
+| `mods/vostok-toolkit/mods/VTK/VTKTeleportTab.gd` | вкладка «Телепорт»: экземпляр `RefCounted`, владеет тремя боксами; `travel`/`game_data` — аргументы, `hover`/`motion` (`_attach_row_hover`/`_attach_motion`) — инъекция Callable из `VTKUI.gd` |
+| `mods/vostok-toolkit/mods/VTK/VTKFeatureHost.gd` | хост фич: владеет ленивыми узлами (`_hooks`/`_nvg_node`/`_travel`/`_kc_node`/`_feed_node`/`_hud_canvas`) и тумблерами; создаётся с родителем-VTKUI, потому что дети обязаны лежать под `/root/VTKUI`; применяет весь разобранный MCM-конфиг разом через `apply_config` |
+| `mods/vostok-toolkit/mods/VTK/VTKConfig.gd` | типизированный срез MCM-конфига: 19 полей с дефолтами и `read(cfg)`; статический `RefCounted`, без состояния сцены; headless-тест `test_config.gd` |
+| `mods/vostok-toolkit/mods/VTK/VTKMCMBridge.gd` | мост MCM: регистрация настроек, свёртка `config.ini`, разбор в `VTKConfig` и делегирование в хост; `rebuild_ui`/`set_key_ui_toggle` — инъекция Callable из `VTKUI.gd` |
+| `mods/vostok-toolkit/mods/VTK/VTKSetsRail.gd` | вкладка «Сеты», рейл-половина: список сетов, выбор активного, захват хоткея и превью состава; экземпляр `RefCounted`, создаётся с родителем-VTKUI (`VTKSetsRail.new(self)`) ради общих сцен; `_ui` — ссылка на узел VTKUI, `refresh_rail` — инъекция Callable из `VTKUI.gd` |
+| `mods/vostok-toolkit/mods/VTK/VTKLoadoutSession.gd` | состояние редактора сета: владеет черновиком (`draft`), страницей мастера, целью шага 1, фильтрами и поиском шага 2, открытой панелью обвесов и последним положенным предметом; чистый `RefCounted` без `load()`/путей внутрь игры, headless-тест `test_session.gd` |
+| `mods/vostok-toolkit/mods/VTK/VTKEditor.gd` | редактор сета (мастер шагов): экземпляр `RefCounted`, создаётся с родителем-VTKUI (`Editor.new(self)`); владеет сеткой экипировки, каталогом шага 2, оверлеем обвесов и страницей «Готово»; поля VTKUI читает через `_ui.`, `refresh` делегирует обратно; тестов нет — UI-сборка |
 
 ## Регламент версий
 
@@ -34,7 +69,7 @@
 
 Правила:
 
-1. Версия живёт в одном месте — `loadouts/mod.txt`, поле `version`. Внесли изменение в мод — внесли изменение в `mod.txt`.
+1. Версия живёт в одном месте — `mods/<slug>/mod.txt`, поле `version`. Внесли изменение в мод — внесли изменение в его `mod.txt`.
 2. Перед сборкой версия обязательно проверена и при необходимости поднята. `pack.ps1` печатает версию из `mod.txt` перед упаковкой — сверяйтесь с этим выводом.
 3. В GDScript версия **не дублируется**: ни `MOD_VERSION`, ни `ESP_VERSION` в коде держать не нужно. MCM берёт её из `res://mod.txt` в рантайме и только для отображения, логика на версию не завязана.
 4. `user://MCM/vostok-toolkit/config.ini` синхронизируется по ключам, а не по версии (`_register_mcm`): ключи, которых больше нет в коде, удаляются; существующие сохраняют пользовательские значения; секция `Info` перезаписывается. Следствие: удаление настройки из кода автоматически чистит конфиг пользователя, отдельный мажорный релиз для этого не нужен.
@@ -68,7 +103,7 @@
 
 `VTKPicker.gd` и `VTKDraft.gd` — чистая логика выбора предметов: ни `load()`, ни путей внутрь игры, поэтому тестируются headless. `VTKUI.gd` зовёт их как `Picker.*` / `Draft.*`; всё, что знает про ресурсы, остаётся в `VTKUI.gd`.
 
-Счётчик `preload` в таблице падает сам собой при каждом переименовании: сверять с `Select-String -SimpleMatch 'preload('` по `VTKUI.gd`. Полный прогон по всем `loadouts\mods\VTK\*.gd` даст больше — остальные скрипты грузят свои зависимости сами (`VTKPaths.gd` в семи файлах, `VTKLog.gd` в шести — в том числе двум HUD-виджетам он нужен для `warn_once` при провалившейся привязке), так что жёсткой арифметики между числами нет, ориентир — свежий `grep`.
+Счётчик `preload` в таблице падает сам собой при каждом переименовании: сверять с `Select-String -SimpleMatch 'preload('` по `VTKUI.gd`. Полный прогон по всем `mods\vostok-toolkit\mods\VTK\*.gd` даст больше — остальные скрипты грузят свои зависимости сами (`VTKPaths.gd` в семи файлах, `VTKLog.gd` в шести — в том числе двум HUD-виджетам он нужен для `warn_once` при провалившейся привязке), так что жёсткой арифметики между числами нет, ориентир — свежий `grep`.
 
 Путь `/root/VTKUI` — единственное место, где ошибка не бросается: `get_node_or_null` вернёт `null`, и счётчик убийств просто перестанет считать, без ошибки в логе. Стенд `.check` такое пропускает — это рантайм-путь, а не `preload`. Остальные привязки рвутся громко на первой сборке.
 
@@ -121,15 +156,15 @@
 3. Группы `### Added` / `### Changed` / `### Fixed` (Keep a Changelog); заголовок релиза — `## [x.y.z] - YYYY-MM-DD`, версия совпадает с `mod.txt`.
 4. Внутренние чистки, рефакторинг и микрооптимизации сворачиваем в «Minor performance improvements» или не упоминаем.
 5. Язык — английский, как исходный язык мода.
-6. `CHANGELOG.md` — под `.gitignore`-allowlist (`!/CHANGELOG.md`); это трекаемый файл, не забывать коммитить вместе с версией.
+6. У каждого мода свой `CHANGELOG.md` (`mods/<slug>/CHANGELOG.md`); файл отслеживается git, не забывать коммитить его вместе с версией.
 
 ## Сборка
 
 1. Прогнать стенд раскладки: `py -3 .check\layout_check.py`.
 2. Прогнать стенд парсинга: `powershell -NoProfile -ExecutionPolicy Bypass -File .check\check.ps1`.
-3. Поднять версию в `loadouts/mod.txt`.
-4. Запустить `powershell -ExecutionPolicy Bypass -File pack.ps1`.
-5. Скопировать `Loadouts.vmz` в папку модов игры `D:\SteamLibrary\steamapps\common\Road to Vostok\mods`.
+3. Поднять версию в `mods/<slug>/mod.txt`.
+4. Запустить `powershell -ExecutionPolicy Bypass -File pack.ps1 -Mod <slug>` (или `-All` для всех модов сразу).
+5. Скопировать артефакт из `dist/` (`Loadouts.vmz`/`ThermalVTK.vmz`/`RoadToLoot.vmz`/`Freeze.vmz`) в папку модов игры `D:\SteamLibrary\steamapps\common\Road to Vostok\mods`.
 
 `pack.ps1` при упаковке чистит `.gd` от построчных `#`-комментариев, пустых строк и CR (шейдеры не трогает: в них `#` — препроцессор). Исходники не меняются, вес `.vmz` падает примерно на 40%. Трансформация построчная и потому безопасна: многострочных строк (`"""`) в коде нет, а строки кода остаются дословно.
 
@@ -137,11 +172,11 @@
 
 - Игра собрана на **Godot 4.6.3** (`RTVcopy/RTV.pck`, pack format 3).
 - Отступы в `.gd` — только табы. Перед сборкой убедиться, что нет смешанных пробелов и что скобки сбалансированы.
-- Стенд `.check/check.ps1` копирует `loadouts/mods/VTK/*.gd` во временный проект и прогоняет `godot --headless --check-only` по каждому файлу. Бинарь ищется в PATH, иначе передаётся через `-Godot "<путь к Godot_*_console.exe>"`. Папка назначения в `.check/project/mods/` очищается перед каждой копировкой, так что удалённые скрипты там не накапливаются.
+- Стенд `.check/check.ps1` копирует `.gd` всех модов из `mods/<slug>/mods/<Folder>/` (список в таблице `$mods` стенда) во временный проект и прогоняет `godot --headless --check-only` по каждому файлу. Бинарь ищется в PATH, иначе передаётся через `-Godot "<путь к Godot_*_console.exe>"`. Папка назначения в `.check/project/mods/` очищается перед каждой копировкой, так что удалённые скрипты там не накапливаются.
 - Стенд ловит ошибки парсинга и компиляции, но не проверяет работу в игре: пути внутрь игры, нити и готовность сцен остаются на ручную проверку.
 - Авто-экип висит на ванильном событии подбора `Pickup.Interact()` (хуки `pickup-interact-pre/-post`), а не на отличии количества в инвентаре: игра при перекладывании временно пересобирает узлы, дельта это ловила. Оба hook void -> колбэки без `_result` (см. `t_post_callback_arity`). Take/Split в слоте экипировки — replace-хуки `interface-contexttake`/`interface-contextsplit` (`skip_super` только когда `contextGrid == null`); декларация обёрток в `[hooks]` (`mod.txt`).
-- Стенд гоняет и тесты (`test_picker.gd`, `test_draft.gd`, `test_hooks.gd`, `test_notes.gd`, `test_deposits.gd`, `test_feed.gd`, `test_spawn.gd`, `test_items.gd`, `test_data.gd`, `test_equip.gd`, `test_composite.gd`, `test_travel.gd`, `test_config.gd`, `test_session.gd` — 14 штук); список `$tests` в `check.ps1` явный — новый тест добавляется туда вручную, а `test_hooks.gd` запускает тело теста на первом кадре (`process_frame`), потому что `_on_restart_pressed` делает `get_node_or_null("/root/Loader")` — абсолютный путь работает только из активного дерева. Зелёный статус значит **всё** из трёх: нет строк `SCRIPT ERROR` / `Parse Error` / `Invalid call` / `Failed to load script`, есть строка `tests passed`, код выхода 0. Раньше проверялась только вторая строка, и `Invalid call` внутри теста глушил функцию, печатал `passed` и выходил с кодом 0 — падение выглядело как успех.
-- `.check\layout_check.py` сверяет раскладку picker по всем модулям `loadouts/mods/VTK/*.gd` (глоб, не только `VTKUI.gd`: после декомпозиции монолита символы живут в разных файлах): список `GONE` (символы, которых быть не должно — кнопка `+ Add`, `_gear_grid_open`, `_cat_color`, префиксы `[x] `/`[ ] `, список слотов `_side_slots_box`/`_make_slot_row`) и список `PRESENT` (которые должны быть — `_page_columns`, `_make_facet_row`, `_done_equip_col`, с 4.9.0 — сетка экипировки `_equip_grid_box`/`_make_equip_cell`/`_make_body_zone`/`BodySilhouette`). `GONE`/`GONE_RE` проверяются по каждому модулю отдельно, `PRESENT` — хотя бы в одном, `FUNCS` — по телу функции в том модуле, где она определена, плюс варнинг `DUP`, если функция объявлена больше чем в одном модуле (след выноса — забытая копия в монолите). Комментарии не разбираются, поэтому упоминание имени живого `GONE`-символа в тексте тоже считается провалом — в комментариях эти имена не пишем. Списки пополняются вместе с задачами плана; забытый символ в `GONE` поймает возврат кнопки, а пропущенный в `PRESENT` — исчезновение колонки. Список `HOOKS_GONE` (удалённая фолбек-панель смерти: `_build_fallback_panel`, `_on_menu_pressed`, `_on_quit_pressed`, `_death_restart_btn`) сканируется отдельно от `GONE` (оба смотрят все модули) — оставлен ради явной группировки и счётчика в отчёте.
+- Стенд гоняет и тесты — `test_*.gd` из `.check/project/tests/<slug>/`, сейчас 41 файл: 15 `vostok-toolkit`, 17 `thermal-vtk`, 9 `road-to-loot` (у `jcm-freeze` headless-тестов нет); списки `$tests` в `check.ps1` явные, по одному на мод в таблице `$mods` — новый тест добавляется туда вручную, а `test_hooks.gd` запускает тело теста на первом кадре (`process_frame`), потому что `_on_restart_pressed` делает `get_node_or_null("/root/Loader")` — абсолютный путь работает только из активного дерева. Зелёный статус значит **всё** из трёх: нет строк `SCRIPT ERROR` / `Parse Error` / `Invalid call` / `Failed to load script`, есть строка `tests passed`, код выхода 0. Раньше проверялась только вторая строка, и `Invalid call` внутри теста глушил функцию, печатал `passed` и выходил с кодом 0 — падение выглядело как успех.
+- `.check\layout_check.py` сверяет раскладку picker по всем модулям `mods/vostok-toolkit/mods/VTK/*.gd` (глоб, не только `VTKUI.gd`: после декомпозиции монолита символы живут в разных файлах): список `GONE` (символы, которых быть не должно — кнопка `+ Add`, `_gear_grid_open`, `_cat_color`, префиксы `[x] `/`[ ] `, список слотов `_side_slots_box`/`_make_slot_row`) и список `PRESENT` (которые должны быть — `_page_columns`, `_make_facet_row`, `_done_equip_col`, с 4.9.0 — сетка экипировки `_equip_grid_box`/`_make_equip_cell`/`_make_body_zone`/`BodySilhouette`). `GONE`/`GONE_RE` проверяются по каждому модулю отдельно, `PRESENT` — хотя бы в одном, `FUNCS` — по телу функции в том модуле, где она определена, плюс варнинг `DUP`, если функция объявлена больше чем в одном модуле (след выноса — забытая копия в монолите). Комментарии не разбираются, поэтому упоминание имени живого `GONE`-символа в тексте тоже считается провалом — в комментариях эти имена не пишем. Списки пополняются вместе с задачами плана; забытый символ в `GONE` поймает возврат кнопки, а пропущенный в `PRESENT` — исчезновение колонки. Список `HOOKS_GONE` (удалённая фолбек-панель смерти: `_build_fallback_panel`, `_on_menu_pressed`, `_on_quit_pressed`, `_death_restart_btn`) сканируется отдельно от `GONE` (оба смотрят все модули) — оставлен ради явной группировки и счётчика в отчёте.
 - `VTKSurface.gd` — статический `RefCounted` без состояния сцены: поверхности и иконки собираются из SVG, `svg_texture` грузит SVG **из строки** через `Image.load_svg_from_string` и отдаёт `ImageTexture` — ни одного `load()` и ни одного файла из игры. Поэтому слои переживают любой апдейт игры, а кэш (`_textures`, `_surfaces`) живёт в static-переменных и сбрасывается через `clear_cache()`.
 - `VTKItemStore.gd` — каталог предметов, тоже статический `RefCounted`: список, индекс `resource_path`, кеши info и иконок. Наполняется из `VTKUI._load_items` (`Items.clear()` до чтения базы, `Items.rebuild(db.master.items)` после), читается как `Items.all()`/`Items.index_of()`. `load()` в нём остался для дисковых фолбэков (путь не попал в индекс, PNG рядом с предметом), поэтому дисковые ветки headless не покрыты, а остальное — в `test_items.gd`. Форвардеры `_item_info`/`_item_icon` обязаны остаться на `VTKUI`: `VTKFeed` зовёт `ui.call("_item_icon", item)`, а ~15 внутренних вызовов `_item_info` намеренно не переписывались.
 - Перенос функции в другой модуль ломает `layout_check.py` только тогда, когда меняется её имя: `GONE`/`HOOKS_GONE` сканируют каждый модуль, а `PRESENT` — все сразу (при переезде каталога запись `_attachment_resource` заменена на `attachment_resource`).
