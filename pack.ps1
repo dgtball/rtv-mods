@@ -1,9 +1,21 @@
 param(
     [string]$Mod = "all",
-    [string]$OutDir = ""
+    [switch]$All,
+    [string]$OutDir = "",
+    [Parameter(ValueFromRemainingArguments = $true)]$Rest
 )
 
 $ErrorActionPreference = "Stop"
+
+# -All is the documented shorthand for every mod. Unmatched arguments are
+# rejected explicitly: PowerShell in -File mode drops unknown -Name tokens
+# silently, so a typo like -Al would otherwise fall back to the default
+# ($Mod = "all") and look like it worked.
+if ($All) { $Mod = "all" }
+$extra = @($Rest | Where-Object { $null -ne $_ })
+if ($extra.Count -gt 0) {
+    throw "Unexpected argument(s): $($extra -join ' '). Usage: pack.ps1 [-Mod <slug> | -All] [-OutDir <dir>]"
+}
 
 # One row per mod: Slug is the folder under mods\, Folder is the folder name
 # inside the .vmz (mods\<Folder>\ at the archive root), Artifact is the historic
