@@ -3,7 +3,8 @@
 **Version:** 0.4.0
 
 Standalone loot-rarity mod for Road to Vostok. Weapons and clothing found in
-containers and on bodies roll a per-instance rarity tier with passive affixes.
+containers, on bodies and lying on the ground roll a per-instance rarity tier
+with passive affixes.
 
 > **Do not remove this mod from an existing save.** It stores two extra fields
 > on every item. Removing the mod makes the game drop those values.

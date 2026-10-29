@@ -127,6 +127,10 @@ func _init() -> void:
 	bare.on_world_loot_spawned()
 	ck(true, "callback without a lib does not crash")
 
+	# --- a non-zero arity would make the hook a silent no-op (callv mismatch) ---
+	ck(Callable(boot, "on_world_loot_spawned").get_argument_count() == 0,
+		"world callback takes no arguments")
+
 	boot.free()
 	bare.free()
 
