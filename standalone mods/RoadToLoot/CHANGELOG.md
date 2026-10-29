@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4] - 2026-10-29
+
+### Fixed
+- Rarity and affixes no longer reset when travelling to another map or leaving a shelter.
+- The mod menu now shows the current version instead of an old one.
+- The loader no longer logs an error about a hook that could never fire.
+
 ## [0.3.2] - 2026-10-29
 
 ### Fixed

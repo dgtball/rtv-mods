@@ -103,9 +103,19 @@ static func build_config() -> ConfigFile:
 	cfg.set_value("Int", "debug_force_tier", {"name": "Force tier (0=off)", "default": 0, "value": 0, "minRange": 0, "maxRange": 3, "step": 1, "category": dbg, "menu_pos": 1, "tooltip": "1=Common, 2=Rare, 3=Legendary."})
 	cfg.set_value("Keycode", "debug_reroll_key", {"name": "Re-roll hovered item", "default": 0, "default_type": "Keycode", "value": 0, "category": dbg, "menu_pos": 2, "tooltip": "Press to re-roll the item under the cursor."})
 	cfg.set_value("Bool", "log_rolls", {"name": "Log rolls", "default": false, "value": false, "category": dbg, "menu_pos": 3, "tooltip": "Print every loot roll to the log."})
-	cfg.set_value("Info", "version", "0.2.25")
+	cfg.set_value("Info", "version", mod_version())
 
 	return cfg
+
+# Version lives in mod.txt; pack.ps1 also drops it into version.txt. Read the
+# copy rather than parsing mod.txt, so the number cannot drift from the release.
+static func mod_version() -> String:
+	var vf := FileAccess.open("res://mods/RoadToLoot/version.txt", FileAccess.READ)
+	if vf == null:
+		return "unknown"
+	var v := vf.get_as_text().strip_edges()
+	vf.close()
+	return v if v != "" else "unknown"
 
 static func merge_user_values(cfg: ConfigFile, existing: ConfigFile) -> void:
 	for section in cfg.get_sections():
@@ -142,15 +152,11 @@ func on_item_initialize(_source, data) -> void:
 	if item == null or not ("slotData" in item) or item.slotData == null:
 		return
 	var sd = item.slotData
-	var t: int = Store.tier(sd)
-	var aff: Array = Store.affixes(sd)
-	if t <= 0 and data != null:
-		t = Store.tier(data)
-		if aff.is_empty():
-			aff = Store.affixes(data)
-	if t <= 0:
+	# On load vanilla hands Initialize() the saved SlotData, which carries the
+	# roll in its metadata (see _patch_character_save). adopt() moves it onto the
+	# live copy that Update() just rebuilt.
+	if not Store.adopt(sd, data):
 		return
-	Store.stamp(sd, t, aff)
 	_pending_add_container(sd)
 	_display.paint(item)
 
@@ -397,6 +403,7 @@ func _iface() -> Node:
 const SIDECAR_PATH := "user://roadtoloot_moddata.json"
 const SIDECAR_TMP := "user://roadtoloot_moddata.json.tmp"
 const SIDECAR_VERSION := 3
+const CHARACTER_PATH := "user://Character.tres"
 
 func _collect_grid(kind: String, grid, out: Dictionary) -> void:
 	if grid == null:
@@ -539,6 +546,12 @@ func _apply_grid(kind: String, grid, data: Dictionary) -> void:
 		var file: String = str(itemData.file)
 		var n: int = int(seen.get(file, 0))
 		seen[file] = n + 1
+		# The roll now travels inside the save itself. The positional sidecar key
+		# is a fallback for saves written by older builds, so it must never
+		# overwrite a roll that came from metadata: the key is "Nth item with this
+		# file" and a reshuffled grid would hand it to a different item.
+		if Store.has_tier(slotData):
+			continue
 		var entry = data.get(kind + "|" + file + "|" + str(n))
 		if not (entry is Dictionary):
 			var items_dict = data.get("items", null)
@@ -626,7 +639,19 @@ func _apply_slots(kind: String, equipment, data: Dictionary) -> void:
 		var itemData = item.slotData.itemData
 		if itemData == null:
 			continue
-		var entry = data.get(kind + "|" + str(itemData.file) + "|" + str(slot.name))
+		# Same rule as _apply_grid: metadata wins, the sidecar only fills gaps
+		# left by saves written by older builds.
+		if Store.has_tier(item.slotData):
+			continue
+		var key := kind + "|" + str(itemData.file) + "|" + str(slot.name)
+		var entry = data.get(key)
+		if not (entry is Dictionary):
+			# _sidecar_read() nests the positional keys under "items", so the
+			# top-level lookup above always misses. Without this fallback the
+			# equipment half of every legacy save stayed unrolled.
+			var items_dict = data.get("items", null)
+			if items_dict is Dictionary:
+				entry = items_dict.get(key)
 		if not (entry is Dictionary):
 			continue
 		Store.stamp(item.slotData, int(entry.get("t", 0)), entry.get("a", []))
@@ -878,10 +903,72 @@ func _sidecar_read() -> Dictionary:
 
 func on_save_character() -> void:
 	Log.line("[RTL-DBG] HOOK on_save_character called")
+	# Runs on every character save, not only while a container is open: the
+	# metadata pass is what keeps the roll inside the save file itself.
+	_patch_character_save()
 	if _pending_container.is_empty() and _container_watch <= 0:
 		Log.line("[RTL-DBG] HOOK on_save_character: SKIP sidecar write (no pending)")
 		return
 	_sidecar_write()
+
+# SaveCharacter() builds a fresh SlotData per item with Update(), and Update()
+# copies vanilla fields only -- the roll's metadata never makes it in. The save
+# has already hit the disk by the time this runs, so reload it, put the rolls
+# back on the saved copies in vanilla's own order, and write it again.
+func _patch_character_save() -> void:
+	var iface = _iface()
+	if iface == null:
+		return
+	if not ResourceLoader.exists(CHARACTER_PATH):
+		return
+	var character = ResourceLoader.load(CHARACTER_PATH, "", ResourceLoader.CACHE_MODE_REPLACE)
+	if character == null or not ("inventory" in character):
+		return
+	var inventory = character.get("inventory")
+	var equipment = character.get("equipment")
+	var catalog = character.get("catalog")
+	var copied := 0
+	if inventory is Array:
+		copied += Store.mirror_list(_live_grid_slots(iface.get("inventoryGrid")), inventory)
+	if equipment is Array:
+		copied += Store.mirror_list(_live_equip_slots(iface.get("equipment")), equipment)
+	if catalog is Array:
+		copied += Store.mirror_list(_live_grid_slots(iface.get("catalogGrid")), catalog)
+	if copied <= 0:
+		return
+	var err := ResourceSaver.save(character, CHARACTER_PATH)
+	if err != OK:
+		Log.warn("save: could not write the roll into Character.tres (code " + str(err) + ")")
+		return
+	Log.line("save: mirrored " + str(copied) + " roll(s) into Character.tres")
+
+# Vanilla's loop: every child of the grid becomes one saved SlotData, in child
+# order, with no filtering. null keeps the indexes aligned.
+func _live_grid_slots(grid) -> Array:
+	var out: Array = []
+	if grid == null:
+		return out
+	for item in grid.get_children():
+		if item != null and ("slotData" in item):
+			out.append(item.slotData)
+		else:
+			out.append(null)
+	return out
+
+# Vanilla's loop: only real Slot nodes that hold an item contribute an entry.
+func _live_equip_slots(equipment) -> Array:
+	var out: Array = []
+	if equipment == null:
+		return out
+	for slot in equipment.get_children():
+		if not _is_equipment_slot(slot) or slot.get_child_count() == 0:
+			continue
+		var item = slot.get_child(0)
+		if item != null and ("slotData" in item):
+			out.append(item.slotData)
+		else:
+			out.append(null)
+	return out
 
 func on_load_character() -> void:
 	Log.line("[RTL-DBG] HOOK on_load_character called")
