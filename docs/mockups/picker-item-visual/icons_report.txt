@@ -1,0 +1,101 @@
+godot: 4.6.3-stable (official)
+
+=== res://Items/Weapons/AKM/AKM.tres
+   name = KA-M
+   type = Weapon
+   texture = (768.0, 256.0)
+   used_rect = [P: (53.0, 55.0), S: (663.0, 147.0)]  (padding (105.0, 109.0))
+   save_png = 0
+
+=== res://Items/Weapons/Remington_870/Remington_870.tres
+   name = RM-870
+   type = Weapon
+   texture = (768.0, 256.0)
+   used_rect = [P: (43.0, 63.0), S: (682.0, 130.0)]  (padding (86.0, 126.0))
+   save_png = 0
+
+=== res://Items/Weapons/Makarov/Makarov.tres
+   name = Karov
+   type = Weapon
+   texture = (256.0, 256.0)
+   used_rect = [P: (25.0, 47.0), S: (207.0, 163.0)]  (padding (49.0, 93.0))
+   save_png = 0
+
+=== res://Items/Weapons/MP5/MP5.tres
+   name = PM5
+   type = Weapon
+   texture = (512.0, 256.0)
+   used_rect = [P: (33.0, 47.0), S: (446.0, 152.0)]  (padding (66.0, 104.0))
+   save_png = 0
+
+=== res://Items/Weapons/MP5K/MP5K.tres
+   name = PM5-K
+   type = Weapon
+   texture = (384.0, 256.0)
+   used_rect = [P: (64.0, 47.0), S: (256.0, 163.0)]  (padding (128.0, 93.0))
+   save_png = 0
+
+=== res://Items/Weapons/SVD/SVD.tres
+   name = VSD
+   type = Weapon
+   texture = (1024.0, 256.0)
+   used_rect = [P: (64.0, 68.0), S: (896.0, 121.0)]  (padding (128.0, 135.0))
+   save_png = 0
+
+=== res://Items/Medical/Medkit/Medkit.tres
+   name = Medkit
+   type = Medical
+   texture = (384.0, 256.0)
+   used_rect = [P: (52.0, 43.0), S: (280.0, 170.0)]  (padding (104.0, 86.0))
+   save_png = 0
+
+=== res://Items/Medical/IFAK/IFAK.tres
+   name = IFAK
+   type = Medical
+   texture = (128.0, 128.0)
+   used_rect = [P: (27.0, 11.0), S: (74.0, 106.0)]  (padding (54.0, 22.0))
+   save_png = 0
+
+=== res://Items/Backpacks/Backpack_Nomad/Backpack_Nomad.tres
+   name = Nomad Backpack
+   type = Backpack
+   texture = (384.0, 512.0)
+   used_rect = [P: (50.0, 64.0), S: (284.0, 384.0)]  (padding (100.0, 128.0))
+   save_png = 0
+
+=== res://Items/Helmets/Helmet_Police/Helmet_Police.tres
+   name = Police Helmet (IIIA)
+   type = Helmet
+   texture = (256.0, 256.0)
+   used_rect = [P: (28.0, 52.0), S: (200.0, 152.0)]  (padding (56.0, 104.0))
+   save_png = 0
+
+=== res://Items/Consumables/Beer/Beer.tres
+   name = Beer
+   type = Consumables
+   texture = (128.0, 128.0)
+   used_rect = [P: (32.0, 12.0), S: (64.0, 104.0)]  (padding (64.0, 24.0))
+   save_png = 0
+
+=== res://Items/Clothing/Jacket_M62/Jacket_M62.tres
+   name = M62 Jacket
+   type = Clothing
+   texture = (256.0, 256.0)
+   used_rect = [P: (24.0, 25.0), S: (208.0, 206.0)]  (padding (48.0, 50.0))
+   save_png = 0
+
+=== res://Items/Weapons/AKM/AKM_Magazine.tres
+   name = KA-M Magazine
+   type = Attachment
+   texture = (128.0, 256.0)
+   used_rect = [P: (17.0, 22.0), S: (99.0, 213.0)]  (padding (29.0, 43.0))
+   save_png = 0
+
+=== res://Items/Attachments/ACOG/ACOG.tres
+   name = ATOG
+   type = Attachment
+   texture = (256.0, 128.0)
+   used_rect = [P: (31.0, 19.0), S: (195.0, 90.0)]  (padding (61.0, 38.0))
+   save_png = 0
+
+saved: 14 of 14

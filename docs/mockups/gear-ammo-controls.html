@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>VTK — управление количеством: патроны и обоймы</title>
+<style>
+	:root {
+		--bg: #14110d;
+		--panel: #1c1813;
+		--panel2: #221d16;
+		--line: #3a3226;
+		--gold: #d9b25a;
+		--gold-soft: #c9a24a;
+		--brown: #8a6f4a;
+		--grey: #8a8578;
+		--dim: #6b6659;
+		--red: #e05a4a;
+		--green: #7fae5a;
+	}
+	* { box-sizing: border-box; }
+	body {
+		margin: 0; padding: 28px 34px 80px;
+		background: var(--bg); color: #d8d2c6;
+		font: 13px/1.55 "Consolas", "Cascadia Mono", monospace;
+	}
+	h1 { font-size: 19px; color: var(--gold); margin: 0 0 4px; font-weight: 600; }
+	h2 { font-size: 15px; color: var(--gold-soft); margin: 42px 0 6px;
+	     border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+	h3 { font-size: 12px; color: var(--brown); margin: 26px 0 10px;
+	     text-transform: uppercase; letter-spacing: .09em; }
+	.sub { color: var(--dim); margin: 0 0 4px; }
+	.facts { margin: 14px 0 0; padding: 12px 16px; background: var(--panel);
+	         border: 1px solid var(--line); border-radius: 6px; color: var(--grey); }
+	.facts b { color: var(--gold); }
+	.row { display: flex; gap: 26px; flex-wrap: wrap; align-items: flex-start; margin-top: 16px; }
+	.item { width: 300px; }
+	.cap { font-size: 12px; margin: 0 0 8px; }
+	.cap b { color: var(--gold); }
+	.cap .tag { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 3px;
+	            margin-right: 6px; vertical-align: 1px; }
+	.tag.rec { background: #2c3a22; color: #a6cf7c; border: 1px solid #3f5a30; }
+	.tag.base { background: #3a2a24; color: #d99a86; border: 1px solid #5a3f34; }
+	.tag.alt { background: #2a2f3a; color: #93a8cc; border: 1px solid #3a445a; }
+	.pro { color: #9fbf7a; font-size: 11.5px; margin: 8px 0 0; }
+	.con { color: #c89a8a; font-size: 11.5px; margin: 2px 0 0; }
+	.mono-note { color: var(--dim); font-size: 11px; margin-top: 3px; }
+
+	/* ---- клетка снаряжения ---- */
+	.cell {
+		width: 128px; background: var(--panel2);
+		border: 1px solid var(--line); border-radius: 4px;
+		padding: 6px 5px 7px; position: relative;
+		display: flex; flex-direction: column; align-items: center; gap: 4px;
+	}
+	.cell.in-set { border-color: var(--gold-soft); box-shadow: 0 0 0 1px rgba(201,162,74,.35) inset; }
+	.cell .x {
+		position: absolute; top: 1px; right: 1px; width: 20px; height: 20px;
+		line-height: 18px; text-align: center; color: var(--red);
+		border: 1px solid var(--line); border-radius: 3px; font-size: 11px;
+		background: #191510;
+	}
+	.art {
+		width: 96px; height: 56px; border: 1px dashed #2f281e; border-radius: 3px;
+		display: flex; align-items: center; justify-content: center;
+		color: #4a4234; font-size: 10px; letter-spacing: .06em;
+	}
+	.name { font-size: 9px; color: #aaa; text-align: center; line-height: 1.25;
+	        max-height: 23px; overflow: hidden; }
+	.bar {
+		display: flex; align-items: center; justify-content: center; gap: 4px;
+		width: 100%;
+	}
+	.b {
+		height: 28px; min-width: 28px; border: 1px solid var(--line); border-radius: 3px;
+		background: #191510; color: #cfc8ba; font: 15px/1 "Consolas", monospace;
+		display: flex; align-items: center; justify-content: center; cursor: default;
+		padding: 0 6px;
+	}
+	.b.sm { height: 18px; min-width: 18px; font-size: 10px; padding: 0 4px; }
+	.b.gold { color: var(--gold); border-color: var(--gold-soft); }
+	.b.wide { width: 100%; font-size: 11px; height: 22px; }
+	.cnt { font-size: 13px; color: var(--gold); min-width: 30px; text-align: center; }
+	.cnt small { font-size: 9px; color: var(--dim); }
+	.chip { height: 22px; padding: 0 7px; border: 1px solid var(--line); border-radius: 3px;
+	        background: #191510; color: #cfc8ba; font-size: 10.5px;
+	        display: flex; align-items: center; cursor: default; }
+	.chip.on { color: var(--gold); border-color: var(--gold-soft); }
+	.stack-hint { font-size: 8.5px; color: var(--dim); }
+
+	.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block;
+	       background: var(--gold); box-shadow: 0 0 5px rgba(217,178,90,.8); }
+	.b .dot { margin-right: 5px; }
+	.b.off { color: #8f8878; border-color: var(--line); background: #191510; }
+	.final { display: flex; gap: 14px; align-items: flex-start; }
+	.final .lbl { font-size: 11px; color: var(--dim); text-align: center; width: 128px; }
+
+	.card {
+		width: 300px; background: var(--panel); border: 1px solid var(--line);
+		border-radius: 6px; padding: 14px 16px;
+	}
+	.card h4 { margin: 0 0 6px; color: var(--gold); font-size: 13px; }
+	.card p { margin: 0 0 8px; color: var(--grey); font-size: 12px; }
+	.card .ex { border-top: 1px dashed var(--line); padding-top: 10px; margin-top: 10px;
+	            display: flex; align-items: center; gap: 6px; }
+	.q { color: var(--dim); font-size: 11px; }
+</style>
+</head>
+<body>
+
+<h1>Управление количеством в клетке снаряжения</h1>
+<p class="sub">Патроны и обоймы. Макет для выбора. Клетка — реального размера: 128 px.</p>
+
+<div class="facts">
+	<b>Данные игры (проверено headless):</b><br>
+	· Патроны: <b>amount</b> = число патронов. Стак (<b>defaultAmount</b>) по калибру:
+	12x70 = 10 · 7.62x54R / 9x39 = 20 · 5.45 / 5.56 / 7.62x39 = 30 · .45 / 9x18 / 9x19 = 50.
+	Полный = <b>maxAmount = 300</b>.<br>
+	· Обоймы: в сете <b>count</b> = число обойм (этим уже рулят «−/+»), а
+	<b>Full magazine</b> — тумблер заполнения каждой (патронов = вместимость).<br>
+	· Сейчас шаг «−/+» всюду = <b>1</b>; добавление кликом из каталога для патронов тоже = 1.
+</div>
+
+<h2>0. Финал (выбрано: V1 + M1 + клик-по-числу)</h2>
+<div class="row">
+	<div class="item">
+		<p class="cap"><span class="tag rec">патроны · полные</span> <b>Full горит</b></p>
+		<div class="cell in-set">
+			<div class="x">✕</div>
+			<div class="art">5.45&#215;39 icon</div>
+			<div class="name">5.45x39 mm</div>
+			<div class="bar">
+				<div class="b">−</div><span class="cnt">300</span><div class="b">+</div>
+			</div>
+			<div class="bar"><div class="b wide gold"><span class="dot"></span>Full &#183; 300</div></div>
+		</div>
+		<p class="mono-note">amount == maxAmount &#8594; залито, точка горит.</p>
+	</div>
+	<div class="item">
+		<p class="cap"><span class="tag rec">патроны · не полные</span> <b>Full тумбая</b></p>
+		<div class="cell in-set">
+			<div class="x">✕</div>
+			<div class="art">5.45&#215;39 icon</div>
+			<div class="name">5.45x39 mm</div>
+			<div class="bar">
+				<div class="b">−</div><span class="cnt">90</span><div class="b">+</div>
+			</div>
+			<div class="bar"><div class="b wide off">Full &#183; 300</div></div>
+		</div>
+		<p class="mono-note">Клик по числу &#8594; ввод точного значения.</p>
+	</div>
+	<div class="item">
+		<p class="cap"><span class="tag rec">обоймы · Full</span> <b>точка горит</b></p>
+		<div class="cell in-set">
+			<div class="x">✕</div>
+			<div class="art">AKM Magazine icon</div>
+			<div class="name">AKM Magazine</div>
+			<div class="bar">
+				<div class="b">−</div><span class="cnt">2</span><div class="b">+</div>
+			</div>
+			<div class="bar"><div class="b wide gold"><span class="dot"></span>Full magazine</div></div>
+		</div>
+		<p class="mono-note">&#171;−/+&#187; меняет число обойм, не заполнение.</p>
+	</div>
+	<div class="item">
+		<p class="cap"><span class="tag rec">обоймы · Empty</span> <b>точки нет</b></p>
+		<div class="cell in-set">
+			<div class="x">✕</div>
+			<div class="art">AKM Magazine icon</div>
+			<div class="name">AKM Magazine</div>
+			<div class="bar">
+				<div class="b">−</div><span class="cnt">2</span><div class="b">+</div>
+			</div>
+			<div class="bar"><div class="b wide off">Empty</div></div>
+		</div>
+		<p class="mono-note">Полная заливка + точка = включено.</p>
+	</div>
+</div>
+
+<h2>1. Патроны</h2>
+
+<div class="row">
+
+	<div class="item">
+		<p class="cap"><span class="tag base">сейчас</span> <b>Шаг 1, без «Full»</b></p>
+		<div class="cell in-set">
+			<div class="x">✕</div>
+			<div class="art">5.45&#215;39 icon</div>
+			<div class="name">5.45x39 mm</div>
+			<div class="bar"><span class="cnt">30</span></div>
+			<div class="bar">
+				<div class="b">−</div><span class="cnt">30</span><div class="b">+</div>
+			</div>
+		</div>
+		<p class="mono-note">120 тапов, чтобы дойти до 300.</p>
+	</div>
+
+	<div class="item">
+		<p class="cap"><span class="tag rec">V1 · рекомендую</span> <b>Шаг = стак, «Full» снизу</b></p>
+		<div class="cell in-set">
+			<div class="x">✕</div>
+			<div class="art">5.45&#215;39 icon</div>
+			<div class="name">5.45x39 mm</div>
+			<div class="bar">
+				<div class="b">−</div><span class="cnt">30</span><div class="b">+</div>
+			</div>
+			<div class="bar"><div class="b wide gold">Full · 300</div></div>
+			<div class="stack-hint">шаг 30 (стак)</div>
+		</div>
+		<p class="pro">+ «−/+» прыгает на стак; «Full» добивает до 300 одним кликом.</p>
+		<p class="con">− Число патронов не кратно 300 после шагов; для точного — идея №2 ниже.</p>
+	</div>
+
+	<div class="item">
+		<p class="cap"><span class="tag alt">V2</span> <b>Пресеты вместо «Full»</b></p>
+		<div class="cell in-set">
+			<div class="x">✕</div>
+			<div class="art">5.45&#215;39 icon</div>
+			<div class="name">5.45x39 mm</div>
+			<div class="bar">
+				<div class="b">−</div><span class="cnt">30</span><div class="b">+</div>
+			</div>
+			<div class="bar">
+				<div class="chip">1</div><div class="chip on">30</div>
+				<div class="chip">150</div><div class="chip">300</div>
+			</div>
+		</div>
+		<p class="pro">+ Прямой доступ к типовым значениям; «1» есть точно.</p>
+		<p class="con">− 4 кнопки в 128 px мелкие; пресеты надо решать (стак? полстака?).</p>
+	</div>
+
+	<div class="item">
+		<p class="cap"><span class="tag alt">V3</span> <b>Двухъярусный степпер</b></p>
+		<div class="cell in-set">
+			<div class="x">✕</div>
+			<div class="art">5.45&#215;39 icon</div>
+			<div class="name">5.45x39 mm</div>
+			<div class="bar"><span class="cnt">30 <small>/ 300</small></span></div>
+			<div class="bar">
+				<div class="b sm">−30</div><div class="b sm">−1</div>
+				<div class="b sm">+1</div><div class="b sm">+30</div>
+			</div>
+		</div>
+		<p class="pro">+ И крупный шаг, и точная подстройка; видно предел «/ 300».</p>
+		<p class="con">− 4 узких кнопки; шаг ещё и «полный» только кнопкой +30.</p>
+	</div>
+
+</div>
+
+<h2>2. Обоймы</h2>
+
+<div class="row">
+
+	<div class="item">
+		<p class="cap"><span class="tag base">сейчас</span> <b>Full зажат в строке A</b></p>
+		<div class="cell in-set">
+			<div class="x">✕</div>
+			<div class="art">AKM Magazine icon</div>
+			<div class="name">AKM Magazine</div>
+			<div class="bar"><span class="cnt">2</span><div class="b sm gold">Full</div></div>
+			<div class="bar">
+				<div class="b">−</div><span class="cnt">2</span><div class="b">+</div>
+			</div>
+		</div>
+		<p class="mono-note">«Full» шрифт 8, делит строку со счётчиком.</p>
+	</div>
+
+	<div class="item">
+		<p class="cap"><span class="tag rec">M1 · рекомендую</span> <b>Full снизу, крупно</b></p>
+		<div class="cell in-set">
+			<div class="x">✕</div>
+			<div class="art">AKM Magazine icon</div>
+			<div class="name">AKM Magazine</div>
+			<div class="bar">
+				<div class="b">−</div><span class="cnt">2</span><div class="b">+</div>
+			</div>
+			<div class="bar"><div class="b wide gold">Full magazine</div></div>
+			<div class="stack-hint">2 &#215; 30 патронов</div>
+		</div>
+		<p class="pro">+ «−/+» = число обойм; «Full» читаемый и отделён; видно вместимость.</p>
+	</div>
+
+	<div class="item">
+		<p class="cap"><span class="tag alt">M2</span> <b>Сегмент Full / Empty</b></p>
+		<div class="cell in-set">
+			<div class="x">✕</div>
+			<div class="art">AKM Magazine icon</div>
+			<div class="name">AKM Magazine</div>
+			<div class="bar">
+				<div class="b">−</div><span class="cnt">2</span><div class="b">+</div>
+			</div>
+			<div class="bar">
+				<div class="chip on">Full</div><div class="chip">Empty</div>
+			</div>
+		</div>
+		<p class="pro">+ Явные два состояния, без «какое сейчас?».</p>
+		<p class="con">− Тумблер уже и есть переключатель; лишний ряд.</p>
+	</div>
+
+</div>
+
+<h2>3. Ещё три идеи управления (от меня)</h2>
+
+<div class="row">
+
+	<div class="card">
+		<h4>№1 — Колесо мыши по клетке</h4>
+		<p>Наведение + скролл меняет количество, не надо целиться в «−/+».
+		По умолчанию — шаг-стак, с Shift — на 1.</p>
+		<div class="ex">
+			<span class="chip">scroll</span>
+			<span class="q">30 → 60 → 90 … 300</span>
+		</div>
+	</div>
+
+	<div class="card">
+		<h4>№2 — Клик по числу = ввод</h4>
+		<p>Клик по счётчику превращает его в поле ввода: набрать точное число.
+		Решает некратность стаку (например, 45 патронов).</p>
+		<div class="ex">
+			<div class="b" style="min-width:56px;color:var(--gold)">45&#9608;</div>
+			<span class="q">Enter — применить</span>
+		</div>
+	</div>
+
+	<div class="card">
+		<h4>№3 — Удержание «−/+» с ускорением</h4>
+		<p>Короткое нажатие — 1, удержание — повтор и разгон до стака.
+		Без новых кнопок, привычно как в спиннерах.</p>
+		<div class="ex">
+			<div class="b">+</div>
+			<span class="q">тап = 1 · удержание = быстро</span>
+		</div>
+	</div>
+
+</div>
+
+<h2>Что решить</h2>
+<div class="facts">
+	1. Патроны: общий шаг на **стак** (V1) или пресеты (V2) или двухъярусный (V3)?<br>
+	2. Шаг-стак = сколько? Значение калибра (10/20/30/50) или фикс, напр. 30?<br>
+	3. «Full» у патронов — только выставить 300, или ещё и тумблер «Empty»?<br>
+	4. Обоймы: M1 (Full снизу) достаточно, или M2?<br>
+	5. Брать ли какую-то из идей №1–3 в этот же заход?
+</div>
+
+</body>
+</html>
