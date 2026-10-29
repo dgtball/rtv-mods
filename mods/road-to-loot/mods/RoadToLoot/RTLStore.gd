@@ -26,6 +26,15 @@ static func affixes(slotData) -> Array:
 static func has_tier(slotData) -> bool:
 	return tier(slotData) > 0
 
+# True once RTL has written a roll onto this slot -- including a Common roll,
+# which is tier 0 and therefore invisible to has_tier(). The world-loot path
+# needs this: a force-table calls SpawnItems() once per item and reaches the
+# earlier pickups again.
+static func is_stamped(slotData) -> bool:
+	if slotData == null:
+		return false
+	return slotData.has_meta("rtl_loot_tier")
+
 static func stamp(slotData, tier: int, affixes: Array) -> void:
 	if slotData == null:
 		Log.warn("stamp: slotData null")

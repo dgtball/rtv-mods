@@ -119,7 +119,7 @@ $tests = [ordered]@{
         "res://tests/road-to-loot/test_rtl_pool.gd", "res://tests/road-to-loot/test_rtl_roll.gd",
         "res://tests/road-to-loot/test_rtl_rows.gd", "res://tests/road-to-loot/test_rtl_stats.gd",
         "res://tests/road-to-loot/test_rtl_text.gd", "res://tests/road-to-loot/test_sidecar.gd",
-        "res://tests/road-to-loot/test_store.gd")
+        "res://tests/road-to-loot/test_store.gd", "res://tests/road-to-loot/test_rtl_world.gd")
 }
 $tests = @($tests.Values | ForEach-Object { $_ })
 
