@@ -1,4 +1,4 @@
-# local-only data: game copy, reference mods, godot builds, probes
+# local-only data: game copy, reference mods, godot builds, probes, docs
 /RTVcopy/
 /referens/
 /tools/
@@ -6,6 +6,7 @@
 /.superpowers/
 /superpowers/
 /.docs/
+/docs/
 __pycache__/
 
 # build output
