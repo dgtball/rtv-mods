@@ -1,6 +1,6 @@
 # Road To Loot
 
-**Version:** 0.3.4
+**Version:** 0.4.0
 
 Standalone loot-rarity mod for Road to Vostok. Weapons and clothing found in
 containers and on bodies roll a per-instance rarity tier with passive affixes.
@@ -40,6 +40,8 @@ powershell -ExecutionPolicy Bypass -File pack.ps1
 - Travelling to another map or leaving a shelter keeps the tier and affixes on
   everything in the backpack, on the body and in the catalog.
 - Corpse loot rolls.
+- World loot (weapons and clothing on the ground) rolls a tier, and the tier
+  survives picking it up.
 - "Force tier" debug applies to all finds.
 - The re-roll hotkey updates the hovered item.
 - Runs without MCM installed.

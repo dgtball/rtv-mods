@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0] - 2026-10-29
+
+### Added
+- Weapons and clothing lying on the ground now roll a rarity and passive
+  affixes, the same way items found in containers do.
+- The roll is kept when you pick the item up, and it stays on the item after
+  saving and loading.
+
 ## [0.3.4] - 2026-10-29
 
 ### Fixed
