@@ -10,6 +10,23 @@ static func get_uid(slotData) -> String:
 		return str(slotData.get_meta(META_UID, ""))
 	return ""
 
+static func ensure_uid(slotData) -> String:
+	if slotData == null:
+		return ""
+	if slotData.has_meta(META_UID):
+		var u := str(slotData.get_meta(META_UID))
+		if u != "":
+			return u
+	if not ("itemData" in slotData) or slotData.itemData == null:
+		return ""
+	var itemData = slotData.itemData
+	var file := str(itemData.file)
+	if file.is_empty():
+		return ""
+	var u := "%s|%d|%d" % [file, Time.get_ticks_msec(), randi_range(100000, 999999)]
+	slotData.set_meta(META_UID, u)
+	return u
+
 static func get_plate(slotData) -> int:
 	if slotData == null:
 		return 0
@@ -50,14 +67,4 @@ static func clear_slot(slotData) -> void:
 	slotData.set_meta(META_UID, "")
 	slotData.set_meta(META_PLATE, 0)
 
-# Meta-transfer pre-hook: prepare before game state changes
-# slotData = the slot being modified, itemData = the item involved
-static func prepare_slot(slotData, itemData=null) -> void:
-	# Currently a no-op; exists for future use (e.g. snapshot before equip)
-	pass
 
-# Meta-transfer post-hook: commit after game state changes
-# slotData = the slot that was modified
-static func commit_slot(slotData) -> void:
-	# Currently a no-op; exists for future use (e.g. validate after change)
-	pass

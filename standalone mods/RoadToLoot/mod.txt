@@ -1,0 +1,19 @@
+[mod]
+name="Road To Loot"
+id="road-to-loot"
+version="0.3.2"
+
+[autoload]
+RTL="res://mods/RoadToLoot/RTLBoot.gd"
+
+[hooks]
+res://Scripts/LootContainer.gd = CreateLoot, AILoot, Storage
+res://Scripts/Item.gd = Initialize
+res://Scripts/Loader.gd = SaveCharacter, LoadCharacter, NewGame
+res://Scripts/Tooltip.gd = Update, Info
+
+[dependencies]
+optional=["doinkoink-mcm"]
+
+[updates]
+source=""

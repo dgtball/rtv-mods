@@ -58,9 +58,13 @@ func track(node: Node) -> void:
 		var _t = Store.tier(node.slotData)
 		if _t > 0 and _cfg != null and _cfg.debug_enabled:
 			var _name: String = "?"
+			var _uid: String = ""
 			if node.slotData != null and "itemData" in node.slotData and node.slotData.itemData != null:
 				_name = str(node.slotData.itemData.name)
-			Log.line("track NONVANILLA item " + _name + " tier=" + str(_t))
+			var Sidecar := preload("res://mods/RoadToLoot/RTLSidecar.gd")
+			if node.slotData != null:
+				_uid = Sidecar.get_uid(node.slotData)
+			Log.line("track NONVANILLA item " + _name + " by_uid=" + _uid + " tier=" + str(_t))
 		if _cfg == null or _cfg.paint_cells:
 			paint(node)
 	for child in node.get_children():
