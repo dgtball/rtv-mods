@@ -440,7 +440,10 @@ static func category_of(slots, type) -> String:
 static func subcategory_of(path: String, type) -> String:
 	# Разбор пути зовётся на каждый предмет при каждой пересборке каталога;
 	# таблицы подкатегорий неизменны, поэтому результат мемоизируем по пути.
-	var key := path + "\u0000" + str(type)
+	# Разделитель - печатный "|": встроенный NUL-символ Godot не переживает,
+	# при загрузке скрипта он печатает Unicode parsing error и подменяет байт
+	# на U+FFFD. Ни в путях, ни в type символа "|" не бывает.
+	var key := path + "|" + str(type)
 	if _subcat_cache.has(key):
 		return _subcat_cache[key]
 	var sub := _subcategory_of_uncached(path, type)

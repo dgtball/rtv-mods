@@ -23,6 +23,13 @@ import sys
 
 MODULES_GLOB = str(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "mods", "vostok-toolkit", "mods", "VTK", "*.gd"))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ALL_SOURCES_GLOB = str(os.path.join(REPO_ROOT, "mods", "**", "*.gd"))
+
+# Встроенный NUL не переживает UTF-8: Godot при загрузке скрипта печатает
+# "Unicode parsing error ... Unexpected NUL character", а в строке остаётся
+# U+FFFD. Поймать это иначе нечем - стенд парсинга такой литерал принимает.
+NUL_ESCAPE_RE = re.compile(r"\\u0000|\\x00")
 
 GONE = [
     "_make_target_chip",
@@ -439,8 +446,20 @@ def main():
             print("  HOOKS-GONE %-31s встречается в %s"
                   % (esc(s), ", ".join(hits)))
 
-    print("GONE: %d, GONE_RE: %d, PRESENT: %d, FUNCS: %d, HOOKS_GONE: %d"
-          % (len(GONE), len(GONE_RE), len(PRESENT), len(FUNCS), len(HOOKS_GONE)))
+    nul_rows = 0
+    for path in sorted(glob.glob(ALL_SOURCES_GLOB, recursive=True)):
+        src = io.open(path, encoding="utf-8", errors="replace").read()
+        for n, line in enumerate(src.splitlines(), 1):
+            if "\x00" in line or NUL_ESCAPE_RE.search(line):
+                nul_rows += 1
+                bad += 1
+                print("  NUL     %-34s %s:%d"
+                      % (os.path.basename(path),
+                         os.path.relpath(path, REPO_ROOT).replace("\\", "/"), n))
+
+    print("GONE: %d, GONE_RE: %d, PRESENT: %d, FUNCS: %d, HOOKS_GONE: %d, NUL: %d"
+          % (len(GONE), len(GONE_RE), len(PRESENT), len(FUNCS),
+             len(HOOKS_GONE), nul_rows))
     if bad:
         print("RESULT: раскладка разошлась с планом: %d" % bad)
         sys.exit(1)

@@ -1,5 +1,11 @@
 # Changelog
 
+## [5.2.1] - 2026-10-29
+
+### Fixed
+
+- The toolkit no longer writes a Unicode warning to the game log on startup.
+
 ## [5.2.0] - 2026-10-25
 
 ### Removed

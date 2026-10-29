@@ -5,7 +5,7 @@ separate `.vmz` archives and can be installed on their own — there is no share
 
 | Mod | What it does | Version | README |
 |---|---|---|---|
-| **Vostok Toolkit** (`vostok-toolkit`) | Loadout presets, partial task hand-in, Notes icon rows, kill stats and killfeed, fast travel | 5.2.0 | [mods/vostok-toolkit/README.md](mods/vostok-toolkit/README.md) |
+| **Vostok Toolkit** (`vostok-toolkit`) | Loadout presets, partial task hand-in, Notes icon rows, kill stats and killfeed, fast travel | 5.2.1 | [mods/vostok-toolkit/README.md](mods/vostok-toolkit/README.md) |
 | **ThermalVTK** (`thermal-vtk`) | Standalone thermal vision / NVG overlay with heat glow and ESP | 2.2.0 | [mods/thermal-vtk/README.md](mods/thermal-vtk/README.md) |
 | **Road To Loot** (`road-to-loot`) | Per-instance rarity tiers and affixes for looted weapons and clothing | 0.3.4 | [mods/road-to-loot/README.md](mods/road-to-loot/README.md) |
 | **Freeze for JCM** (`jcm-freeze`) | Freezes NPCs, the BTR and the helicopter on demand (JCM addon) | 1.2.0 | [mods/jcm-freeze/README.md](mods/jcm-freeze/README.md) |

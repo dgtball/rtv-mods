@@ -2,7 +2,7 @@
 
 A quality-of-life toolkit for **Road to Vostok** вЂ” loadout presets, smarter tasks, thermal vision, kill stats, a dynamic killfeed and fast travel, all in one mod.
 
-**Version:** 5.2.0 · **Loader:** Metro Mod Loader 3.4.2 · **Game:** 0.2.1.0 · **Language:** RU / EN
+**Version:** 5.2.1 · **Loader:** Metro Mod Loader 3.4.2 · **Game:** 0.2.1.0 · **Language:** RU / EN
 
 ## Features
 
