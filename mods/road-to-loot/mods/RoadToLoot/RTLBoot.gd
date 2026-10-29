@@ -22,6 +22,10 @@ var _sidecar_retry := 0
 var _container_watch := 0
 
 var _pending_container: Dictionary = {} # instance_id -> { "sd": slotData, "uid": String, "file": String, "t": int, "a": Array }
+var _drop_src = null
+var _drop_file := ""
+var _drop_ids: Dictionary = {}
+var _shelter_ids: Dictionary = {}
 
 func _ready() -> void:
 	set_process(true)
@@ -46,6 +50,10 @@ func _ready() -> void:
 		_lib.hook("loader-savecharacter-post", Callable(self, "on_save_character"), 100)
 		_lib.hook("loader-loadcharacter-post", Callable(self, "on_load_character"), 100)
 		_lib.hook("loader-newgame-post", Callable(self, "on_new_game"), 100)
+		_lib.hook("interface-drop-pre", Callable(self, "on_drop_pre"), 100)
+		_lib.hook("interface-drop-post", Callable(self, "on_drop_post"), 100)
+		_lib.hook("loader-loadshelter-pre", Callable(self, "on_shelter_pre"), 100)
+		_lib.hook("loader-loadshelter-post", Callable(self, "on_shelter_loaded"), 100)
 		_display.attach(get_tree())
 
 func register_mcm() -> void:
@@ -224,6 +232,64 @@ func on_world_loot_spawned() -> void:
 	var ctx := {"rarity_roll": _caller_rarity_roll()}
 	for sd in World.fresh_slots(caller.get_children()):
 		_roll_into(sd, ctx, false)
+
+# Interface.Drop() adds the ground pickup to Map first and only then calls
+# slotData.Update(), which copies vanilla fields and drops the roll. The pre hook
+# remembers the source slot and the map's current children; the post hook finds
+# the pickups Drop just added (id diff, so nodes that were already on the ground
+# are out of scope) and copies the roll onto each of them.
+func on_drop_pre(target) -> void:
+	_drop_src = null
+	_drop_file = ""
+	_drop_ids = {}
+	if target == null or not ("slotData" in target) or target.slotData == null:
+		return
+	var sd = target.slotData
+	if sd.itemData == null or Store.tier(sd) <= 0:
+		return
+	_drop_src = sd
+	_drop_file = str(sd.itemData.file)
+	_drop_ids = _id_set(_map())
+
+func on_drop_post(_target) -> void:
+	if _drop_src == null:
+		return
+	var src = _drop_src
+	var file := _drop_file
+	_drop_src = null
+	_drop_file = ""
+	var ids := _drop_ids
+	_drop_ids = {}
+	var map := _map()
+	if map == null:
+		return
+	var carried := 0
+	for node in _new_children(map, ids, file):
+		if _carry_roll(src, node):
+			carried += 1
+	if carried > 0 and _debug.should_log():
+		Log.line("drop: carried " + str(carried) + " roll(s) onto the ground")
+
+# LoadShelter() is a coroutine: the post hook runs after vanilla finished, so the
+# pickups exist. It only receives the shelter's name, so the saved records are
+# read back from the same file. SaveShelter() stores the live SlotData and
+# ResourceSaver writes metadata, so the roll is in the .tres already -- only the
+# new pickup's Update() copy is missing it.
+func on_shelter_pre(_shelter_name) -> void:
+	_shelter_ids = _id_set(_map())
+
+func on_shelter_loaded(shelter_name) -> void:
+	var ids := _shelter_ids
+	_shelter_ids = {}
+	var map := _map()
+	if map == null:
+		return
+	var saved: Array = _shelter_saved_items(shelter_name)
+	if saved.is_empty():
+		return
+	var carried: int = _carry_pairs(saved, _new_children(map, ids))
+	if carried > 0 and _debug.should_log():
+		Log.line("shelter: carried " + str(carried) + " roll(s) back onto the ground")
 
 func on_container_storage(containerGrid) -> void:
 	if containerGrid == null or _lib == null or not ("_caller" in _lib):
@@ -419,6 +485,121 @@ func _iface() -> Node:
 	if scene == null:
 		return null
 	return scene.get_node_or_null("/root/Map/Core/UI/Interface")
+
+# Same root as _iface(), one level up: Interface.Drop() and Loader.LoadShelter()
+# both parent their pickups straight to /root/Map.
+func _map() -> Node:
+	var tree := get_tree()
+	if tree == null:
+		return null
+	var scene = tree.current_scene
+	if scene == null:
+		return null
+	return scene.get_node_or_null("/root/Map")
+
+func _id_set(node) -> Dictionary:
+	var out: Dictionary = {}
+	if node == null or not node.has_method("get_children"):
+		return out
+	for c in node.get_children():
+		if is_instance_valid(c):
+			out[c.get_instance_id()] = true
+	return out
+
+# Children that appeared since the snapshot. The file filter narrows a drop: one
+# Drop() call can add several pickups (a stackable item is split into boxes) but
+# only those of the dropped model may take its roll.
+func _new_children(map, before: Dictionary, file_filter: String = "") -> Array:
+	var out: Array = []
+	if map == null or not map.has_method("get_children"):
+		return out
+	for c in map.get_children():
+		if not is_instance_valid(c):
+			continue
+		if before.has(c.get_instance_id()):
+			continue
+		if not ("slotData" in c) or c.slotData == null:
+			continue
+		if not ("itemData" in c.slotData) or c.slotData.itemData == null:
+			continue
+		if file_filter != "" and str(c.slotData.itemData.file) != file_filter:
+			continue
+		out.append(c)
+	return out
+
+# Copy the roll onto a SlotData of our own rather than stamping in place: the
+# pickup's slotData comes from its scene and is shared by every instance of that
+# scene, so stamping it would hand the roll to unrelated pickups. Vanilla does
+# the same in LootSimulation.SpawnItems(). Update() keeps the vanilla fields
+# vanilla just wrote -- the amount of a split stack, attachments in nested.
+func _carry_roll(src, node) -> bool:
+	if src == null or node == null:
+		return false
+	if not ("slotData" in node) or node.slotData == null:
+		return false
+	if not ("itemData" in node.slotData) or node.slotData.itemData == null:
+		return false
+	if Store.tier(src) <= 0:
+		return false
+	var fresh := SlotData.new()
+	fresh.Update(node.slotData)
+	if not Store.mirror(src, fresh):
+		return false
+	node.slotData = fresh
+	return true
+
+# A node with no usable slotData still takes a slot in the live list, so the
+# indexes pair_positions() returns keep pointing at the right node.
+func _carry_pairs(saved: Array, nodes: Array) -> int:
+	if not (nodes is Array) or nodes.is_empty():
+		return 0
+	var live: Array = []
+	for node in nodes:
+		if node == null or not ("slotData" in node) or node.slotData == null:
+			live.append({})
+			continue
+		var sd = node.slotData
+		if not ("itemData" in sd) or sd.itemData == null or not ("global_position" in node):
+			live.append({})
+			continue
+		live.append({"file": str(sd.itemData.file), "pos": node.global_position})
+	var carried := 0
+	for pair in World.pair_positions(saved, live):
+		if _carry_roll(saved[int(pair[0])]["slotData"], nodes[int(pair[1])]):
+			carried += 1
+	return carried
+
+func _shelter_saved_items(shelter_name) -> Array:
+	var out: Array = []
+	if shelter_name == null:
+		return out
+	var key := str(shelter_name)
+	if key == "":
+		return out
+	var path := "user://" + key + ".tres"
+	if not ResourceLoader.exists(path):
+		return out
+	var shelter = ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
+	if shelter == null or not ("items" in shelter):
+		return out
+	var items = shelter.items
+	if not (items is Array):
+		return out
+	for entry in items:
+		if entry == null or not ("slotData" in entry) or entry.slotData == null:
+			continue
+		var sd = entry.slotData
+		if not ("itemData" in sd) or sd.itemData == null:
+			continue
+		if Store.tier(sd) <= 0:
+			continue
+		if not ("position" in entry):
+			continue
+		var pos = entry.position
+		if not (pos is Vector3) or not pos.is_finite():
+			continue
+		out.append({"file": str(sd.itemData.file), "pos": pos, "slotData": sd})
+	return out
 
 const SIDECAR_PATH := "user://roadtoloot_moddata.json"
 const SIDECAR_TMP := "user://roadtoloot_moddata.json.tmp"

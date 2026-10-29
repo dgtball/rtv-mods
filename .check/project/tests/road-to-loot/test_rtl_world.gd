@@ -3,6 +3,7 @@ extends SceneTree
 const Store = preload("res://mods/RoadToLoot/RTLStore.gd")
 const World = preload("res://mods/RoadToLoot/RTLWorld.gd")
 const Boot = preload("res://mods/RoadToLoot/RTLBoot.gd")
+const RTLSidecar = preload("res://mods/RoadToLoot/RTLSidecar.gd")
 
 var fails := 0
 
@@ -18,6 +19,12 @@ class Slot extends RefCounted:
 
 class Pickup extends RefCounted:
 	var slotData = null
+
+# A ground pickup stand-in for the shelter path: _carry_pairs reads slotData and
+# global_position, nothing else, so a RefCounted is enough.
+class Ground extends RefCounted:
+	var slotData = null
+	var global_position := Vector3.ZERO
 
 # FakeItem answers get() like the game's ItemData: Category.of_item() and
 # Roll.build_affixes() read "type"/"slots"/needs fields through it.
@@ -151,6 +158,90 @@ func _init() -> void:
 	ck(World.pair_positions(null, []).is_empty(), "null saved -> empty")
 	ck(World.pair_positions([], null).is_empty(), "null live -> empty")
 	ck(World.pair_positions([null, "x", {}], [null, {}]).is_empty(), "broken entries are skipped")
+
+	# --- _carry_roll: a SlotData of its own, mod data copied, vanilla fields kept ---
+	var src_sd := SlotData.new()
+	src_sd.itemData = FakeItem.new()
+	src_sd.amount = 30
+	Store.stamp(src_sd, 3, [{"stat": "damage", "unit": "pct", "value": 0.2}])
+	RTLSidecar.set_uid(src_sd, "AKM|1|2")
+	var dst_sd := SlotData.new()
+	dst_sd.itemData = src_sd.itemData
+	dst_sd.amount = 7
+	var ground := Pickup.new()
+	ground.slotData = dst_sd
+	ck(boot._carry_roll(src_sd, ground), "carry_roll reports a transfer")
+	ck(ground.slotData != dst_sd, "pickup gets a SlotData of its own")
+	ck(Store.tier(ground.slotData) == 3, "tier copied")
+	ck(Store.affixes(ground.slotData).size() == 1, "affixes copied")
+	ck(RTLSidecar.get_uid(ground.slotData) == "AKM|1|2", "uid copied")
+	ck(int(ground.slotData.amount) == 7, "vanilla amount kept")
+	ck(not Store.is_stamped(dst_sd), "the destination slotData is left untouched")
+	# nothing to carry
+	var plain := SlotData.new()
+	plain.itemData = src_sd.itemData
+	var plain_node := Pickup.new()
+	plain_node.slotData = SlotData.new()
+	ck(not boot._carry_roll(plain, plain_node), "no roll -> no transfer")
+	ck(not boot._carry_roll(src_sd, plain_node), "node without itemData -> no transfer")
+	ck(not boot._carry_roll(null, plain_node), "null source -> false")
+	ck(not boot._carry_roll(src_sd, Marker.new()), "node without slotData -> false")
+
+	# --- _new_children: id-diff keeps the pre-existing node out, file filter narrows ---
+	var old_node := Pickup.new()
+	old_node.slotData = SlotData.new()
+	old_node.slotData.itemData = FakeItem.new()
+	var kids_root := FakeRoot.new()
+	kids_root.kids = [old_node]
+	var before: Dictionary = boot._id_set(kids_root)
+	var other_item := FakeItem.new()
+	other_item.file = "res://Items/Weapons/Mosin/Mosin.tres"
+	var other_sd := SlotData.new()
+	other_sd.itemData = other_item
+	var homonym := Pickup.new()
+	homonym.slotData = other_sd
+	var added := Pickup.new()
+	added.slotData = SlotData.new()
+	added.slotData.itemData = FakeItem.new()
+	kids_root.kids = [old_node, homonym, added]
+	ck(boot._new_children(kids_root, before).size() == 2, "id-diff keeps only the nodes added later")
+	ck(boot._new_children(kids_root, before, "res://Items/Weapons/AKM/AKM.tres").size() == 1,
+		"file filter drops the other model")
+	ck(boot._new_children(kids_root, {}).size() == 3, "empty snapshot sees every node")
+	ck(boot._new_children(null, {}).is_empty(), "null map -> empty")
+
+	# --- _carry_pairs: each saved record finds its own live node ---
+	var saved_a := SlotData.new()
+	saved_a.itemData = FakeItem.new()
+	Store.stamp(saved_a, 2, [])
+	var saved_c := SlotData.new()
+	saved_c.itemData = FakeItem.new()
+	Store.stamp(saved_c, 3, [])
+	var ground_a := Ground.new()
+	ground_a.slotData = SlotData.new()
+	ground_a.slotData.itemData = saved_a.itemData
+	ground_a.global_position = Vector3(1, 0, 1)
+	var ground_c := Ground.new()
+	ground_c.slotData = SlotData.new()
+	ground_c.slotData.itemData = saved_c.itemData
+	ground_c.global_position = Vector3(3, 0, 3)
+	var saved_pairs := [
+		{"file": "res://Items/Weapons/AKM/AKM.tres", "pos": Vector3(1, 0, 1), "slotData": saved_a},
+		{"file": "res://Items/Weapons/AKM/AKM.tres", "pos": Vector3(3, 0, 3), "slotData": saved_c},
+	]
+	ck(boot._carry_pairs(saved_pairs, [ground_a, ground_c]) == 2, "both saved items are carried")
+	ck(Store.tier(ground_a.slotData) == 2, "the first live node got its saved roll")
+	ck(Store.tier(ground_c.slotData) == 3, "the second live node got its saved roll")
+	ck(boot._carry_pairs([], [ground_a]) == 0, "no saved items -> nothing carried")
+	ck(boot._carry_pairs(saved_pairs, [Marker.new()]) == 0, "node without slotData is skipped")
+
+	# --- arity: one argument each, or callv silently drops the hook ---
+	ck(Callable(boot, "on_drop_pre").get_argument_count() == 1, "drop pre takes 1 argument")
+	ck(Callable(boot, "on_drop_post").get_argument_count() == 1, "drop post takes 1 argument")
+	ck(Callable(boot, "on_shelter_pre").get_argument_count() == 1, "shelter pre takes 1 argument")
+	ck(Callable(boot, "on_shelter_loaded").get_argument_count() == 1, "shelter post takes 1 argument")
+	ck(boot._shelter_saved_items("").is_empty(), "empty shelter name -> no records")
+	ck(boot._shelter_saved_items(null).is_empty(), "null shelter name -> no records")
 
 	boot.free()
 	bare.free()
