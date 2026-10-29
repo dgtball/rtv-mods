@@ -131,6 +131,27 @@ func _init() -> void:
 	ck(Callable(boot, "on_world_loot_spawned").get_argument_count() == 0,
 		"world callback takes no arguments")
 
+	# --- pair_positions: saved shelter records vs live pickups ---
+	var s0 := {"file": "AKM", "pos": Vector3(1, 0, 2)}
+	var l0 := {"file": "AKM", "pos": Vector3(1, 0, 2.02)}
+	ck(World.pair_positions([s0], [l0]).size() == 1, "close position pairs")
+	ck(World.pair_positions([s0], [l0])[0] == [0, 0], "pair is [saved, live]")
+	ck(World.pair_positions([{"file": "AKM", "pos": Vector3.ZERO}],
+		[{"file": "AKM", "pos": Vector3(1, 0, 0)}]).is_empty(), "out of tolerance does not pair")
+	ck(World.pair_positions([{"file": "AKM", "pos": Vector3.ZERO}],
+		[{"file": "Mosin", "pos": Vector3.ZERO}]).is_empty(), "different file does not pair")
+	# two saved items of the same model standing side by side stay separate
+	var pair2: Array = World.pair_positions(
+		[{"file": "AKM", "pos": Vector3(0, 0, 0)}, {"file": "AKM", "pos": Vector3(0.5, 0, 0)}],
+		[{"file": "AKM", "pos": Vector3(0, 0, 0.01)}, {"file": "AKM", "pos": Vector3(0.5, 0, 0.01)}])
+	ck(pair2.size() == 2, "duplicate file pairs twice")
+	ck(int(pair2[0][0]) == 0 and int(pair2[1][0]) == 1, "saved order is kept")
+	ck(int(pair2[0][1]) != int(pair2[1][1]), "one live pickup is used once")
+	# dirty input
+	ck(World.pair_positions(null, []).is_empty(), "null saved -> empty")
+	ck(World.pair_positions([], null).is_empty(), "null live -> empty")
+	ck(World.pair_positions([null, "x", {}], [null, {}]).is_empty(), "broken entries are skipped")
+
 	boot.free()
 	bare.free()
 
