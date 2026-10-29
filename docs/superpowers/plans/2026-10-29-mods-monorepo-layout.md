@@ -241,14 +241,16 @@ cd D:\RTVMOD
 New-Item -ItemType Directory -Force -Path mods | Out-Null
 git mv loadouts mods/vostok-toolkit
 git rm -r assets
-git mv README.md mods/vostok-toolkit/README.md
-git mv "standalone mods/ThermalVTK" mods/thermal-vtk
+git mv README.md mods/vostok-toolkit/README.mdgit mv "standalone mods/ThermalVTK" mods/thermal-vtk
 git mv "standalone mods/RoadToLoot" mods/road-to-loot
 git mv "standalone mods/jcm-freeze" mods/jcm-freeze
 git status --short
 ```
 
 Expected: только `R`-строки (renames) без `D`+`??`; папка `standalone mods` пустая.
+`git rm -r assets` даёт `D`-строки на 8 jpg — это намеренно (пользователь отказался от них).
+Ссылки на `assets/` в `mods/vostok-toolkit/README.md` чистятся **в этом же коммите**, иначе
+промежуточный коммит ссылается на удалённые файлы (Task 6 Step 2 переехал сюда).
 
 - [ ] **Step 2: Проверить, что переехало всё**
 
@@ -256,8 +258,9 @@ Expected: только `R`-строки (renames) без `D`+`??`; папка `s
 после:
 
 Run: `git -C D:\RTVMOD ls-files | Measure-Object -Line`
-Expected: то же число, что было после коммита Task 3 (записать его в Step 1 Task 3, повторно
-снять здесь). Любое уменьшение — потерянный файл, разбираться до продолжения.
+Expected: те же `305`, что после коммита Task 3 — переезд файлов не добавляет и не удаляет.
+Проверено: до коммита (после всех удалений Task 4) остаётся `282` = 305 − 8 `assets` − 6 LSH-тестов
+− `test_serialization.gd` − 8 отладочных заготовок − `.check/project/Scripts/SlotData.gd`.
 
 Run: `Get-ChildItem D:\RTVMOD\mods -Directory | Select-Object -ExpandProperty Name`
 Expected: `jcm-freeze`, `road-to-loot`, `thermal-vtk`, `vostok-toolkit`.
