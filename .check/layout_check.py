@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-r"""Проверка раскладки picker по всем модулям loadouts/mods/VTK/*.gd.
+r"""Проверка раскладки picker по всем модулям mods/vostok-toolkit/mods/VTK/*.gd.
 
 Стенд .check ловит парсинг, макет - дизайн. Ни один из них не знает, что кнопка
 "+ Добавить" не должна вернуться, а боковая колонка - должна. Здесь ровно эта
@@ -21,29 +21,8 @@ import os
 import re
 import sys
 
-MODULES_GLOB = r"D:\RTVMOD\loadouts\mods\VTK\*.gd"
-LSH_GLOB = r"D:\RTVMOD\standalone mods\LooterShooter\mods\LooterShooter\*.gd"
-LSH_GLOB_SUB = r"D:\RTVMOD\standalone mods\LooterShooter\mods\LooterShooter\Scripts\*.gd"
-
-LSH_PRESENT = [
-    ("LSHBoot.gd", "lootcontainer-createloot-post"),
-    ("LSHBoot.gd", "lootcontainer-ailoot-post"),
-    ("LSHBoot.gd", "tooltip-update-post"),
-    ("LSHBoot.gd", "RegisterConfiguration"),
-    ("LSHStore.gd", "static func stamp"),
-    ("LSHStore.gd", "static func tier"),
-    ("LSHRoll.gd", "static func tier_weights"),
-    ("LSHRoll.gd", "static func build_affixes"),
-    ("LSHPool.gd", "static func validate"),
-    ("LSHCategory.gd", "static func of_item"),
-    ("LSHDisplay.gd", "const BORDER_NAME"),
-    ("LSHDisplay.gd", "const BLOCK_NAME"),
-    ("Scripts/SlotData.gd", "extends \"res://Scripts/SlotData.gd\""),
-    ("Scripts/SlotData.gd", "loot_tier"),
-    ("Scripts/SlotData.gd", "loot_affixes"),
-]
-
-LSH_GONE = ["_rings", "_boost", "modloader_hooks", "take_over_path"]
+MODULES_GLOB = str(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "..", "mods", "vostok-toolkit", "mods", "VTK", "*.gd"))
 
 GONE = [
     "_make_target_chip",
@@ -459,24 +438,6 @@ def main():
             bad += 1
             print("  HOOKS-GONE %-31s встречается в %s"
                   % (esc(s), ", ".join(hits)))
-
-    lsh_files = {}
-    for pattern in (LSH_GLOB, LSH_GLOB_SUB):
-        for path in glob.glob(pattern):
-            lsh_files[os.path.basename(path)] = io.open(path, encoding="utf-8").read()
-    if lsh_files:
-        for fname, needle in LSH_PRESENT:
-            base = os.path.basename(fname)
-            body = lsh_files.get(base, "")
-            status = "ok" if needle in body else "MISSING"
-            print("LSH PRESENT %s %s: %s" % (status, fname, needle))
-            if status == "MISSING":
-                bad += 1
-        for needle in LSH_GONE:
-            for fname, body in lsh_files.items():
-                if needle in body:
-                    print("LSH GONE    FAIL     %s: %s" % (fname, needle))
-                    bad += 1
 
     print("GONE: %d, GONE_RE: %d, PRESENT: %d, FUNCS: %d, HOOKS_GONE: %d"
           % (len(GONE), len(GONE_RE), len(PRESENT), len(FUNCS), len(HOOKS_GONE)))

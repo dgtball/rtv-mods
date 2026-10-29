@@ -2,8 +2,6 @@
 
 A quality-of-life toolkit for **Road to Vostok** вЂ” loadout presets, smarter tasks, thermal vision, kill stats, a dynamic killfeed and fast travel, all in one mod.
 
-![Ironman Restart](assets/ironman-restart.jpg)
-
 **Version:** 5.2.0 · **Loader:** Metro Mod Loader 3.4.2 · **Game:** 0.2.1.0 · **Language:** RU / EN
 
 ## Features
@@ -33,13 +31,13 @@ A quality-of-life toolkit for **Road to Vostok** вЂ” loadout presets, smarte
 
 ## Building from source
 
-`Loadouts.vmz` is a zip of the contents of `loadouts/`: `mod.txt` and `mods/` at the archive root (no top-level `loadouts` folder). Zip the folder and rename to `.vmz`, or run `pack.ps1`.
+`Loadouts.vmz` is a zip of the contents of `mods/vostok-toolkit/`: `mod.txt` and `mods/` at the archive root (no top-level folder). Run `pack.ps1 -Mod vostok-toolkit` from the repository root; the archive lands in `dist/`.
 
 ## Repository layout
 
-- `loadouts/mod.txt` вЂ” name, id, version, autoload
-- `loadouts/mods/VTK/*.gd` вЂ” mod source (prefix `VTK`)
-- `assets/` вЂ” images for the README and the Vostok Mods listing
+- `mods/vostok-toolkit/mod.txt` вЂ” name, id, version, autoload
+- `mods/vostok-toolkit/mods/VTK/*.gd` вЂ” mod source (prefix `VTK`)
+- `mods/vostok-toolkit/CHANGELOG.md` вЂ” release history
 
 ## Compatibility
 

@@ -2,8 +2,8 @@ extends SceneTree
 
 const Store = preload("res://mods/RoadToLoot/RTLStore.gd")
 const Sidecar = preload("res://mods/RoadToLoot/RTLSidecar.gd")
-const ProbeSlot = preload("res://tests/rtl_probe_slot.gd")
-const ProbeSave = preload("res://tests/rtl_probe_save.gd")
+const ProbeSlot = preload("res://tests/road-to-loot/rtl_probe_slot.gd")
+const ProbeSave = preload("res://tests/road-to-loot/rtl_probe_save.gd")
 
 const PATH := "user://rtl_persist_probe.tres"
 
