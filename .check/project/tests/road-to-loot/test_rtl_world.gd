@@ -2,6 +2,7 @@ extends SceneTree
 
 const Store = preload("res://mods/RoadToLoot/RTLStore.gd")
 const World = preload("res://mods/RoadToLoot/RTLWorld.gd")
+const Boot = preload("res://mods/RoadToLoot/RTLBoot.gd")
 
 var fails := 0
 
@@ -18,6 +19,24 @@ class Slot extends RefCounted:
 class Pickup extends RefCounted:
 	var slotData = null
 
+# FakeItem answers get() like the game's ItemData: Category.of_item() and
+# Roll.build_affixes() read "type"/"slots"/needs fields through it.
+class FakeItem extends RefCounted:
+	var name := "AKM"
+	var file := "res://Items/Weapons/AKM/AKM.tres"
+	var type := "Weapon"
+	var slots := ["Primary"]
+
+class FakeRoot extends RefCounted:
+	var kids: Array = []
+	var rarityRoll = 100
+
+	func get_children() -> Array:
+		return kids
+
+class FakeLib extends RefCounted:
+	var _caller = null
+
 func ck(cond: bool, msg: String) -> void:
 	if cond:
 		print("ok    ", msg)
@@ -28,6 +47,11 @@ func ck(cond: bool, msg: String) -> void:
 func _slot(item):
 	var sd = Slot.new()
 	sd.itemData = item
+	return sd
+
+func _world_slot():
+	var sd = Slot.new()
+	sd.itemData = FakeItem.new()
 	return sd
 
 func _init() -> void:
@@ -66,6 +90,45 @@ func _init() -> void:
 	Store.stamp(csd, 0, [])
 	common.slotData = csd
 	ck(World.fresh_slots([common]).is_empty(), "tier-0 stamped pickup is skipped")
+
+	# --- persist=false: the roll lands on the slot, the sidecar stays untouched ---
+	var boot = Boot.new()
+	var dbg: Variant = boot._debug
+	dbg._enabled = true
+	dbg._force_tier = 3
+	var live = _world_slot()
+	boot._roll_into(live, {"rarity_roll": 100}, false)
+	ck(Store.tier(live) == 3, "world roll stamps the forced tier")
+	ck(not live.has_meta("rtl_uid"), "world roll does not mint a sidecar uid")
+
+	# --- the hook callback rolls every fresh pickup on the caller ---
+	var root := FakeRoot.new()
+	var first := Pickup.new()
+	first.slotData = _world_slot()
+	var second := Pickup.new()
+	second.slotData = _world_slot()
+	root.kids = [Marker.new(), first, second]
+	var lib := FakeLib.new()
+	lib._caller = root
+	boot._lib = lib
+	boot.on_world_loot_spawned()
+	ck(Store.tier(first.slotData) == 3, "callback rolls the first pickup")
+	ck(Store.tier(second.slotData) == 3, "callback rolls the second pickup")
+	ck(not first.slotData.has_meta("rtl_uid"), "callback leaves the first pickup without a uid")
+	ck(not second.slotData.has_meta("rtl_uid"), "callback leaves the second pickup without a uid")
+
+	# --- a second call (force tables) must not restamp anything ---
+	ck(World.fresh_slots(root.kids).is_empty(), "after the callback no pickup is fresh")
+	boot.on_world_loot_spawned()
+	ck(Store.tier(first.slotData) == 3, "second call keeps the tier")
+
+	# --- no modloader lib: the callback is a no-op, not a crash ---
+	var bare = Boot.new()
+	bare.on_world_loot_spawned()
+	ck(true, "callback without a lib does not crash")
+
+	boot.free()
+	bare.free()
 
 	print("")
 	if fails > 0:

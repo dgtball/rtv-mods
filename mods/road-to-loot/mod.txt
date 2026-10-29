@@ -8,6 +8,7 @@ RTL="res://mods/RoadToLoot/RTLBoot.gd"
 
 [hooks]
 res://Scripts/LootContainer.gd = CreateLoot, AILoot, Storage
+res://Scripts/LootSimulation.gd = SpawnItems
 res://Scripts/Item.gd = Initialize
 res://Scripts/Loader.gd = SaveCharacter, LoadCharacter, NewGame
 res://Scripts/Tooltip.gd = Update, Info

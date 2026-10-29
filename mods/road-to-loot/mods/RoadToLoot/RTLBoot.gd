@@ -9,6 +9,7 @@ const Roll = preload("res://mods/RoadToLoot/RTLRoll.gd")
 const Store = preload("res://mods/RoadToLoot/RTLStore.gd")
 const Category = preload("res://mods/RoadToLoot/RTLCategory.gd")
 const RTLSidecar = preload("res://mods/RoadToLoot/RTLSidecar.gd")
+const World = preload("res://mods/RoadToLoot/RTLWorld.gd")
 
 const MCM_HELPERS := "res://ModConfigurationMenu/Scripts/Doink Oink/MCM_Helpers.tres"
 
@@ -38,6 +39,7 @@ func _ready() -> void:
 		_lib.hook("lootcontainer-createloot-post", Callable(self, "tag_created_loot"), 100)
 		_lib.hook("lootcontainer-ailoot-post", Callable(self, "tag_ai_loot"), 100)
 		_lib.hook("lootcontainer-storage-post", Callable(self, "on_container_storage"), 100)
+		_lib.hook("lootsimulation-spawnitems-post", Callable(self, "on_world_loot_spawned"), 100)
 		_lib.hook("tooltip-update-post", Callable(self, "on_tooltip_update"), 100)
 		_lib.hook("tooltip-info-post", Callable(self, "on_tooltip_info"), 100)
 		_lib.hook("item-initialize-post", Callable(self, "on_item_initialize"), 100)
@@ -211,6 +213,18 @@ func tag_ai_loot(slotData) -> void:
 	_queue_sidecar_save()
 	call_deferred("_queue_sidecar_save")
 
+func on_world_loot_spawned() -> void:
+	# LootSimulation.SpawnItems() is void and takes no arguments: this callback
+	# must match, or Callable.callv silently skips it.
+	if _lib == null:
+		return
+	var caller = _lib._caller if "_caller" in _lib else null
+	if caller == null or not caller.has_method("get_children"):
+		return
+	var ctx := {"rarity_roll": _caller_rarity_roll()}
+	for sd in World.fresh_slots(caller.get_children()):
+		_roll_into(sd, ctx, false)
+
 func on_container_storage(containerGrid) -> void:
 	if containerGrid == null or _lib == null or not ("_caller" in _lib):
 		return
@@ -342,7 +356,7 @@ func _retry_sidecar_save() -> void:
 		_sidecar_write()
 	try_restore_container()
 
-func _roll_into(slotData, ctx: Dictionary) -> void:
+func _roll_into(slotData, ctx: Dictionary, persist: bool = true) -> void:
 	if slotData == null or slotData.itemData == null:
 		return
 	if not Category.rollable(slotData.itemData):
@@ -351,6 +365,12 @@ func _roll_into(slotData, ctx: Dictionary) -> void:
 	if r["tier"] <= 0 and Store.has_tier(slotData):
 		return
 	Store.stamp(slotData, r["tier"], r["affixes"])
+	if not persist:
+		# World loot is rebuilt on every map load: stamping the slot is enough,
+		# a sidecar entry per pickup would grow the file without bound.
+		if _debug.should_log():
+			Log.line("world roll " + str(slotData.itemData.name) + " tier=" + str(r["tier"]) + " affixes=" + str(r["affixes"]))
+		return
 	var uid := RTLSidecar.get_uid(slotData)
 	if uid == "":
 		uid = RTLSidecar.ensure_uid(slotData)
