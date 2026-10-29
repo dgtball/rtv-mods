@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.1] - 2026-10-29
+
+### Fixed
+- Dropped weapons and clothing keep their rarity and affixes: on the ground,
+  after picking them up again, and after leaving and re-entering a shelter.
+
 ## [0.4.0] - 2026-10-29
 
 ### Added
