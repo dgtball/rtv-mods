@@ -107,6 +107,27 @@ const SLOT_SUBS := {"Grenade_1": "Grenade", "Grenade_2": "Grenade"}
 # являются. Проверяются раньше слотов.
 const HOBBY_TYPES := ["fishing", "instrument"]
 
+# Тип из данных -> группа шага 2. Синонимы живут здесь же: игра отдаёт и
+# "Consumable", и "Consumables", разгрузку как "Rig", подсумок как
+# "Belt Pouch", шлем как "Helmet", рюкзак как "Backpack". Незнакомый тип
+# сюда не попадает и группы не получает.
+const TYPE_GROUPS := {
+	"weapon": "weapon", "knife": "weapon", "grenade": "weapon",
+	"ammo": "ammo", "attachment": "ammo",
+	"clothing": "clothing", "rig": "clothing", "belt pouch": "clothing",
+	"helmet": "clothing", "backpack": "clothing", "armor": "clothing",
+	"medical": "medical",
+	"consumable": "food", "consumables": "food", "fish": "food",
+	"fishing": "gear", "instrument": "gear", "music": "gear",
+	"misc": "tools", "tool": "tools", "key": "tools",
+	"literature": "tools", "lore": "tools", "electronics": "tools",
+	"furniture": "furniture",
+}
+
+# Слоты, которые сами называют класс предмета: у фонарика, ПНВ, часов, карты и
+# спичек папка модели (Polaris, PV7) ничего не говорит.
+const GEAR_SLOTS := ["Light", "NVG", "Time", "Map", "Matches"]
+
 static var _art_cache: Dictionary = {}
 static var _subcat_cache: Dictionary = {}
 
@@ -217,6 +238,18 @@ static func equip_subs_of(type, slots) -> Array:
 		if not out.has(sub):
 			out.append(sub)
 	return out
+
+# Группа шага 2. Слот важнее type: он и есть место, куда предмет встаёт. Так
+# электроника со слотом Light/Time/Map/Matches уходит в Gear, а граната - в
+# Weapons. Остальное решает type через TYPE_GROUPS.
+static func inventory_group_of(type, slots) -> String:
+	for s in _slot_list(slots):
+		if s == "Grenade_1" or s == "Grenade_2":
+			return "weapon"
+		if GEAR_SLOTS.has(s):
+			return "gear"
+	var t := "" if type == null else str(type).strip_edges().to_lower()
+	return str(TYPE_GROUPS.get(t, ""))
 
 # Сводка типов, которые в данных игры не совпадают с группой, в которую их
 # ждёт игрок. Одна и та же еда приходит и как "Consumable", и как
@@ -354,7 +387,7 @@ const SUB_FOLDERS := {
 	"Lumber": "Utilities & Tools", "Matches": "Utilities & Tools",
 	"Mess_Kit": "Utilities & Tools", "Nails": "Utilities & Tools",
 	"Oil_Filter": "Utilities & Tools", "Sticks": "Utilities & Tools",
-	"Toolbox": "Utilities & Tools", "Water_Lock": "Utilities & Tools",
+	"Tarp": "Utilities & Tools", "Toolbox": "Utilities & Tools", "Water_Lock": "Utilities & Tools",
 	"Weapon_Repair_Kit": "Utilities & Tools",
 	"Blanket": "Utilities & Tools", "Board_Game": "Utilities & Tools",
 	"Bucket": "Utilities & Tools", "Coffee_Filter": "Utilities & Tools",
@@ -528,28 +561,44 @@ static func category_of(slots, type) -> String:
 # разных смысла. Папка предмета - третий сегмент пути, а у трёхсегментного
 # (Armor_Plate_II.tres, Key_Attic.tres) её нет вовсе, и роль папки играет
 # имя файла.
-static func subcategory_of(path: String, type) -> String:
+static func subcategory_of(path: String, type, slots := []) -> String:
 	# Разбор пути зовётся на каждый предмет при каждой пересборке каталога;
 	# таблицы подкатегорий неизменны, поэтому результат мемоизируем по пути.
-	# Разделитель - печатный "|": встроенный NUL-символ Godot не переживает,
-	# при загрузке скрипта он печатает Unicode parsing error и подменяет байт
-	# на U+FFFD. Ни в путях, ни в type символа "|" не бывает.
-	var key := path + "|" + str(type)
+	# Слоты входят в ключ: одна и та же граната со слотом даёт "Grenades", а без
+	# слота - пустой класс. Разделитель - печатный "|": встроенный NUL-символ
+	# Godot не переживает, при загрузке скрипта он печатает Unicode parsing error
+	# и подменяет байт на U+FFFD. Ни в путях, ни в type символа "|" не бывает.
+	var key := path + "|" + str(type) + "|" + str(slots)
 	if _subcat_cache.has(key):
 		return _subcat_cache[key]
-	var sub := _subcategory_of_uncached(path, type)
+	var sub := _subcategory_of_uncached(path, type, slots)
 	_subcat_cache[key] = sub
 	return sub
 
-static func _subcategory_of_uncached(path: String, type) -> String:
+static func _subcategory_of_uncached(path: String, type, slots) -> String:
 	if path == "" or type == null or str(type) == "":
 		return ""
+	var t := str(type).strip_edges().to_lower()
 	# Мебель: папка - второй сегмент пути (res://Assets/<Папка>/...).
-	if str(type).strip_edges().to_lower() == "furniture":
+	if t == "furniture":
 		var fsegs: PackedStringArray = path.trim_prefix("res://").split("/")
 		if fsegs.size() >= 2:
 			return str(FURN_SUB_FOLDERS.get(fsegs[1], ""))
 		return ""
+	# Слот называет класс точнее папки: у фонарика (Polaris), ПНВ (PV7), часов,
+	# карты и спичек папка модели ничего не говорит.
+	for s in _slot_list(slots):
+		if GEAR_SLOTS.has(s):
+			return s
+		if s == "Grenade_1" or s == "Grenade_2":
+			return "Grenades"
+	# Классы, у которых в данных свой тип и своя единственная подкатегория.
+	if t == "knife":
+		return "Knives"
+	if t == "key":
+		return "Keys"
+	if t == "literature":
+		return "Books"
 	var leaf := path.get_file()
 	if leaf.get_extension() == "":
 		return ""
@@ -565,16 +614,19 @@ static func _subcategory_of_uncached(path: String, type) -> String:
 		folder = segs[2]
 	elif segs.size() == 3:
 		folder = stem
-	if folder == "":
-		return ""
-	if segs.size() >= 3 and NO_SUB_FOLDERS.has(segs[1]):
-		return ""
-	for suf in MAG_SUFFIXES:
-		if stem.ends_with(suf):
-			return "Handgun & SMG Mags" if MAG_FOLDERS.has(folder) else "Rifle & Sniper Mags"
-	if SUB_FOLDERS.has(folder):
-		return str(SUB_FOLDERS[folder])
-	return folder
+	if folder != "":
+		for suf in MAG_SUFFIXES:
+			if stem.ends_with(suf):
+				return "Handgun & SMG Mags" if MAG_FOLDERS.has(folder) else "Rifle & Sniper Mags"
+		if SUB_FOLDERS.has(folder):
+			return str(SUB_FOLDERS[folder])
+	# Электроника без слота остаётся электроникой: фонарик, ПНВ, часы и карта
+	# уходят в Gear по слоту выше, всё остальное - сюда.
+	if t == "electronics":
+		return "Electronics"
+	# Незнакомая папка чипа не даёт: подпись из имени папки ломала вёрстку
+	# (каждая новая папка в апдейте игры росла отдельным чипом).
+	return ""
 
 # Подкатегории в порядке таблицы, остальные - после них по алфавиту. Пустая
 # строка отбрасывается: неопознанная папка не должна превращаться в чип.

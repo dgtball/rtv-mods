@@ -33,6 +33,9 @@ func _init() -> void:
 	t_category_allowed()
 	t_equip_group_of()
 	t_equip_subs_of()
+	t_inventory_group_of()
+	t_type_groups()
+	t_unknown_folder_no_chip()
 	t_subcategory_of()
 	t_order_subcategories()
 	t_furn_subcategories()
@@ -254,6 +257,52 @@ func t_equip_subs_of() -> void:
 	ck(P.equip_subs_of("Ammo", []).is_empty(), "вне шага 1 - без подкатегорий")
 	ck(P.equip_subs_of("Weapon", ["Primary", "Armor"]) == ["Primary"], "слот вне шага 1 в подкатегории не попадает")
 
+func t_inventory_group_of() -> void:
+	ck(P.inventory_group_of("Furniture", []) == "furniture", "мебель")
+	ck(P.inventory_group_of("Weapon", ["Primary"]) == "weapon", "оружие")
+	ck(P.inventory_group_of("Knife", ["Knife"]) == "weapon", "нож к оружию")
+	ck(P.inventory_group_of("Grenade", ["Grenade_1"]) == "weapon", "граната к оружию")
+	ck(P.inventory_group_of(null, ["Grenade_2"]) == "weapon", "слот-граната решает без type")
+	ck(P.inventory_group_of("Ammo", []) == "ammo", "патроны")
+	ck(P.inventory_group_of("Attachment", []) == "ammo", "обвесы рядом с патронами")
+	ck(P.inventory_group_of("Rig", ["Rig"]) == "clothing", "разгрузка в одежду")
+	ck(P.inventory_group_of("Belt Pouch", ["Belt"]) == "clothing", "подсумок в одежду")
+	ck(P.inventory_group_of("Armor", ["Armor"]) == "clothing", "бронеплита в одежду")
+	ck(P.inventory_group_of("Medical", []) == "medical", "медицина")
+	ck(P.inventory_group_of("Consumables", []) == "food", "еда (Consumables)")
+	ck(P.inventory_group_of("Consumable", []) == "food", "еда (Consumable)")
+	ck(P.inventory_group_of("Fish", []) == "food", "рыба в еду")
+	ck(P.inventory_group_of("Electronics", ["Light"]) == "gear", "фонарик уходит из электроники в Gear")
+	ck(P.inventory_group_of("Misc", ["Map"]) == "gear", "карта в Gear по слоту")
+	ck(P.inventory_group_of("Fishing", []) == "gear", "удочка в Gear")
+	ck(P.inventory_group_of("Instrument", []) == "gear", "музыка в Gear")
+	ck(P.inventory_group_of("Misc", []) == "tools", "хлам в хозтовары")
+	ck(P.inventory_group_of("Key", []) == "tools", "ключи в хозтовары")
+	ck(P.inventory_group_of("Literature", []) == "tools", "книги в хозтовары")
+	ck(P.inventory_group_of("Lore", []) == "tools", "лор в хозтовары")
+	ck(P.inventory_group_of("Electronics", []) == "tools", "электроника без слота в хозтовары")
+	ck(P.inventory_group_of(" Misc ", []) == "tools", "пробелы и регистр не мешают")
+	ck(P.inventory_group_of("Wat", []) == "", "незнакомый type - без группы")
+	ck(P.inventory_group_of(null, null) == "", "null type и слоты - без группы")
+	ck(P.group_keys(P.INVENTORY_GROUPS).size() == 8, "восемь групп шага 2")
+	ck(P.group_label(P.INVENTORY_GROUPS, "tools") == "Tools & sundries", "подпись группы шага 2")
+
+func t_type_groups() -> void:
+	ck(P.inventory_group_of("Consumables", []) == P.inventory_group_of("Consumable", []),
+		"Consumables и Consumable - одна группа")
+	ck(P.inventory_group_of("Rig", []) == "clothing", "разгрузка в одежде, а не отдельной полке")
+	ck(P.inventory_group_of("Backpack", []) == "clothing", "рюкзак в одежде")
+	ck(P.inventory_group_of("Helmet", []) == "clothing", "шлем в одежде")
+	ck(P.inventory_group_of("Fish", []) == "food", "рыба в еде")
+
+func t_unknown_folder_no_chip() -> void:
+	ck(P.subcategory_of("res://Items/Misc/Tarp/Tarp.tres", "Misc") == "Utilities & Tools",
+		"Tarp явно в хозтоварах")
+	ck(P.subcategory_of("res://Items/Misc/Tarp_New/Tarp_New.tres", "Misc") == "",
+		"новая папка чипа не даёт")
+	ck(P.subcategory_of("res://Items/Junk/Thing_01.tres", "Misc") == "",
+		"новая трёхсегментная папка чипа не даёт")
+
 func t_order_subcategories() -> void:
 	ck(P.order_subcategories(["Fish", "Grenades", "Pistols", "Assault Rifles"]) == ["Assault Rifles", "Pistols", "Fish", "Grenades"],
 		"порядок таблицы важнее порядка во входных данных")
@@ -394,8 +443,8 @@ func t_subcategory_of() -> void:
 		"Jaeger_140 -> без подкатегории")
 	ck(P.subcategory_of("res://Items/Electronics/Alarm_Clock/Alarm_Clock.tres", "Tool") == "",
 		"Alarm_Clock -> без подкатегории")
-	ck(P.subcategory_of("res://Items/Electronics/PV7/PV7.tres", "Electronics") == "",
-		"PV7 -> без подкатегории")
+	ck(P.subcategory_of("res://Items/Electronics/PV7/PV7.tres", "Electronics") == "Electronics",
+		"PV7 без слота остаётся электроникой")
 	# Прочие папки верхних уровней.
 	ck(P.subcategory_of("res://Items/Rigs/LVPC/LVPC_Green.tres", "Armor") == "Rigs & Vests",
 		"LVPC -> Rigs & Vests")
@@ -437,12 +486,31 @@ func t_subcategory_of() -> void:
 		"Fishing_Rod -> Fishing")
 	ck(P.subcategory_of("res://Items/Fishing/Bream/Bream.tres", "Food") == "Fish",
 		"Bream -> Fish")
-	# Неизвестная папка не теряется: её имя становится подкатегорией.
-	ck(P.subcategory_of("res://Items/Weapons/Foo_Bar/Foo_Bar.tres", "Weapon") == "Foo_Bar",
-		"Foo_Bar -> имя папки")
+	# Неизвестная папка больше не превращается в чип: класс предмета берётся
+	# из таблиц, а не из имени папки.
+	ck(P.subcategory_of("res://Items/Weapons/Foo_Bar/Foo_Bar.tres", "Weapon") == "",
+		"Foo_Bar -> без подкатегории")
 	# То же для трёхсегментного пути, где роль папки играет имя файла.
-	ck(P.subcategory_of("res://Items/Junk/Thing_01.tres", "Tool") == "Thing_01",
-		"Thing_01 -> имя файла")
+	ck(P.subcategory_of("res://Items/Junk/Thing_01.tres", "Tool") == "",
+		"Thing_01 -> без подкатегории")
+	# Класс из слота: у гранаты, фонарика и спичек папка модели ничего не говорит.
+	ck(P.subcategory_of("res://Items/Grenades/F1/F1.tres", "Grenade", []) == "",
+		"без слотов граната класса не получает")
+	ck(P.subcategory_of("res://Items/Grenades/F1/F1.tres", "Grenade", ["Grenade_1", "Grenade_2"]) == "Grenades",
+		"слот-граната даёт класс Grenades (кэш различает наборы слотов)")
+	ck(P.subcategory_of("res://Items/Knives/Jaeger_140/Jaeger_140.tres", "Knife") == "Knives",
+		"Knife -> Knives")
+	ck(P.subcategory_of("res://Items/Keys/Key_Attic.tres", "Key") == "Keys", "Key -> Keys")
+	ck(P.subcategory_of("res://Items/Books/Book_Children.tres", "Literature") == "Books",
+		"Literature -> Books")
+	ck(P.subcategory_of("res://Items/Electronics/Polaris/Polaris.tres", "Electronics", ["Light"]) == "Light",
+		"класс Gear берётся из слота, а не из папки")
+	ck(P.subcategory_of("res://Items/Electronics/PV7/PV7.tres", "Electronics", ["NVG"]) == "NVG",
+		"PV7 -> NVG по слоту")
+	ck(P.subcategory_of("res://Items/Misc/Matches/Matches.tres", "Misc", ["Matches"]) == "Matches",
+		"спички -> Matches по слоту")
+	ck(P.subcategory_of("res://Items/Electronics/Batteries/Batteries.tres", "Electronics") == "Electronics",
+		"электроника без слота остаётся электроникой")
 	# Пустой путь и пустой тип.
 	ck(P.subcategory_of("", "Weapon") == "", "пустой путь -> пусто")
 	ck(P.subcategory_of("res://Items/Weapons/AKM/AKM.tres", null) == "", "пустой тип -> пусто")
