@@ -167,6 +167,8 @@ GONE = [
     "_spawn_gear",
     "Spawn into inventory",
     "spawn_gear(",
+    # 5.3.0: фуллскрин-панель закрывала ванильные тосты, возврат = откат плана.
+    "_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)",
 ]
 
 GONE_RE = [
@@ -273,7 +275,10 @@ PRESENT = [
     "_att_overlay",
     "_close_att_overlay",
     "_refresh_att_overlay",
-    "_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)",
+    "_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)",
+    "VTKLook.window_size",
+    "_fit_window",
+    "_fit_height",
     "_make_inventory_wall",
     "_equip_styles",
     "_inven_bg_style",
@@ -320,7 +325,12 @@ FUNCS = [
     ("_build_ui", [
         "_main_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL",
         "vb.size_flags_vertical = Control.SIZE_EXPAND_FILL",
+        "_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL",
     ], "цепочка табов обязана тянуться от скролла до таба"),
+    ("_fit_window", ["VTKLook.window_size", "offset_right"],
+     "окно считается правилом, а не якорем на весь вьюпорт"),
+    ("_fit_height", ["custom_minimum_size"],
+     "содержимое тянется до низа окна"),
     ("_build_teleport_tab", [
         "_make_tp_column",
         "Control.SIZE_EXPAND_FILL",

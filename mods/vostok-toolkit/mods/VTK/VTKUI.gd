@@ -13,6 +13,7 @@ const MCMBridge := preload("res://mods/VTK/VTKMCMBridge.gd")
 const SetsRail := preload("res://mods/VTK/VTKSetsRail.gd")
 const Session := preload("res://mods/VTK/VTKLoadoutSession.gd")
 const Editor := preload("res://mods/VTK/VTKEditor.gd")
+const VTKLook := preload("res://mods/VTK/VTKLook.gd")
 
 const UI_LAYER := 4095
 
@@ -30,6 +31,7 @@ var _equip_rows := 8
 var _equip_styles: Dictionary = {}
 var _inven_bg_style: StyleBoxFlat
 var _panel: Panel = null
+var _frame: VBoxContainer = null
 var _scroll: ScrollContainer = null
 var _main_vbox: VBoxContainer = null
 
@@ -193,7 +195,10 @@ func set_panel_open(open: bool) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		_self_paused = true
 		get_tree().paused = true
+		# Окно сначала получает размер, потом содержимое тянется до его низа.
+		_fit_window()
 		refresh(RefreshScope.PAGES | RefreshScope.LIST | RefreshScope.PREVIEW)
+		_fit_height()
 	else:
 		get_tree().paused = false
 		_self_paused = false
@@ -310,9 +315,11 @@ func _build_ui() -> void:
 	_ui_nodes.append(bg)
 
 	_panel = Panel.new()
-	# На весь вьюпорт: мастер-деталь (рейл сетов + редактор) тогда тянется
-	# по всей ширине окна, и фокус-кнопка ⛶ больше не нужна.
-	_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	# Окно по центру вьюпорта, а не во весь экран: непрозрачная панель на весь
+	# слой 4095 закрывала ванильные тосты (Loader/Messages живёт на обычном
+	# слое), и игрок терял обратную связь игры. Размер считает VTKLook.
+	_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_panel.clip_contents = true
 	var panel_style := VTKSurface.panel(false, 0).duplicate(true)
 	panel_style.shadow_color = Color(0, 0, 0, 0.5)
 	panel_style.shadow_size = 12
@@ -330,21 +337,25 @@ func _build_ui() -> void:
 	ui_theme.set_font_size("font_size", "TooltipLabel", 10)
 	_panel.theme = ui_theme
 
-	# КПК-хром: верхний рейл устройства: плашка «V», имя и версия в одну строку.
-	# Только имя и версия: бренд-квадрат,
-	# текущая вкладка и часы из макета убраны.
-	# Отступ сверху не 4, а 34: счётчик убийств - отдельный CanvasLayer слоем
-	# 9999 поверх панели, его Label стоит в (10,10) шрифтом 13 и опускается до
-	# y≈28, и при меньшем верхе имя «VOSTOK TOOLKIT» уходило под счётчик.
-	# Рейл и вкладки сдвинуты на ту же величину, чтобы не наехать друг на друга.
+	# Один фрейм на всё содержимое: врезка 10 и зазор 6 вместо якорей у каждого
+	# ряда. Фрейм обязан попасть в _ui_nodes, иначе смена языка уберёт панель,
+	# а фрейм останется висеть на ней до освобождения.
+	_frame = VBoxContainer.new()
+	_frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_frame.offset_left = 10
+	_frame.offset_top = 10
+	_frame.offset_right = -10
+	_frame.offset_bottom = -10
+	_frame.add_theme_constant_override("separation", 6)
+	_panel.add_child(_frame)
+	_ui_nodes.append(_frame)
+
+	# КПК-хром: верхний рейл устройства. Окно центрировано, HUD-счётчик стоит
+	# слева от него, поэтому верхнего отступа 34 больше не нужно.
 	var rail := HBoxContainer.new()
-	rail.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	rail.offset_left = 4
-	rail.offset_top = 34
-	rail.offset_right = -4
-	rail.offset_bottom = 64
+	rail.custom_minimum_size = Vector2(0, 30)
 	rail.add_theme_constant_override("separation", 8)
-	_panel.add_child(rail)
+	_frame.add_child(rail)
 	_ui_nodes.append(rail)
 
 	var brand := Panel.new()
@@ -383,25 +394,15 @@ func _build_ui() -> void:
 	rver.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	rail.add_child(rver)
 
-	# Полоса под рейлом (макет .rail border-bottom): 1px на всю ширину
-	# рабочей области (как рейл и вкладки, врезка 4px).
 	var rail_sep := ColorRect.new()
-	rail_sep.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	rail_sep.offset_left = 4
-	rail_sep.offset_top = 66
-	rail_sep.offset_right = -4
-	rail_sep.offset_bottom = 67
+	rail_sep.custom_minimum_size = Vector2(0, 1)
+	rail_sep.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rail_sep.color = VTKSurface.SEPARATOR
 	rail_sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_panel.add_child(rail_sep)
+	_frame.add_child(rail_sep)
 
 	var tab_bar = HBoxContainer.new()
-	tab_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	tab_bar.offset_left = 4
-	tab_bar.offset_top = 68
-	tab_bar.offset_right = -4
-	tab_bar.offset_bottom = 98
-	_panel.add_child(tab_bar)
+	_frame.add_child(tab_bar)
 
 	var tabs = [Loc.txt("Sets"), Loc.txt("Teleport")]
 	for tname in tabs:
@@ -416,18 +417,16 @@ func _build_ui() -> void:
 		_tab_btns.append(btn)
 
 	_scroll = ScrollContainer.new()
-	_scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_scroll.offset_left = 4
-	_scroll.offset_top = 102
-	_scroll.offset_right = -4
-	_scroll.offset_bottom = -4
-	_panel.add_child(_scroll)
+	_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_frame.add_child(_scroll)
 
 	_main_vbox = VBoxContainer.new()
 	_main_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_main_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_main_vbox.add_theme_constant_override("separation", 6)
 	_scroll.add_child(_main_vbox)
+	_scroll.resized.connect(_fit_height)
 
 	for tname in tabs:
 		var vb = VBoxContainer.new()
@@ -446,6 +445,32 @@ func _build_ui() -> void:
 	_tp_tab._build_teleport_tab(_tab_containers[Loc.txt("Teleport")], _features.travel(), game_data)
 
 	_switch_tab(Loc.txt("Sets"))
+	_fit_window()
+	if not get_viewport().size_changed.is_connected(_fit_window):
+		get_viewport().size_changed.connect(_fit_window)
+
+# Окно по правилу VTKLook.window_size: якорь PRESET_CENTER, offsets от центра.
+# Драг/ресайз не делаем - игрок не должен уметь затащить окно на полосу тостов.
+func _fit_window() -> void:
+	if _panel == null or not is_inside_tree():
+		return
+	var win := VTKLook.window_size(get_viewport().get_visible_rect().size)
+	var half := win * 0.5
+	_panel.offset_left = -half.x
+	_panel.offset_top = -half.y
+	_panel.offset_right = half.x
+	_panel.offset_bottom = half.y
+
+# Пол высоты содержимого: ScrollContainer не растягивает ребёнка по вертикали,
+# и без него табы схлопываются в минимум (полки и превью пропадают). Порог
+# 1px - чтобы не крутить перерисовку на доли пикселя.
+func _fit_height() -> void:
+	if _main_vbox == null or _scroll == null:
+		return
+	var need := _scroll.size.y
+	if need <= 0.0 or absf(_main_vbox.custom_minimum_size.y - need) < 1.0:
+		return
+	_main_vbox.custom_minimum_size.y = need
 
 
 
@@ -533,6 +558,8 @@ var _features: RefCounted = null
 var _mcm: RefCounted = null
 
 func _clear_ui() -> void:
+	if is_inside_tree() and get_viewport().size_changed.is_connected(_fit_window):
+		get_viewport().size_changed.disconnect(_fit_window)
 	for n in _ui_nodes:
 		if n != null and is_instance_valid(n):
 			n.queue_free()
@@ -540,6 +567,8 @@ func _clear_ui() -> void:
 	_tab_btns.clear()
 	_tab_containers.clear()
 	_scroll = null
+	_frame = null
+	_main_vbox = null
 	_panel = null
 
 # Пересборка UI на месте после смены языка. Активную вкладку восстанавливаем
