@@ -55,6 +55,7 @@ const HOVER_INK := Color("#efe5d4")
 static var _surfaces: Dictionary = {}
 static var _textures: Dictionary = {}
 static var _panels: Dictionary = {}
+static var _tabs: Dictionary = {}
 static var _focus: StyleBoxFlat = null
 
 static func svg_texture(svg: String) -> Texture2D:
@@ -67,6 +68,25 @@ static func svg_texture(svg: String) -> Texture2D:
 	_textures[svg] = tex
 	return tex
 
+# Стиль вкладки без плашки: заполненная подложка читается кнопкой, а вкладку
+# узнают по золотой нижней грани. Отсюда прозрачный фон, нулевые поля и
+# border_width_bottom как единственный признак активности. Кэш по флагу:
+# вкладок две, а стиль спрашивают на каждой перерисовке.
+static func tab_style(active: bool) -> StyleBoxFlat:
+	if _tabs.has(active):
+		return _tabs[active]
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color.TRANSPARENT
+	sb.set_border_width_all(0)
+	sb.border_width_bottom = 2 if active else 0
+	sb.border_color = GOLD
+	sb.content_margin_left = 0
+	sb.content_margin_top = 0
+	sb.content_margin_right = 0
+	sb.content_margin_bottom = 0
+	_tabs[active] = sb
+	return sb
+
 # Голая шестерёнка золотым: признак, что в слоте есть вложение. Своя SVG, а не
 # символ шрифта игры: U+2699 в шрифте может отсутствовать, а мод и так рисует
 # иконки из строк. Цвет подставляется в fill-rule evenodd-путь (отверстие).
@@ -75,6 +95,17 @@ static func gear_icon(size: int, color: Color) -> Texture2D:
 	var svg := ('<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 24 24">' \
 		+ '<path fill="#%s" fill-rule="evenodd" d="M19.14 12.94a7.5 7.5 0 0 0 0-1.88l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.4 7.4 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58a7.5 7.5 0 0 0 0 1.88l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.01-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/></svg>') \
 		% [size, size, hex]
+	return svg_texture(svg)
+
+# Замок для недоступного пункта: эмодзи U+1F512 в шрифте игры может
+# отсутствовать, поэтому дужка и корпус рисуются сами. Цвет приходит
+# аргументом, чтобы hex не уезжал из палитры.
+static func lock_icon(size: int, color: Color) -> Texture2D:
+	var hex := color.to_html(false)
+	var svg := ('<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 24 24">' \
+		+ '<path fill="none" stroke="#%s" stroke-width="2.2" stroke-linecap="round" d="M8 10V7a4 4 0 0 1 8 0v3"/>' \
+		+ '<rect x="4" y="10" width="16" height="11" rx="2" fill="#%s"/></svg>') \
+		% [size, size, hex, hex]
 	return svg_texture(svg)
 
 static func surface(state: String = "normal", accent: bool = false,

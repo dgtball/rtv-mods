@@ -23,6 +23,8 @@ func _run() -> void:
 	t_card_head()
 	t_card()
 	t_palette()
+	t_tab_style()
+	t_lock_icon()
 	print("")
 	if fails == 0:
 		print("Look tests passed")
@@ -111,3 +113,19 @@ func t_palette() -> void:
 		if not (v is Color):
 			not_color += 1
 	ck(not_color == 0, "все новые константы - Color")
+
+func t_tab_style() -> void:
+	var off := VTKSurface.tab_style(false)
+	ck(off is StyleBoxFlat, "вкладка - плоский стиль")
+	ck(off.bg_color.a == 0.0, "неактивная вкладка без плашки")
+	ck(off.border_width_bottom == 0, "у неактивной нет подчёркивания")
+	var on := VTKSurface.tab_style(true)
+	ck(on.border_width_bottom == 2, "активная вкладка подчёркнута на 2 px")
+	ck(on.border_color == VTKSurface.GOLD, "подчёркивание золотое")
+	ck(VTKSurface.tab_style(true) == on, "стиль вкладки кэшируется")
+
+func t_lock_icon() -> void:
+	var t := VTKSurface.lock_icon(16, VTKSurface.GOLD_OFF)
+	ck(t != null, "замок рисуется из SVG-строки")
+	ck(t.get_width() == 16 and t.get_height() == 16, "замок 16x16")
+	ck(VTKSurface.lock_icon(16, VTKSurface.GOLD_OFF) == t, "иконка замка кэшируется")
