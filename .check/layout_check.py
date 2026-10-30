@@ -272,6 +272,8 @@ PRESENT = [
     "EQ_COL_W := 447",
     "EQ_CELL := 70",
     "INVEN_CELL := 70",
+    # Высота окна подобрана под 1080p: внутри h - 73, «Готово» просит 740.
+    "H_MAX := 840.0",
     "_rotates_icon",
     "_apply_qk_btn",
     "_done_bind_btn",

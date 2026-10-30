@@ -34,7 +34,12 @@ func _run() -> void:
 func t_window_size() -> void:
 	ck(Look.window_size(Vector2(1280, 720)) == Vector2(960, 500), "1280x720 -> 960x500")
 	ck(Look.window_size(Vector2(1600, 900)) == Vector2(1200, 680), "1600x900 -> 1200x680")
-	ck(Look.window_size(Vector2(1920, 1080)) == Vector2(1200, 680), "1920x1080 -> 1200x680")
+	ck(Look.window_size(Vector2(1920, 1080)) == Vector2(1200, 840), "1920x1080 -> 1200x840")
+	ck(Look.window_size(Vector2(1440, 1080)) == Vector2(1120, 840), "1440x1080 -> 1120x840")
+	# Инвариант высоты: внутри окна остаётся h - 73 (врезки 20 + рейл 40 +
+	# разделитель 1 + два зазора 6), а странице «Готово» нужно 740.
+	ck(Look.window_size(Vector2(1920, 1080)).y - 73.0 >= 740.0,
+		"на 1080p «Готово» влезает без прокрутки")
 	ck(Look.window_size(Vector2(800, 600)) == Vector2(720, 400), "800x600 -> 720x400")
 	ck(Look.window_size(Vector2(640, 480)) == Vector2(624, 400), "640x480 -> 624x400 (зажим view-16)")
 
