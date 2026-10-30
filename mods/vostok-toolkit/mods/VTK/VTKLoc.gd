@@ -23,7 +23,6 @@ const RU := {
 	'Clothing': 'Одежда',
 	'Close': 'Закрыть',
 	'Consumables': 'Еда',
-	'Controls': 'Управление',
 	'Create new loadout': 'Создать новый сет',
 	'Delete': 'Удалить',
 	'Does not fit: ': 'Не подходит: ',

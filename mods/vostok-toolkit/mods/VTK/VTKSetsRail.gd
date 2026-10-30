@@ -1,6 +1,7 @@
 extends RefCounted
 # Рейл сетов и превью состава (вкладка «Сеты»): список сохранённых сетов,
-# выбор активного, захват хоткея и превью выбранного сета с колонкой Управления.
+# выбор активного, захват хоткея и превью выбранного сета с полосой управления
+# над карточками.
 # Модуль владеет левой и правой колонками ряда и общим билдером превью
 # (_build_set_preview), который переиспользует страница Готово редактора.
 # Ссылка на узел VTKUI (_ui) нужна для общих сцен: перерисовка списка/превью
@@ -12,9 +13,9 @@ const VTKSurface := preload("res://mods/VTK/VTKSurface.gd")
 const LD := preload("res://mods/VTK/VTKData.gd")
 const VTKLook := preload("res://mods/VTK/VTKLook.gd")
 
-# Ширина рейла сетов. Панель на весь экран, поэтому рейл можно не жать:
-# карточкам хватает воздуха, а редактор справа всё равно забирает большую
-# часть ширины.
+# Ширина рейла сетов. Окно фиксированной ширины (720-1200), поэтому рейл
+# держим компактным: карточкам хватает воздуха, а редактор справа всё равно
+# забирает большую часть ширины.
 const RAIL_WIDTH := 280
 
 var _ui
@@ -93,44 +94,53 @@ func _build_loadouts_tab(parent: VBoxContainer) -> void:
 	_preview_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_right_box.add_child(_preview_box)
 
-# Колонка управления превью/Done: шапка + вертикальный стек кнопок.
-# Принимает готовые кнопки (стиль и текст задаёт вызывающий), раскладывает
-# их столбиком по центру высоты колонки. Панель тянется по вертикали.
-func _make_control_column(title: String, buttons: Array) -> Control:
-	var panel := VBoxContainer.new()
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	panel.add_theme_constant_override("separation", 6)
-	var head := Label.new()
-	head.text = title
-	head.add_theme_font_size_override("font_size", 9)
-	head.add_theme_color_override("font_color", VTKSurface.GOLD)
-	head.add_theme_constant_override("letter_spacing", 1)
-	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(head)
-	var stack := VBoxContainer.new()
-	stack.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	stack.add_theme_constant_override("separation", 4)
-	for btn in buttons:
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		stack.add_child(btn)
-	panel.add_child(stack)
-	return panel
-
-# Общий билдер превью сета: три колонки - экипировка, инвентарь, управление.
-# Им же собрана страница Done, чтобы состав везде выглядел одинаково. fill=false
-# на странице Done: там превью идёт по содержимому, а строка полей сразу под ним,
-# а не прижата к низу на всё окно. controls=null - колонки управления нет.
-func _build_set_preview(eq: Dictionary, gear: Array, fill := true, controls: Control = null) -> Control:
+# Полоса управления превью/Done: ряд на всю ширину над карточками. Заголовок
+# «Управление» удалён - полоса из кнопок читается сама. Ребёнок без заданной
+# минимальной ширины получает EXPAND_FILL и делит остаток; ребёнок с
+# custom_minimum_size.x остаётся при своей ширине (на «Готово» так живут хоткей,
+# «Сохранить» и «Отмена», а поле имени забирает остаток).
+func _make_control_row(buttons: Array) -> Control:
 	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 8)
+	for btn in buttons:
+		btn.custom_minimum_size.y = 30
+		if btn.custom_minimum_size.x == 0.0:
+			btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(btn)
+	return row
+
+# Общий билдер превью сета: полоса управления, разделитель и две карточки -
+# экипировка и инвентарь. Кнопки стоят НАД карточками (вариант B макета):
+# экипировка занимает почти всю видимую высоту, и футер с «Применить» уезжал бы
+# под кромку скролла. Им же собрана страница Done, чтобы состав выглядел
+# одинаково. fill=false на странице Done: превью идёт по содержимому, а строка
+# полей сразу под ним. controls=null - полосы нет.
+func _build_set_preview(eq: Dictionary, gear: Array, fill := true, controls: Control = null) -> Control:
+	var box := VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.size_flags_vertical = Control.SIZE_EXPAND_FILL if fill else Control.SIZE_SHRINK_BEGIN
+	box.add_theme_constant_override("separation", 6)
+	if controls != null:
+		box.add_child(controls)
+	var head_sep := ColorRect.new()
+	head_sep.custom_minimum_size = Vector2(0, 1)
+	head_sep.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head_sep.color = VTKSurface.SEPARATOR
+	head_sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(head_sep)
+	# HFlow, а не HBox: в окне 960 (вьюпорт 1280×720) превью достаётся ~626 px,
+	# а ряд карточек - 845. HBox дал бы горизонтальный скроллбар; flow переносит
+	# стену инвентаря под экипировку, и раскладка остаётся одна.
+	var row := HFlowContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.size_flags_vertical = Control.SIZE_EXPAND_FILL if fill else Control.SIZE_SHRINK_BEGIN
+	row.add_theme_constant_override("h_separation", 8)
+	row.add_theme_constant_override("v_separation", 8)
 	row.add_child(_ui._editor._make_equip_preview(eq))
 	row.add_child(_ui._editor._make_inventory_panel(gear))
-	if controls != null:
-		row.add_child(controls)
-	return row
+	box.add_child(row)
+	return box
 
 # Превью выбранного сета в правой колонке. Схлопывается при открытом
 # черновике: правая колонка принадлежит редактору.
@@ -169,14 +179,6 @@ func _refresh_preview() -> void:
 	card_head.add_child(nm)
 	_preview_box.add_child(card_head)
 
-	# Разделитель под именем сета (макет .card head border-bottom).
-	var head_sep := ColorRect.new()
-	head_sep.custom_minimum_size = Vector2(0, 1)
-	head_sep.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head_sep.color = VTKSurface.SEPARATOR
-	head_sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_preview_box.add_child(head_sep)
-
 	var apply_btn := Button.new()
 	apply_btn.text = Loc.txt("Apply")
 	VTKSurface.style_button(apply_btn, true)
@@ -201,7 +203,7 @@ func _refresh_preview() -> void:
 
 	_preview_box.add_child(_build_set_preview(
 		eq_d, gr_a, true,
-		_make_control_column(Loc.txt("Controls").to_upper(), [apply_btn, edit_btn, qk_btn, del_btn])))
+		_make_control_row([apply_btn, edit_btn, qk_btn, del_btn])))
 
 func _make_cards_grid() -> GridContainer:
 	var grid := GridContainer.new()

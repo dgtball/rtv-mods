@@ -855,9 +855,9 @@ func _items_for_gear() -> Array:
 func _build_page_done() -> Control:
 	var v := _page_wrap()
 
-	# Карточка трёх колонок состава; имя сета и кнопка хоткея живут в столбце
-	# «Управление», как в превью. Узлы создаются один раз и перевешиваются в
-	# столбец при каждой пересборке (_refresh_page_done), чтобы не терять текст.
+	# Карточка состава; имя сета и кнопка хоткея живут в полосе управления над
+	# карточками, как в превью. Узлы создаются один раз и перевешиваются в
+	# полосу при каждой пересборке (_refresh_page_done), чтобы не терять текст.
 	_name_input = LineEdit.new()
 	_name_input.placeholder_text = Loc.txt("Enter a name...")
 	_name_input.add_theme_color_override("font_color", VTKSurface.FIELD_INK)
@@ -875,8 +875,7 @@ func _build_page_done() -> Control:
 	_ui._rail._apply_qk_btn(_ui._rail._bind_btn, _ui._rail._display_qk())
 	_ui._rail._bind_btn.pressed.connect(func(): _ui._rail._begin_bind("", _ui._rail._done_bind_btn, true))
 
-	_done_preview = _ui._rail._build_set_preview({}, [], false,
-		_ui._rail._make_control_column(Loc.txt("Controls").to_upper(), []))
+	_done_preview = _ui._rail._build_set_preview({}, [], false, _ui._rail._make_control_row([]))
 	v.add_child(_done_preview)
 	return v
 
@@ -885,8 +884,8 @@ func _build_page_done() -> Control:
 func _refresh_page_done() -> void:
 	if _done_preview == null:
 		return
-	# Поле имени и кнопка хоткея переживают пересборку: отцепить от старого
-	# столбца, иначе queue_free унёс бы их вместе с ним (текст и фокус).
+	# Поле имени и кнопка хоткея переживают пересборку: отцепить от старой
+	# полосы, иначе queue_free унёс бы их вместе с ней (текст и фокус).
 	if _name_input != null and _name_input.get_parent() != null:
 		_name_input.get_parent().remove_child(_name_input)
 	if _ui._rail._done_bind_btn != null and _ui._rail._done_bind_btn.get_parent() != null:
@@ -896,17 +895,19 @@ func _refresh_page_done() -> void:
 		child.queue_free()
 	var save_btn := Button.new()
 	save_btn.text = Loc.txt("Save loadout")
+	save_btn.custom_minimum_size = Vector2(150, 0)
 	VTKSurface.style_button(save_btn, true)
 	save_btn.pressed.connect(_ui._save_loadout)
 	var cancel_btn := Button.new()
 	cancel_btn.text = Loc.txt("Cancel")
+	cancel_btn.custom_minimum_size = Vector2(120, 0)
 	VTKSurface.style_button(cancel_btn)
 	cancel_btn.pressed.connect(_ui._cancel_draft)
 	_done_preview.add_child(_ui._rail._build_set_preview(
 		_ui._session.draft.equip if _ui._session.draft else {},
 		_ui._session.draft.gear if _ui._session.draft else [],
 		false,
-		_ui._rail._make_control_column(Loc.txt("Controls").to_upper(),
+		_ui._rail._make_control_row(
 			[_name_input, _ui._rail._done_bind_btn, save_btn, cancel_btn])))
 
 func _refresh_page_equipment() -> void:

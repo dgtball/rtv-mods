@@ -171,6 +171,8 @@ GONE = [
     "_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)",
     # 5.3.0: вкладки живут в шапке окна, отдельный ряд удалён.
     "tab_bar",
+    # 5.3.0: кнопки превью переехали из колонки в полосу над карточками.
+    "_make_control_column",
 ]
 
 GONE_RE = [
@@ -291,7 +293,7 @@ PRESENT = [
     "INVEN_ROWS",
     "_make_tp_column",
     "var rail := HBoxContainer.new()",
-    "_make_control_column",
+    "_make_control_row",
     'Loc.txt("Delete")',
     "28 if level else 31",
     "rail_sep",
@@ -365,7 +367,10 @@ FUNCS = [
         "_make_equip_preview(eq)",
         "_make_inventory_panel(gear)",
         "if fill else Control.SIZE_SHRINK_BEGIN",
-    ], "превью: три колонки экипировка|инвентарь|управление, Done по содержимому"),
+        "controls != null",
+        "head_sep",
+        "HFlowContainer",
+    ], "превью: полоса управления над карточками, Done по содержимому"),
     ("_refresh_slots", [
         "_make_equip_grid",
     ], "укладка берётся из кэша _build_equip_layout и строится _make_equip_grid"),
@@ -384,10 +389,9 @@ FUNCS = [
         "Picker.item_art",
     ], "общий TextureRect клеток: кроп иконки через Picker"),
     ("_refresh_preview", [
-        "_make_control_column(Loc.txt(\"Controls\")",
+        "_make_control_row(",
         "Loc.txt(\"Delete\")",
-        "head_sep",
-    ], "превью: кнопки в колонке Управление, удаление текстом, разделитель шапки"),
+    ], "превью: кнопки в полосе над карточками, удаление текстом"),
     ("_build_page_done", [
         "_build_set_preview({}, [], false,",
         "_name_input",
