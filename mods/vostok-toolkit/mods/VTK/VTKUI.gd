@@ -299,10 +299,22 @@ func _tween_scale(c: Control, target: float) -> void:
 	c.set_meta("vtk_tween", tw)
 
 func _make_tab_style() -> StyleBox:
-	return VTKSurface.surface("normal", false, false, false, 14, 14, 6, 6)
+	return VTKSurface.tab_style(false)
 
 func _make_tab_active_style() -> StyleBox:
-	return VTKSurface.surface("normal", true, false, true, 14, 14, 6, 6)
+	return VTKSurface.tab_style(true)
+
+# Боковая зона шапки: одинаковый минимум слева и справа держит вкладки по
+# центру окна. Правая зона прижимает содержимое к своему концу (version +
+# крестик), левая - к началу (знак + заголовок).
+func _make_header_zone(content_end: bool) -> HBoxContainer:
+	var zone := HBoxContainer.new()
+	zone.custom_minimum_size = Vector2(VTKLook.HEADER_SIDE, 0)
+	zone.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	zone.add_theme_constant_override("separation", 8)
+	if content_end:
+		zone.alignment = BoxContainer.ALIGNMENT_END
+	return zone
 
 func _make_chip_style(active: bool, hover: bool = false) -> StyleBox:
 	return VTKSurface.surface("hover" if hover else "normal", active, false, false, 8, 12, 7, 7)
@@ -350,13 +362,17 @@ func _build_ui() -> void:
 	_panel.add_child(_frame)
 	_ui_nodes.append(_frame)
 
-	# КПК-хром: верхний рейл устройства. Окно центрировано, HUD-счётчик стоит
-	# слева от него, поэтому верхнего отступа 34 больше не нужно.
+	# КПК-хром: верхний рейл устройства из трёх зон. Боковые зоны получают
+	# одинаковый минимум (HEADER_SIDE), поэтому вкладки в середине стоят по
+	# центру окна и не съезжают от длины заголовка или версии.
 	var rail := HBoxContainer.new()
-	rail.custom_minimum_size = Vector2(0, 30)
+	rail.custom_minimum_size = Vector2(0, VTKLook.RAIL_H)
 	rail.add_theme_constant_override("separation", 8)
 	_frame.add_child(rail)
 	_ui_nodes.append(rail)
+
+	var left := _make_header_zone(false)
+	rail.add_child(left)
 
 	var brand := Panel.new()
 	brand.custom_minimum_size = Vector2(30, 30)
@@ -365,7 +381,7 @@ func _build_ui() -> void:
 	bs.bg_color = VTKSurface.GOLD
 	bs.corner_radius_all = 8
 	brand.add_theme_stylebox_override("panel", bs)
-	rail.add_child(brand)
+	left.add_child(brand)
 	var bv := Label.new()
 	bv.text = "V"
 	bv.add_theme_font_size_override("font_size", 15)
@@ -380,42 +396,49 @@ func _build_ui() -> void:
 	rname.text = "VOSTOK TOOLKIT"
 	rname.add_theme_font_size_override("font_size", 14)
 	rname.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	rail.add_child(rname)
+	left.add_child(rname)
+
+	var mid := HBoxContainer.new()
+	mid.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	mid.add_theme_constant_override("separation", 4)
+	rail.add_child(mid)
 
 	var tabs = [Loc.txt("Sets"), Loc.txt("Teleport")]
 	for tname in tabs:
 		var btn = Button.new()
 		btn.text = tname
-		btn.custom_minimum_size = Vector2(130, 30)
+		btn.custom_minimum_size = Vector2(VTKLook.TAB_W, VTKLook.TAB_H)
 		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		btn.add_theme_font_size_override("font_size", 12)
+		btn.add_theme_font_size_override("font_size", 13)
+		btn.add_theme_color_override("font_hover_color", VTKSurface.INK)
+		btn.add_theme_color_override("font_pressed_color", _gold)
 		var tn = tname
 		btn.pressed.connect(func(): _switch_tab(tn))
 		_attach_motion(btn)
-		rail.add_child(btn)
+		mid.add_child(btn)
 		_tab_btns.append(btn)
 
-	var fill := Control.new()
-	fill.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	rail.add_child(fill)
+	var right := _make_header_zone(true)
+	rail.add_child(right)
 
 	var rver := Label.new()
 	rver.text = "v" + _mcm.version()
 	rver.add_theme_font_size_override("font_size", 10)
 	rver.add_theme_color_override("font_color", VTKSurface.BROWN)
 	rver.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	rail.add_child(rver)
+	right.add_child(rver)
 
 	var close := Button.new()
 	close.text = "✕"
-	close.custom_minimum_size = Vector2(26, 26)
+	# Крестик 40x40 с полями 8: иначе ✕ с дефолтными полями тянет рейл до 43.
+	close.custom_minimum_size = Vector2(40, 40)
 	close.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	close.add_theme_font_size_override("font_size", 12)
 	close.tooltip_text = Loc.txt("Close") + " (Esc)"
-	VTKSurface.style_button(close)
+	VTKSurface.style_button(close, false, false, 8, 8, 8, 8)
 	close.pressed.connect(func(): set_panel_open(false))
 	_attach_motion(close)
-	rail.add_child(close)
+	right.add_child(close)
 
 	var rail_sep := ColorRect.new()
 	rail_sep.custom_minimum_size = Vector2(0, 1)
@@ -502,12 +525,15 @@ func _switch_tab(name: String) -> void:
 	for i in range(_tab_btns.size()):
 		var btn = _tab_btns[i] as Button
 		var is_active = btn.text == name
+		# Стиль ставится во все три состояния: у прозрачной вкладки Godot иначе
+		# дорисует дефолтную плашку на ховере и нажатии.
+		var style: StyleBox = _make_tab_active_style() if is_active else _make_tab_style()
 		if is_active:
 			btn.add_theme_color_override("font_color", _gold)
-			btn.add_theme_stylebox_override("normal", _make_tab_active_style())
 		else:
 			btn.add_theme_color_override("font_color", VTKSurface.GREY)
-			btn.add_theme_stylebox_override("normal", _make_tab_style())
+		for state in ["normal", "hover", "pressed"]:
+			btn.add_theme_stylebox_override(state, style)
 
 # ============== TAB: Сеты ==============
 

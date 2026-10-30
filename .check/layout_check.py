@@ -274,6 +274,12 @@ PRESENT = [
     "INVEN_CELL := 70",
     # Высота окна подобрана под 1080p: внутри h - 73, «Готово» просит 740.
     "H_MAX := 840.0",
+    # Шапка: три зоны, равные боковые держат вкладки по центру.
+    "RAIL_H := 40",
+    "TAB_W := 170",
+    "TAB_H := 40",
+    "HEADER_SIDE := 168",
+    "VTKSurface.tab_style",
     "_rotates_icon",
     "_apply_qk_btn",
     "_done_bind_btn",
@@ -336,7 +342,13 @@ FUNCS = [
         "_main_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL",
         "vb.size_flags_vertical = Control.SIZE_EXPAND_FILL",
         "_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL",
-    ], "цепочка табов обязана тянуться от скролла до таба"),
+        "rail.add_child(mid)",
+        "_tab_btns.append(btn)",
+    ], "цепочка табов обязана тянуться от скролла до таба, вкладки - в середине шапки"),
+    ("_make_header_zone", [
+        "custom_minimum_size = Vector2(VTKLook.HEADER_SIDE, 0)",
+        "Control.SIZE_EXPAND_FILL",
+    ], "боковые зоны шапки одинаковой ширины держат вкладки по центру"),
     ("_fit_window", ["VTKLook.window_size", "offset_right"],
      "окно считается правилом, а не якорем на весь вьюпорт"),
     ("_fit_height", ["custom_minimum_size"],

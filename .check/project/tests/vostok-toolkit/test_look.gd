@@ -18,6 +18,7 @@ func _init() -> void:
 func _run() -> void:
 	t_window_size()
 	t_window_toast_gap()
+	t_header_fits_min_window()
 	t_window_degenerate()
 	t_flow_columns()
 	t_card_head()
@@ -56,6 +57,13 @@ func t_window_toast_gap() -> void:
 		var gap: float = (v.y - h) * 0.5
 		ck(gap >= 110.0 or h <= Look.H_MIN,
 			"зазор под тосты %.0f при %.0fx%.0f" % [gap, v.x, v.y])
+
+func t_header_fits_min_window() -> void:
+	# Внутри окна остаётся W_MIN - 20 (врезки фрейма по 10): знак с заголовком
+	# слева, вкладки по центру, версия с крестиком справа обязаны влезть.
+	var need := 2.0 * Look.HEADER_SIDE + 2.0 * Look.TAB_W + 4.0 + 16.0
+	ck(need <= Look.W_MIN - 20.0, "шапка влезает в минимальное окно 720")
+	ck(Look.TAB_H == Look.RAIL_H, "вкладка и рейл одной высоты")
 
 func t_window_degenerate() -> void:
 	# Вырожденный вьюпорт не должен дать отрицательный размер окна.
