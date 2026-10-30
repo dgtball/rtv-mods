@@ -21,6 +21,7 @@ const RU := {
 	'Categories': 'Категории',
 	'Chest rig': 'Нагрудник',
 	'Clothing': 'Одежда',
+	'Close': 'Закрыть',
 	'Consumables': 'Еда',
 	'Controls': 'Управление',
 	'Create new loadout': 'Создать новый сет',

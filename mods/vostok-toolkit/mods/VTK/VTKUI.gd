@@ -382,6 +382,19 @@ func _build_ui() -> void:
 	rname.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	rail.add_child(rname)
 
+	var tabs = [Loc.txt("Sets"), Loc.txt("Teleport")]
+	for tname in tabs:
+		var btn = Button.new()
+		btn.text = tname
+		btn.custom_minimum_size = Vector2(130, 30)
+		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		btn.add_theme_font_size_override("font_size", 12)
+		var tn = tname
+		btn.pressed.connect(func(): _switch_tab(tn))
+		_attach_motion(btn)
+		rail.add_child(btn)
+		_tab_btns.append(btn)
+
 	var fill := Control.new()
 	fill.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -394,27 +407,22 @@ func _build_ui() -> void:
 	rver.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	rail.add_child(rver)
 
+	var close := Button.new()
+	close.text = "✕"
+	close.custom_minimum_size = Vector2(26, 26)
+	close.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	close.tooltip_text = Loc.txt("Close") + " (Esc)"
+	VTKSurface.style_button(close)
+	close.pressed.connect(func(): set_panel_open(false))
+	_attach_motion(close)
+	rail.add_child(close)
+
 	var rail_sep := ColorRect.new()
 	rail_sep.custom_minimum_size = Vector2(0, 1)
 	rail_sep.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rail_sep.color = VTKSurface.SEPARATOR
 	rail_sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_frame.add_child(rail_sep)
-
-	var tab_bar = HBoxContainer.new()
-	_frame.add_child(tab_bar)
-
-	var tabs = [Loc.txt("Sets"), Loc.txt("Teleport")]
-	for tname in tabs:
-		var btn = Button.new()
-		btn.text = tname
-		btn.custom_minimum_size = Vector2(130, 30)
-		btn.add_theme_font_size_override("font_size", 12)
-		var tn = tname
-		btn.pressed.connect(func(): _switch_tab(tn))
-		_attach_motion(btn)
-		tab_bar.add_child(btn)
-		_tab_btns.append(btn)
 
 	_scroll = ScrollContainer.new()
 	_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL

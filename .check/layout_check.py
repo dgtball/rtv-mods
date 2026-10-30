@@ -169,6 +169,8 @@ GONE = [
     "spawn_gear(",
     # 5.3.0: фуллскрин-панель закрывала ванильные тосты, возврат = откат плана.
     "_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)",
+    # 5.3.0: вкладки живут в шапке окна, отдельный ряд удалён.
+    "tab_bar",
 ]
 
 GONE_RE = [
