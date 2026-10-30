@@ -257,7 +257,10 @@ func _build_stepper() -> Control:
 	_page_label = Label.new()
 	_page_label.add_theme_font_size_override("font_size", 10)
 	_page_label.add_theme_color_override("font_color", _ui._gold)
-	_page_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Подпись только прижимается вправо и не растягивается: с EXPAND_FILL она
+	# забирала весь остаток ширины, и три шага стояли сжатыми влево, хотя
+	# задуманы как ряд кнопок на всю ширину редактора.
+	_page_label.size_flags_horizontal = Control.SIZE_SHRINK_END
 	_page_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	row.add_child(_page_label)
 	return row

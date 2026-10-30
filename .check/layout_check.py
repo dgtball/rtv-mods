@@ -377,6 +377,10 @@ FUNCS = [
      "смена опции «только открытые» сразу обновляет замки в окне"),
     ("_switch_tab", ["focus", "font_hover_color"],
      "у вкладки нет серой рамки фокуса, а активная не теряет золото на ховере"),
+    ("_build_stepper", [
+        "_page_label.size_flags_horizontal = Control.SIZE_SHRINK_END",
+        "card.size_flags_horizontal = Control.SIZE_EXPAND_FILL",
+    ], "три шага делят всю ширину, а подпись страницы прижата вправо и не съедает остаток"),
     ("_set_search", ["_search_debounce.start()"],
      "живой поиск дебаунсится перед пересборкой"),
     ("_apply_search", ["_validate_target_filters()"],
