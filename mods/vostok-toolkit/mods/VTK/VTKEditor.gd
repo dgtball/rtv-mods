@@ -203,7 +203,7 @@ func _build_stepper() -> Control:
 	var row = HBoxContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 4)
-	var titles := [Loc.txt("Equipment"), Loc.txt("Gear"), Loc.txt("Done")]
+	var titles := [Loc.txt("Equipment"), Loc.txt("Inventory"), Loc.txt("Done")]
 	_step_btns.clear()
 	_step_labels.clear()
 	_step_circles.clear()
@@ -640,13 +640,17 @@ func _apply_gear_search() -> void:
 	# бы из него курсор на каждом символе.
 	_ui.refresh(R_GEAR)
 
-# Фасеты и сетка считаются одним проходом по списку предметов: facets_of
-# фильтрует и группирует его целиком, а считать дважды - значит фильтровать
-# дважды.
+# Фасеты и сетка считаются одним проходом: buckets группирует найденное
+# целиком, а считать дважды - значит фильтровать дважды. Поиск применяется
+# здесь, до нарезки, поэтому счётчики равны содержимому сетки.
 func _refresh_gear_catalog() -> void:
 	var facets: Array = []
 	if _ui._session.draft != null:
-		facets = Picker.facets_of(_items_for_gear(), _ui._session.gear_search)
+		var found: Array = []
+		for e in _items_for_gear():
+			if Picker.matches_search(str(e.get("name", "")), _ui._session.gear_search):
+				found.append(e)
+		facets = Picker.buckets(found, "inv_group", Picker.group_keys(Picker.INVENTORY_GROUPS), true)
 	_rebuild_gear_facets(facets)
 	_rebuild_gear_grid(facets)
 
@@ -740,7 +744,7 @@ func _make_facet_row(facet: Dictionary, level: bool) -> Control:
 	if key == "":
 		nm.text = Loc.txt("All items")
 	else:
-		nm.text = ("> " if level else "") + Loc.txt(key if level else Picker.category_label(key))
+		nm.text = ("> " if level else "") + Loc.txt(key if level else Picker.group_label(Picker.INVENTORY_GROUPS, key))
 	nm.add_theme_font_size_override("font_size", 10 if level else 11)
 	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	nm.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -768,20 +772,14 @@ func _on_facet_input(ev: InputEvent, key: String, level: bool) -> void:
 # Счётчик - это число предметов подкатегории в текущем наборе, то есть ровно
 # то, что окажется в сетке после клика.
 func _gear_subfacets(items) -> Array:
-	var buckets := {}
+	var keys: Array = []
 	for e in items:
 		if typeof(e) != TYPE_DICTIONARY:
 			continue
-		var s := str(e.get("sub", ""))
-		if s == "":
-			continue
-		if not buckets.has(s):
-			buckets[s] = []
-		buckets[s].append(e)
-	var out: Array = []
-	for s in Picker.order_subcategories(buckets.keys()):
-		out.append({"key": s, "items": buckets[s], "count": buckets[s].size()})
-	return out
+		var s := str(e.get("inv_sub", ""))
+		if s != "" and not keys.has(s):
+			keys.append(s)
+	return Picker.buckets(items, "inv_sub", Picker.order_subcategories(keys), false)
 
 func _set_gear_sub(key: String) -> void:
 	_ui._session.gear_sub_key = "" if _ui._session.gear_sub_key == key else key
@@ -820,7 +818,7 @@ func _rebuild_gear_grid(facets: Array) -> void:
 	if _ui._session.gear_sub_key != "":
 		var only: Array = []
 		for e in found:
-			if str(e.get("sub", "")) == _ui._session.gear_sub_key:
+			if str(e.get("inv_sub", "")) == _ui._session.gear_sub_key:
 				only.append(e)
 		found = only
 	if _ui._session.gear_only_selected and _ui._session.draft != null:
@@ -845,8 +843,8 @@ func _rebuild_gear_grid(facets: Array) -> void:
 
 # Шаг 2 не фильтрует по слоту: слот-цель принадлежит шагу 1, и переносить её
 # сюда значило бы всюду показывать предметы только одного слота. Запрос тоже не
-# применяется здесь: facets_of считает его сам, иначе фильтр был бы применён
-# дважды - на входе и в счётчиках фасетов.
+# применяется здесь: _refresh_gear_catalog считает его сам, иначе фильтр был бы
+# применён дважды - на входе и в счётчиках фасетов.
 func _items_for_gear() -> Array:
 	var out: Array = []
 	for it in Items.all():
@@ -915,8 +913,8 @@ func _refresh_page_done() -> void:
 
 func _refresh_page_equipment() -> void:
 	# Один обход каталога на пересборку: и шапка фильтров, и полки берут один
-	# и тот же набор, а _target_filter_items проходит весь каталог целиком.
-	var found := _target_filter_items()
+	# и тот же набор, а _items_for_target проходит весь каталог целиком.
+	var found := _items_for_target()
 	_rebuild_target_bar(found)
 	_refresh_slots()
 	_rebuild_shelves(found)
@@ -970,7 +968,7 @@ func _rotates_icon(slot: String, desc: Dictionary) -> bool:
 	if res == null:
 		return false
 	var path := str(res.get("resource_path"))
-	return Picker.subcategory_of(path, res.get("type")) != "Pistols"
+	return Picker.subcategory_of(path, res.get("type"), res.get("slots")) != "Pistols"
 
 # Есть ли в слоте вложения (плита рига, обвесы оружия). Пустой ключ и не-массив
 # считаются отсутствием.
@@ -1431,7 +1429,7 @@ func _rebuild_target_bar(found: Array) -> void:
 # уровень, а меняет только себя.
 func _make_filter_chip(key: String, on: bool, level: bool = false) -> Button:
 	var b := Button.new()
-	var name_txt := key if level else Picker.category_label(key)
+	var name_txt := key if level else Picker.group_label(Picker.EQUIP_GROUPS, key)
 	b.text = ("> " if level else "") + Loc.txt(name_txt)
 	b.add_theme_font_size_override("font_size", 9)
 	b.tooltip_text = name_txt
@@ -1460,54 +1458,25 @@ func _reset_target_filters() -> void:
 	_ui._session.target_sub = ""
 	_ui.refresh(R_EQUIP)
 
-# Записи каталога, подходящие слоту-цели и запросу, с посчитанной
-# подкатегорией. Поиск применяет _items_for_target, поэтому шапка фильтров и
-# сетка под ней всегда показывают один и тот же набор.
-func _target_filter_items() -> Array:
-	var out: Array = []
-	if _ui._session.draft == null:
-		return out
-	for e in _items_for_target():
-		var it = e.get("item")
-		if it == null:
-			continue
-		out.append({
-			"item": it,
-			"name": str(it.get("name", "")),
-			"cat": str(e.get("cat", "")),
-			"sub": str(e.get("sub", "")),
-		})
-	return out
-
-# Уникальные категории найденного списка в порядке чипов: сначала известный
-# порядок Picker.category_keys(), затем остальные по алфавиту - строка
-# фильтров и валидация должны считать набор одинаково.
+# Уникальные группы найденного списка в порядке таблицы шага 1, затем
+# остальные по алфавиту - строка фильтров и валидация считают набор одинаково.
 func _target_cats(found: Array) -> Array:
-	var known := Picker.category_keys()
 	var out: Array = []
-	for c in known:
-		for e in found:
-			if str(e.get("cat", "")) == c and not out.has(c):
-				out.append(c)
-	var extra: Array = []
-	for e in found:
-		var c := str(e.get("cat", ""))
-		if c != "" and not known.has(c) and not extra.has(c):
-			extra.append(c)
-	extra.sort()
-	out.append_array(extra)
+	for b in Picker.buckets(found, "eq_group", Picker.group_keys(Picker.EQUIP_GROUPS), false):
+		out.append(str(b.get("key", "")))
 	return out
 
-# Подкатегории одной категории из найденного списка, в общем порядке
+# Подкатегории одной группы из найденного списка, в общем порядке
 # Picker.order_subcategories, чтобы чипы не прыгали между перестройками.
 func _target_subs(found: Array, cat: String) -> Array:
-	var seen: Array = []
+	var inside: Array = []
 	for e in found:
-		if str(e.get("cat", "")) == cat:
-			var s := str(e.get("sub", ""))
-			if s != "" and not seen.has(s):
-				seen.append(s)
-	return Picker.order_subcategories(seen)
+		if str(e.get("eq_group", "")) == cat:
+			inside.append(e)
+	var out: Array = []
+	for b in Picker.buckets(inside, "eq_subs", [], false):
+		out.append(str(b.get("key", "")))
+	return Picker.order_subcategories(out)
 
 # Смена запроса меняет набор найденного: под категорию или подкатегорию
 # могло остаться одно или ноль предметов, и фильтр без чипов молча пускал бы
@@ -1515,7 +1484,7 @@ func _target_subs(found: Array, cat: String) -> Array:
 func _validate_target_filters() -> void:
 	if _ui._session.target_cat == "" and _ui._session.target_sub == "":
 		return
-	var found := _target_filter_items()
+	var found := _items_for_target()
 	var cats := _target_cats(found)
 	if _ui._session.target_cat != "":
 		if not cats.has(_ui._session.target_cat):
@@ -1565,15 +1534,17 @@ func _apply_search() -> void:
 	_validate_target_filters()
 	_ui.refresh(R_EQUIP)
 
-# Запись каталога для обоих шагов: предмет и его группа. Группу вычисляет
-# Picker, а не строка type здесь: иначе шаг 1 и шаг 2 разошлись бы группами,
-# и граната с Grenade_1 попала бы в другое место, чем её полка.
+# Запись каталога для обоих шагов: предмет и его место в каждой таксономии.
+# Группы вычисляет Picker, а не строка type здесь: иначе шаг 1 и шаг 2 разошлись
+# бы группами, и граната с Grenade_1 попала бы в другое место, чем её полка.
 func _entry(it) -> Dictionary:
 	return {
 		"item": it,
 		"name": str(it.get("name", "")),
-		"cat": Picker.category_of(it.get("slots"), it.get("type")),
-		"sub": Picker.subcategory_of(str(it.resource_path), it.get("type")),
+		"eq_group": Picker.equip_group_of(it.get("type"), it.get("slots")),
+		"eq_subs": Picker.equip_subs_of(it.get("type"), it.get("slots")),
+		"inv_group": Picker.inventory_group_of(it.get("type"), it.get("slots")),
+		"inv_sub": Picker.subcategory_of(str(it.resource_path), it.get("type"), it.get("slots")),
 	}
 
 # Предметы под текущую цель и запрос. Цель - это фильтр по слотам, а не
@@ -1588,7 +1559,9 @@ func _items_for_target() -> Array:
 		if _ui._session.target_slot != "" and not Picker.matches_slot(it.get("slots"), _ui._session.target_slot):
 			continue
 		var e := _entry(it)
-		if not Picker.category_allowed(str(e.get("cat", "")), _ui._session.target_slot):
+		# Предмет без слота шага 1 сюда не попадает: патроны, обвесы, еда и
+		# мебель встают только в инвентарь, а не в клетку экипировки.
+		if str(e.get("eq_group", "")) == "":
 			continue
 		out.append(e)
 	return out
@@ -1602,13 +1575,14 @@ func _rebuild_shelves(found: Array) -> void:
 	if _ui._session.target_cat != "":
 		var only: Array = []
 		for e in found:
-			if str(e.get("cat", "")) == _ui._session.target_cat:
+			if str(e.get("eq_group", "")) == _ui._session.target_cat:
 				only.append(e)
 		found = only
 	if _ui._session.target_sub != "":
 		var only_sub: Array = []
 		for e in found:
-			if str(e.get("sub", "")) == _ui._session.target_sub:
+			# Подкатегория - набор: предмет в двух слотах лежит на обеих полках.
+			if (e.get("eq_subs", []) as Array).has(_ui._session.target_sub):
 				only_sub.append(e)
 		found = only_sub
 	if found.is_empty():
@@ -1618,7 +1592,7 @@ func _rebuild_shelves(found: Array) -> void:
 		note.add_theme_color_override("font_color", VTKSurface.GREY_DIM)
 		_shelves_box.add_child(note)
 		return
-	for shelf in Picker.shelves_of(found):
+	for shelf in Picker.buckets(found, "eq_group", Picker.group_keys(Picker.EQUIP_GROUPS), false):
 		_shelves_box.add_child(_make_shelf(shelf))
 
 # Полоса категории: заголовок и клетки в потоке. Заголовок остаётся на месте
@@ -1628,9 +1602,9 @@ func _make_shelf(shelf: Dictionary) -> Control:
 	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	box.add_theme_constant_override("separation", 2)
 
-	var cat := str(shelf.get("cat", ""))
+	var cat := str(shelf.get("key", ""))
 	var head := Label.new()
-	head.text = Loc.txt(Picker.category_label(cat))
+	head.text = Loc.txt(Picker.group_label(Picker.EQUIP_GROUPS, cat))
 	head.add_theme_font_size_override("font_size", 10)
 	# Заголовок полки нейтральный: цвет по категории вынуждал бы держать
 	# палитру ради одной строки текста, а на шаге 2 категорию и так называет
