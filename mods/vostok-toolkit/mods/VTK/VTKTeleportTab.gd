@@ -57,6 +57,11 @@ func _tp_row(title: String, note: String, enabled: bool, callback: Callable) -> 
 	hb.add_theme_constant_override("separation", 10)
 	row.add_child(hb)
 
+	# Маркер задаёт высоту строки (стрелка шрифтом 16 выше иконки 16), поэтому
+	# оба маркера получают один бокс: иначе открытая и запертая строки
+	# расходились бы на пиксель.
+	var marker := Vector2(16, float(ThemeDB.fallback_font.get_height(16)))
+
 	var nm := Label.new()
 	nm.text = title
 	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -77,6 +82,8 @@ func _tp_row(title: String, note: String, enabled: bool, callback: Callable) -> 
 		go.text = "▸"
 		go.add_theme_font_size_override("font_size", 16)
 		go.add_theme_color_override("font_color", VTKSurface.GOLD)
+		go.custom_minimum_size = marker
+		go.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		go.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		hb.add_child(go)
 		hover.call(row, func(hv: bool) -> StyleBox:
@@ -91,7 +98,7 @@ func _tp_row(title: String, note: String, enabled: bool, callback: Callable) -> 
 	else:
 		var lock := TextureRect.new()
 		lock.texture = VTKSurface.lock_icon(16, VTKSurface.GOLD_OFF)
-		lock.custom_minimum_size = Vector2(16, 22)
+		lock.custom_minimum_size = marker
 		lock.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
 		lock.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		lock.mouse_filter = Control.MOUSE_FILTER_IGNORE

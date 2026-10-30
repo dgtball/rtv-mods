@@ -411,8 +411,6 @@ func _build_ui() -> void:
 		btn.custom_minimum_size = Vector2(VTKLook.TAB_W, VTKLook.TAB_H)
 		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		btn.add_theme_font_size_override("font_size", 13)
-		btn.add_theme_color_override("font_hover_color", VTKSurface.INK)
-		btn.add_theme_color_override("font_pressed_color", _gold)
 		var tn = tname
 		btn.pressed.connect(func(): _switch_tab(tn))
 		_attach_motion(btn)
@@ -528,12 +526,15 @@ func _switch_tab(name: String) -> void:
 		# Стиль ставится во все три состояния: у прозрачной вкладки Godot иначе
 		# дорисует дефолтную плашку на ховере и нажатии.
 		var style: StyleBox = _make_tab_active_style() if is_active else _make_tab_style()
-		if is_active:
-			btn.add_theme_color_override("font_color", _gold)
-		else:
-			btn.add_theme_color_override("font_color", VTKSurface.GREY)
+		var color: Color = _gold if is_active else VTKSurface.GREY
+		# Цвета фокусируем все сразу: ховер иначе перекрашивал активную вкладку
+		# в INK, и под курсором она теряла золото, оставляя золотое подчёркивание.
+		for cstate in ["font_color", "font_hover_color", "font_pressed_color"]:
+			btn.add_theme_color_override(cstate, color)
 		for state in ["normal", "hover", "pressed"]:
 			btn.add_theme_stylebox_override(state, style)
+		# Пустой focus: прозрачная вкладка иначе ловит серую рамку после клика.
+		btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 
 # Замки телепорта зависят от живой опции «только открытые» и от того, открыли
 # ли убежище, пока окно было закрыто. Поэтому строки пересобираются при

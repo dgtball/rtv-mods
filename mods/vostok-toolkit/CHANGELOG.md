@@ -4,7 +4,7 @@
 
 ### Added
 
-- Locked teleport destinations now show a padlock instead of an arrow.
+- Locked teleport destinations now show a padlock instead of a plain dot.
 
 ### Changed
 

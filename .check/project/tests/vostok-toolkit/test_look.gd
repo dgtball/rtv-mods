@@ -17,6 +17,7 @@ func _init() -> void:
 	process_frame.connect(_run)
 
 func _run() -> void:
+	await t_teleport_row_height()
 	t_window_size()
 	t_window_toast_gap()
 	t_header_fits_min_window()
@@ -63,6 +64,18 @@ func t_window_toast_gap() -> void:
 func t_header_fits_min_window() -> void:
 	# Внутри окна остаётся W_MIN - 20 (врезки фрейма по 10): знак с заголовком
 	# слева, вкладки по центру, версия с крестиком справа обязаны влезть.
+	# Меряем содержимое боковых зон, а не только константы: шапку ломает и
+	# длинный заголовок с версией, не только рост HEADER_SIDE.
+	var font := ThemeDB.fallback_font
+	var title_w := font.get_string_size("VOSTOK TOOLKIT", HORIZONTAL_ALIGNMENT_LEFT, -1, 14).x
+	# Версия берётся с запасом на будущие цифры, а не из mod.txt: тест про вёрстку.
+	var ver_w := font.get_string_size("v99.99.99", HORIZONTAL_ALIGNMENT_LEFT, -1, 10).x
+	var left_need := 30.0 + 8.0 + title_w
+	var right_need := ver_w + 8.0 + 40.0
+	ck(left_need <= float(Look.HEADER_SIDE),
+		"левая зона шапки: %.0f <= %d" % [left_need, Look.HEADER_SIDE])
+	ck(right_need <= float(Look.HEADER_SIDE),
+		"правая зона шапки: %.0f <= %d" % [right_need, Look.HEADER_SIDE])
 	var need := 2.0 * Look.HEADER_SIDE + 2.0 * Look.TAB_W + 4.0 + 16.0
 	ck(need <= Look.W_MIN - 20.0, "шапка влезает в минимальное окно 720")
 	ck(Look.TAB_H == Look.RAIL_H, "вкладка и рейл одной высоты")
@@ -154,3 +167,41 @@ func t_locked_row_icon() -> void:
 			"замок - иконка 16 px")
 		ck(lock.stretch_mode == TextureRect.STRETCH_KEEP_CENTERED,
 			"замок не растягивается по высоте строки")
+
+func _noop_hover(_n: Control, _make: Callable) -> void:
+	pass
+
+func _noop_motion(_n: Control) -> void:
+	pass
+
+func t_teleport_row_height() -> void:
+	# Маркер строки задаёт её высоту, поэтому стрелка и замок обязаны получить
+	# один бокс: с разными блоками список скачет на пиксель между открытыми и
+	# запертыми строками, и замер зависит от шрифта игры, а не от кода.
+	var tab = TeleportTab.new()
+	tab.hover = Callable(self, "_noop_hover")
+	tab.motion = Callable(self, "_noop_motion")
+	var holder := VBoxContainer.new()
+	holder.add_theme_constant_override("separation", 0)
+	get_root().add_child(holder)
+	var open: Control = tab._tp_row("Open", "", true, Callable())
+	var locked: Control = tab._tp_row("Locked", "Not unlocked yet", false, Callable())
+	holder.add_child(open)
+	holder.add_child(locked)
+	await process_frame
+	var arrow_h := _marker_height(open)
+	var lock_h := _marker_height(locked)
+	ck(arrow_h > 0.0 and arrow_h == lock_h,
+		"маркеры одной высоты: %.0f и %.0f" % [arrow_h, lock_h])
+	ck(open.size.y == locked.size.y,
+		"запертая строка той же высоты, что открытая")
+	holder.queue_free()
+
+func _marker_height(row: Control) -> float:
+	for c in row.find_children("*", "Label", true, false):
+		var l := c as Label
+		if l != null and l.text == "▸":
+			return l.custom_minimum_size.y
+	for c in row.find_children("*", "TextureRect", true, false):
+		return (c as Control).custom_minimum_size.y
+	return 0.0
