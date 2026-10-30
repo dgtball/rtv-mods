@@ -128,9 +128,9 @@ func t_feed_segments() -> void:
 		"weapon": "AKM", "headshot": true, "grenade": true, "t": 0,
 	}
 	segs = Feed.segments(self_death)
-	ck(segs.size() == 2, "self_death: ровно череп и жертва")
-	ck(str(segs[0]["icon"]) == "skull", "self_death: первым череп")
-	ck(str(segs[1]["text"]) == "Mikko" and segs[1]["color"] == Feed.GREEN, "self_death: имя жертвы своим цветом")
+	ck(segs.size() == 2, "self_death: ровно имя и череп")
+	ck(str(segs[0]["text"]) == "Mikko" and segs[0]["color"] == Feed.GREEN, "self_death: имя жертвы своим цветом")
+	ck(str(segs[1]["icon"]) == "skull", "self_death: череп после имени")
 	ck(Feed.kind_color("nomad") == Feed.GREEN, "номад зелёный")
 	ck(Feed.kind_color("") == Feed.RED, "неизвестный kind красный (hostile fallback)")
 

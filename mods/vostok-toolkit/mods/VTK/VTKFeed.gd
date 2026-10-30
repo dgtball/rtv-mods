@@ -27,7 +27,7 @@ static func segments(ev: Dictionary) -> Array:
 	var victim := {"text": str(ev.get("victim_name", "")), "color": kind_color(str(ev.get("victim_kind", "")))}
 	# Смерть от старой раны: убийцы нет, поэтому нет ни оружия, ни HS, ни гранаты.
 	if bool(ev.get("self_death", false)):
-		return [{"icon": "skull"}, victim]
+		return [victim, {"icon": "skull"}]
 	var out: Array = []
 	out.append({"text": str(ev.get("killer_name", "")), "color": kind_color(str(ev.get("killer_kind", "")))})
 	if bool(ev.get("grenade", false)):
