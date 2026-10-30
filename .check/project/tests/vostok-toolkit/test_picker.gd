@@ -36,6 +36,8 @@ func _init() -> void:
 	t_inventory_group_of()
 	t_type_groups()
 	t_unknown_folder_no_chip()
+	t_buckets()
+	t_buckets_multi()
 	t_subcategory_of()
 	t_order_subcategories()
 	t_furn_subcategories()
@@ -302,6 +304,42 @@ func t_unknown_folder_no_chip() -> void:
 		"новая папка чипа не даёт")
 	ck(P.subcategory_of("res://Items/Junk/Thing_01.tres", "Misc") == "",
 		"новая трёхсегментная папка чипа не даёт")
+
+func t_buckets() -> void:
+	var items: Array = [
+		{"name": "AK", "inv_group": "weapon"},
+		{"name": "Аптечка", "inv_group": "medical"},
+		{"name": "Без группы", "inv_group": ""},
+	]
+	var got := P.buckets(items, "inv_group", P.group_keys(P.INVENTORY_GROUPS), true)
+	ck(str(got[0].get("key", "x")) == "" and int(got[0].get("count", -1)) == 3,
+		"строка Все впереди и считает и записи без группы")
+	ck(str(got[1].get("key", "")) == "weapon", "группы идут в порядке таблицы")
+	ck(str(got[2].get("key", "")) == "medical", "медицина после оружия")
+	ck(got.size() == 3, "пустые группы не появляются")
+	ck(P.buckets(items, "inv_group", [], false).size() == 2, "без with_all нет строки Все")
+	var odd := P.buckets([{"g": "zzz"}, {"g": "weapon"}, {"g": "aaa"}], "g", ["weapon"], false)
+	ck(str(odd[0].get("key", "")) == "weapon", "порядок из order идёт первым")
+	ck(str(odd[1].get("key", "")) == "aaa" and str(odd[2].get("key", "")) == "zzz",
+		"хвост по алфавиту")
+	ck(P.buckets([], "inv_group", [], true).size() == 1, "пустой вход даёт только Все с нулём")
+	ck(int(P.buckets([], "inv_group", [], true)[0].get("count", -1)) == 0, "счётчик Все нулевой")
+	ck(P.buckets([null, "мусор"], "inv_group", [], true)[0].get("count", -1) == 0,
+		"мусорные элементы пропускаются")
+
+func t_buckets_multi() -> void:
+	var items: Array = [
+		{"name": "Karov", "eq_group": "weapon", "eq_subs": ["Primary", "Secondary"]},
+		{"name": "Шапка", "eq_group": "clothing", "eq_subs": ["Head"]},
+	]
+	var shelves := P.buckets(items, "eq_group", P.group_keys(P.EQUIP_GROUPS), false)
+	ck(shelves.size() == 2, "две полки")
+	ck((shelves[0].get("items", []) as Array).size() == 1, "пистолет лежит на полке один раз")
+	var subs := P.buckets(items, "eq_subs", ["Primary", "Secondary", "Head"], false)
+	ck(subs.size() == 3, "подкатегории: Primary, Secondary, Head")
+	ck((subs[0].get("items", []) as Array).size() == 1, "пистолет в Primary")
+	ck((subs[1].get("items", []) as Array).size() == 1, "он же в Secondary")
+	ck(str(subs[2].get("key", "")) == "Head", "шапка в своей подкатегории")
 
 func t_order_subcategories() -> void:
 	ck(P.order_subcategories(["Fish", "Grenades", "Pistols", "Assault Rifles"]) == ["Assault Rifles", "Pistols", "Fish", "Grenades"],

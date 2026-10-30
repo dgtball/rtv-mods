@@ -646,6 +646,51 @@ static func order_subcategories(names) -> Array:
 		out.append(str(s))
 	return out
 
+# Единственная нарезка каталога: полки шага 1, строки фильтров шага 2 и
+# подкатегории внутри строки. На вход - записи _entry, имя поля с группой
+# ("eq_group", "inv_group", "inv_sub") и порядок ключей. Значение поля может
+# быть строкой или списком строк: предмет в двух слотах попадает в обе
+# подкатегории, но на полке лежит один раз.
+#
+# with_all вставляет первой строку "Все предметы" - она считает весь вход,
+# включая записи без группы: иначе предмет без чипа нельзя было бы найти
+# мышью, а сумма строк не совпадала бы со счётчиком.
+static func buckets(entries: Array, field: String, order: Array, with_all: bool) -> Array:
+	var all: Array = []
+	var groups: Dictionary = {}
+	for e in entries:
+		if typeof(e) != TYPE_DICTIONARY:
+			continue
+		all.append(e)
+		var val = e.get(field, "")
+		var keys: Array = []
+		if typeof(val) == TYPE_ARRAY:
+			for k in val:
+				keys.append(str(k))
+		elif val != null:
+			keys.append(str(val))
+		for k in keys:
+			if k == "":
+				continue
+			if not groups.has(k):
+				groups[k] = []
+			(groups[k] as Array).append(e)
+	var out: Array = []
+	if with_all:
+		out.append({"key": "", "items": all, "count": all.size()})
+	for k in order:
+		var key := str(k)
+		if not groups.has(key):
+			continue
+		out.append({"key": key, "items": groups[key], "count": (groups[key] as Array).size()})
+		groups.erase(key)
+	# Незнакомый ключ не теряется: уходит в конец по алфавиту.
+	var rest := groups.keys()
+	rest.sort()
+	for k in rest:
+		out.append({"key": str(k), "items": groups[k], "count": (groups[k] as Array).size()})
+	return out
+
 static func matches_search(item_name: String, query: String) -> bool:
 	var q := query.strip_edges().to_lower()
 	if q == "":
