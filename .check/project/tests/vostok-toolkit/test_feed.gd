@@ -21,6 +21,7 @@ class FakeAgent extends Node3D:
 	var dead := false
 	var active := true
 	var variant = FakeVariant.new()
+	var nickname := ""
 
 	func Activate() -> void:
 		pass
@@ -73,6 +74,20 @@ func t_agent_display_name() -> void:
 	ck(KC.agent_display_name(n) == "Punisher", "variant Punisher -> Punisher")
 	n.queue_free()
 	ck(KC.agent_display_name(null) == "NPC", "null -> NPC")
+	ck(KC.display_name_of("Nomad", "Mikko") == "Mikko", "никнейм побеждает имя варианта")
+	ck(KC.display_name_of("Nomad", "  Mikko  ") == "Mikko", "никнейм обрезается")
+	ck(KC.display_name_of("Nomad", "   ") == "Nomad", "пустой никнейм -> имя варианта")
+	ck(KC.display_name_of("", "") == "NPC", "оба пустые -> NPC")
+	var nomad := FakeAgent.new()
+	nomad.variant.name = "Nomad"
+	nomad.nickname = "Aino"
+	root.add_child(nomad)
+	ck(KC.agent_display_name(nomad) == "Aino", "узел с nickname -> никнейм")
+	nomad.queue_free()
+	var plain := Node3D.new()
+	root.add_child(plain)
+	ck(KC.agent_display_name(plain) == "NPC", "узел без variant и nickname -> NPC")
+	plain.queue_free()
 
 func t_feed_segments() -> void:
 	var Feed = preload("res://mods/VTK/VTKFeed.gd")

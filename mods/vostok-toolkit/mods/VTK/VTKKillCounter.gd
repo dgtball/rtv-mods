@@ -100,16 +100,35 @@ static func agent_kind(n: Node) -> String:
 		return ""
 	return "enemy"
 
+# Имя агента: никнейм номада побеждает имя варианта. Семантика та же, что у
+# VTKLabels.name_of в thermal-vtk, иначе лента и 2D-подписи называют одного
+# номада по-разному.
+static func display_name_of(variant_name: String, nickname: String) -> String:
+	var n := nickname.strip_edges()
+	if n != "":
+		return n
+	var v := variant_name.strip_edges()
+	if v != "":
+		return v
+	return "NPC"
+
 static func agent_display_name(n: Node) -> String:
 	if n == null or not is_instance_valid(n):
 		return "NPC"
-	var v = n.get("variant")
-	if v == null:
-		return "NPC"
-	var s := str(v.get("name")).strip_edges()
-	if s != "":
-		return s
-	return "NPC"
+	var vname := ""
+	var nick := ""
+	if "variant" in n:
+		var v = n.get("variant")
+		if v != null:
+			var raw = v.get("name")
+			if raw != null:
+				vname = str(raw)
+	# Свойства nickname нет у не-номадов: проверяем наличие, а не ловим null.
+	if "nickname" in n:
+		var raw_nick = n.get("nickname")
+		if raw_nick != null:
+			nick = str(raw_nick)
+	return display_name_of(vname, nick)
 
 func _reseed() -> void:
 	_agents.clear()
