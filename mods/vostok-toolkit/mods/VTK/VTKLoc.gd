@@ -94,11 +94,11 @@ const RU := {
 	'Reset': 'Сброс',
 	# Подкатегории предметов: ключ идёт из VTKPicker.SUBCATEGORY_ORDER, поэтому
 	# порядок здесь повторяет его, чтобы ключ и заголовок строки фильтров
-	# читались вместе. Grenades, Books, Knives и Electronics выше: подписи
-	# полок категорий, только приходят они не литералом, а через
-	# Picker.category_label() из VTKPicker.CATEGORIES. Lasers выше: подпись
-	# группы обвесов из VTKUI.ATT_GROUP_LABELS, перевод один и тот же.
-	# По тексту кода их не найти, поэтому keycheck читает таблицу отдельно.
+	# читались вместе. Часть ключей - подписи групп, а не литералы: они приходят
+	# через Picker.group_label() из VTKPicker.EQUIP_GROUPS/INVENTORY_GROUPS.
+	# Lasers выше: подпись группы обвесов из VTKUI.ATT_GROUP_LABELS, перевод
+	# один и тот же. По тексту кода их не найти, поэтому loc_check читает
+	# таблицу отдельно.
 	'Assault Rifles': 'Винтовки',
 	'Sniper Rifles': 'Снайперки',
 	'Shotguns': 'Дробовики',

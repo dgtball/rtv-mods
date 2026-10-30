@@ -41,30 +41,6 @@ const EQUIP_GRID := [
 const EQUIP_COLS := 6
 const EQUIP_ROWS := 8
 
-# Полосы категорий: порядок полок и подписи в одной таблице. Ключ -
-# str(item.type).to_lower() после CATEGORY_ALIASES, подпись - что видит игрок.
-# Раньше порядок жил здесь, а подписи в VTKUI.gd как CATEGORY_LABELS, и они
-# разъезжались: одну и ту же категорию приходилось вписывать в оба места.
-# Категория из данных, которой здесь нет, не теряется: встаёт в конец по
-# алфавиту и подписывается через category_label() - обновление игры не даёт
-# строчной подписи.
-const CATEGORIES := [
-	["weapon", "Weapons"],
-	["armor", "Armor"],
-	["@grenade", "Grenades"],
-	["ammo", "Ammo"],
-	["attachment", "Attachments"],
-	["medical", "Medical"],
-	["consumable", "Consumables"],
-	["clothing", "Clothing"],
-	["electronics", "Electronics"],
-	["key", "Keys"],
-	["knife", "Knives"],
-	["literature", "Books"],
-	["misc", "Misc"],
-	["furniture", "Furniture"],
-]
-
 # Группы шага 1 «Экипировка»: только то, что встаёт в клетку сетки, по слотам.
 # Патроны, обвесы, еда, медицина, ключи, книги и мебель сюда не попадают.
 const EQUIP_GROUPS := [
@@ -173,23 +149,6 @@ static func item_art(texture: Texture2D, rotate := false) -> Texture2D:
 	_art_cache[ckey] = art
 	return art
 
-# Ключи категорий в порядке полок.
-static func category_keys() -> Array:
-	var out: Array = []
-	for entry in CATEGORIES:
-		out.append(str(entry[0]))
-	return out
-
-# Подпись полки по ключу категории. Неизвестный ключ не возвращается сырым:
-# capitalize() даёт "Furniture", а не "furniture". Вызывать только для
-# категории, не для подкатегории: у подкатегорий ключ уже в игровом регистре
-# и в нём бывает "&" и "SMG", которые capitalize() поломал бы.
-static func category_label(key: String) -> String:
-	for entry in CATEGORIES:
-		if str(entry[0]) == key:
-			return str(entry[1])
-	return key.capitalize()
-
 # Ключи таблицы групп в её порядке: [["weapon", "Weapons"], ...] -> ["weapon", ...].
 static func group_keys(groups: Array) -> Array:
 	var out: Array = []
@@ -244,49 +203,35 @@ static func equip_subs_of(type, slots) -> Array:
 # Weapons. Остальное решает type через TYPE_GROUPS.
 static func inventory_group_of(type, slots) -> String:
 	for s in _slot_list(slots):
-		if s == "Grenade_1" or s == "Grenade_2":
+		if GRENADE_SLOTS.has(s):
 			return "weapon"
 		if GEAR_SLOTS.has(s):
 			return "gear"
 	var t := "" if type == null else str(type).strip_edges().to_lower()
 	return str(TYPE_GROUPS.get(t, ""))
 
-# Сводка типов, которые в данных игры не совпадают с группой, в которую их
-# ждёт игрок. Одна и та же еда приходит и как "Consumable", и как
-# "Consumables", у Sticks - " Misc" с ведущим пробелом, и отдельные типы
-# дробят полки на пустые подписи: рыба уходит в еду, разгрузка в броню,
-# подсумок, шлем и рюкзак в одежду, удочка с гитарой сходятся в "Разное", а
-# type "Grenade" без гранатного слота давал вторую полку рядом с @grenade.
-# Отдельными полками стояли Instruments, Lore и Backpacks - подпись каждой
-# приходилось держать в двух таблицах разом.
-# Подкатегории при этом не трогаются - их считает subcategory_of по пути.
-const CATEGORY_ALIASES := {
-	"consumables": "consumable",
-	"fish": "consumable",
-	"rig": "armor",
-	"belt pouch": "clothing",
-	"helmet": "clothing",
-	"backpack": "clothing",
-	"fishing": "misc",
-	"instrument": "misc",
-	"lore": "misc",
-	"grenade": "@grenade",
-}
-
-# Порядок подкатегорий - как заголовки "-- X --" в JCMDatabase.gd. Хвост
-# списка - группы мебели из FURN_SUB_FOLDERS: у мебели подпись считается по
-# папке ассета, а не по SUB_FOLDERS.
-const SUBCATEGORY_ORDER := ["Assault Rifles", "Sniper Rifles", "Shotguns",
-	"Pistols", "SMGs",
+# Порядок подкатегорий - один на оба шага: впереди подписи слотов шага 1 в
+# порядке SLOT_ORDER, затем классы предметов шага 2 (как заголовки "-- X --" в
+# JCMDatabase.gd), в конце группы мебели из FURN_SUB_FOLDERS: у мебели подпись
+# считается по папке ассета, а не по SUB_FOLDERS.
+const SUBCATEGORY_ORDER := [
+	# Слоты шага 1. Гранаты схлопнуты в один чип, Player на шаге 1 не бывает.
+	"Primary", "Secondary", "Knife", "Grenade", "Backpack", "Rig", "Helmet",
+	"Head", "Torso", "Legs", "Belt", "Feet", "Hands", "Light", "Time", "Map",
+	"NVG", "Matches",
+	# Классы шага 2.
+	"Assault Rifles", "Sniper Rifles", "Shotguns", "Pistols", "SMGs",
+	"Knives", "Grenades",
 	"Handgun & SMG Mags", "Rifle & Sniper Mags",
 	"Pistol & SMG Calibers", "Rifle Calibers", "Shotgun Shells",
 	"First Aid", "Medication", "Utility",
 	"Helmets", "Armor Plates", "Rigs & Vests", "Backpacks",
-	"Belts", "Hats", "Torso", "Pants", "Boots & Hands",
+	"Belts", "Hats", "Pants", "Boots & Hands",
 	"Weapon Parts", "Scopes", "Suppressors", "Lasers",
 	"Hydration", "Canned Goods", "Snacks & Ingredients", "Cooked Meals",
 	"Vices", "Fish", "Garbage",
 	"Utilities & Tools", "Music", "Fishing", "Lore",
+	"Keys", "Books", "Electronics",
 	"Storage & Cabinets", "Seating & Beds", "Tables & Shelving",
 	"Appliances & Electronics", "Decor"]
 
@@ -380,8 +325,8 @@ const SUB_FOLDERS := {
 	"Bream": "Fish", "Perch": "Fish", "Pike": "Fish", "Roach": "Fish",
 	# Пустая тара: не расходник, а мусор.
 	"Can_Empty": "Garbage", "Soda_Empty": "Garbage",
-	# Разное. Ключи, книги, ножи, электроника и гранаты здесь не значатся: их
-	# убирает NO_SUB_FOLDERS по верхней папке пути.
+	# Разное. Ключи, книги, ножи, электроника и гранаты сюда не попадают: их
+	# класс называется типом или слотом, а не папкой модели.
 	"Aluminum_Foil": "Utilities & Tools", "Duct_Tape": "Utilities & Tools",
 	"Happy_Stove": "Utilities & Tools", "Jerry_Can": "Utilities & Tools",
 	"Lumber": "Utilities & Tools", "Matches": "Utilities & Tools",
@@ -464,13 +409,6 @@ const FURN_SUB_FOLDERS := {
 	"Weapon_Display": "Decor",
 }
 
-# Верхние папки, у которых подкатегория не считается: подписи там либо
-# дублируют категорию (Books, Knives, Electronics, Grenades - единственная
-# подкатегория в своей полке), либо дробят её на чипы, которые игрок просил
-# убрать (Keys). Проверяется верхняя папка пути, а не список имён предметов:
-# их много и они меняются с апдейтами игры.
-const NO_SUB_FOLDERS := ["Keys", "Books", "Knives", "Electronics", "Grenades"]
-
 # Папки, чей магазин относится к пистолетам и ПП. Остальные стволы дают
 # Rifle & Sniper Mags. Список нужен потому, что папка у магазина та же, что
 # у ствола: у Makarov она одна на Pistols и на Handgun & SMG Mags.
@@ -537,30 +475,16 @@ static func matches_slot(slots, slot: String) -> bool:
 			return true
 	return false
 
-# Группа предмета для полок и фасетов. Слоты важнее type: граната лежит в
-# Grenade_1/2, а её type в данных игры не grenade, и группа "Гранаты" по одному
-# type не набралась бы. Виртуальный ключ начинается с @, чтобы не совпасть с
-# типом из данных. Ни слотов ни type - предмет вне групп, не показываем.
-const CATEGORY_GRENADE := "@grenade"
+# Гнёзда гранат. Слот важнее type: в данных игры у гранаты type не "grenade",
+# и группа "Гранаты" по одному type не набралась бы.
 const GRENADE_SLOTS := ["Grenade_1", "Grenade_2"]
 
-static func category_of(slots, type) -> String:
-	for gs in GRENADE_SLOTS:
-		if matches_slot(slots, str(gs)):
-			return CATEGORY_GRENADE
-	if type == null:
-		return ""
-	var c := str(type).strip_edges().to_lower()
-	return str(CATEGORY_ALIASES.get(c, c))
-
-# Совпадение по имени без учёта регистра, подстрокой. Запрос из пробелов
-# считается пустым, чтобы пробел вокруг слова его не отключал.
 # Подкатегория предмета по его resource_path. Порядок правил важен:
-# сначала суффикс имени файла, потом верхняя папка без подкатегории, потом
-# папка предмета. Суффикс - потому что у KAR-21 и Makarov папка одна на два
-# разных смысла. Папка предмета - третий сегмент пути, а у трёхсегментного
-# (Armor_Plate_II.tres, Key_Attic.tres) её нет вовсе, и роль папки играет
-# имя файла.
+# сначала слот, потом суффикс имени файла, потом папка предмета. Слот - потому
+# что у гранаты, фонарика и спичек папка модели ничего не говорит. Суффикс -
+# потому что у KAR-21 и Makarov папка одна на два разных смысла. Папка предмета -
+# третий сегмент пути, а у трёхсегментного (Armor_Plate_II.tres,
+# Key_Attic.tres) её нет вовсе, и роль папки играет имя файла.
 static func subcategory_of(path: String, type, slots := []) -> String:
 	# Разбор пути зовётся на каждый предмет при каждой пересборке каталога;
 	# таблицы подкатегорий неизменны, поэтому результат мемоизируем по пути.
@@ -590,7 +514,7 @@ static func _subcategory_of_uncached(path: String, type, slots) -> String:
 	for s in _slot_list(slots):
 		if GEAR_SLOTS.has(s):
 			return s
-		if s == "Grenade_1" or s == "Grenade_2":
+		if GRENADE_SLOTS.has(s):
 			return "Grenades"
 	# Классы, у которых в данных свой тип и своя единственная подкатегория.
 	if t == "knife":
@@ -696,76 +620,6 @@ static func matches_search(item_name: String, query: String) -> bool:
 	if q == "":
 		return true
 	return str(item_name).to_lower().find(q) >= 0
-
-# Слоты, которые в игре занимает только оружие. Удилище, гитара и губная
-# гармошка формально помечены слотами Primary/Secondary (тип Fishing и
-# Instrument), поэтому без этого правила в фильтре шага 1 к Weapons
-# доезжали лишние чипы, а предмет не относился к снаряжению.
-const WEAPON_SLOTS := ["Primary", "Secondary"]
-
-# Единственная категория, которую эти слоты предлагают. Пустая категория -
-# предмет вне таксономии: он и раньше не попадал ни на какую полку, но из
-# списка не выбрасывается, чтобы чип не стал единственным фильтром в пустоту.
-static func category_allowed(cat: String, slot: String) -> bool:
-	if not WEAPON_SLOTS.has(slot):
-		return true
-	return cat == "" or cat == "weapon"
-
-# Полосы категорий в порядке CATEGORIES, пустые пропускаются.
-# Элемент полосы: {"cat": String, "items": Array}. Элемент предмета:
-# {"item": Resource, "cat": String} - cat это str(item.type).to_lower().
-static func shelves_of(items) -> Array:
-	var buckets: Dictionary = {}
-	for it in items:
-		if typeof(it) != TYPE_DICTIONARY:
-			continue
-		var c := str(it.get("cat", ""))
-		if c == "":
-			continue
-		if not buckets.has(c):
-			buckets[c] = []
-		buckets[c].append(it)
-	var out: Array = []
-	for c in category_keys():
-		if buckets.has(c):
-			out.append({"cat": c, "items": buckets[c]})
-			buckets.erase(c)
-	var rest := buckets.keys()
-	rest.sort()
-	for c in rest:
-		out.append({"cat": str(c), "items": buckets[c]})
-	return out
-
-# Фасеты левой колонки шага 2: строка "Все" первой, затем по строке на
-# категорию. Пустые под текущим запросом выпадают - иначе фасет вёл бы в
-# пустую сетку. На вход - записи _entry: нужен name для поиска и cat для
-# группировки. Счётчик строки равен числу её элементов, поэтому клик по фасету
-# всегда открывает ровно то, что показано цифрой.
-static func facets_of(items, query) -> Array:
-	var all: Array = []
-	var buckets: Dictionary = {}
-	for e in items:
-		if typeof(e) != TYPE_DICTIONARY:
-			continue
-		if not matches_search(str(e.get("name", "")), query):
-			continue
-		var c := str(e.get("cat", ""))
-		if c == "":
-			continue
-		all.append(e)
-		if not buckets.has(c):
-			buckets[c] = []
-		buckets[c].append(e)
-	var out: Array = [{"key": "", "items": all, "count": all.size()}]
-	for c in category_keys():
-		if buckets.has(c):
-			out.append({"key": c, "items": buckets[c], "count": buckets[c].size()})
-			buckets.erase(c)
-	var rest := buckets.keys()
-	rest.sort()
-	for c in rest:
-		out.append({"key": str(c), "items": buckets[c], "count": (buckets[c] as Array).size()})
-	return out
 
 # Есть ли что показать в панели обвесов: непустой compatible. Тумблер заполнения
 # обоймы обрабатывается отдельно (_is_magazine), поэтому maxAmount здесь не

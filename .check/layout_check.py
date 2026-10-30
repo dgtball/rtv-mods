@@ -174,6 +174,17 @@ GONE = [
     "tab_bar",
     # 5.3.0: кнопки превью переехали из колонки в полосу над карточками.
     "_make_control_column",
+    # 5.3.2: старая таксономия по type заменена группами шага 1 и шага 2.
+    "func category_of(",
+    "func category_allowed(",
+    "func category_keys(",
+    "func category_label(",
+    "func shelves_of(",
+    "func facets_of(",
+    "CATEGORY_ALIASES",
+    "WEAPON_SLOTS",
+    "NO_SUB_FOLDERS",
+    "Picker.category_label",
 ]
 
 GONE_RE = [

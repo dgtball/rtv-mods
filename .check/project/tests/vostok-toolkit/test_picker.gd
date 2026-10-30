@@ -11,26 +11,11 @@ func ck(cond: bool, msg: String) -> void:
 		fails += 1
 		print("FAIL  ", msg)
 
-func t_facets_of_requires_name() -> void:
-	# Регрессия: facets_of фильтрует по ключу name записи. Запись без name
-	# (как её отдавал _entry до 4.13.4) под непустым запросом выпадает целиком.
-	var with_name: Array = [{"name": "AKM", "cat": "weapon"}]
-	var without: Array = [{"cat": "weapon"}]
-	ck(int(P.facets_of(with_name, "akm")[0].get("count", -1)) == 1,
-		"запись с name находится по запросу")
-	ck(int(P.facets_of(without, "akm")[0].get("count", -1)) == 0,
-		"запись без name под запросом выпадает (нужен ключ name)")
-	ck(int(P.facets_of(without, "")[0].get("count", -1)) == 1,
-		"без запроса запись без name остаётся")
-
 func _init() -> void:
 	t_all_slots()
 	t_equip_layout()
 	t_matches_slot()
 	t_matches_search()
-	t_shelves_of()
-	t_category_of()
-	t_category_allowed()
 	t_equip_group_of()
 	t_equip_subs_of()
 	t_inventory_group_of()
@@ -42,9 +27,6 @@ func _init() -> void:
 	t_order_subcategories()
 	t_furn_subcategories()
 	t_merged_subcategories()
-	t_facets_of()
-	t_facets_of_requires_name()
-	t_facets_of_ungrouped()
 	t_att_panel_needed()
 	t_group_attachments()
 	t_item_art()
@@ -123,34 +105,6 @@ func t_matches_search() -> void:
 	ck(P.matches_search("Аптечка", "ечк") == true, "совпадение в середине слова")
 	ck(P.matches_search("", "апт") == false, "пустое имя не совпадает ни с чем")
 
-func t_shelves_of() -> void:
-	var items := [
-		{"name": "Нож", "cat": "tool"},
-		{"name": "АК", "cat": "weapon"},
-		{"name": "Аптечка", "cat": "medical"},
-		{"name": "Пламегаситель", "cat": "consumable"},
-		{"name": "Рация", "cat": "equipment"},
-	]
-	var got := P.shelves_of(items)
-	ck(got.size() == 5, "пять непустых полос")
-	ck(str(got[0]["cat"]) == "weapon", "оружие идёт первым")
-	ck(str(got[1]["cat"]) == "medical", "медицина раньше расходников и снаряжения")
-	ck(str(got[2]["cat"]) == "consumable", "расходники после медицины")
-	ck(str(got[3]["cat"]) == "equipment", "снаряжение дальше")
-	ck(str(got[4]["cat"]) == "tool", "инструменты последними")
-	ck((got[0]["items"] as Array).size() == 1, "в полосе оружия один предмет")
-	# категория из данных, которой нет в CATEGORIES, не теряется
-	var odd := P.shelves_of([{"name": "Х", "cat": "zzz"}, {"name": "А", "cat": "weapon"},
-		{"name": "Б", "cat": "aaa"}])
-	ck(odd.size() == 3, "неизвестные категории тоже получили полосы")
-	ck(str(odd[0]["cat"]) == "weapon", "известная категория осталась первой")
-	ck(str(odd[1]["cat"]) == "aaa" and str(odd[2]["cat"]) == "zzz",
-		"неизвестные категории в конце по алфавиту")
-	ck(P.shelves_of([]).is_empty(), "пустой список предметов даёт пустые полосы")
-	ck(P.shelves_of([{"name": "X", "cat": "weapon"}, "мусор", null]).size() == 1,
-		"мусорные элементы пропускаются")
-	ck(P.shelves_of([{"name": "Y", "cat": ""}]).is_empty(), "предмет без категории не образует полосу")
-
 func t_att_panel_needed() -> void:
 	ck(P.att_panel_needed({"compatible": [{"name": "ПСО"}]}) == true, "есть compatible - панель нужна")
 	ck(P.att_panel_needed({"compatible": []}) == false, "пустой compatible - панель не нужна")
@@ -200,40 +154,6 @@ func t_item_art() -> void:
 		"item_art поворот 90° меняет стороны кропа")
 	ck(P.item_art(tex, true) == rot, "повёрнутый item_art кэшируется отдельно")
 	ck(P.item_art(tex) != rot, "поворот и без поворота - разные записи кэша")
-
-func t_category_of() -> void:
-	ck(P.category_of(["Grenade_1"], "Consumable") == "@grenade", "слот-граната бьёт type")
-	ck(P.category_of(["Grenade_2"], null) == "@grenade", "второй слот-граната тоже")
-	ck(P.category_of(["Primary", "Grenade_1"], "Weapon") == "@grenade", "среди прочих слотов")
-	ck(P.category_of(["Primary"], "Weapon") == "weapon", "без слота-гранаты это type в нижнем регистре")
-	ck(P.category_of(null, "Medical") == "medical", "null slots не мешают type")
-	ck(P.category_of(["Head"], null) == "", "без type предмет вне групп")
-	ck(P.category_of(null, null) == "", "ни слотов ни типа - вне групп")
-	ck(P.category_of("Grenade_1", "Weapon") == "weapon", "строка слотами не считается слотами")
-	ck(P.category_of(null, "Consumables") == "consumable", "Consumables сводится к consumable")
-	ck(P.category_of(null, "Consumable") == "consumable", "единый тип даёт ту же группу")
-	ck(P.category_of(null, " Misc") == "misc", "ведущий пробел в type не делает отдельный фасет")
-	ck(P.category_of(null, "Instrument") == "misc", "гитара и гармошка ушли в misc")
-	ck(P.category_of(null, "Lore") == "misc", "лор ушёл в misc")
-	ck(P.category_of(null, "Fishing") == "misc", "удилище ушло в misc")
-	ck(P.category_of(["Backpack"], "Backpack") == "clothing", "рюкзак ушёл в одежду")
-	ck(P.category_keys().has("@grenade"), "в порядке категорий есть гранаты")
-	ck(not P.category_keys().has("instrument"), "полки Instruments больше нет")
-	ck(not P.category_keys().has("lore"), "полки Lore больше нет")
-	ck(not P.category_keys().has("backpack"), "полки Backpacks больше нет")
-
-func t_category_allowed() -> void:
-	ck(P.category_allowed("weapon", "Primary"), "оружие проходит в Primary")
-	ck(not P.category_allowed("fishing", "Primary"), "удилище не проходит в Primary")
-	ck(not P.category_allowed("instrument", "Secondary"), "гитара не проходит в Secondary")
-	ck(P.category_allowed("fishing", ""), "без слота цель не режет предметы")
-	ck(P.category_allowed("fishing", "Melee"), "у melee слотов фильтр свободный")
-	ck(P.category_allowed("tool", "Head"), "у головы фильтр свободный")
-	ck(P.category_allowed("", "Primary"), "предмет вне таксономии не выбрасывается")
-	ck(P.category_allowed("weapon", "Grenade_1"), "Primary-правило не цепляет другие слоты")
-	ck(not P.category_allowed("attachment", "Primary"), "обвесы не предлагаются слоту оружия")
-	ck(P.WEAPON_SLOTS == ["Primary", "Secondary"], "правило касается только двух слотов")
-
 
 func t_equip_group_of() -> void:
 	ck(P.equip_group_of("Weapon", ["Primary"]) == "weapon", "оружие в Primary -> Weapons")
@@ -342,13 +262,15 @@ func t_buckets_multi() -> void:
 	ck(str(subs[2].get("key", "")) == "Head", "шапка в своей подкатегории")
 
 func t_order_subcategories() -> void:
-	ck(P.order_subcategories(["Fish", "Grenades", "Pistols", "Assault Rifles"]) == ["Assault Rifles", "Pistols", "Fish", "Grenades"],
+	ck(P.order_subcategories(["Fish", "Grenades", "Pistols", "Assault Rifles"]) == ["Assault Rifles", "Pistols", "Grenades", "Fish"],
 		"порядок таблицы важнее порядка во входных данных")
 	ck(P.order_subcategories([]) == [], "пустой вход даёт пустой список")
 	ck(P.order_subcategories(["", "Fish"]) == ["Fish"], "пустая подкатегория отбрасывается")
 	ck(P.order_subcategories(["Fish", "Fish"]) == ["Fish"], "дубли схлопываются")
 	ck(P.order_subcategories(["Zzz Gear", "Fish", "Aaa Gear"]) == ["Fish", "Aaa Gear", "Zzz Gear"],
 		"неизвестные подкатегории идут после таблицы, по алфавиту")
+	ck(P.order_subcategories(["Head", "Primary", "Light"]) == ["Primary", "Head", "Light"],
+		"подписи слотов шага 1 стоят впереди в порядке SLOT_ORDER")
 
 func t_furn_subcategories() -> void:
 	ck(P.subcategory_of("res://Assets/Radio/Radio_F.tres", "Furniture") == "Appliances & Electronics",
@@ -381,70 +303,6 @@ func t_merged_subcategories() -> void:
 	for sub in ["Air_Freshener", "Glue", "Leather", "Museum_Plate", "Radiator_Engine", "Screws"]:
 		var got := P.subcategory_of("res://Items/Misc/" + sub + "/" + sub + ".tres", "Misc")
 		ck(got == "Utilities & Tools", "мелочь без группы -> хозтовары: " + sub)
-
-func t_facets_of() -> void:
-	var list: Array = [
-		{"name": "АК-74", "cat": "weapon"},
-		{"name": "Граната М50", "cat": "@grenade"},
-		{"name": "Аптечка", "cat": "medical"},
-		{"name": "АК-74У", "cat": "weapon"},
-	]
-	var f := P.facets_of(list, "")
-	ck(f.size() == 4, "Все + weapon + гранаты + медицина")
-	ck(str(f[0].get("key", "x")) == "" and int(f[0].get("count", -1)) == 4,
-		"строка Все впереди и считает всё")
-	ck(str(f[1].get("key", "")) == "weapon" and int(f[1].get("count", 0)) == 2,
-		"вторым идёт weapon с двумя")
-	ck(str(f[2].get("key", "")) == "@grenade" and int(f[2].get("count", 0)) == 1,
-		"гранаты по слотам, а не по type")
-	ck(str(f[3].get("key", "")) == "medical", "медицина последней по CATEGORIES")
-	var q := P.facets_of(list, "ак")
-	ck(int(q[0].get("count", -1)) == 2, "запрос сужает строку Все")
-	ck(q.size() == 2, "пустые группы под запросом выпадают")
-	ck(str(q[1].get("key", "")) == "weapon" and int(q[1].get("count", 0)) == 2,
-		"счётчик фасета тоже пересчитан")
-	var sum := 0
-	for r in q:
-		if str(r.get("key", "")) != "":
-			sum += int(r.get("count", 0))
-	ck(sum == int(q[0].get("count", -1)), "сумма фасетов равна Все: группы не пересекаются")
-	var empty := P.facets_of([], "")
-	ck(empty.size() == 1 and int(empty[0].get("count", -1)) == 0,
-		"пустой каталог даёт только строку Все с нулём")
-	ck(P.facets_of([null, "мусор"], "").size() == 1, "мусорные элементы пропускаются")
-	# Два типа еды из данных игры не должны давать две строки с одинаковой
-	# подписью: ключ фасета - результат category_of, а не сырой type.
-	var food: Array = [
-		{"name": "Water Bottle", "cat": P.category_of(null, "Consumable")},
-		{"name": "Canned Meat", "cat": P.category_of(null, "Consumables")},
-	]
-	var ff := P.facets_of(food, "")
-	ck(ff.size() == 2, "Consumable и Consumables дают один фасет")
-	ck(str(ff[1].get("key", "")) == "consumable" and int(ff[1].get("count", 0)) == 2,
-		"сводный фасет consumable считает оба типа")
-
-# Предмет без группы не должен попадать в "Все": иначе сумма фасетов не равна
-# счётчику Все, и клик по фасету показывает меньше, чем обещает число.
-func t_facets_of_ungrouped() -> void:
-	var list: Array = [
-		{"name": "АК-74", "cat": "weapon"},
-		{"name": "Без типа", "cat": ""},
-		{"name": "Без ключа"},
-	]
-	var f := P.facets_of(list, "")
-	ck(f.size() == 2, "без группы остаётся только Все и weapon")
-	ck(int(f[0].get("count", -1)) == 1, "предметы вне групп не считаются")
-	ck(int(f[1].get("count", 0)) == 1, "в фасете осталось одно")
-	var all := P.facets_of(list, "")[0]["items"] as Array
-	ck(all.size() == 1 and str((all[0] as Dictionary).get("name", "")) == "АК-74",
-		"в items Все лежит только сгруппированный предмет")
-	var sum := 0
-	for r in P.facets_of(list, ""):
-		if str(r.get("key", "")) != "":
-			sum += int(r.get("count", 0))
-	ck(sum == int(f[0].get("count", -1)), "сумма фасетов равна Все и с несгруппированными")
-	ck(P.facets_of([{"name": "Без типа", "cat": ""}], "").size() == 1,
-		"каталог без сгруппированных даёт только строку Все")
 
 func t_subcategory_of() -> void:
 	# Папка ствола из третьего сегмента.
