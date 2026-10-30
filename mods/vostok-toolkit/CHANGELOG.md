@@ -1,5 +1,19 @@
 # Changelog
 
+## [5.3.0] - 2026-10-30
+
+### Changed
+
+- The panel opens as a centered window instead of covering the whole screen.
+- The Sets and Teleport tabs moved into the window header, with the version and a close button on the right.
+- Card headers share one style, with a small gold tick before the title.
+- Teleport cards rearrange into two or three columns to fit the window width.
+- The set preview shows equipment and inventory side by side, with the set buttons above them.
+
+### Fixed
+
+- Game notifications such as "Shelter locked" are no longer hidden behind the panel.
+
 ## [5.2.3] - 2026-10-30
 
 ### Changed
