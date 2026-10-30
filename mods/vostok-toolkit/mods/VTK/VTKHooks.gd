@@ -5,7 +5,6 @@ const Log = preload("res://mods/VTK/VTKLog.gd")
 var _registered: bool = false
 var _lib = null
 var _kill_count: int = 0
-var _player_hits: Dictionary = {}
 var _hooks_kc: Array = []
 var _hooks_notes: Array = []
 var _hooks_deposits: Array = []
@@ -22,7 +21,6 @@ const SEASONS := preload("res://mods/VTK/VTKSeasons.gd")
 const SEASON_DRV := preload("res://mods/VTK/VTKSeasonDriver.gd")
 const HIT_WINDOW_MSEC := 15000
 const SEEN_DEATHS_TTL_MSEC := 600000
-const PLAYER_HITS_TTL_MSEC := 30000
 
 var _equip_on: bool = true
 var _pickup_pending: int = 0
@@ -68,7 +66,6 @@ func get_kill_count() -> int:
 
 func reset_kills() -> void:
 	_kill_count = 0
-	_player_hits.clear()
 	_last_damager.clear()
 	_seen_deaths.clear()
 
@@ -673,38 +670,35 @@ func _merge_picked(iface, ig, node, occ, occ_sd, res, picked: int) -> void:
 
 func _on_ai_weapon_damage(_hitbox, _damage, _vector, id) -> void:
 	var victim_ai = _lib._caller if _lib else null
-	if victim_ai != null and is_instance_valid(victim_ai) and victim_ai is Node:
-		var rec := {
-			"t": Time.get_ticks_msec(),
-			"hitbox": str(_hitbox),
-			"player": false,
-			"attacker": null,
-			"weapon": "",
-		}
-		if id != null and is_instance_valid(id) and id is Node:
-			if id.is_in_group("Player"):
-				rec["player"] = true
-				rec["weapon"] = _rig_weapon_name()
-			else:
-				# Игра отдаёт атакующего как ID-маркер, а не агента:
-				# kind/display/weapon живут на агенте-предке.
-				var atk := _agent_root(id)
-				rec["attacker"] = atk
-				rec["weapon"] = _weapon_name_of(atk)
-		_last_damager[victim_ai.get_instance_id()] = rec
-	if id == null or not is_instance_valid(id):
+	if victim_ai == null or not is_instance_valid(victim_ai) or not (victim_ai is Node):
 		return
-	if not id.is_in_group("Player"):
-		return
-	var ai = _lib._caller if _lib else null
-	if ai == null or not is_instance_valid(ai):
-		return
-	_player_hits[ai.get_instance_id()] = Time.get_ticks_msec()
+	var rec := {
+		"t": Time.get_ticks_msec(),
+		"hitbox": str(_hitbox),
+		"killer_kind": "",
+		"killer_name": "",
+		"weapon": "",
+	}
+	if id != null and is_instance_valid(id) and id is Node:
+		if id.is_in_group("Player"):
+			rec["killer_kind"] = "player"
+			rec["killer_name"] = "Player"
+			rec["weapon"] = _rig_weapon_name()
+		else:
+			# Игра отдаёт атакующего как ID-маркер, а не агента:
+			# kind/display/weapon живут на агенте-предке. Снимаем их сразу:
+			# запись переживёт атакующего.
+			var atk := _agent_root(id)
+			var kind := KC.agent_kind(atk)
+			rec["killer_kind"] = kind if kind != "" else "enemy"
+			rec["killer_name"] = KC.agent_display_name(atk)
+			rec["weapon"] = _weapon_name_of(atk)
+	_last_damager[victim_ai.get_instance_id()] = rec
 
 # Гранаты и взрывы идут мимо ai-weapondamage (probe Task 1, п.4):
 # ai-explosiondamage(_direction, id), caller=жертва, id=Area бросившего
-# (grpP=true). Без записи здесь взрывной килл не попадает ни в счётчик
-# (_player_hits), ни в ленту (_last_damager).
+# (grpP=true). Без записи здесь взрывной килл не попадает ни в счётчик,
+# ни в ленту.
 func _on_ai_explosion(_direction, id) -> void:
 	var victim_ai = _lib._caller if _lib else null
 	if victim_ai == null or not is_instance_valid(victim_ai) or not (victim_ai is Node):
@@ -712,78 +706,77 @@ func _on_ai_explosion(_direction, id) -> void:
 	var rec := {
 		"t": Time.get_ticks_msec(),
 		"hitbox": "",
-		"player": false,
-		"attacker": null,
+		"killer_kind": "",
+		"killer_name": "",
 		"weapon": "",
 		"grenade": true,
 	}
 	if id != null and is_instance_valid(id) and id is Node:
 		if id.is_in_group("Player"):
-			rec["player"] = true
-			_player_hits[victim_ai.get_instance_id()] = Time.get_ticks_msec()
+			rec["killer_kind"] = "player"
+			rec["killer_name"] = "Player"
 		else:
-			rec["attacker"] = _agent_root(id)
+			var atk := _agent_root(id)
+			var kind := KC.agent_kind(atk)
+			rec["killer_kind"] = kind if kind != "" else "enemy"
+			rec["killer_name"] = KC.agent_display_name(atk)
 	_last_damager[victim_ai.get_instance_id()] = rec
 
 func _on_ai_death(_direction, _force) -> void:
 	var ai = _lib._caller if _lib else null
-	if ai == null or not is_instance_valid(ai):
-		return
-	var iid = ai.get_instance_id()
-	var now = Time.get_ticks_msec()
-	if _player_hits.has(iid) and now - int(_player_hits[iid]) < 15000:
-		_kill_count += 1
-	_player_hits.erase(iid)
-	_emit_kill_event(_direction)
-
-func _emit_kill_event(direction) -> void:
-	var ai = _lib._caller if _lib else null
 	if ai == null or not is_instance_valid(ai) or not (ai is Node):
 		return
 	var iid = ai.get_instance_id()
+	# Дедуп до резолва: ExplosionDamage в ванили не проверяет dead, и второй
+	# взрыв по трупу не должен ни показать строку, ни тикнуть счётчик.
 	if _seen_deaths.has(iid):
 		return
 	_seen_deaths[iid] = Time.get_ticks_msec()
-	var now := Time.get_ticks_msec()
-	var killer_kind := ""
-	var killer_name := ""
-	var weapon := ""
-	var headshot := false
-	var grenade := false
-	var rec = _last_damager.get(iid, null)
-	if rec != null and now - int(rec["t"]) <= HIT_WINDOW_MSEC:
-		weapon = str(rec["weapon"])
-		headshot = str(rec["hitbox"]).to_lower() == "head"
-		if bool(rec["player"]):
-			killer_kind = "player"
-			killer_name = "Player"
-		else:
-			var atk = rec.get("attacker")
-			if atk != null and is_instance_valid(atk) and atk is Node:
-				killer_kind = KC.agent_kind(atk)
-				if killer_kind == "":
-					killer_kind = "enemy"
-				killer_name = KC.agent_display_name(atk)
-		grenade = bool(rec.get("grenade", false)) or _is_grenade(weapon)
-	if killer_kind == "" and _direction_is_player(direction):
-		killer_kind = "player"
-		killer_name = "Player"
-		weapon = _rig_weapon_name()
-		grenade = _is_grenade(weapon)
-	if killer_kind == "":
-		_last_damager.erase(iid)
-		return
-	kill_event.emit({
-		"killer_kind": killer_kind,
-		"killer_name": killer_name,
-		"victim_kind": KC.agent_kind(ai),
-		"victim_name": KC.agent_display_name(ai),
-		"weapon": weapon,
-		"headshot": headshot,
-		"grenade": grenade,
-		"t": now,
-	})
+	var ev := _resolve_kill(ai)
 	_last_damager.erase(iid)
+	if ev.is_empty():
+		return
+	if str(ev["killer_kind"]) == "player":
+		_kill_count += 1
+	kill_event.emit(ev)
+
+# Одно решение на смерть: счётчик и лента читают его, поэтому разойтись не
+# могут. Запись о ране причинна всегда; свежесть решает только подробности:
+# старая рана -> NPC умер сам (череп + имя жертвы), свежая -> обычная строка.
+func _resolve_kill(ai: Node) -> Dictionary:
+	var now := Time.get_ticks_msec()
+	var rec = _last_damager.get(ai.get_instance_id(), null)
+	if rec == null:
+		return {}
+	var victim_kind := KC.agent_kind(ai)
+	var victim_name := KC.agent_display_name(ai)
+	if now - int(rec["t"]) > HIT_WINDOW_MSEC:
+		return {
+			"self_death": true,
+			"killer_kind": "",
+			"killer_name": "",
+			"victim_kind": victim_kind,
+			"victim_name": victim_name,
+			"weapon": "",
+			"headshot": false,
+			"grenade": false,
+			"t": now,
+		}
+	var killer_kind := str(rec.get("killer_kind", ""))
+	if killer_kind == "":
+		return {}
+	var weapon := str(rec.get("weapon", ""))
+	return {
+		"self_death": false,
+		"killer_kind": killer_kind,
+		"killer_name": str(rec.get("killer_name", "")),
+		"victim_kind": victim_kind,
+		"victim_name": victim_name,
+		"weapon": weapon,
+		"headshot": str(rec.get("hitbox", "")).to_lower() == "head",
+		"grenade": bool(rec.get("grenade", false)) or _is_grenade(weapon),
+		"t": now,
+	}
 
 # Ни GameData, ни узел игрока не несут имени оружия (probe, Task 1): настоящее
 # оружие — WeaponRig под Camera/Manager, у него data.file (AKM, M4A1...).
@@ -865,46 +858,27 @@ func _is_grenade(weapon: String) -> bool:
 		return String(item.resource_path).contains("/Grenades/")
 	return false
 
-func _direction_is_player(direction) -> bool:
-	if not (direction is Vector3):
-		return false
-	var gd = _resolve_gamedata()
-	if gd == null or not ("playerVector" in gd):
-		return false
-	var pv = gd.get("playerVector")
-	if not (pv is Vector3):
-		return false
-	var a := (direction as Vector3).normalized()
-	var b := (pv as Vector3).normalized()
-	if a == Vector3.ZERO or b == Vector3.ZERO:
-		return false
-	return a.dot(b) > 0.985
-
 func _on_controller_process(_delta: float) -> void:
 	var controller = _lib._caller if _lib else null
 	if not is_instance_valid(controller):
 		return
-	if _player_hits.is_empty() and _seen_deaths.is_empty() and _last_damager.is_empty():
+	if _seen_deaths.is_empty() and _last_damager.is_empty():
 		return
 	var now = Time.get_ticks_msec()
-	var stale: Array = []
-	for iid in _player_hits:
-		if now - int(_player_hits[iid]) > PLAYER_HITS_TTL_MSEC:
-			stale.append(iid)
-	for s in stale:
-		_player_hits.erase(s)
 	var stale_seen: Array = []
 	for iid in _seen_deaths:
 		if now - int(_seen_deaths[iid]) > SEEN_DEATHS_TTL_MSEC:
 			stale_seen.append(iid)
 	for s in stale_seen:
 		_seen_deaths.erase(s)
-	var stale_dmg: Array = []
+	# Запись о ране живёт, пока жива жертва: возраст — это порог свежести,
+	# а не срок хранения. Мёртвый узел освобождает запись.
+	var gone: Array = []
 	for iid in _last_damager:
-		if now - int(_last_damager[iid]["t"]) > HIT_WINDOW_MSEC:
-			stale_dmg.append(iid)
-	for s in stale_dmg:
-		_last_damager.erase(s)
+		if instance_from_id(int(iid)) == null:
+			gone.append(iid)
+	for g in gone:
+		_last_damager.erase(g)
 
 # Сдача задачи во вкладке торговца: убираем её заметку из Notes сразу.
 # Notes в этот момент закрыт, поэтому чистим только данные (Loader).

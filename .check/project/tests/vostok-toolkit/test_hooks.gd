@@ -308,6 +308,8 @@ func _init() -> void:
 
 func _run() -> void:
 	t_kill_event()
+	t_attacker_snapshot()
+	t_damage_record_ttl()
 	t_marker_attacker()
 	t_explosion_kill()
 	t_player_rig_weapon()
@@ -590,33 +592,131 @@ func t_kill_event() -> void:
 		ck(str(evs[1]["killer_kind"]) == "enemy", "bandit -> enemy (красный)")
 		ck(str(evs[1]["victim_kind"]) == "nomad", "nomad -> nomad (зелёный)")
 
-	# Окно 15 с истекло и direction не игрока — события нет.
+	# Старая рана: NPC умер сам. Строка есть, но без убийцы — только череп + имя.
 	var victim3 := FakeAgent2.new()
 	victim3.name = "AI_Bandit"
+	victim3.variant.faction = 1
+	victim3.variant.name = "Bandit"
 	root.add_child(victim3)
+	var count_before := h.get_kill_count()
 	lib._caller = victim3
 	h._on_ai_weapon_damage("Chest", 10.0, Vector3.ZERO, bandit)
 	h._last_damager[victim3.get_instance_id()] = {
 		"t": Time.get_ticks_msec() - 60000, "hitbox": "Chest",
-		"player": false, "attacker": bandit, "weapon": "",
+		"killer_kind": "enemy", "killer_name": "Bandit", "weapon": "AKM",
 	}
 	lib._caller = victim3
 	h._on_ai_death(null, null)
-	ck(evs.size() == 2, "протухшая запись не даёт события")
+	ck(evs.size() == 3, "старая рана даёт событие")
+	if evs.size() == 3:
+		ck(bool(evs[2]["self_death"]), "старая рана помечена self_death")
+		ck(str(evs[2]["killer_kind"]) == "" and str(evs[2]["killer_name"]) == "", "у старой раны нет убийцы")
+		ck(str(evs[2]["victim_name"]) == "Bandit", "жертва названа и в строке «сам»")
+		ck(str(evs[2]["weapon"]) == "" and not bool(evs[2]["headshot"]), "подробности старой раны не показываются")
+	ck(h.get_kill_count() == count_before, "старая рана не тикает счётчик")
 
-	# Никто не бил, direction не игрока (null) — события нет.
+	# Свежая запись без убийцы (id был null): строки нет, как и раньше.
 	var victim4 := FakeAgent2.new()
 	victim4.name = "AI_Bandit"
 	root.add_child(victim4)
 	lib._caller = victim4
+	h._last_damager[victim4.get_instance_id()] = {
+		"t": Time.get_ticks_msec(), "hitbox": "", "killer_kind": "",
+		"killer_name": "", "weapon": "",
+	}
+	lib._caller = victim4
 	h._on_ai_death(null, null)
-	ck(evs.size() == 2, "смерть без убийцы не показывается")
+	ck(evs.size() == 3, "свежая запись без убийцы не показывается")
+
+	# Записи нет вообще (мод позвал Death напрямую): строки нет.
+	var victim5 := FakeAgent2.new()
+	victim5.name = "AI_Bandit"
+	root.add_child(victim5)
+	lib._caller = victim5
+	h._on_ai_death(null, null)
+	ck(evs.size() == 3, "смерть без записи не показывается")
 
 	victim2.queue_free()
 	bandit.queue_free()
 	victim3.queue_free()
 	victim4.queue_free()
+	victim5.queue_free()
 	player.queue_free()
+	h.queue_free()
+
+# Запись живёт, пока жива жертва, поэтому атакующий может умереть раньше неё.
+# Имя снимается в момент раны; живая ссылка к моменту смерти уже невалидна.
+func t_attacker_snapshot() -> void:
+	var evs: Array = []
+	var h = TestHooks.new()
+	root.add_child(h)
+	h.connect("kill_event", func(ev: Dictionary) -> void: evs.append(ev))
+	var lib := FakeLib2.new()
+	h._lib = lib
+
+	var victim := FakeAgent2.new()
+	victim.name = "AI_Nomad"
+	victim.variant.faction = 0
+	victim.variant.name = "Nomad"
+	victim.nickname = "Mikko"
+	root.add_child(victim)
+	var bandit := FakeAgent2.new()
+	bandit.name = "AI_Bandit"
+	bandit.variant.faction = 1
+	bandit.variant.name = "Bandit"
+	root.add_child(bandit)
+
+	lib._caller = victim
+	h._on_ai_weapon_damage("Chest", 40.0, Vector3.ZERO, bandit)
+	bandit.free()
+	lib._caller = victim
+	h._on_ai_death(Vector3.ZERO, null)
+
+	ck(evs.size() == 1, "освобождённый атакующий не теряет килл")
+	if evs.size() == 1:
+		ck(str(evs[0]["killer_name"]) == "Bandit", "имя убийцы из снимка")
+		ck(str(evs[0]["victim_name"]) == "Mikko", "жертва-номад названа никнеймом")
+
+	victim.free()
+	h.queue_free()
+
+# 15 с — порог свежести, а не время жизни записи: иначе смерть от старой раны
+# нечем описать и строка «череп» не появляется никогда.
+func t_damage_record_ttl() -> void:
+	var h = TestHooks.new()
+	root.add_child(h)
+	var lib := FakeLib2.new()
+	h._lib = lib
+	var controller := FakeAgent2.new()
+	controller.name = "AI_Controller"
+	root.add_child(controller)
+	lib._caller = controller
+
+	var victim := FakeAgent2.new()
+	victim.name = "AI_Bandit"
+	root.add_child(victim)
+	var iid := victim.get_instance_id()
+	lib._caller = victim
+	h._on_ai_weapon_damage("Chest", 10.0, Vector3.ZERO, null)
+	h._last_damager[iid]["t"] = Time.get_ticks_msec() - 60000
+
+	lib._caller = controller
+	h._on_controller_process(0.1)
+	ck(h._last_damager.has(iid), "запись живой жертвы переживает окно 15 с")
+
+	var gone := FakeAgent2.new()
+	gone.name = "AI_Gone"
+	root.add_child(gone)
+	var gone_id := gone.get_instance_id()
+	lib._caller = gone
+	h._on_ai_weapon_damage("Chest", 10.0, Vector3.ZERO, null)
+	gone.free()
+	lib._caller = controller
+	h._on_controller_process(0.1)
+	ck(not h._last_damager.has(gone_id), "запись освобождённой жертвы вычищается")
+
+	victim.free()
+	controller.free()
 	h.queue_free()
 
 class FakeVariant extends RefCounted:
@@ -627,6 +727,7 @@ class FakeAgent2 extends Node3D:
 	var dead := false
 	var active := true
 	var variant = FakeVariant.new()
+	var nickname := ""
 	var weapon = null
 
 	func Activate() -> void:
@@ -685,7 +786,7 @@ func t_marker_attacker() -> void:
 
 # Граната бьёт мимо ai-weapondamage: только ai-explosiondamage
 # (probe Task 1, п.4: caller=жертва, id=Area бросившего, grpP=true).
-# Без него не работают ни счётчик (_player_hits), ни лента (_last_damager).
+# Без него взрывной килл не попадает ни в счётчик, ни в ленту.
 func t_explosion_kill() -> void:
 	var evs: Array = []
 	var h = TestHooks.new()
