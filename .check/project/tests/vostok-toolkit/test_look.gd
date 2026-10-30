@@ -2,6 +2,7 @@ extends SceneTree
 
 const Look = preload("res://mods/VTK/VTKLook.gd")
 const VTKSurface = preload("res://mods/VTK/VTKSurface.gd")
+const TeleportTab = preload("res://mods/VTK/VTKTeleportTab.gd")
 
 var fails := 0
 
@@ -26,6 +27,7 @@ func _run() -> void:
 	t_palette()
 	t_tab_style()
 	t_lock_icon()
+	t_locked_row_icon()
 	print("")
 	if fails == 0:
 		print("Look tests passed")
@@ -137,3 +139,18 @@ func t_lock_icon() -> void:
 	ck(t != null, "замок рисуется из SVG-строки")
 	ck(t.get_width() == 16 and t.get_height() == 16, "замок 16x16")
 	ck(VTKSurface.lock_icon(16, VTKSurface.GOLD_OFF) == t, "иконка замка кэшируется")
+
+func t_locked_row_icon() -> void:
+	# Замок живёт в боксе 16x22 ради общей высоты строки: без KEEP_CENTERED
+	# TextureRect растянул бы квадратную иконку по высоте и она бы поплыла.
+	var tab = TeleportTab.new()
+	var row: Control = tab._tp_row("Shelter", "Not unlocked yet", false, Callable())
+	var lock: TextureRect = null
+	for c in row.find_children("*", "TextureRect", true, false):
+		lock = c as TextureRect
+	ck(lock != null, "запертая строка показывает замок")
+	if lock != null:
+		ck(lock.texture != null and lock.texture.get_width() == 16,
+			"замок - иконка 16 px")
+		ck(lock.stretch_mode == TextureRect.STRETCH_KEEP_CENTERED,
+			"замок не растягивается по высоте строки")

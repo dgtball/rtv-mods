@@ -198,6 +198,7 @@ func set_panel_open(open: bool) -> void:
 		# Окно сначала получает размер, потом содержимое тянется до его низа.
 		_fit_window()
 		refresh(RefreshScope.PAGES | RefreshScope.LIST | RefreshScope.PREVIEW)
+		refresh_teleport_rows()
 		_fit_height()
 	else:
 		get_tree().paused = false
@@ -516,8 +517,7 @@ func _switch_tab(name: String) -> void:
 	_current_tab = name
 	if name == Loc.txt("Teleport"):
 		_features._ensure_travel()
-		if _tp_tab != null:
-			_tp_tab._refresh_teleport_tab(_features.travel(), game_data)
+		refresh_teleport_rows()
 	if _tab_containers.has(name):
 		_tab_containers[name].show()
 	if name == Loc.txt("Sets"):
@@ -534,6 +534,15 @@ func _switch_tab(name: String) -> void:
 			btn.add_theme_color_override("font_color", VTKSurface.GREY)
 		for state in ["normal", "hover", "pressed"]:
 			btn.add_theme_stylebox_override(state, style)
+
+# Замки телепорта зависят от живой опции «только открытые» и от того, открыли
+# ли убежище, пока окно было закрыто. Поэтому строки пересобираются при
+# открытии окна и при смене опции, а не только по клику на вкладку: иначе строка
+# показывала бы доступное направление, а travel_to_shelter отказывал.
+func refresh_teleport_rows() -> void:
+	if _tp_tab == null:
+		return
+	_tp_tab._refresh_teleport_tab(_features.travel(), game_data)
 
 # ============== TAB: Сеты ==============
 

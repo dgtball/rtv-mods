@@ -92,6 +92,7 @@ func _tp_row(title: String, note: String, enabled: bool, callback: Callable) -> 
 		var lock := TextureRect.new()
 		lock.texture = VTKSurface.lock_icon(16, VTKSurface.GOLD_OFF)
 		lock.custom_minimum_size = Vector2(16, 22)
+		lock.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
 		lock.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		hb.add_child(lock)

@@ -57,6 +57,8 @@ func set_travel_unlocked(only: bool) -> void:
 	var t := travel()
 	if t != null:
 		t.set_unlocked_only(only)
+	if _root != null and _root.has_method("refresh_teleport_rows"):
+		_root.call("refresh_teleport_rows")
 
 # Применение всего разобранного MCM-конфига разом. Порядок: HUD ->
 # автоэкип -> телепорт (термал удалён в 5.2.0).
