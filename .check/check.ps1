@@ -100,7 +100,8 @@ $tests = [ordered]@{
         "res://tests/vostok-toolkit/test_data.gd", "res://tests/vostok-toolkit/test_deposits.gd",
         "res://tests/vostok-toolkit/test_draft.gd", "res://tests/vostok-toolkit/test_equip.gd",
         "res://tests/vostok-toolkit/test_feed.gd", "res://tests/vostok-toolkit/test_hooks.gd",
-        "res://tests/vostok-toolkit/test_items.gd", "res://tests/vostok-toolkit/test_notes.gd",
+        "res://tests/vostok-toolkit/test_items.gd", "res://tests/vostok-toolkit/test_look.gd",
+        "res://tests/vostok-toolkit/test_notes.gd",
         "res://tests/vostok-toolkit/test_picker.gd", "res://tests/vostok-toolkit/test_seasons.gd",
         "res://tests/vostok-toolkit/test_session.gd", "res://tests/vostok-toolkit/test_spawn.gd",
         "res://tests/vostok-toolkit/test_travel.gd")
