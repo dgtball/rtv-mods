@@ -1,6 +1,6 @@
 extends RefCounted
-## Вкладка «Телепорт»: три равные колонки-карточки (карты, убежища, торговцы)
-## и строки-кнопки телепорта. Вынесена из VTKUI (батч 6e, R3).
+## Вкладка «Телепорт»: карточки (карты, убежища, торговцы) перетекают по ширине
+## окна: 3 колонки, 2 + третья во всю ширину, 1. Вынесена из VTKUI (батч 6e, R3).
 ##
 ## Вкладка владеет только своими боксами, всё остальное приходит извне:
 ## travel создаёт VTKUI через _ensure_travel (узел живёт ребёнком VTKUI),
@@ -23,6 +23,13 @@ var motion: Callable = Callable()
 var _tp_maps_box: VBoxContainer = null
 var _tp_shelters_box: VBoxContainer = null
 var _tp_traders_box: VBoxContainer = null
+
+# Карточки и раскладка: карточки создаются один раз и перевешиваются, а не
+# пересоздаются - иначе пропали бы боксы строк, которые наполняет
+# _refresh_teleport_tab.
+var _tp_cards: Array[Control] = []
+var _tp_flow: VBoxContainer = null
+var _tp_cols: int = 0
 
 func _tp_section_label(section: String) -> String:
 	match section:
@@ -114,16 +121,61 @@ func _build_teleport_tab(parent: VBoxContainer, travel: Node, game_data: Resourc
 		n_shelters = travel.SHELTERS.size()
 		n_traders = travel.TRADERS.size()
 
+	_tp_flow = VBoxContainer.new()
+	_tp_flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_tp_flow.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_tp_flow.add_theme_constant_override("separation", 10)
+	_tp_flow.resized.connect(_reflow_tp)
+	parent.add_child(_tp_flow)
+
+	_tp_cards = [
+		_make_tp_column(_tp_section_label("maps"), n_maps, _tp_maps_box),
+		_make_tp_column(_tp_section_label("shelters"), n_shelters, _tp_shelters_box),
+		_make_tp_column(_tp_section_label("traders"), n_traders, _tp_traders_box),
+	]
+	_reflow_tp()
+
+	_refresh_teleport_tab(travel, game_data)
+
+func _make_tp_row(a: Control, b: Control) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	row.add_theme_constant_override("separation", 10)
-	row.add_child(_make_tp_column(_tp_section_label("maps"), n_maps, _tp_maps_box))
-	row.add_child(_make_tp_column(_tp_section_label("shelters"), n_shelters, _tp_shelters_box))
-	row.add_child(_make_tp_column(_tp_section_label("traders"), n_traders, _tp_traders_box))
-	parent.add_child(row)
+	row.add_child(a)
+	row.add_child(b)
+	return row
 
-	_refresh_teleport_tab(travel, game_data)
+# Раскладка карточек по ширине окна: 3 колонки, 2 + третья во всю ширину, 1.
+# Карточки сперва отцепляются от старых рядов и только потом ряды освобождаются:
+# queue_free ряда унёс бы карточки вместе с собой. Пересборка - только при смене
+# числа колонок, иначе репарент случался бы на каждый ресайз и мог съесть клик.
+func _reflow_tp() -> void:
+	if _tp_flow == null or _tp_cards.is_empty():
+		return
+	var cols := VTKLook.flow_columns(_tp_flow.size.x, 340.0)
+	if cols == _tp_cols:
+		return
+	_tp_cols = cols
+	for card in _tp_cards:
+		if card.get_parent() != null:
+			card.get_parent().remove_child(card)
+	for row in _tp_flow.get_children():
+		_tp_flow.remove_child(row)
+		row.queue_free()
+	if cols == 1:
+		for card in _tp_cards:
+			card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			_tp_flow.add_child(card)
+		return
+	var first := _make_tp_row(_tp_cards[0], _tp_cards[1])
+	_tp_flow.add_child(first)
+	if cols == 3:
+		first.add_child(_tp_cards[2])
+		return
+	# cols == 2: третья карточка во всю ширину под первым рядом.
+	_tp_cards[2].size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_tp_flow.add_child(_tp_cards[2])
 
 func _refresh_teleport_tab(travel: Node, game_data: Resource) -> void:
 	if travel == null or not is_instance_valid(travel):

@@ -292,6 +292,8 @@ PRESENT = [
     "INVEN_COLS",
     "INVEN_ROWS",
     "_make_tp_column",
+    "_tp_cards",
+    "VTKLook.flow_columns",
     "var rail := HBoxContainer.new()",
     "_make_control_row",
     'Loc.txt("Delete")',
@@ -340,7 +342,8 @@ FUNCS = [
     ("_build_teleport_tab", [
         "_make_tp_column",
         "Control.SIZE_EXPAND_FILL",
-    ], "телепорт: три равные колонки-карточки"),
+        "_tp_cards",
+    ], "телепорт: карточки раскладываются по ширине окна"),
     ("_make_tp_column", [
         "Control.SIZE_EXPAND_FILL",
     ], "колонки телепорта делят ширину поровну"),
