@@ -65,6 +65,48 @@ const CATEGORIES := [
 	["furniture", "Furniture"],
 ]
 
+# Группы шага 1 «Экипировка»: только то, что встаёт в клетку сетки, по слотам.
+# Патроны, обвесы, еда, медицина, ключи, книги и мебель сюда не попадают.
+const EQUIP_GROUPS := [
+	["weapon", "Weapons"],
+	["clothing", "Clothing"],
+	["gear", "Gear"],
+	["hobby", "Hobby"],
+]
+
+# Группы шага 2 «Инвентарь»: весь каталог по назначению. Порядок - это порядок
+# строк в колонке фильтров.
+const INVENTORY_GROUPS := [
+	["weapon", "Weapons"],
+	["ammo", "Ammo & attachments"],
+	["clothing", "Clothing"],
+	["gear", "Gear"],
+	["medical", "Medical"],
+	["food", "Food"],
+	["tools", "Tools & sundries"],
+	["furniture", "Furniture"],
+]
+
+# Слот -> группа шага 1. Слота, которого здесь нет (Armor у бронеплит, Player),
+# на шаге 1 не существует: шаг показывает только то, что встаёт в клетку.
+const EQUIP_SLOT_GROUPS := {
+	"Primary": "weapon", "Secondary": "weapon", "Knife": "weapon",
+	"Grenade_1": "weapon", "Grenade_2": "weapon",
+	"Feet": "clothing", "Legs": "clothing", "Belt": "clothing",
+	"Torso": "clothing", "Head": "clothing", "Hands": "clothing",
+	"Helmet": "clothing", "Backpack": "clothing", "Rig": "clothing",
+	"Light": "gear", "NVG": "gear", "Time": "gear", "Map": "gear",
+	"Matches": "gear",
+}
+
+# Слот -> подпись подкатегории шага 1. Тождество, кроме гранат: два гнезда -
+# один чип.
+const SLOT_SUBS := {"Grenade_1": "Grenade", "Grenade_2": "Grenade"}
+
+# Классы предметов, которые формально помечены Primary/Secondary, но оружием не
+# являются. Проверяются раньше слотов.
+const HOBBY_TYPES := ["fishing", "instrument"]
+
 static var _art_cache: Dictionary = {}
 static var _subcat_cache: Dictionary = {}
 
@@ -126,6 +168,55 @@ static func category_label(key: String) -> String:
 		if str(entry[0]) == key:
 			return str(entry[1])
 	return key.capitalize()
+
+# Ключи таблицы групп в её порядке: [["weapon", "Weapons"], ...] -> ["weapon", ...].
+static func group_keys(groups: Array) -> Array:
+	var out: Array = []
+	for entry in groups:
+		out.append(str(entry[0]))
+	return out
+
+# Подпись группы по ключу. Неизвестный ключ не возвращается сырым: capitalize()
+# даёт "Furniture", а не "furniture".
+static func group_label(groups: Array, key: String) -> String:
+	for entry in groups:
+		if str(entry[0]) == key:
+			return str(entry[1])
+	return key.capitalize()
+
+# Набор слотов предмета без мусора: null и строка вместо массива - пустой набор.
+static func _slot_list(slots) -> Array:
+	if typeof(slots) != TYPE_ARRAY:
+		return []
+	var out: Array = []
+	for s in slots:
+		if s != null and str(s) != "":
+			out.append(str(s))
+	return out
+
+# Группа шага 1 по слоту. Хобби проверяется раньше слотов: удилище и гитара
+# формально помечены Primary/Secondary, но оружием не являются.
+static func equip_group_of(type, slots) -> String:
+	if type != null and HOBBY_TYPES.has(str(type).strip_edges().to_lower()):
+		return "hobby"
+	for s in _slot_list(slots):
+		if EQUIP_SLOT_GROUPS.has(s):
+			return str(EQUIP_SLOT_GROUPS[s])
+	return ""
+
+# Подкатегории шага 1 - это подписи его слотов. У Hobby их нет: удилище и
+# гитара стоят в группе по одному-два, чип внутри неё ничего не добавляет.
+static func equip_subs_of(type, slots) -> Array:
+	if equip_group_of(type, slots) == "hobby":
+		return []
+	var out: Array = []
+	for s in _slot_list(slots):
+		if not EQUIP_SLOT_GROUPS.has(s):
+			continue
+		var sub := str(SLOT_SUBS.get(s, s))
+		if not out.has(sub):
+			out.append(sub)
+	return out
 
 # Сводка типов, которые в данных игры не совпадают с группой, в которую их
 # ждёт игрок. Одна и та же еда приходит и как "Consumable", и как

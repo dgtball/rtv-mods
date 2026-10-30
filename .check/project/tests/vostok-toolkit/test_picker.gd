@@ -31,6 +31,8 @@ func _init() -> void:
 	t_shelves_of()
 	t_category_of()
 	t_category_allowed()
+	t_equip_group_of()
+	t_equip_subs_of()
 	t_subcategory_of()
 	t_order_subcategories()
 	t_furn_subcategories()
@@ -227,6 +229,30 @@ func t_category_allowed() -> void:
 	ck(not P.category_allowed("attachment", "Primary"), "обвесы не предлагаются слоту оружия")
 	ck(P.WEAPON_SLOTS == ["Primary", "Secondary"], "правило касается только двух слотов")
 
+
+func t_equip_group_of() -> void:
+	ck(P.equip_group_of("Weapon", ["Primary"]) == "weapon", "оружие в Primary -> Weapons")
+	ck(P.equip_group_of("Weapon", ["Primary", "Secondary"]) == "weapon", "два слота оружия -> Weapons")
+	ck(P.equip_group_of("Clothing", ["Head"]) == "clothing", "шапка -> Clothing")
+	ck(P.equip_group_of("Electronics", ["Light"]) == "gear", "фонарик -> Gear")
+	ck(P.equip_group_of("Misc", ["Matches"]) == "gear", "спички -> Gear")
+	ck(P.equip_group_of("Fishing", ["Primary", "Secondary"]) == "hobby", "удилище -> Hobby, не Weapons")
+	ck(P.equip_group_of("Instrument", ["Primary", "Secondary"]) == "hobby", "гитара -> Hobby")
+	ck(P.equip_group_of("Ammo", []) == "", "патроны без слота на шаге 1 не показываются")
+	ck(P.equip_group_of("Armor", ["Armor"]) == "", "бронеплита вне слотов шага 1")
+	ck(P.equip_group_of(null, null) == "", "без type и слотов - вне шага 1")
+	ck(P.equip_group_of("Weapon", "Primary") == "", "строка вместо массива слотов не считается")
+	ck(P.equip_group_of("Weapon", [null, "Zzz"]) == "", "мусор и незнакомый слот группы не дают")
+	ck(P.group_keys(P.EQUIP_GROUPS) == ["weapon", "clothing", "gear", "hobby"], "порядок групп шага 1")
+	ck(P.group_label(P.EQUIP_GROUPS, "gear") == "Gear", "подпись группы шага 1")
+
+func t_equip_subs_of() -> void:
+	ck(P.equip_subs_of("Weapon", ["Primary", "Secondary"]) == ["Primary", "Secondary"], "пистолет в двух слотах")
+	ck(P.equip_subs_of("Grenade", ["Grenade_1"]) == ["Grenade"], "граната: подпись без номера слота")
+	ck(P.equip_subs_of("Grenade", ["Grenade_1", "Grenade_2"]) == ["Grenade"], "два гнезда гранат схлопываются")
+	ck(P.equip_subs_of("Fishing", ["Primary", "Secondary"]).is_empty(), "у Hobby подкатегорий нет")
+	ck(P.equip_subs_of("Ammo", []).is_empty(), "вне шага 1 - без подкатегорий")
+	ck(P.equip_subs_of("Weapon", ["Primary", "Armor"]) == ["Primary"], "слот вне шага 1 в подкатегории не попадает")
 
 func t_order_subcategories() -> void:
 	ck(P.order_subcategories(["Fish", "Grenades", "Pistols", "Assault Rifles"]) == ["Assault Rifles", "Pistols", "Fish", "Grenades"],
