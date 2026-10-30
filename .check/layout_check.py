@@ -235,6 +235,7 @@ PRESENT = [
     "target_sub",
     "_reset_target_filters",
     "_make_filter_chip",
+    "_make_filter_row",
     "Picker.subcategory_of",
     "gear_sub_key",
     "gear_subs_collapsed",
@@ -356,6 +357,8 @@ FUNCS = [
      "предметы без слота не попадают на шаг 1"),
     ("_rebuild_shelves", ["Picker.buckets", "eq_subs"],
      "полка строится по группе, фильтр подкатегории - по набору слотов"),
+    ("_rebuild_target_bar", ["_make_filter_row", "margin_left", "show_subs"],
+     "подкатегории шага 1 идут отдельным рядом с отступом, а не в потоке категорий"),
     ("_build_ui", [
         "_main_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL",
         "vb.size_flags_vertical = Control.SIZE_EXPAND_FILL",

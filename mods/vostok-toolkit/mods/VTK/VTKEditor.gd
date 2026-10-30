@@ -1366,6 +1366,15 @@ class ToggleSwitch:
 		else:
 			_knob.position = target
 
+# Ряд чипов фильтра: один горизонтальный поток с общими отступами. Отдельная
+# функция, потому что рядов теперь два - категории и подкатегории.
+func _make_filter_row() -> HFlowContainer:
+	var line := HFlowContainer.new()
+	line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	line.add_theme_constant_override("h_separation", 4)
+	line.add_theme_constant_override("v_separation", 2)
+	return line
+
 func _rebuild_target_bar(found: Array) -> void:
 	if _target_bar == null:
 		return
@@ -1396,10 +1405,7 @@ func _rebuild_target_bar(found: Array) -> void:
 	if not show_line:
 		return
 
-	var line := HFlowContainer.new()
-	line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	line.add_theme_constant_override("h_separation", 4)
-	line.add_theme_constant_override("v_separation", 2)
+	var line := _make_filter_row()
 
 	var lbl := Label.new()
 	lbl.text = Loc.txt("Filter") + ":"
@@ -1410,8 +1416,6 @@ func _rebuild_target_bar(found: Array) -> void:
 	if cats.size() > 1:
 		for c in cats:
 			line.add_child(_make_filter_chip(c, _ui._session.target_cat == c))
-	for sub in show_subs:
-		line.add_child(_make_filter_chip(sub, _ui._session.target_sub == sub, true))
 
 	var reset := Button.new()
 	reset.text = Loc.txt("Reset")
@@ -1424,6 +1428,20 @@ func _rebuild_target_bar(found: Array) -> void:
 	line.add_child(reset)
 
 	_target_bar.add_child(line)
+
+	# Подкатегории - отдельный ряд под категориями: в общем потоке при узкой
+	# колонке они перемешивались с категориями, и второй уровень читался
+	# только по префиксу "> ". Отступ держит MarginContainer: у HFlowContainer
+	# своих margin-констант нет, а margin_left на PanelContainer не читается.
+	if not show_subs.is_empty():
+		var sub_row := MarginContainer.new()
+		sub_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sub_row.add_theme_constant_override("margin_left", 12)
+		var sub_line := _make_filter_row()
+		for sub in show_subs:
+			sub_line.add_child(_make_filter_chip(sub, _ui._session.target_sub == sub, true))
+		sub_row.add_child(sub_line)
+		_target_bar.add_child(sub_row)
 
 # Чип фильтра. level = true означает подкатегорию: она не снимает старший
 # уровень, а меняет только себя.

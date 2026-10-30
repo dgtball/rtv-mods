@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.3.3] - 2026-10-30
+
+### Changed
+
+- Subcategory filters in the equipment step sit on their own row, so they no
+  longer mix with the category chips.
+
 ## [5.3.2] - 2026-10-30
 
 ### Changed
