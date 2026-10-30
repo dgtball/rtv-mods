@@ -36,6 +36,7 @@ func _run() -> void:
 	t_feed_fade()
 	t_feed_evict()
 	t_feed_hs_svg()
+	t_feed_skull_svg()
 	t_feed_norm_weapon()
 	t_log_warn_once()
 	print("")
@@ -119,6 +120,17 @@ func t_feed_segments() -> void:
 	}
 	segs = Feed.segments(bare)
 	ck(segs.size() == 2, "без оружия и HS: только имена")
+	# Старая рана: только череп и имя жертвы, подробности игнорируются.
+	var self_death := {
+		"self_death": true,
+		"killer_kind": "", "killer_name": "",
+		"victim_kind": "nomad", "victim_name": "Mikko",
+		"weapon": "AKM", "headshot": true, "grenade": true, "t": 0,
+	}
+	segs = Feed.segments(self_death)
+	ck(segs.size() == 2, "self_death: ровно череп и жертва")
+	ck(str(segs[0]["icon"]) == "skull", "self_death: первым череп")
+	ck(str(segs[1]["text"]) == "Mikko" and segs[1]["color"] == Feed.GREEN, "self_death: имя жертвы своим цветом")
 	ck(Feed.kind_color("nomad") == Feed.GREEN, "номад зелёный")
 	ck(Feed.kind_color("") == Feed.RED, "неизвестный kind красный (hostile fallback)")
 
@@ -150,6 +162,12 @@ func t_feed_hs_svg() -> void:
 	ck(Feed.HS_SVG.contains("#FFD669"), "цвет HS-SVG совпадает с HS_GOLD")
 	var tex = Feed.Surface.svg_texture(Feed.HS_SVG)
 	ck(tex is Texture2D and tex.get_width() > 0, "HS-SVG рендерится в текстуру")
+
+func t_feed_skull_svg() -> void:
+	var Feed = preload("res://mods/VTK/VTKFeed.gd")
+	ck(Feed.SKULL_SVG.contains("#E6E6E6"), "череп рисуется костяным цветом")
+	var tex = Feed.Surface.svg_texture(Feed.SKULL_SVG)
+	ck(tex is Texture2D and tex.get_width() > 0, "SKULL-SVG рендерится в текстуру")
 
 # Оружие приходит из data.file рига/имени узла (AKS_74U), а в Database лежит
 # либо переименованное RGAAN имя, либо путь AKS-74U.tres — без нормализации

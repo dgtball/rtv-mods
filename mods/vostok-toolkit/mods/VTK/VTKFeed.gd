@@ -24,6 +24,10 @@ static func kind_color(kind: String) -> Color:
 	return RED
 
 static func segments(ev: Dictionary) -> Array:
+	var victim := {"text": str(ev.get("victim_name", "")), "color": kind_color(str(ev.get("victim_kind", "")))}
+	# Смерть от старой раны: убийцы нет, поэтому нет ни оружия, ни HS, ни гранаты.
+	if bool(ev.get("self_death", false)):
+		return [{"icon": "skull"}, victim]
 	var out: Array = []
 	out.append({"text": str(ev.get("killer_name", "")), "color": kind_color(str(ev.get("killer_kind", "")))})
 	if bool(ev.get("grenade", false)):
@@ -33,7 +37,7 @@ static func segments(ev: Dictionary) -> Array:
 			out.append({"icon": "weapon"})
 		if bool(ev.get("headshot", false)):
 			out.append({"icon": "hs"})
-	out.append({"text": str(ev.get("victim_name", "")), "color": kind_color(str(ev.get("victim_kind", "")))})
+	out.append(victim)
 	return out
 
 static func alpha_at(age: float) -> float:
@@ -57,6 +61,8 @@ const Picker = preload("res://mods/VTK/VTKPicker.gd")
 const GRENADE_SVG := "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\"><ellipse cx=\"16\" cy=\"20\" rx=\"9\" ry=\"10\" fill=\"#6f7a5a\" stroke=\"#3d4433\" stroke-width=\"2\"/><rect x=\"13\" y=\"6\" width=\"6\" height=\"5\" rx=\"1\" fill=\"#8a8f7a\" stroke=\"#3d4433\" stroke-width=\"1.5\"/><path d=\"M19 8 q7 1 7 7\" fill=\"none\" stroke=\"#c9c2b2\" stroke-width=\"2\"/><path d=\"M26 15 l0 4\" fill=\"none\" stroke=\"#c9c2b2\" stroke-width=\"2\"/></svg>"
 # Перекрестие HS — из утверждённого макета (killfeed-mockup.html), цвет = HS_GOLD.
 const HS_SVG := "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\"><circle cx=\"16\" cy=\"16\" r=\"11\" fill=\"none\" stroke=\"#FFD669\" stroke-width=\"2.5\"/><circle cx=\"16\" cy=\"16\" r=\"3.5\" fill=\"#FFD669\"/><path d=\"M16 1v7M16 24v7M1 16h7M24 16h7\" fill=\"none\" stroke=\"#FFD669\" stroke-width=\"2.5\"/></svg>"
+# Череп — для смерти от старой раны: убийцы нет, подробности неизвестны.
+const SKULL_SVG := "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\"><path d=\"M16 3C9.4 3 5 7.6 5 13.4c0 3.6 1.6 6.2 3.8 8v4.2c0 1.3 1 2.4 2.4 2.4h1.6v-2.6h2v2.6h2.4v-2.6h2v2.6h1.6c1.4 0 2.4-1.1 2.4-2.4V21.4c2.2-1.8 3.8-4.4 3.8-8C27 7.6 22.6 3 16 3z\" fill=\"#E6E6E6\" stroke=\"#3A3A3A\" stroke-width=\"1.6\"/><circle cx=\"11.6\" cy=\"13.6\" r=\"2.7\" fill=\"#3A3A3A\"/><circle cx=\"20.4\" cy=\"13.6\" r=\"2.7\" fill=\"#3A3A3A\"/><path d=\"M16 18.4l-1.5 3h3z\" fill=\"#3A3A3A\"/></svg>"
 
 var _enabled: bool = false
 var _rows: Array = []
@@ -166,6 +172,9 @@ func _add_icon(row: HBoxContainer, icon: String, ev: Dictionary) -> void:
 			wl.add_theme_font_size_override("font_size", FONT_SIZE)
 			wl.add_theme_color_override("font_color", GREY)
 			row.add_child(wl)
+		return
+	if icon == "skull":
+		_add_tex(row, Surface.svg_texture(SKULL_SVG))
 		return
 	if icon == "grenade":
 		_add_tex(row, Surface.svg_texture(GRENADE_SVG))
