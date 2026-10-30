@@ -304,7 +304,7 @@ func _make_chip_style(active: bool, hover: bool = false) -> StyleBox:
 
 func _build_ui() -> void:
 	var bg = ColorRect.new()
-	bg.color = Color(0, 0, 0, 0.6)
+	bg.color = VTKSurface.SCRIM
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 	_ui_nodes.append(bg)
@@ -358,7 +358,7 @@ func _build_ui() -> void:
 	var bv := Label.new()
 	bv.text = "V"
 	bv.add_theme_font_size_override("font_size", 15)
-	bv.add_theme_color_override("font_color", Color("#0e0b08"))
+	bv.add_theme_color_override("font_color", VTKSurface.BRAND_INK)
 	bv.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bv.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bv.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -391,7 +391,7 @@ func _build_ui() -> void:
 	rail_sep.offset_top = 66
 	rail_sep.offset_right = -4
 	rail_sep.offset_bottom = 67
-	rail_sep.color = Color("#2a2419")
+	rail_sep.color = VTKSurface.SEPARATOR
 	rail_sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_panel.add_child(rail_sep)
 

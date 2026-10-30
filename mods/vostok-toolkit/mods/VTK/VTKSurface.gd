@@ -13,6 +13,45 @@ const PANEL_BG := Color("#1a1510")
 const GREY := Color("#888888")
 const GREY_DIM := Color("#666666")
 
+# Затемнение под окном: 0.35, а не 0.6 — иначе ванильный тост за подложкой
+# не читается (Loader/Messages живёт под нашим слоем).
+const SCRIM := Color(0, 0, 0, 0.35)
+
+# Палитра UI. Держим здесь единственный дом цветов: литерал Color("#...") в
+# любом другом модуле валит layout_check.
+const BRAND_INK := Color("#0e0b08")
+const SEPARATOR := Color("#2a2419")
+const INK_ON_GOLD := Color("#1a1206")
+const FIELD_INK := Color("#ffffff")
+const DOT_OFF := Color("#4a4038")
+const STEP_OFF_BG := Color("#1f1913")
+const CELL_BG := Color("#1e1a15")
+const CELL_ON_BG := Color("#241d13")
+const CELL_HOVER_BG := Color("#2c2417")
+const CELL_ON_BORDER := Color("#c9823a")
+const CELL_HOVER_BORDER := Color("#8a6a30")
+const CELL_BORDER := Color("#4a443a")
+const DANGER := Color("#e05a4a")
+const INVEN_BG := Color("#14110c")
+const TRACK_ON := Color("#2a1a0a")
+const TRACK_OFF := Color("#241b12")
+const KNOB_OFF := Color("#6b5a46")
+const SECTION_INK := Color("#6a5a4a")
+# Четыре почти одинаковых серых (#aaa/#bbb/#ccc/#ddd) сведены к двум ролям:
+# вторичный текст и приглушённый.
+const TEXT_SOFT := Color("#cccccc")
+const TEXT_DIM := Color("#aaaaaa")
+const TEXT_OFF := Color("#444444")
+const BTN_INK := Color("#c8bfae")
+const RAIL_BG := Color("#141009")
+const INK_OFF := Color("#4d443a")
+const GOLD_OFF := Color("#3a3226")
+
+# Внутренние: снаружи не нужны, но файл перестаёт быть наполовину именованным.
+const INSET_BG := Color("#171208")
+const INSET_BORDER := Color("#2a1f14")
+const HOVER_INK := Color("#efe5d4")
+
 static var _surfaces: Dictionary = {}
 static var _textures: Dictionary = {}
 static var _panels: Dictionary = {}
@@ -92,8 +131,8 @@ static func panel(inset: bool = false, margin: int = 16) -> StyleBoxFlat:
 	if _panels.has(key):
 		return _panels[key]
 	var s := StyleBoxFlat.new()
-	s.bg_color = Color("#171208") if inset else PANEL_BG
-	s.border_color = Color("#2a1f14")
+	s.bg_color = INSET_BG if inset else PANEL_BG
+	s.border_color = INSET_BORDER
 	s.set_border_width_all(1)
 	s.set_corner_radius_all(4)
 	s.set_content_margin_all(margin)
@@ -139,7 +178,7 @@ static func focus_style() -> StyleBoxFlat:
 static func style_button(button: Button, accent: bool = false, danger: bool = false,
 		ml: int = 14, mr: int = 14, mt: int = 9, mb: int = 11) -> void:
 	button.add_theme_color_override("font_color", INK)
-	button.add_theme_color_override("font_hover_color", Color("#efe5d4"))
+	button.add_theme_color_override("font_hover_color", HOVER_INK)
 	button.add_theme_color_override("font_pressed_color", GOLD)
 	button.add_theme_color_override("font_disabled_color", BROWN)
 	for state in ["normal", "hover", "pressed", "disabled"]:

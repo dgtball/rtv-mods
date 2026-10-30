@@ -47,7 +47,7 @@ func _tp_row(title: String, note: String, enabled: bool, callback: Callable) -> 
 	nm.text = title
 	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	nm.add_theme_font_size_override("font_size", 12)
-	nm.add_theme_color_override("font_color", VTKSurface.INK if enabled else Color("#4d443a"))
+	nm.add_theme_color_override("font_color", VTKSurface.INK if enabled else VTKSurface.INK_OFF)
 	hb.add_child(nm)
 
 	if note != "":
@@ -61,7 +61,7 @@ func _tp_row(title: String, note: String, enabled: bool, callback: Callable) -> 
 	var go := Label.new()
 	go.text = "▸" if enabled else "•"
 	go.add_theme_font_size_override("font_size", 12)
-	go.add_theme_color_override("font_color", VTKSurface.GOLD if enabled else Color("#3a3226"))
+	go.add_theme_color_override("font_color", VTKSurface.GOLD if enabled else VTKSurface.GOLD_OFF)
 	go.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	hb.add_child(go)
 

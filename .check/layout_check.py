@@ -185,6 +185,12 @@ HOOKS_GONE = [
     "_death_restart_btn",
 ]
 
+# Палитра живёт в одном файле: литерал Color("#...") вне VTKSurface - ошибка
+# стенда, а не стиль. VTKSurface сам держит литералы, поэтому он единственный
+# файл в белом списке.
+HEX_OK = {"VTKSurface.gd"}
+HEX_RE = re.compile(r'Color\("#')
+
 PRESENT = [
     "_page_columns",
     "class RefreshScope:",
@@ -446,6 +452,17 @@ def main():
             print("  HOOKS-GONE %-31s встречается в %s"
                   % (esc(s), ", ".join(hits)))
 
+    hex_hits = 0
+    for fname, src in mods:
+        if fname in HEX_OK:
+            continue
+        for n, line in enumerate(src.splitlines(), 1):
+            found = HEX_RE.findall(line)
+            if found:
+                hex_hits += len(found)
+                bad += 1
+                print("  HEX     %-34s %s:%d (%d)" % (fname, fname, n, len(found)))
+
     nul_rows = 0
     for path in sorted(glob.glob(ALL_SOURCES_GLOB, recursive=True)):
         src = io.open(path, encoding="utf-8", errors="replace").read()
@@ -457,9 +474,9 @@ def main():
                       % (os.path.basename(path),
                          os.path.relpath(path, REPO_ROOT).replace("\\", "/"), n))
 
-    print("GONE: %d, GONE_RE: %d, PRESENT: %d, FUNCS: %d, HOOKS_GONE: %d, NUL: %d"
+    print("GONE: %d, GONE_RE: %d, PRESENT: %d, FUNCS: %d, HOOKS_GONE: %d, HEX: %d, NUL: %d"
           % (len(GONE), len(GONE_RE), len(PRESENT), len(FUNCS),
-             len(HOOKS_GONE), nul_rows))
+             len(HOOKS_GONE), hex_hits, nul_rows))
     if bad:
         print("RESULT: раскладка разошлась с планом: %d" % bad)
         sys.exit(1)

@@ -269,7 +269,7 @@ func _make_step_row_style(active: bool, hover: bool = false) -> StyleBox:
 
 func _make_step_circle_style(active: bool) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
-	s.bg_color = _ui._gold if active else Color("#1f1913")
+	s.bg_color = _ui._gold if active else VTKSurface.STEP_OFF_BG
 	s.border_color = _ui._gold if active else VTKSurface.BORDER
 	s.border_width_all = 1
 	s.corner_radius_all = 9
@@ -287,7 +287,7 @@ func _make_step_circle(n: int, active: bool) -> Panel:
 	var num := Label.new()
 	num.text = str(n)
 	num.add_theme_font_size_override("font_size", 10)
-	num.add_theme_color_override("font_color", Color("#1a1206") if active else VTKSurface.MUTED)
+	num.add_theme_color_override("font_color", VTKSurface.INK_ON_GOLD if active else VTKSurface.MUTED)
 	num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	num.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	num.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -319,7 +319,7 @@ func _show_page(n: int) -> void:
 		if i < _step_numbers.size():
 			var num := _step_numbers[i] as Label
 			if num != null:
-				num.add_theme_color_override("font_color", Color("#1a1206") if on else VTKSurface.MUTED)
+				num.add_theme_color_override("font_color", VTKSurface.INK_ON_GOLD if on else VTKSurface.MUTED)
 		if i < _step_checks.size():
 			var chk := _step_checks[i] as Label
 			if chk != null:
@@ -424,7 +424,7 @@ func _page_columns(title: String, side: Control, main: Control, width := SIDE_WI
 func _make_search_field(on_change: Callable) -> LineEdit:
 	var search := LineEdit.new()
 	search.placeholder_text = Loc.txt("Search items...")
-	search.add_theme_color_override("font_color", Color("#ffffff"))
+	search.add_theme_color_override("font_color", VTKSurface.FIELD_INK)
 	search.add_theme_color_override("placeholder_color", VTKSurface.GREY_DIM)
 	search.add_theme_stylebox_override("normal", VTKSurface.panel(true, 10))
 	search.add_theme_stylebox_override("focus", VTKSurface.focus_style())
@@ -728,7 +728,7 @@ func _make_facet_row(facet: Dictionary, level: bool) -> Control:
 	hb.add_theme_constant_override("separation", 6)
 	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(hb)
-	hb.add_child(_make_dot(Color("#4a4038") if level else VTKSurface.BROWN))
+	hb.add_child(_make_dot(VTKSurface.DOT_OFF if level else VTKSurface.BROWN))
 
 	var nm := Label.new()
 	if key == "":
@@ -857,7 +857,7 @@ func _build_page_done() -> Control:
 	# столбец при каждой пересборке (_refresh_page_done), чтобы не терять текст.
 	_name_input = LineEdit.new()
 	_name_input.placeholder_text = Loc.txt("Enter a name...")
-	_name_input.add_theme_color_override("font_color", Color("#ffffff"))
+	_name_input.add_theme_color_override("font_color", VTKSurface.FIELD_INK)
 	_name_input.add_theme_color_override("placeholder_color", VTKSurface.GREY_DIM)
 	_name_input.add_theme_stylebox_override("normal", VTKSurface.panel(true, 10))
 	_name_input.add_theme_stylebox_override("focus", VTKSurface.focus_style())
@@ -936,19 +936,19 @@ func _equip_cell_style(active: bool, hover: bool = false, occupied: bool = false
 	if _ui._equip_styles.has(key):
 		return _ui._equip_styles[key]
 	var s := StyleBoxFlat.new()
-	s.bg_color = Color("#241d13") if occupied else Color("#1e1a15")
+	s.bg_color = VTKSurface.CELL_ON_BG if occupied else VTKSurface.CELL_BG
 	if active:
-		s.bg_color = Color("#2c2417")
+		s.bg_color = VTKSurface.CELL_HOVER_BG
 	s.set_border_width_all(1)
 	s.corner_radius_all = 6
 	if active:
 		s.border_color = _ui._gold
 	elif hover:
-		s.border_color = Color("#c9823a")
+		s.border_color = VTKSurface.CELL_ON_BORDER
 	elif occupied:
-		s.border_color = Color("#8a6a30")
+		s.border_color = VTKSurface.CELL_HOVER_BORDER
 	else:
-		s.border_color = Color("#4a443a")
+		s.border_color = VTKSurface.CELL_BORDER
 	_ui._equip_styles[key] = s
 	return s
 
@@ -1107,7 +1107,7 @@ func _make_equip_cell(slot: String, w: int, h: int, desc: Dictionary = {}, inter
 		var xs := _x_size(w, h)
 		var drop := _make_mini_btn("✕", Vector2(xs["box"], xs["box"]), xs["font"])
 		drop.tooltip_text = Loc.txt("Remove")
-		drop.add_theme_color_override("font_color", Color("#e05a4a"))
+		drop.add_theme_color_override("font_color", VTKSurface.DANGER)
 		drop.pressed.connect(func(): _remove_slot(slot))
 		box.add_child(drop)
 		drop.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
@@ -1232,7 +1232,7 @@ func _make_inventory_wall(gear: Array) -> Control:
 	bg.add_theme_constant_override("v_separation", INVEN_GAP)
 	if _ui._inven_bg_style == null:
 		_ui._inven_bg_style = StyleBoxFlat.new()
-		_ui._inven_bg_style.bg_color = Color("#14110c")
+		_ui._inven_bg_style.bg_color = VTKSurface.INVEN_BG
 		_ui._inven_bg_style.corner_radius_all = 3
 	for i in range(rows * INVEN_COLS):
 		var gc := Panel.new()
@@ -1365,16 +1365,16 @@ class ToggleSwitch:
 			return
 		var ts := StyleBoxFlat.new()
 		if _on:
-			ts.bg_color = Color("#2a1a0a")
+			ts.bg_color = VTKSurface.TRACK_ON
 			ts.border_color = GOLD
 		else:
-			ts.bg_color = Color("#241b12")
+			ts.bg_color = VTKSurface.TRACK_OFF
 			ts.border_color = VTKSurface.BORDER
 		ts.border_width_all = 1
 		ts.corner_radius_all = 9
 		_track.add_theme_stylebox_override("panel", ts)
 		var ks := StyleBoxFlat.new()
-		ks.bg_color = GOLD if _on else Color("#6b5a46")
+		ks.bg_color = GOLD if _on else VTKSurface.KNOB_OFF
 		ks.corner_radius_all = 6
 		ks.shadow_color = Color(0, 0, 0, 0.4)
 		ks.shadow_size = 2
@@ -1456,7 +1456,7 @@ func _make_filter_chip(key: String, on: bool, level: bool = false) -> Button:
 	b.add_theme_font_size_override("font_size", 9)
 	b.tooltip_text = name_txt
 	b.add_theme_stylebox_override("normal", _ui._make_chip_style(on))
-	b.add_theme_color_override("font_color", _ui._gold if on else Color("#cccccc"))
+	b.add_theme_color_override("font_color", _ui._gold if on else VTKSurface.TEXT_SOFT)
 	_ui._attach_motion(b)
 	if level:
 		b.pressed.connect(func(): _set_target_sub(key))
@@ -1798,7 +1798,7 @@ func _make_item_cell(item, forced_slot = null, gear := false, force_gear := fals
 	cell.add_theme_stylebox_override("panel", normal_style)
 
 	var vbox := _icon_stack(cell, _ui._item_icon(item), Vector2(GEAR_CELL_W - 32, 56),
-		str(item.name), 9, Color("#aaa"), 2)
+		str(item.name), 9, VTKSurface.TEXT_DIM, 2)
 
 	var already: bool = _ui._session.draft != null and _ui._session.draft.has_path(path_now)
 	if already and not gear:
@@ -1858,7 +1858,7 @@ func _make_item_cell(item, forced_slot = null, gear := false, force_gear := fals
 		# center и рисуется поверх, клики на себя забирает она.
 		var drop := _make_mini_btn("✕", Vector2(20, 20), 11)
 		VTKSurface.style_button(drop, false, true, 2, 2, 2, 2)
-		drop.add_theme_color_override("font_color", Color("#e05a4a"))
+		drop.add_theme_color_override("font_color", VTKSurface.DANGER)
 		drop.tooltip_text = Loc.txt("Remove")
 		drop.pressed.connect(func(): _remove_gear(path_now))
 		cell.add_child(drop)
@@ -2075,7 +2075,7 @@ func _build_att_panel(path: String) -> Control:
 		var sect := Label.new()
 		sect.text = _att_group_label(grp)
 		sect.add_theme_font_size_override("font_size", 9)
-		sect.add_theme_color_override("font_color", Color("#6a5a4a"))
+		sect.add_theme_color_override("font_color", VTKSurface.SECTION_INK)
 		sect.add_theme_constant_override("margin_left", 4)
 		vb.add_child(sect)
 		# Плитки переносятся сами, а обвесов у ствола бывает под двадцать,
@@ -2113,7 +2113,7 @@ func _make_att_cell(owner_path: String, grp: String, att_res) -> Control:
 	_ui._attach_motion(cell)
 
 	_icon_stack(cell, _ui._item_icon(att_res), Vector2(84, 48),
-		str(att_res.name), 9, _ui._gold if on else Color("#aaa"), 2)
+		str(att_res.name), 9, _ui._gold if on else VTKSurface.TEXT_DIM, 2)
 
 	cell.tooltip_text = str(att_res.name) + "\n" + str(att_res.resource_path)
 	cell.gui_input.connect(func(ev: InputEvent):
@@ -2161,7 +2161,7 @@ func _build_mag_panel(path: String, desc: Dictionary) -> Control:
 	var cut_label := Label.new()
 	cut_label.text = Loc.txt("Full magazine")
 	cut_label.add_theme_font_size_override("font_size", 10)
-	cut_label.add_theme_color_override("font_color", _ui._gold if on else Color("#bbb"))
+	cut_label.add_theme_color_override("font_color", _ui._gold if on else VTKSurface.TEXT_SOFT)
 	cut_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(cut_label)
 

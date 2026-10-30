@@ -75,7 +75,7 @@ func _build_loadouts_tab(parent: VBoxContainer) -> void:
 	var list_title = Label.new()
 	list_title.text = Loc.txt("Saved loadouts")
 	list_title.add_theme_font_size_override("font_size", 13)
-	list_title.add_theme_color_override("font_color", Color("#ddd"))
+	list_title.add_theme_color_override("font_color", VTKSurface.TEXT_SOFT)
 	_rail_box.add_child(list_title)
 
 	_list_container = VBoxContainer.new()
@@ -176,7 +176,7 @@ func _refresh_preview() -> void:
 	var head_sep := ColorRect.new()
 	head_sep.custom_minimum_size = Vector2(0, 1)
 	head_sep.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	head_sep.color = Color("#2a2419")
+	head_sep.color = VTKSurface.SEPARATOR
 	head_sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_preview_box.add_child(head_sep)
 
@@ -194,7 +194,7 @@ func _refresh_preview() -> void:
 		qk_btn.add_theme_color_override("font_color", VTKSurface.GOLD)
 	else:
 		qk_btn.text = "?"
-		qk_btn.add_theme_color_override("font_color", Color("#444"))
+		qk_btn.add_theme_color_override("font_color", VTKSurface.TEXT_OFF)
 	VTKSurface.style_button(qk_btn, qk > 0)
 	qk_btn.pressed.connect(func(): _begin_bind(_selected_set, qk_btn))
 	var del_btn := Button.new()
@@ -227,7 +227,7 @@ class CreateCard extends Panel:
 		custom_minimum_size = Vector2(0, 46)
 		mouse_filter = Control.MOUSE_FILTER_STOP
 		var st := StyleBoxFlat.new()
-		st.bg_color = Color("#141009")
+		st.bg_color = VTKSurface.RAIL_BG
 		st.corner_radius_all = 4
 		add_theme_stylebox_override("panel", st)
 		var l := Label.new()
@@ -265,7 +265,7 @@ func _refresh_loadout_list() -> void:
 		var debug = Label.new()
 		debug.text = Loc.txt("file: ") + str(OS.get_user_data_dir()) + "/MCM/vostok-toolkit/VTKsets.json"
 		debug.add_theme_font_size_override("font_size", 8)
-		debug.add_theme_color_override("font_color", Color("#444"))
+		debug.add_theme_color_override("font_color", VTKSurface.TEXT_OFF)
 		_list_container.add_child(debug)
 		_list_container.add_child(CreateCard.new(_ui._start_new_draft, Loc.txt("+ Create loadout")))
 		return
@@ -396,11 +396,11 @@ func _apply_qk_btn(btn: Button, qk: int) -> void:
 		VTKSurface.style_button(btn, true)
 	elif btn == _done_bind_btn:
 		btn.text = Loc.txt("Assign key")
-		btn.add_theme_color_override("font_color", Color("#c8bfae"))
+		btn.add_theme_color_override("font_color", VTKSurface.BTN_INK)
 		VTKSurface.style_button(btn)
 	else:
 		btn.text = "?"
-		btn.add_theme_color_override("font_color", Color("#444"))
+		btn.add_theme_color_override("font_color", VTKSurface.TEXT_OFF)
 		VTKSurface.style_button(btn)
 
 # Бинд, который показывает кнопка на странице Готово: нажатый в захвате,
