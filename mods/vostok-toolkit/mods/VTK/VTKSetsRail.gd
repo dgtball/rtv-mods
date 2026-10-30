@@ -10,6 +10,7 @@ extends RefCounted
 const Loc = preload("res://mods/VTK/VTKLoc.gd")
 const VTKSurface := preload("res://mods/VTK/VTKSurface.gd")
 const LD := preload("res://mods/VTK/VTKData.gd")
+const VTKLook := preload("res://mods/VTK/VTKLook.gd")
 
 # Ширина рейла сетов. Панель на весь экран, поэтому рейл можно не жать:
 # карточкам хватает воздуха, а редактор справа всё равно забирает большую
@@ -72,11 +73,7 @@ func _build_loadouts_tab(parent: VBoxContainer) -> void:
 	_rail_box.add_theme_constant_override("separation", 6)
 	rail_panel.add_child(_rail_box)
 
-	var list_title = Label.new()
-	list_title.text = Loc.txt("Saved loadouts")
-	list_title.add_theme_font_size_override("font_size", 13)
-	list_title.add_theme_color_override("font_color", VTKSurface.TEXT_SOFT)
-	_rail_box.add_child(list_title)
+	_rail_box.add_child(VTKLook.card_head(Loc.txt("Saved loadouts")))
 
 	_list_container = VBoxContainer.new()
 	_list_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL

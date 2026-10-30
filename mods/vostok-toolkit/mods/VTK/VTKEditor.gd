@@ -5,6 +5,7 @@ const Picker := preload("res://mods/VTK/VTKPicker.gd")
 const VTKSurface := preload("res://mods/VTK/VTKSurface.gd")
 const Items := preload("res://mods/VTK/VTKItemStore.gd")
 const Draft := preload("res://mods/VTK/VTKDraft.gd")
+const VTKLook := preload("res://mods/VTK/VTKLook.gd")
 
 const R_EQUIP := 1
 const R_GEAR := 2
@@ -362,10 +363,12 @@ const SIDE_WIDTH := 232
 const EQ_COL_W := 447
 const EQ_CELL := 70
 const EQ_GAP := 3
-# Стена инвентаря: чипы 1×1, клетка 70px для читаемости иконок, всегда 8×8.
-# Метрики совпадают с экипировкой (70/3) и отступом 6px: ряды колонок ровные.
+# Стена инвентаря: чипы 1×1, клетка 70px для читаемости иконок, всегда 8 рядов.
+# Колонок 5, а не 8: превью сета живёт в окне 1200 справа от рейла (~866px), и
+# восемь колонок (600px) не встают рядом с экипировкой даже без колонки
+# управления. Пять дают сетку 362, карточка с полями 10+10 - 382.
 const INVEN_CELL := 70
-const INVEN_COLS := 8
+const INVEN_COLS := 5
 const INVEN_ROWS := 8
 const INVEN_GAP := 3
 
@@ -1141,45 +1144,33 @@ func _make_equip_grid(cells: Array, cols: int, rows: int, eq: Dictionary = {}, i
 	return zone
 
 # Превью сета: та же укладка, что во вкладке, но некликабельная и с занятыми
-# клетками из сета. Колонка фиксирована (EQ_COL_W), остаток строки забирает
-# стена инвентаря.
+# клетками из сета. Карточка VTKLook.card: заголовок с тиком, тело - сетка.
+# Ширина считается от сетки (EQ_CELL/EQ_GAP) плюс поля карточки, а не от
+# EQ_COL_W: тот - ширина левой колонки шага 1 с полями 6+6.
 func _make_equip_preview(eq: Dictionary) -> Control:
-	var panel := VBoxContainer.new()
-	panel.custom_minimum_size = Vector2(EQ_COL_W, 0)
-	panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	panel.add_theme_constant_override("separation", 6)
-	panel.add_theme_stylebox_override("panel", VTKSurface.panel(true, 6))
-	var head := Label.new()
-	head.text = Loc.txt("Equipment").to_upper()
-	head.add_theme_font_size_override("font_size", 9)
-	head.add_theme_color_override("font_color", _ui._gold)
-	head.add_theme_constant_override("letter_spacing", 1)
-	head.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(head)
 	# Слоты берём из каталога, как в редакторе (_refresh_slots): превью повторяет
 	# укладку целиком, включая пустые клетки, даже если сет занял лишь часть
 	# слотов.
 	if _ui._equip_cells.is_empty():
 		_ui._build_equip_layout()
 	var cells: Array = _ui._equip_cells
+	var body: Control
 	if cells.is_empty():
 		var ph := Label.new()
 		ph.text = Loc.txt("Set is empty")
 		ph.add_theme_font_size_override("font_size", 11)
 		ph.add_theme_color_override("font_color", VTKSurface.GREY_DIM)
 		ph.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		panel.add_child(ph)
+		body = ph
 	else:
-		var pad := MarginContainer.new()
-		pad.add_theme_constant_override("margin_left", 6)
-		pad.add_theme_constant_override("margin_top", 6)
-		pad.add_theme_constant_override("margin_right", 6)
-		pad.add_theme_constant_override("margin_bottom", 6)
-		pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		pad.add_child(_make_equip_grid(cells, _ui._equip_cols, _ui._equip_rows, eq, false))
-		panel.add_child(pad)
-	return panel
+		body = _make_equip_grid(cells, _ui._equip_cols, _ui._equip_rows, eq, false)
+	var cols: int = maxi(1, _ui._equip_cols)
+	var grid_w := cols * EQ_CELL + maxi(0, cols - 1) * EQ_GAP
+	var card := VTKLook.card(Loc.txt("Equipment"), "", body)
+	card.custom_minimum_size = Vector2(grid_w + VTKLook.CARD_PAD * 2, 0)
+	card.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	return card
 
 func _wall_item(desc: Dictionary) -> Control:
 	var box := Control.new()
@@ -1206,11 +1197,10 @@ func _wall_item(desc: Dictionary) -> Control:
 			box.add_child(q)
 	return box
 
-# Стена инвентаря: чипы 1×1, 8 колонок, минимум 8 рядов - поле всегда квадрат
-# 581×581 (при ≤64 стеках). Не растягивается по ширине: блок превью прижат
-# влево, остаток строки - справа. Пиксельные координаты, посчитанные один
-# раз, не пережили бы ресайз окна, поэтому предметы держатся якорями -
-# долями от ширины/высоты стены.
+# Стена инвентаря: чипы 1×1, 5 колонок, минимум 8 рядов - поле 362×581 (при
+# ≤40 стеках). Не растягивается по ширине: блок превью прижат влево, остаток
+# строки - справа. Пиксельные координаты, посчитанные один раз, не пережили бы
+# ресайз окна, поэтому предметы держатся якорями - долями от ширины/высоты стены.
 func _make_inventory_wall(gear: Array) -> Control:
 	var n := 0
 	for desc in gear:
@@ -1262,30 +1252,16 @@ func _make_inventory_wall(gear: Array) -> Control:
 	return wall
 
 func _make_inventory_panel(gear: Array) -> Control:
-	var panel := VBoxContainer.new()
-	panel.custom_minimum_size = Vector2(INVEN_COLS * INVEN_CELL + (INVEN_COLS - 1) * INVEN_GAP + 12, 0)
-	panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	panel.add_theme_constant_override("separation", 6)
-	var head := HBoxContainer.new()
-	var ttl := Label.new()
-	ttl.text = Loc.txt("Inventory").to_upper()
-	ttl.add_theme_font_size_override("font_size", 9)
-	ttl.add_theme_color_override("font_color", _ui._gold)
-	ttl.add_theme_constant_override("letter_spacing", 1)
-	ttl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	head.add_child(ttl)
-	panel.add_child(head)
-	var pad := MarginContainer.new()
-	pad.add_theme_constant_override("margin_left", 6)
-	pad.add_theme_constant_override("margin_top", 6)
-	pad.add_theme_constant_override("margin_right", 6)
-	pad.add_theme_constant_override("margin_bottom", 6)
-	pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var wall := _make_inventory_wall(gear)
-	pad.add_child(wall)
-	panel.add_child(pad)
-	return panel
+	var card := VTKLook.card(Loc.txt("Inventory"), "", wall)
+	card.custom_minimum_size = Vector2(
+		INVEN_COLS * INVEN_CELL + (INVEN_COLS - 1) * INVEN_GAP + VTKLook.CARD_PAD * 2, 0)
+	# SHRINK_BEGIN: карточка держит свои 382 px (5·70 + 4·3 + поля 20), а не
+	# тянется до кромки. В HFlowContainer EXPAND_FILL всё равно не растягивает
+	# ребёнка, поэтому флаг честно описывает поведение: стена прижата влево.
+	card.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	return card
 
 # Клик по строке слота: строка становится целью, а клик по текущей цели с
 # предметом открывает панель обвесов. Иначе обвесы пришлось бы искать
@@ -2072,12 +2048,7 @@ func _build_att_panel(path: String) -> Control:
 
 	for g in groups:
 		var grp := str(g.get("grp", "Other"))
-		var sect := Label.new()
-		sect.text = _att_group_label(grp)
-		sect.add_theme_font_size_override("font_size", 9)
-		sect.add_theme_color_override("font_color", VTKSurface.SECTION_INK)
-		sect.add_theme_constant_override("margin_left", 4)
-		vb.add_child(sect)
+		vb.add_child(VTKLook.card_head(_att_group_label(grp), "", false))
 		# Плитки переносятся сами, а обвесов у ствола бывает под двадцать,
 		# поэтому ряд не задаётся числом.
 		var flow := HFlowContainer.new()

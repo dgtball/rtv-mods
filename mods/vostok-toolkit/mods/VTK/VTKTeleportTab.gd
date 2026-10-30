@@ -14,6 +14,7 @@ extends RefCounted
 
 const Loc = preload("res://mods/VTK/VTKLoc.gd")
 const VTKSurface := preload("res://mods/VTK/VTKSurface.gd")
+const VTKLook := preload("res://mods/VTK/VTKLook.gd")
 
 # Инъекция из VTKUI: _attach_row_hover и _attach_motion.
 var hover: Callable = Callable()
@@ -78,39 +79,13 @@ func _tp_row(title: String, note: String, enabled: bool, callback: Callable) -> 
 	return row
 
 func _make_tp_column(title: String, count: int, box: VBoxContainer) -> Control:
-	var card := PanelContainer.new()
-	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	card.add_theme_stylebox_override("panel", VTKSurface.surface("normal", false, false, false, 10, 10, 7, 7))
-
-	var col := VBoxContainer.new()
-	col.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	col.add_theme_constant_override("separation", 6)
-	card.add_child(col)
-
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 6)
-	col.add_child(head)
-
-	var nm := Label.new()
-	nm.text = title.to_upper()
-	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	nm.add_theme_font_size_override("font_size", 11)
-	nm.add_theme_color_override("font_color", VTKSurface.GOLD)
-	head.add_child(nm)
-
-	var cnt := Label.new()
-	cnt.text = str(count)
-	cnt.add_theme_font_size_override("font_size", 9)
-	cnt.add_theme_color_override("font_color", VTKSurface.BROWN)
-	cnt.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	head.add_child(cnt)
-
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.add_child(box)
-	col.add_child(scroll)
+	var card := VTKLook.card(title, str(count), scroll)
+	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	card.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	return card
 
 

@@ -265,6 +265,8 @@ PRESENT = [
     "_make_equip_preview",
     "Picker.equip_layout",
     "EQUIP_GRID",
+    "VTKLook.card",
+    "INVEN_COLS := 5",
     "EQ_COL_W := 447",
     "EQ_CELL := 70",
     "INVEN_CELL := 70",
@@ -352,8 +354,8 @@ FUNCS = [
     ("_make_item_cell", [
         "PRESET_TOP_RIGHT",
     ], "✕ в правом верхнем углу клетки снаряжения"),
-    ("_make_equip_preview", ["MarginContainer", "EQ_COL_W"],
-     "превью экипировки: сетка в отступе 6px, колонка EQ_COL_W"),
+    ("_make_equip_preview", ["VTKLook.card", "EQ_CELL"],
+     "превью экипировки: карточка с общим заголовком, ширина от сетки"),
     ("_make_equip_cell", [
         "_on_slot_row_input",
         "Picker.item_art",
