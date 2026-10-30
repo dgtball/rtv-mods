@@ -1,5 +1,11 @@
 # Changelog
 
+## [5.2.3] - 2026-10-30
+
+### Changed
+
+- In the kill feed, a death from an old wound now reads as the victim's name followed by the skull icon.
+
 ## [5.2.2] - 2026-10-30
 
 ### Fixed
