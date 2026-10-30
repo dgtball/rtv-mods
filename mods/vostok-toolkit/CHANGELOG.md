@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.3.1] - 2026-10-30
+
+### Added
+
+- Locked teleport destinations now show a padlock instead of an arrow.
+
+### Changed
+
+- The panel uses more of a 1080p screen, so the set preview and the Done page show without scrolling.
+- Teleport rows are larger and easier to hit.
+- The Sets and Teleport tabs sit in the middle of the header and look like tabs instead of buttons.
+
 ## [5.3.0] - 2026-10-30
 
 ### Changed
