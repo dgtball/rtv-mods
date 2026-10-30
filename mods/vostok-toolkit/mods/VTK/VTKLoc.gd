@@ -147,6 +147,7 @@ const RU := {
 	'+ Create loadout': '+ Создать сет',
 	'file: ': 'файл: ',
 	'in the tutorial': 'в туториале',
+	'Not unlocked yet': 'Ещё не открыто',
 }
 
 static var _lang := DEFAULT

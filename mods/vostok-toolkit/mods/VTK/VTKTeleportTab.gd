@@ -41,41 +41,46 @@ func _tp_section_label(section: String) -> String:
 			return Loc.txt("Traders")
 	return ""
 
+# Строка телепорта - цель клика, а не подпись: поля 18 и шрифт 14 дают высоту
+# 59 вместо прежних 41. Поля одинаковы в обоих состояниях, иначе строка
+# прыгала бы на ховере.
+func _tp_row_style(hover: bool) -> StyleBox:
+	return VTKSurface.surface("hover" if hover else "normal", false, false, false, 18, 18, 18, 18)
+
 func _tp_row(title: String, note: String, enabled: bool, callback: Callable) -> Control:
 	var row := PanelContainer.new()
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.add_theme_stylebox_override("panel", VTKSurface.surface("normal", false, false, false, 10, 10, 7, 7))
+	row.add_theme_stylebox_override("panel", _tp_row_style(false))
 
 	var hb := HBoxContainer.new()
-	hb.add_theme_constant_override("separation", 8)
+	hb.add_theme_constant_override("separation", 10)
 	row.add_child(hb)
 
 	var nm := Label.new()
 	nm.text = title
 	nm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	nm.add_theme_font_size_override("font_size", 12)
+	nm.add_theme_font_size_override("font_size", 14)
 	nm.add_theme_color_override("font_color", VTKSurface.INK if enabled else VTKSurface.INK_OFF)
 	hb.add_child(nm)
 
 	if note != "":
 		var nt := Label.new()
 		nt.text = note
-		nt.add_theme_font_size_override("font_size", 9)
+		nt.add_theme_font_size_override("font_size", 10)
 		nt.add_theme_color_override("font_color", VTKSurface.BROWN)
 		nt.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		hb.add_child(nt)
 
-	var go := Label.new()
-	go.text = "▸" if enabled else "•"
-	go.add_theme_font_size_override("font_size", 12)
-	go.add_theme_color_override("font_color", VTKSurface.GOLD if enabled else VTKSurface.GOLD_OFF)
-	go.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	hb.add_child(go)
-
 	if enabled:
+		var go := Label.new()
+		go.text = "▸"
+		go.add_theme_font_size_override("font_size", 16)
+		go.add_theme_color_override("font_color", VTKSurface.GOLD)
+		go.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		hb.add_child(go)
 		hover.call(row, func(hv: bool) -> StyleBox:
-			return VTKSurface.surface("hover" if hv else "normal", false, false, false, 10, 10, 7, 7))
+			return _tp_row_style(hv))
 		motion.call(row)
 		var cb := callback
 		row.gui_input.connect(func(ev: InputEvent):
@@ -83,6 +88,13 @@ func _tp_row(title: String, note: String, enabled: bool, callback: Callable) -> 
 			if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
 				if cb.is_valid():
 					cb.call())
+	else:
+		var lock := TextureRect.new()
+		lock.texture = VTKSurface.lock_icon(16, VTKSurface.GOLD_OFF)
+		lock.custom_minimum_size = Vector2(16, 22)
+		lock.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hb.add_child(lock)
 	return row
 
 func _make_tp_column(title: String, count: int, box: VBoxContainer) -> Control:
@@ -193,12 +205,17 @@ func _refresh_teleport_tab(travel: Node, game_data: Resource) -> void:
 		var mm := String(m)
 		_tp_maps_box.add_child(_tp_row(String(m), map_note, not in_tutorial, func(): travel.travel_to_map(mm)))
 
+	var unlocked_only: bool = bool(travel.get("unlocked_only"))
+
 	for s in travel.SHELTERS:
 		var ss := String(s)
 		if in_tutorial:
 			_tp_shelters_box.add_child(_tp_row(String(s), Loc.txt("in the tutorial"), false, func(): travel.travel_to_shelter(ss)))
 		else:
-			_tp_shelters_box.add_child(_tp_row(String(s), "", true, func(): travel.travel_to_shelter(ss)))
+			var open: bool = bool(travel.is_shelter_unlocked(ss))
+			var enabled: bool = not unlocked_only or open
+			var note := "" if enabled else Loc.txt("Not unlocked yet")
+			_tp_shelters_box.add_child(_tp_row(ss, note, enabled, func(): travel.travel_to_shelter(ss)))
 
 	for t in travel.TRADERS:
 		var entry: Dictionary = t
