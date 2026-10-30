@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.2.2] - 2026-10-30
+
+### Fixed
+
+- Kill feed shows a nomad's own name instead of the generic faction label.
+- An NPC that dies of an old wound is shown as a skull and its name, without a killer.
+- Kills caused by another NPC's wound are no longer credited to the player, and no longer tick the kill counter.
+
 ## [5.2.1] - 2026-10-29
 
 ### Fixed
