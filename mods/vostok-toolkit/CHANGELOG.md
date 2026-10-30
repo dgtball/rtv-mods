@@ -1,5 +1,17 @@
 # Changelog
 
+## [5.3.2] - 2026-10-30
+
+### Changed
+
+- The equipment step now lists only the items that fit a slot, sorted into
+  Weapons, Clothing, Gear and Hobby.
+- The gear step is now called Inventory and sorts the whole catalogue into
+  eight groups: Weapons, Ammo & attachments, Clothing, Gear, Medical, Food,
+  Tools & sundries and Furniture.
+- Unknown item folders no longer create their own filter; the tarp now sits
+  with tools and sundries.
+
 ## [5.3.1] - 2026-10-30
 
 ### Added
