@@ -22,7 +22,6 @@ const UI_LAYER := 4095
 # button ships disabled with the text "Locked"). The menu scene is rebuilt on
 # every visit, so the button is polled and unlocked instead of touched once.
 const MENU_POLL := 0.4
-const MENU_DYNAMIC_SELECT := "Modes/Season/Dynamic/Select"
 
 # Каталог предметов (список, индекс resource_path, кеши info и иконок) живёт в
 # VTKItemStore: сюда он попадает через _load_items, а читается отсюда Items.*.
@@ -94,7 +93,7 @@ func _unlock_dynamic_menu() -> void:
 	var scene = get_tree().current_scene
 	if scene == null:
 		return
-	var sel := scene.get_node_or_null(MENU_DYNAMIC_SELECT) as Button
+	var sel := scene.get_node_or_null(Paths.MENU_DYNAMIC_SELECT) as Button
 	if sel == null:
 		return
 	if sel.disabled:

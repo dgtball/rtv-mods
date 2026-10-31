@@ -31,6 +31,9 @@ const WORLD_SAVE := "user://World.tres"
 
 # Ресурсы игры.
 const GAME_DATA := "res://Resources/GameData.tres"
+# Кнопка Dynamic на главном меню (New Game): выделена в Paths, потому что
+# читается из двух мест - разблокировка в VTKUI и снимок смены сцены в VTKHooks.
+const MENU_DYNAMIC_SELECT := "Modes/Season/Dynamic/Select"
 # Тема HUD: единственный источник игрового шрифта (Lora). Проектного дефолта в
 # игре нет (gui/theme/custom пуст), поэтому наши надписи на автолоаде вне дерева
 # игры его не наследуют — тянем ресурс темы и берём default_font.

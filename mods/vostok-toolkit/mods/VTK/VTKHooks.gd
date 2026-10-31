@@ -49,6 +49,7 @@ var _dyn_start_offset := 1
 var _dyn_cycle_days := 30
 var _dyn_last_idx := -1
 var _dyn_visuals := true
+var _scene_ref: Node = null
 
 # Ironman respawn drops you somewhere random out of these instead of always
 # Highway, so a death run can't be re-learned as one fixed route.
@@ -69,6 +70,17 @@ func reset_kills() -> void:
 func _process(delta: float) -> void:
 	if not _registered:
 		_try_register()
+	# Смена сцены редка, lookup по MENU_DYNAMIC_SELECT оправдан только на ней.
+	# restore раньше звали лишь новый забег и загрузка сейва: выход в меню из
+	# Dynamic-забега оставлял сезонную тонировку в общих материалах (§7.3-5 —
+	# подтверждено игроком). Внутри забега lookup промахнётся, смена карты
+	# между картами игры тонировку не трогает; смерть/рестарт покрывает
+	# _season_new_run.
+	var sc := get_tree().current_scene
+	if sc != null and sc != _scene_ref:
+		_scene_ref = sc
+		if _dyn_enabled and sc.has_node(Paths.MENU_DYNAMIC_SELECT):
+			_season_restore()
 	if _dyn_enabled:
 		_season_apply()
 		if _season_driver != null:
