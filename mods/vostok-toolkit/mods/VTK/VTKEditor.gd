@@ -637,6 +637,9 @@ func _make_gear_count(cnt: int) -> Control:
 	lbl.add_theme_color_override("font_color", _ui._gold)
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.add_child(lbl)
+	# Клетка держит ссылку на число: «±» правит текст на месте, не пересобирая
+	# каталог на 246 клеток.
+	holder.set_meta("vtk_count", lbl)
 	return holder
 
 func _set_gear_search(t: String) -> void:
@@ -1703,11 +1706,22 @@ func _gear_cap(path: String) -> float:
 # dir - направление шага (+1 / -1), не сырая дельта: шаг, потолок и пол зависят
 # от ресурса, поэтому считаются здесь, а не в вызывающем коде. У патронов пол 0:
 # «−» на последней коробке убирает патроны из набора, как ✕.
-func _bump_gear(path: String, dir: float) -> void:
+func _bump_gear(path: String, dir: float, count_holder: Control = null) -> void:
 	if _ui._session.draft == null:
 		return
 	var floor := 0.0 if str(_ui._item_info(path).get("type")) == "Ammo" else 1.0
 	_ui._session.draft.bump_amount(path, dir, _gear_step(path), _gear_cap(path), floor)
+	# Патроны на полу 0 уходят из набора: клетка должна потерять рамку набора
+	# и чип «×N», а это уже другая разметка — пересобираем каталог.
+	if _ui._session.draft.amount_of(path) <= 0.0:
+		_ui.refresh(R_GEAR)
+		return
+	if count_holder != null and count_holder.has_meta("vtk_count"):
+		var lbl = count_holder.get_meta("vtk_count")
+		if lbl is Label:
+			lbl.text = str(int(_ui._session.draft.amount_of(path)))
+			return
+	# Вызывающий не передал клетку (тест/будущий вызов): прежнее поведение.
 	_ui.refresh(R_GEAR | R_DONE)
 
 func _toggle_attachment_panel(path: String) -> void:
@@ -1831,12 +1845,13 @@ func _make_item_cell(item, forced_slot = null, gear := false, force_gear := fals
 		row_a.add_theme_constant_override("separation", 4)
 		row_a.alignment = BoxContainer.ALIGNMENT_CENTER
 		row_a.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var holder := _make_gear_count(cnt_g)
 		var minus := _make_mini_btn("−", Vector2(28, 28), 15)
-		minus.pressed.connect(func(): _bump_gear(path_now, -1.0))
+		minus.pressed.connect(func(): _bump_gear(path_now, -1.0, holder))
 		row_a.add_child(minus)
-		row_a.add_child(_make_gear_count(cnt_g))
+		row_a.add_child(holder)
 		var plus := _make_mini_btn("+", Vector2(28, 28), 15)
-		plus.pressed.connect(func(): _bump_gear(path_now, 1.0))
+		plus.pressed.connect(func(): _bump_gear(path_now, 1.0, holder))
 		row_a.add_child(plus)
 		vbox.add_child(row_a)
 
