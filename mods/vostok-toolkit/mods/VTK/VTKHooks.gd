@@ -937,13 +937,14 @@ func _on_notes_rendered(_result = null) -> void:
 	var notes = []
 	if ldr != null and ldr.has_method("LoadTaskNotes"):
 		notes = ldr.call("LoadTaskNotes")
-	_prune_note_cards(_live_children(list), notes, Notes.completed_lists(_traders()), ldr)
+	var traders = _traders()
+	_prune_note_cards(_live_children(list), notes, Notes.completed_lists(traders), ldr, _ledger_from(traders))
 
 # Сданные заметки: данные уже почищены при сдаче задачи, но ваниль построила
 # карточки до post-хука, поэтому строку надо убрать здесь же - иначе она
 # висит до переоткрытия вкладки. Цикл вынесен из _on_notes_rendered, чтобы
 # его можно было проверить headless, не читая user://Traders.tres.
-func _prune_note_cards(cards: Array, notes: Array, completed: Dictionary, ldr) -> void:
+func _prune_note_cards(cards: Array, notes: Array, completed: Dictionary, ldr, ledger = null) -> void:
 	for card in cards:
 		if card == null or not is_instance_valid(card):
 			continue
@@ -956,7 +957,7 @@ func _prune_note_cards(cards: Array, notes: Array, completed: Dictionary, ldr) -
 				ldr.call("SaveTaskNotes", note, false)
 			card.queue_free()
 			continue
-		Notes.augment_note(card, _notes_cov_map(task_data))
+		Notes.augment_note(card, _notes_cov_map(task_data, ledger))
 
 const DEPOSITS_META := "vtk_deposits"
 
@@ -965,12 +966,14 @@ func _traders() -> Variant:
 		return null
 	return load(Paths.TRADER_SAVE)
 
-func _ledger() -> Dictionary:
-	var traders = _traders()
+func _ledger_from(traders) -> Dictionary:
 	if traders == null:
 		return {}
 	var m = traders.get_meta(DEPOSITS_META, {})
 	return m if typeof(m) == TYPE_DICTIONARY else {}
+
+func _ledger() -> Dictionary:
+	return _ledger_from(_traders())
 
 func _ledger_set(data: Dictionary) -> bool:
 	var traders = _traders()
@@ -1051,7 +1054,7 @@ func _card_covered(card) -> bool:
 # Покрытие для Notes: карточка заметки не строит ячейки inputGrid, поэтому
 # берём deliver напрямую и сопоставляем с леджером по индексу (порядок deliver
 # = порядок ячеек в Tasks). Считаем need так же, как Task.Initialize.
-func _notes_cov_map(task_data) -> Dictionary:
+func _notes_cov_map(task_data, ledger = null) -> Dictionary:
 	var out := {}
 	if task_data == null:
 		return out
@@ -1059,10 +1062,10 @@ func _notes_cov_map(task_data) -> Dictionary:
 	if typeof(deliver) != TYPE_ARRAY:
 		return out
 	var task: Dictionary = {}
-	var ledger := _ledger()
+	var led: Dictionary = ledger if typeof(ledger) == TYPE_DICTIONARY else _ledger()
 	var key := _key_of(task_data)
-	if typeof(ledger.get(key)) == TYPE_DICTIONARY:
-		task = ledger[key]
+	if typeof(led.get(key)) == TYPE_DICTIONARY:
+		task = led[key]
 	for i in range(deliver.size()):
 		var item = deliver[i]
 		var req := 1
@@ -1113,32 +1116,38 @@ func _on_tasks_startinput(target) -> void:
 		return
 	# Клик по карточке меняет только inputTarget, то есть disabled у Deposit и
 	# Complete одной карточки: полный обход списка тут не нужен.
-	_render_task_card(iface, target)
+	_render_task_card(iface, target, _traders())
 
 func _render_all_tasks(iface) -> void:
 	var list = iface.get("taskList")
 	if list == null or not (list is Node):
 		return
+	# Traders.tres - файл на диске: читаем один раз на проход, а не на карточку.
+	var traders = _traders()
 	for card in _live_children(list):
-		_render_task_card(iface, card)
+		_render_task_card(iface, card, traders)
 
-func _card_completed(card) -> bool:
+func _card_completed(card, traders = null) -> bool:
 	if card == null or not is_instance_valid(card):
 		return false
 	var task_data = card.get("taskData")
 	if task_data == null:
 		return false
-	return Notes.is_completed(task_data, Notes.completed_lists(_traders()))
+	var tr = traders if traders != null else _traders()
+	return Notes.is_completed(task_data, Notes.completed_lists(tr))
 
-func _render_task_card(iface, card) -> void:
+func _render_task_card(iface, card, traders = null) -> void:
 	if card == null or not is_instance_valid(card):
 		return
 	var grid = card.get("inputGrid")
 	var task_data = card.get("taskData")
 	if grid == null or not (grid is Node) or task_data == null:
 		return
+	# Одиночные вызовы (клик по Deposit/Complete) приходят без traders:
+	# файл читается здесь один раз и отдаётся дальше, а не дважды.
+	var tr = traders if traders != null else _traders()
 	var btn := _find_deposit_button(card)
-	if _card_completed(card):
+	if _card_completed(card, tr):
 		_clear_badges(grid)
 		if btn != null:
 			btn.queue_free()
@@ -1148,7 +1157,7 @@ func _render_task_card(iface, card) -> void:
 	if slots.is_empty():
 		return
 	var key := _key_of(task_data)
-	var cov := VTKDeposits.coverage(_ledger(), key, slots)
+	var cov := VTKDeposits.coverage(_ledger_from(tr), key, slots)
 	for s in cov["slots"]:
 		_paint_cell(cells, s)
 	if btn == null:

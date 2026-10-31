@@ -223,7 +223,7 @@ class DepositHooks extends "res://mods/VTK/VTKHooks.gd":
 		persisted.append(data)
 		return persist_ok
 
-	func _render_task_card(_iface, _card) -> void:
+	func _render_task_card(_iface, _card, _traders = null) -> void:
 		pass
 
 # Задача требует 3 сигареты, в инвентаре выбрана 1.
@@ -357,6 +357,8 @@ func _run() -> void:
 	t_completed_note_card_is_dropped()
 	t_completed_note_drops_open_card()
 	t_startinput_renders_only_target()
+	t_traders_read_once_per_pass()
+	t_ledger_from_resource()
 	t_selected_stacks_skips_queued_cells()
 	t_post_callback_arity()
 	t_hook_handles_are_counted()
@@ -1538,4 +1540,67 @@ func t_startinput_renders_only_target() -> void:
 		ck(h.drawn[0] == a, "рисуется именно карточка-цель")
 
 	iface.free()
+	h.queue_free()
+
+# П2: Traders.tres - файл на диске, а _traders() его грузит. Полный проход
+# списка читал его на каждую карточку; теперь один раз и отдаёт дальше.
+class TradersSpy extends TestHooks:
+	var calls := 0
+	var traders_obj = null
+	var seen: Array = []
+
+	func _traders() -> Variant:
+		calls += 1
+		return traders_obj
+
+	# GC леджера читает тот же файл; к этому тесту его чтения отношения не
+	# имеют, поэтому заглушены оба имени: до Task 9 и после него.
+	func _gc_ledger() -> void:
+		pass
+
+	func _gc_ledger_once() -> void:
+		pass
+
+	func _render_task_card(_iface, card, traders = null) -> void:
+		seen.append(traders)
+
+func t_traders_read_once_per_pass() -> void:
+	var h := TradersSpy.new()
+	root.add_child(h)
+	var iface := TaskIface.new()
+	root.add_child(iface)
+	iface.taskList = GridContainer.new()
+	iface.add_child(iface.taskList)
+	for i in range(3):
+		iface.taskList.add_child(FakeNoteCard.new())
+	var lib := FakeLib2.new()
+	lib._caller = iface
+	h._lib = lib
+	var save := Resource.new()
+	save.set_meta("vtk_deposits", {"res://Task.tres": {0: 1}})
+	h.traders_obj = save
+
+	h._on_tasks_rendered()
+	ck(h.calls == 1, "Traders.tres читается один раз на проход, а не на карточку")
+	ck(h.seen.size() == 3, "проход рисует все живые карточки")
+	if h.seen.size() == 3:
+		ck(h.seen[0] == save and h.seen[2] == save, "в карточки передан тот же ресурс")
+
+	h.calls = 0
+	h.seen.clear()
+	h._on_tasks_rendered()
+	ck(h.calls == 1, "повторный проход тоже читает файл один раз")
+
+	iface.free()
+	h.queue_free()
+
+func t_ledger_from_resource() -> void:
+	var h := TestHooks.new()
+	root.add_child(h)
+	ck(h._ledger_from(null).is_empty(), "нет TraderSave -> пустой леджер")
+	var save := Resource.new()
+	save.set_meta("vtk_deposits", {"k": {0: 2}})
+	ck(int(h._ledger_from(save)["k"][0]) == 2, "леджер берётся из переданного ресурса")
+	save.set_meta("vtk_deposits", "broken")
+	ck(h._ledger_from(save).is_empty(), "не-словарь в мете -> пустой леджер")
 	h.queue_free()
