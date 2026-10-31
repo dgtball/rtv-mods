@@ -164,6 +164,11 @@ func _on_compiler_spawn() -> void:
 # LoadWorld no longer restores permadeath. Sync the live value and patch the saved
 # world so the chosen difficulty survives regardless of hook order.
 func _on_newgame_post(difficulty, season) -> void:
+	# Граница забега: счёт и атрибуции прошлого забега не должны дотянуться
+	# до нового, когда HUD был выключен в момент рестарта (сцену считывает
+	# только включённый счётчик). В set_enabled нельзя - его зовёт
+	# apply_config на каждом применении MCM, счёт посреди забега обнулился бы.
+	reset_kills()
 	var diff := int(difficulty)
 	var gd = _resolve_gamedata()
 	if gd != null:
