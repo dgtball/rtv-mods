@@ -7,10 +7,16 @@ version = "5.3.5"
 VTKUI="res://mods/VTK/VTKUI.gd"
 
 [hooks]
+res://Scripts/Controller.gd = _physics_process
+res://Scripts/AI.gd = WeaponDamage, ExplosionDamage, Death
+res://Scripts/Trader.gd = CompleteTask
 res://Scripts/Context.gd = Update
 res://Scripts/Pickup.gd = Interact
-res://Scripts/Interface.gd = ContextTake, ContextSplit
+res://Scripts/Interface.gd = ContextTake, ContextSplit, InitializeNotes, InitializeTasks, StartInput, FastTransfer, ContextTransfer, Grab, Release
+res://Scripts/Task.gd = _on_complete_pressed
 res://Scripts/Death.gd = _ready, _on_load_pressed
+res://Scripts/Loader.gd = NewGame, LoadCharacter
+res://Scripts/Compiler.gd = Spawn
 
 [updates]
 source="vostokmods:01a130a0-7fae-7214-bc07-7d33d99e3d70"

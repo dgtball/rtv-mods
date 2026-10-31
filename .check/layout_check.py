@@ -31,6 +31,22 @@ ALL_SOURCES_GLOB = str(os.path.join(REPO_ROOT, "mods", "**", "*.gd"))
 # U+FFFD. Поймать это иначе нечем - стенд парсинга такой литерал принимает.
 NUL_ESCAPE_RE = re.compile(r"\\u0000|\\x00")
 
+# X2: [hooks] в mod.txt - часть контракта с лоадером. Имена хуков живут в
+# литералах _lib.hook("..."), и modloader собирает их сканом _re_hook_call:
+# если скан ужесточат, хуки тихо перестанут оборачиваться. Проход сверяет, что
+# каждый литерал покрыт объявлением метода в [hooks].
+MOD_TXT = os.path.join(REPO_ROOT, "mods", "vostok-toolkit", "mod.txt")
+HOOK_SRC = "VTKHooks.gd"
+HOOK_RE = re.compile(r'_lib\.hook\("([^"]+)"')
+# Префикс имени хука -> файл ванильного скрипта. Единственная ручная часть:
+# неизвестный префикс - провал, иначе новый хук выпал бы из проверки молча.
+HOOK_CLASS = {
+    "controller": "Controller", "ai": "AI", "trader": "Trader",
+    "interface": "Interface", "task": "Task", "loader": "Loader",
+    "compiler": "Compiler", "death": "Death", "context": "Context",
+    "pickup": "Pickup",
+}
+
 GONE = [
     "_make_target_chip",
     "_make_equip_block",
@@ -485,6 +501,39 @@ def func_bodies(mods, name):
     return out
 
 
+def declared_hooks():
+    """{класс: {метод в нижнем регистре}} из секции [hooks] mod.txt."""
+    out = {}
+    in_hooks = False
+    for line in io.open(MOD_TXT, encoding="utf-8"):
+        s = line.strip()
+        if s.startswith("["):
+            in_hooks = s == "[hooks]"
+            continue
+        if not in_hooks or "=" not in s or s.startswith("#"):
+            continue
+        path, methods = s.split("=", 1)
+        cls = os.path.basename(path.strip()).replace(".gd", "")
+        out.setdefault(cls, set()).update(
+            m.strip().lower() for m in methods.split(",") if m.strip())
+    return out
+
+
+def hook_requirements(mods):
+    """[(хук, класс, метод)] по литералам _lib.hook(...) в VTKHooks.gd."""
+    src = dict(mods).get(HOOK_SRC, "")
+    out = []
+    for hook in HOOK_RE.findall(src):
+        core = hook
+        for suffix in ("-pre", "-post"):
+            if core.endswith(suffix):
+                core = core[:-len(suffix)]
+                break
+        prefix, _, method = core.partition("-")
+        out.append((hook, HOOK_CLASS.get(prefix, ""), method))
+    return out
+
+
 def main():
     mods = modules()
     bad = 0
@@ -519,6 +568,16 @@ def main():
                 bad += 1
                 print("  FUNC    %-34s нет %s (%s)"
                       % (esc(name), esc(s), esc(what)))
+    declared = declared_hooks()
+    hooks = hook_requirements(mods)
+    for hook, cls, method in hooks:
+        if not cls:
+            bad += 1
+            print("  HOOK    %-34s неизвестный префикс имени хука" % esc(hook))
+        elif method.lower() not in declared.get(cls, set()):
+            bad += 1
+            print("  HOOK    %-34s %s.%s нет в [hooks] mod.txt"
+                  % (esc(hook), cls, method))
     for s in HOOKS_GONE:
         hits = [f for f, src in mods if s in src]
         if hits:
@@ -548,9 +607,9 @@ def main():
                       % (os.path.basename(path),
                          os.path.relpath(path, REPO_ROOT).replace("\\", "/"), n))
 
-    print("GONE: %d, GONE_RE: %d, PRESENT: %d, FUNCS: %d, HOOKS_GONE: %d, HEX: %d, NUL: %d"
+    print("GONE: %d, GONE_RE: %d, PRESENT: %d, FUNCS: %d, HOOKS_GONE: %d, HEX: %d, NUL: %d, HOOKS: %d"
           % (len(GONE), len(GONE_RE), len(PRESENT), len(FUNCS),
-             len(HOOKS_GONE), hex_hits, nul_rows))
+             len(HOOKS_GONE), hex_hits, nul_rows, len(hooks)))
     if bad:
         print("RESULT: раскладка разошлась с планом: %d" % bad)
         sys.exit(1)
