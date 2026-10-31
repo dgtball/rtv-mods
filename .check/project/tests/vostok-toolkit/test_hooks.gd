@@ -359,6 +359,7 @@ func _run() -> void:
 	t_startinput_renders_only_target()
 	t_traders_read_once_per_pass()
 	t_ledger_from_resource()
+	t_gc_ledger_once()
 	t_selected_stacks_skips_queued_cells()
 	t_post_callback_arity()
 	t_hook_handles_are_counted()
@@ -1554,10 +1555,7 @@ class TradersSpy extends TestHooks:
 		return traders_obj
 
 	# GC леджера читает тот же файл; к этому тесту его чтения отношения не
-	# имеют, поэтому заглушены оба имени: до Task 9 и после него.
-	func _gc_ledger() -> void:
-		pass
-
+	# имеют, поэтому заглушено.
 	func _gc_ledger_once() -> void:
 		pass
 
@@ -1603,4 +1601,38 @@ func t_ledger_from_resource() -> void:
 	ck(int(h._ledger_from(save)["k"][0]) == 2, "леджер берётся из переданного ресурса")
 	save.set_meta("vtk_deposits", "broken")
 	ck(h._ledger_from(save).is_empty(), "не-словарь в мете -> пустой леджер")
+	h.queue_free()
+
+# П3: ключи леджера не появляются и не исчезают в течение сессии (только с
+# апдейтом игры), а _resource_exists - обращение к ФС. Проверяем один раз.
+class GcSpy extends TestHooks:
+	var ledger_data: Dictionary = {}
+	var writes := 0
+
+	func _ledger() -> Dictionary:
+		return ledger_data
+
+	func _ledger_set(_data: Dictionary) -> bool:
+		writes += 1
+		return true
+
+	func _resource_exists(_path: String) -> bool:
+		return false
+
+func t_gc_ledger_once() -> void:
+	var h := GcSpy.new()
+	root.add_child(h)
+	h._gc_ledger_once()
+	ck(h.writes == 0, "пустой леджер: GC ничего не пишет")
+	ck(not h._gc_done, "пустой леджер не защёлкивает GC")
+
+	h.ledger_data = {"res://Gone.tres": {0: 1}}
+	h._gc_ledger_once()
+	ck(h.writes == 1, "первый проход чистит ключ несуществующего ресурса")
+	ck(h._gc_done, "проход отмечен")
+
+	h.ledger_data = {"res://Gone2.tres": {0: 1}}
+	h._gc_ledger_once()
+	ck(h.writes == 1, "повторный проход уже не проверяет ключи")
+
 	h.queue_free()
