@@ -1,5 +1,22 @@
 # Changelog
 
+## [5.3.4] - 2026-10-31
+
+### Fixed
+
+- Saving a set no longer fails silently: if the file cannot be written, you
+  see a message and the set stays in the editor.
+- Renaming a set is saved in one step, so a crash in between cannot drop it.
+- A set file written in an older layout is read as it is instead of being
+  moved aside.
+- A set that is missing its equipment or inventory half now loads the half it
+  still has.
+- A completed note now disappears from Notes straight away.
+- Handing in task items no longer counts an item that is already being removed
+  from the inventory.
+- Teleporting no longer leaves you on a map you never reached when loading
+  fails.
+
 ## [5.3.3] - 2026-10-30
 
 ### Changed
