@@ -29,6 +29,9 @@ class FakeLoaderNotes extends Node:
 class FakeNoteCard extends Node:
 	var taskData = null
 
+class FakeNotesIface extends Node:
+	var notesList = null
+
 func t_task_note_removed_on_complete() -> void:
 	var ldr := FakeLoaderNotes.new()
 	ldr.name = "Loader"
@@ -328,6 +331,7 @@ func _run() -> void:
 	t_death_load_pressed_defers_to_vanilla()
 	t_task_note_removed_on_complete()
 	t_completed_note_card_is_dropped()
+	t_completed_note_drops_open_card()
 	t_selected_stacks_skips_queued_cells()
 	t_post_callback_arity()
 	t_equip_pickup_free()
@@ -1379,6 +1383,39 @@ func t_completed_note_card_is_dropped() -> void:
 	ck(not live.is_queued_for_deletion(), "несданная заметка остаётся в списке")
 
 	h.free()
+	ldr.free()
+
+# Х3: сдача задачи происходит не на вкладке Notes, а карточки уже построены
+# и висят в скрытом списке. Ваниль перерисовывает их только по нажатию вкладки,
+# поэтому сданная карточка должна уйти из списка в момент сдачи.
+func t_completed_note_drops_open_card() -> void:
+	var h = TestHooks.new()
+	root.add_child(h)
+	var ldr := FakeLoaderNotes.new()
+	ldr.name = "Loader"
+	root.add_child(ldr)
+
+	var map := Node.new(); map.name = "Map"; root.add_child(map)
+	var core := Node.new(); core.name = "Core"; map.add_child(core)
+	var ui := Node.new(); ui.name = "UI"; core.add_child(ui)
+	var iface := FakeNotesIface.new(); iface.name = "Interface"; ui.add_child(iface)
+	var list := Node.new(); iface.add_child(list)
+	iface.notesList = list
+
+	var completed_task := {"name": "Duty Calls", "trader": "Doctor"}
+	var card := FakeNoteCard.new()
+	card.taskData = completed_task
+	list.add_child(card)
+	var other := FakeNoteCard.new()
+	other.taskData = {"name": "Still here", "trader": "Doctor"}
+	list.add_child(other)
+
+	h._on_task_completed(completed_task)
+	ck(card.is_queued_for_deletion(), "сданная заметка исчезает из открытой вкладки сразу")
+	ck(not other.is_queued_for_deletion(), "остальные карточки Notes остаются")
+
+	h.free()
+	map.free()
 	ldr.free()
 
 # Х7/Д4: queue_free отложен до конца кадра, поэтому ячейка, уже помеченная

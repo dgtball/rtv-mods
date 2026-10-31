@@ -881,22 +881,38 @@ func _on_controller_process(_delta: float) -> void:
 		_last_damager.erase(g)
 
 # Сдача задачи во вкладке торговца: убираем её заметку из Notes сразу.
-# Notes в этот момент закрыт, поэтому чистим только данные (Loader).
+# Notes в этот момент обычно закрыт, поэтому чистим данные (Loader) и уже
+# построенные карточки: ваниль перерисовывает список только по кнопке вкладки,
+# и сданная заметка висела бы в нём до переоткрытия.
 func _on_task_completed(task_data) -> void:
 	if task_data == null:
 		return
 	_clear_ledger_key(task_data)
 	var ldr = get_node_or_null(Paths.LOADER)
-	if ldr == null or not ldr.has_method("LoadTaskNotes") or not ldr.has_method("SaveTaskNotes"):
+	if ldr != null and ldr.has_method("LoadTaskNotes") and ldr.has_method("SaveTaskNotes"):
+		var inst = Notes.find_note(ldr.call("LoadTaskNotes"), task_data)
+		if inst != null:
+			ldr.call("SaveTaskNotes", inst, false)
+	_drop_open_note_card(task_data)
+
+# Карточка сданной задачи в уже построенном списке Notes. Ищем по данным
+# задачи (имя + торговец), как find_note, чтобы не зависеть от порядка списка.
+func _drop_open_note_card(task_data) -> void:
+	var iface = get_node_or_null(Paths.INTERFACE)
+	if iface == null or not is_instance_valid(iface):
 		return
-	var inst = Notes.find_note(ldr.call("LoadTaskNotes"), task_data)
-	if inst != null:
-		ldr.call("SaveTaskNotes", inst, false)
+	var list = iface.get("notesList")
+	if list == null or not (list is Node):
+		return
+	for card in _live_children(list):
+		var card_task = card.get("taskData")
+		if card_task != null and Notes.find_note([card_task], task_data) != null:
+			card.queue_free()
 
 # Отрисовка вкладки Notes: сданные заметки убираем, у остальных меняем текст
 # списка предметов на ряд иконок. Страховка для задач, сданных в обход
 # Trader.CompleteTask, и заметок из сессий до установки мода.
-func _on_notes_rendered(_result) -> void:
+func _on_notes_rendered(_result = null) -> void:
 	var iface = _lib._caller if _lib else null
 	if iface == null or not is_instance_valid(iface):
 		return
