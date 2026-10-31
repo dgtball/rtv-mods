@@ -33,6 +33,7 @@ func _init() -> void:
 	t_find_note()
 	t_badge_text()
 	t_build_icon_row()
+	t_reward_cell_frame()
 	t_progress_totals()
 	t_build_progress_row()
 	t_build_progress()
@@ -194,6 +195,30 @@ func t_build_icon_row() -> void:
 		var c2 = row.get_child(2)
 		ck(_has_label_text(c2, "Rags"), "нет иконки -> текстовый фоллбэк")
 	row.free()
+
+# Награда рисуется той же клеткой с рамкой, что и предметы к сдаче: без рамки
+# ряд «получить» висел голыми иконками рядом с обрамлённым рядом «сдать».
+func t_reward_cell_frame() -> void:
+	var tex := ImageTexture.create_from_image(Image.create(4, 4, false, Image.FORMAT_RGBA8))
+	var item := {"name": "Bandage", "icon": tex}
+	var reward_row = N.build_icon_row([{"item": item, "count": 2}])
+	var deliver_row = N.build_progress_row([{"item": item, "count": 2}], {})
+	var reward = reward_row.get_child(0)
+	var deliver = deliver_row.get_child(0)
+	ck(reward is Panel, "клетка награды - Panel с рамкой")
+	if reward is Panel and deliver is Panel:
+		var a = reward.get_theme_stylebox("panel")
+		var b = deliver.get_theme_stylebox("panel")
+		ck(a is StyleBoxFlat and b is StyleBoxFlat, "у обеих клеток StyleBoxFlat")
+		if a is StyleBoxFlat and b is StyleBoxFlat:
+			ck(a.bg_color == b.bg_color, "фон рамки награды = фону клетки сдачи")
+			ck(a.border_color == b.border_color, "бордер награды = бордеру клетки сдачи")
+			ck(a.border_width_left == b.border_width_left and a.border_width_left > 0, "толщина рамки та же и не ноль")
+			ck(a.corner_radius_top_left == b.corner_radius_top_left, "радиус скругления тот же")
+	ck(_badge_of(reward) == "×2", "бейдж количества остался")
+	ck(not _has_label_text(reward, "0 / 2"), "у награды нет чипа прогресса")
+	reward_row.free()
+	deliver_row.free()
 
 class FakeCard extends PanelContainer:
 	var taskData = null

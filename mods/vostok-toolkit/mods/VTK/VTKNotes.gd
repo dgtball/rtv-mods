@@ -197,9 +197,7 @@ static func _make_progress_cell(item, got: int, need: int) -> Control:
 	cell.tooltip_text = str(item.get("name")) if item != null else ""
 	var done := need > 0 and got >= need
 	var partial := got > 0 and not done
-	var sb := StyleBoxFlat.new()
-	sb.set_corner_radius_all(5)
-	sb.set_border_width_all(1)
+	var sb := _cell_frame()
 	sb.bg_color = COL_CELL_DONE if done else COL_CHIP_BG
 	sb.border_color = COL_GREEN_DIM if done else (COL_PARTIAL if partial else COL_BORDER)
 	cell.add_theme_stylebox_override("panel", sb)
@@ -227,6 +225,17 @@ static func _make_progress_cell(item, got: int, need: int) -> Control:
 	cell.add_child(chip)
 	return cell
 
+# Общая рамка клетки предмета: одна и та же у сдачи и у награды, иначе два
+# ряда одной карточки выглядят как разные компоненты. Прогресс сдачи лишь
+# перекрашивает рамку сверху, фон и толщина остаются этими.
+static func _cell_frame() -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.set_corner_radius_all(5)
+	sb.set_border_width_all(1)
+	sb.bg_color = COL_CHIP_BG
+	sb.border_color = COL_BORDER
+	return sb
+
 static func _flat(col: Color, radius: int) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = col
@@ -243,9 +252,12 @@ static func build_icon_row(entries: Array) -> Control:
 	return row
 
 static func _make_cell(item, count: int) -> Control:
-	var cell := Control.new()
+	# Награда - та же клетка с рамкой, что и предмет к сдаче, но без чипа
+	# прогресса и галочки: получить предмет нечего «сдавать».
+	var cell := Panel.new()
 	cell.custom_minimum_size = Vector2(ICON_CELL, ICON_CELL)
 	cell.tooltip_text = str(item.get("name"))
+	cell.add_theme_stylebox_override("panel", _cell_frame())
 	_add_art(cell, item, 1.0)
 	var badge := badge_text(count)
 	if badge != "":
