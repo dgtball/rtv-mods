@@ -80,41 +80,54 @@ static func _payload(set_list: Array) -> Dictionary:
 	return {PAYLOAD_KEY: set_list}
 
 static func get_all() -> Array:
-	var payload = _read_payload(SAVE_FILE)
-	if payload != null:
-		return payload as Array
-	# Основной файл отсутствует или нечитаем. Если он есть - сохраняем байты
-	# в сторонний .corrupt, прежде чем путь что-либо перезапишет.
-	if FileAccess.file_exists(SAVE_FILE):
+	var main := _read_file(SAVE_FILE)
+	var kind := str(main.get("kind"))
+	if kind == "ok":
+		return main["sets"] as Array
+	if kind == "bad" and FileAccess.file_exists(SAVE_FILE):
+		# Нечитаемые байты: сохраняем их в сторонний .corrupt, прежде чем
+		# путь что-либо перезапишет.
 		_quarantine(SAVE_FILE)
-	var bak_payload = _read_payload(SAVE_FILE + BAK_SUFFIX)
-	if bak_payload != null:
+	elif kind == "foreign":
+		# Валидный JSON чужой схемы: байты целы, поэтому не переносим файл,
+		# а только сообщаем и пробуем предыдущее поколение.
+		Log.error("sets file has an unknown schema (expected key '" + PAYLOAD_KEY + "')")
+	var bak := _read_file(SAVE_FILE + BAK_SUFFIX)
+	if str(bak.get("kind")) == "ok":
 		Log.log("[VTK] sets file unreadable; recovered from " + SAVE_FILE.get_file() + BAK_SUFFIX)
-		return bak_payload as Array
+		return bak["sets"] as Array
 	return []
 
-# Возвращает массив сетов или null, если прочитать/разобрать не удалось.
-# null - это «данные негодны», в отличие от пустого массива «сетов нет».
-static func _read_payload(path: String) -> Variant:
-	if not FileAccess.file_exists(path):
+# Корень файла: голый массив - список сетов (старый/ручной формат), словарь
+# с PAYLOAD_KEY - наш формат, всё остальное - "не наша схема" (null).
+static func _payload_sets(data) -> Variant:
+	if typeof(data) == TYPE_ARRAY:
+		return data
+	if typeof(data) != TYPE_DICTIONARY or not data.has(PAYLOAD_KEY):
 		return null
+	var arr = data[PAYLOAD_KEY]
+	return arr if typeof(arr) == TYPE_ARRAY else null
+
+# Три исхода вместо двух: "ok" (прочитали), "foreign" (валидный JSON чужой
+# формы) и "bad" (нет файла / не JSON / пусто). get_all по ним решает,
+# quarantine-ить ли байты.
+static func _read_file(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {"kind": "bad"}
 	var file = FileAccess.open(path, FileAccess.READ)
 	if file == null:
-		return null
+		return {"kind": "bad"}
 	var text = file.get_as_text()
 	file.close()
 	if text.strip_edges().is_empty():
-		return null
+		return {"kind": "bad"}
 	var json = JSON.new()
 	if json.parse(text) != OK:
-		return null
-	var data = json.data
-	if typeof(data) != TYPE_DICTIONARY or not data.has("loadouts"):
-		return null
-	var arr = data["loadouts"]
-	if typeof(arr) != TYPE_ARRAY:
-		return null
-	return arr
+		return {"kind": "bad"}
+	var sets = _payload_sets(json.data)
+	if sets == null:
+		return {"kind": "foreign"}
+	return {"kind": "ok", "sets": sets}
 
 static func save_all(loadouts: Array) -> int:
 	var real_dir = OS.get_user_data_dir() + "/MCM/vostok-toolkit"
@@ -218,15 +231,22 @@ static func _norm(ld) -> Dictionary:
 		out["name"] = str(ld["name"])
 	if ld.has("quick_key"):
 		out["quick_key"] = int(ld["quick_key"])
-	if typeof(ld.get("equip")) == TYPE_DICTIONARY and typeof(ld.get("gear")) == TYPE_ARRAY:
+	var has_equip := typeof(ld.get("equip")) == TYPE_DICTIONARY
+	var has_gear := typeof(ld.get("gear")) == TYPE_ARRAY
+	# Половины читаются независимо: запись с одной потерянной половиной - это
+	# половина сета, а не пустой сет. Раньше требовались обе сразу, и при
+	# отсутствии одной функция уходила в legacy-ветку и возвращала пусто.
+	if has_equip:
 		var eq: Dictionary = ld["equip"]
 		var out_eq := {}
 		for k in eq.keys():
 			if typeof(eq[k]) == TYPE_DICTIONARY:
 				out_eq[str(k)] = eq[k]
 		out["equip"] = out_eq
+	if has_gear:
 		var gr: Array = ld["gear"]
 		out["gear"] = gr.duplicate(true)
+	if has_equip or has_gear:
 		return out
 	if typeof(ld.get("items")) == TYPE_ARRAY:
 		_split_legacy(ld["items"], out)

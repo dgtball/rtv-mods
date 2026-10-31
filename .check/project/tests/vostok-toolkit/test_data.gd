@@ -20,6 +20,9 @@ func _run() -> void:
 	t_bak_written()
 	t_corrupt_recovers_from_bak()
 	t_corrupt_without_bak()
+	t_foreign_format_not_quarantined()
+	t_bare_array_is_read_as_sets()
+	t_norm_halves_independent()
 	t_save_returns_ok()
 	t_save_reports_open_error()
 	t_replace_set_drops_old_name_in_one_write()
@@ -148,3 +151,45 @@ func t_replace_set_drops_old_name_in_one_write() -> void:
 	ck(names.size() == 2, "replace_set: осталось ровно два сета")
 	ck(names.has("New") and names.has("Keep") and not names.has("Old"),
 		"replace_set: старое имя убрано, новое добавлено")
+
+# Валидный JSON чужой формы - не порча байтов: карантин не нужен, данные
+# читаются из .bak. Раньше такой файл уезжал в .corrupt-*, и мод возвращал
+# предыдущее поколение сетов.
+func t_foreign_format_not_quarantined() -> void:
+	_clean()
+	VTKData.save_all([_ld("A")])
+	VTKData.save_all([_ld("B")])
+	_write_main('{"sets": []}')
+	var all := VTKData.get_all()
+	ck(all.size() == 1 and str(all[0]["name"]) == "A", "чужой формат -> данные из .bak")
+	ck(_corrupt_count() == 0, "валидный JSON чужой формы не уезжает в .corrupt")
+
+# Голый массив верхнего уровня - старый/ручной формат: принимаем как список.
+func t_bare_array_is_read_as_sets() -> void:
+	_clean()
+	_write_main('[{"name": "Raw", "quick_key": 0, "equip": {}, "gear": []}]')
+	var all := VTKData.get_all()
+	ck(all.size() == 1 and str(all[0]["name"]) == "Raw", "голый массив = список сетов")
+	ck(_corrupt_count() == 0, "голый массив не карантинится")
+
+# Потерянная половина - это половина сета, а не пустой сет: данные на диске
+# целы, терялась только логика чтения.
+func t_norm_halves_independent() -> void:
+	var eq_only = VTKData._norm({
+		"name": "E",
+		"equip": {"Primary": {"path": "res://a.tres"}},
+	})
+	ck((eq_only["equip"] as Dictionary).has("Primary"), "_norm: equip читается без gear")
+	ck((eq_only["gear"] as Array).is_empty(), "_norm: отсутствующий gear -> []")
+
+	var gear_only = VTKData._norm({"name": "G", "gear": [{"path": "res://b.tres"}]})
+	ck((gear_only["equip"] as Dictionary).is_empty(), "_norm: отсутствующий equip -> {}")
+	ck((gear_only["gear"] as Array).size() == 1, "_norm: gear читается без equip")
+
+	# legacy items - только когда нет ни equip, ни gear; иначе он съел бы
+	# половину новой записи.
+	var legacy = VTKData._norm({
+		"name": "L",
+		"items": [{"name": "Old"}],
+	})
+	ck((legacy["gear"] as Array).size() == 1, "_norm: legacy items -> gear")
