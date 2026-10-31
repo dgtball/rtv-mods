@@ -328,6 +328,7 @@ func _run() -> void:
 	t_death_load_pressed_defers_to_vanilla()
 	t_task_note_removed_on_complete()
 	t_completed_note_card_is_dropped()
+	t_selected_stacks_skips_queued_cells()
 	t_post_callback_arity()
 	t_equip_pickup_free()
 	t_equip_pickup_merge()
@@ -909,6 +910,7 @@ class FakeSD extends RefCounted:
 class FakeItem extends Node:
 	var slotData = null
 	var details_updated := false
+	var selected := false
 
 	func UpdateDetails() -> void:
 		details_updated = true
@@ -1378,3 +1380,37 @@ func t_completed_note_card_is_dropped() -> void:
 
 	h.free()
 	ldr.free()
+
+# Х7/Д4: queue_free отложен до конца кадра, поэтому ячейка, уже помеченная
+# на удаление, остаётся "валидной" и "выбранной" - и попадала во вклад,
+# который commit фиксирует ДО списания.
+func t_selected_stacks_skips_queued_cells() -> void:
+	var h := TestHooks.new()
+	root.add_child(h)
+	var iface := FakeIface.new()
+	root.add_child(iface)
+	var grid := Node.new()
+	iface.add_child(grid)
+	iface.inventoryGrid = grid
+
+	var live := FakeItem.new()
+	live.selected = true
+	live.slotData = FakeSD.new()
+	live.slotData.amount = 0
+	live.slotData.itemData = {"file": "Cigarettes", "name": "Cigarettes"}
+	grid.add_child(live)
+
+	var dead := FakeItem.new()
+	dead.selected = true
+	dead.slotData = FakeSD.new()
+	dead.slotData.itemData = {"file": "Cigarettes", "name": "Cigarettes"}
+	grid.add_child(dead)
+	dead.queue_free()
+
+	var out := h._selected_stacks(iface)
+	ck(out.size() == 1, "ячейка, помеченная на удаление, не попадает в выборку")
+	ck(out.size() == 1 and out[0]["ref"] == live, "живая выбранная ячейка осталась")
+	ck(out.size() == 1 and int(out[0]["amount"]) == 1, "amount 0 (нестакуемый) считается за один")
+
+	iface.free()
+	h.free()

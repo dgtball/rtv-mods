@@ -1206,9 +1206,9 @@ func _selected_stacks(iface) -> Array:
 	var grid = iface.get("inventoryGrid")
 	if grid == null or not (grid is Node):
 		return out
-	for cell in grid.get_children():
-		if cell == null or not is_instance_valid(cell):
-			continue
+	# _live_children отбрасывает ячейки, помеченные на удаление: queue_free
+	# отложен, и без фильтра в вклад уходил предмет, которого уже нет.
+	for cell in _live_children(grid):
 		if not bool(cell.get("selected")):
 			continue
 		var sd = cell.get("slotData")
