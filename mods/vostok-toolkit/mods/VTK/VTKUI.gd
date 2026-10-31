@@ -709,13 +709,20 @@ func _save_loadout() -> void:
 		# _bind_btn после захвата уже null; кнопка «Готово» держится отдельным
 		# полем, иначе текст оставался «?» до пересборки страницы.
 		_rail._apply_qk_btn(_rail._done_bind_btn, claim)
-	_session.draft.set_name = name_new
-	_rail._editing_name = name_new
 	_editor._clear_problem()
 	# Строку отказа в рейле снимаем здесь же: иначе прошлый отказ удаления
 	# висел бы поверх успешно сохранённого сета.
 	_rail._set_note("")
-	refresh(RefreshScope.LIST | RefreshScope.PREVIEW)
+	# Запись прошла - закрываем мастер и показываем превью сохранённого сета:
+	# остаться в редакторе значило бы не дать никакого видимого признака, что
+	# сет записан. _selected_set ставим до пересборки, потому что превью рисует
+	# именно он, а _build_editor сам гасит панель редактора и перерисовывает
+	# правую колонку.
+	_session.clear_draft()
+	_rail._editing_name = ""
+	_rail._selected_set = name_new
+	_editor._build_editor()
+	refresh(RefreshScope.LIST)
 
 func _edit_loadout(name: String) -> void:
 	var raw = LD.get_set(name)
