@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.3.5] - 2026-10-31
+
+### Fixed
+
+- A completed note now leaves Notes while the tab is open, instead of staying
+  on screen until you switch tabs.
+
 ## [5.3.4] - 2026-10-31
 
 ### Fixed
