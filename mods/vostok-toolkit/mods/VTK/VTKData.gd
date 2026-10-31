@@ -72,6 +72,13 @@ const BAK_SUFFIX := ".bak"
 const TMP_SUFFIX := ".tmp"
 const CORRUPT_MARK := ".corrupt-"
 
+const PAYLOAD_KEY := "loadouts"
+
+# Схема файла в одном месте: запись и чтение идут через эту пару, чтобы
+# литерал не разъезжался по файлу.
+static func _payload(set_list: Array) -> Dictionary:
+	return {PAYLOAD_KEY: set_list}
+
 static func get_all() -> Array:
 	var payload = _read_payload(SAVE_FILE)
 	if payload != null:
@@ -109,7 +116,7 @@ static func _read_payload(path: String) -> Variant:
 		return null
 	return arr
 
-static func save_all(loadouts: Array) -> void:
+static func save_all(loadouts: Array) -> int:
 	var real_dir = OS.get_user_data_dir() + "/MCM/vostok-toolkit"
 	var d = DirAccess.open(real_dir)
 	if not d:
@@ -121,33 +128,48 @@ static func save_all(loadouts: Array) -> void:
 				d.make_dir("vostok-toolkit")
 				real_dir = OS.get_user_data_dir() + "/MCM/vostok-toolkit"
 				d = DirAccess.open(real_dir)
-	var payload := JSON.stringify({"loadouts": loadouts})
+	var payload := JSON.stringify(_payload(loadouts))
 	# Держим предыдущую исправную версию: перед перезаписью копируем её в .bak.
+	# Если копию сделать не удалось, запись отменяем: иначе следующий get_all
+	# после порчи основного файла восстановит более старое поколение.
 	if FileAccess.file_exists(SAVE_FILE):
 		var bak := SAVE_FILE + BAK_SUFFIX
 		if FileAccess.file_exists(bak):
-			DirAccess.remove_absolute(ProjectSettings.globalize_path(bak))
-		DirAccess.copy_absolute(ProjectSettings.globalize_path(SAVE_FILE), ProjectSettings.globalize_path(bak))
+			var rm := DirAccess.remove_absolute(ProjectSettings.globalize_path(bak))
+			if rm != OK:
+				Log.error("save_all: cannot replace " + bak + " (code " + str(rm) + ")")
+				return rm
+		var cp := DirAccess.copy_absolute(ProjectSettings.globalize_path(SAVE_FILE), ProjectSettings.globalize_path(bak))
+		if cp != OK:
+			Log.error("save_all: cannot back up to " + bak + " (code " + str(cp) + ")")
+			return cp
 	var tmp := SAVE_FILE + TMP_SUFFIX
 	var file = FileAccess.open(tmp, FileAccess.WRITE)
 	if file == null:
-		Log.log("[VTK] save_all: cannot open " + tmp)
-		return
+		var open_err := FileAccess.get_open_error()
+		Log.error("save_all: cannot open " + tmp + " (code " + str(open_err) + ")")
+		return open_err
 	file.store_string(payload)
 	file.close()
-	var err := _replace(tmp, SAVE_FILE)
-	if err != OK:
-		Log.log("[VTK] save_all: replace failed (code " + str(err) + ")")
+	var move_err := _replace(tmp, SAVE_FILE)
+	if move_err != OK:
+		Log.error("save_all: cannot move into place (code " + str(move_err) + ")")
+		return move_err
+	return OK
 
 # Атомарная замена: пишем в .tmp и переносим на место основного. На Windows
-# rename поверх существующего файла может упасть - тогда убираем цель и повторяем.
+# rename поверх существующего файла может упасть - тогда убираем цель и
+# повторяем. Неудачное удаление возвращаем как есть: иначе повторный rename
+# сообщил бы только своё следствие, а не причину.
 static func _replace(from_path: String, to_path: String) -> int:
 	var g_from := ProjectSettings.globalize_path(from_path)
 	var g_to := ProjectSettings.globalize_path(to_path)
 	var err := DirAccess.rename_absolute(g_from, g_to)
 	if err == OK:
 		return OK
-	DirAccess.remove_absolute(g_to)
+	var rm := DirAccess.remove_absolute(g_to)
+	if rm != OK:
+		return rm
 	return DirAccess.rename_absolute(g_from, g_to)
 
 # Битый файл не затираем, а переносим в *.corrupt-<время>: байты остаются для
@@ -256,17 +278,27 @@ static func _preferred_slot(path: String) -> String:
 
 # ---------- set writes ----------
 
-static func remove(name: String) -> void:
+static func remove(name: String) -> int:
 	var all = get_all()
 	var kept := []
 	for ld in all:
 		if typeof(ld) == TYPE_DICTIONARY and str(ld.get("name")) == name:
 			continue
 		kept.append(ld)
-	save_all(kept)
+	return save_all(kept)
 
-static func replace_set(set_name: String, equip_dict: Dictionary, gear_list: Array) -> void:
+# drop_name - прежнее имя при переименовании: старую запись убираем в той же
+# записи файла. remove + replace_set давали ДВА сохранения, и падение второго
+# оставляло файл без старого сета и ещё без нового.
+static func replace_set(set_name: String, equip_dict: Dictionary, gear_list: Array, drop_name: String = "") -> int:
 	var all = get_all()
+	if drop_name != "" and drop_name != set_name:
+		var kept := []
+		for ld in all:
+			if typeof(ld) == TYPE_DICTIONARY and str(ld.get("name")) == drop_name:
+				continue
+			kept.append(ld)
+		all = kept
 	var found := false
 	for i in range(all.size()):
 		if typeof(all[i]) != TYPE_DICTIONARY or str(all[i].get("name")) != set_name:
@@ -284,21 +316,22 @@ static func replace_set(set_name: String, equip_dict: Dictionary, gear_list: Arr
 			"equip": equip_dict.duplicate(true),
 			"gear": gear_list.duplicate(true),
 		})
-	save_all(all)
+	return save_all(all)
 
 # ---------- hotkeys ----------
 
-static func set_quick_key(name: String, keycode: int) -> void:
+static func set_quick_key(name: String, keycode: int) -> int:
 	var all = get_all()
 	for i in range(all.size()):
 		if typeof(all[i]) == TYPE_DICTIONARY and str(all[i].get("name")) == name:
 			all[i]["quick_key"] = keycode
-			save_all(all)
-			return
+			return save_all(all)
+	# Сета нет - менять нечего: это не отказ записи.
+	return OK
 
 # Одна клавиша - один сет: перед назначением чужой бинд на этом коде
 # снимается, иначе get_name_by_quick_key отдала бы первого попавшегося.
-static func set_quick_key_unique(name: String, keycode: int) -> void:
+static func set_quick_key_unique(name: String, keycode: int) -> int:
 	var all = get_all()
 	var found := false
 	for i in range(all.size()):
@@ -310,8 +343,9 @@ static func set_quick_key_unique(name: String, keycode: int) -> void:
 			found = true
 		elif keycode != 0 and int(all[i].get("quick_key", 0)) == keycode:
 			all[i]["quick_key"] = 0
-	if found:
-		save_all(all)
+	if not found:
+		return OK
+	return save_all(all)
 
 static func get_name_by_quick_key(keycode: int) -> String:
 	if keycode == 0:

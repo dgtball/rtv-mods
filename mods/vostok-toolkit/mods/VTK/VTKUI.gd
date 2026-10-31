@@ -671,17 +671,35 @@ func _save_loadout() -> void:
 			if str(ld.get("name")) == _rail._editing_name:
 				kept_key = int(ld.get("quick_key", 0))
 				break
-		LD.remove(_rail._editing_name)
-	LD.replace_set(name_new, _session.draft.equip, _session.draft.gear)
+	# Одна запись вместо remove + replace_set: между ними файл уже не содержал
+	# старого сета, а новый ещё не был записан.
+	var rc := LD.replace_set(name_new, _session.draft.equip, _session.draft.gear, _rail._editing_name)
+	if rc != OK:
+		_editor._set_problem(Loc.txt("Could not save your sets"))
+		return
 	if kept_key != 0:
-		LD.set_quick_key(name_new, kept_key)
+		rc = LD.set_quick_key(name_new, kept_key)
+		if rc != OK:
+			_editor._set_problem(Loc.txt("Could not save your sets"))
+			return
 	if _rail._pending_qk != 0:
-		LD.set_quick_key_unique(name_new, _rail._pending_qk)
+		rc = LD.set_quick_key_unique(name_new, _rail._pending_qk)
+		if rc != OK:
+			_editor._set_problem(Loc.txt("Could not save your sets"))
+			return
 		_rail._pending_qk = 0
-		_rail._apply_qk_btn(_rail._bind_btn, int(LD.get_set(name_new).get("quick_key", 0)))
+		# Кнопка страницы «Готово» держится отдельным полем: _bind_btn после
+		# захвата уже null (его обнуляет _handle_bind_key), и прежний вызов
+		# _apply_qk_btn(_bind_btn, ...) молча ничего не делал - текст кнопки
+		# оставался «?» до пересборки страницы, а refresh(LIST|PREVIEW) её не
+		# пересобирает.
+		_rail._apply_qk_btn(_rail._done_bind_btn, int(LD.get_set(name_new).get("quick_key", 0)))
 	_session.draft.set_name = name_new
 	_rail._editing_name = name_new
 	_editor._clear_problem()
+	# Строку отказа в рейле снимаем здесь же: иначе прошлый отказ удаления
+	# висел бы поверх успешно сохранённого сета.
+	_rail._set_note("")
 	refresh(RefreshScope.LIST | RefreshScope.PREVIEW)
 
 func _edit_loadout(name: String) -> void:
@@ -695,7 +713,10 @@ func _edit_loadout(name: String) -> void:
 	_editor._build_editor()
 
 func _delete_loadout(name: String) -> void:
-	LD.remove(name)
+	if LD.remove(name) != OK:
+		_rail._set_note(Loc.txt("Could not save your sets"))
+		return
+	_rail._set_note("")
 	if _rail._editing_name == name:
 		_cancel_draft()
 	else:

@@ -20,6 +20,9 @@ func _run() -> void:
 	t_bak_written()
 	t_corrupt_recovers_from_bak()
 	t_corrupt_without_bak()
+	t_save_returns_ok()
+	t_save_reports_open_error()
+	t_replace_set_drops_old_name_in_one_write()
 	t_prop()
 	print("")
 	if fails == 0:
@@ -56,6 +59,9 @@ func _clean() -> void:
 	for p in [VTKData.SAVE_FILE, VTKData.SAVE_FILE + ".bak", VTKData.SAVE_FILE + ".tmp"]:
 		if FileAccess.file_exists(p):
 			DirAccess.remove_absolute(_g(p))
+	var tmp_dir := _g(VTKData.SAVE_FILE + ".tmp")
+	if DirAccess.dir_exists_absolute(tmp_dir):
+		DirAccess.remove_absolute(tmp_dir)
 	var d := DirAccess.open(_dir())
 	if d != null:
 		for f in d.get_files():
@@ -114,3 +120,31 @@ func t_corrupt_without_bak() -> void:
 	ck(_corrupt_count() == 1, "Р±РёС‚С‹Р№ Р±РµР· .bak РѕС‚Р»РѕР¶РµРЅ РІ .corrupt")
 	VTKData.get_all()
 	ck(_corrupt_count() == 1, "РїРѕРІС‚РѕСЂРЅС‹Р№ get_all РЅРµ РїР»РѕРґРёС‚ .corrupt")
+
+func t_save_returns_ok() -> void:
+	_clean()
+	ck(VTKData.save_all([_ld("A")]) == OK, "save_all: успешная запись -> OK")
+
+# Отказ записи: каталог на месте .tmp не открывается на запись. Раньше
+# save_all молча возвращал void, и вызывающий не мог отличить отказ от успеха.
+func t_save_reports_open_error() -> void:
+	_clean()
+	VTKData.save_all([_ld("A")])
+	var tmp_dir := _g(VTKData.SAVE_FILE + ".tmp")
+	DirAccess.make_dir_recursive_absolute(tmp_dir)
+	var rc := VTKData.save_all([_ld("B")])
+	ck(rc != OK, "save_all: неоткрываемый .tmp -> код ошибки")
+	ck(str(VTKData.get_all()[0]["name"]) == "A", "save_all: основной файл не тронут")
+	_clean()
+
+# Переименование одной записью: remove + replace_set оставляли файл без старого
+# сета и ещё без нового, если вторая запись падала.
+func t_replace_set_drops_old_name_in_one_write() -> void:
+	_clean()
+	VTKData.save_all([_ld("Old"), _ld("Keep")])
+	var rc := VTKData.replace_set("New", {}, [], "Old")
+	ck(rc == OK, "replace_set с drop_name -> OK")
+	var names := VTKData.names()
+	ck(names.size() == 2, "replace_set: осталось ровно два сета")
+	ck(names.has("New") and names.has("Keep") and not names.has("Old"),
+		"replace_set: старое имя убрано, новое добавлено")

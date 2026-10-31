@@ -24,6 +24,7 @@ const RU := {
 	'Clothing': 'Одежда',
 	'Close': 'Закрыть',
 	'Consumables': 'Еда',
+	'Could not save your sets': 'Не удалось сохранить сеты',
 	'Create new loadout': 'Создать новый сет',
 	'Delete': 'Удалить',
 	'Does not fit: ': 'Не подходит: ',

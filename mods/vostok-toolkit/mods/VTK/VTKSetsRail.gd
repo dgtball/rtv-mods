@@ -39,6 +39,9 @@ var _bind_btn: Button = null
 # Кнопка хоткея на странице Готово: её непустое состояние показываем текстом
 # «Назначить клавишу», а не «?». В остальных местах кнопка хоткея - превью сета.
 var _done_bind_btn: Button = null
+# Строка отказа записи под списком сетов: удаление и бинд хоткея живут в рейле
+# и превью, где _editor._page_label не виден.
+var _rail_note: Label = null
 var _pending_qk: int = 0
 # Callable из VTKUI: перерисовать список и превью (LIST|PREVIEW).
 var refresh_rail: Callable
@@ -82,6 +85,13 @@ func _build_loadouts_tab(parent: VBoxContainer) -> void:
 
 	_cards_grid = _make_cards_grid()
 	_list_container.add_child(_cards_grid)
+
+	_rail_note = Label.new()
+	_rail_note.add_theme_font_size_override("font_size", 10)
+	_rail_note.add_theme_color_override("font_color", VTKSurface.DANGER)
+	_rail_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_rail_note.visible = false
+	_rail_box.add_child(_rail_note)
 
 	_right_box = VBoxContainer.new()
 	_right_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -352,9 +362,12 @@ func _handle_bind_key(event: InputEventKey) -> void:
 		return
 	if _bind_target != "":
 		# Клавиша, занятая другим сетом, забирается: чужой бинд снимается.
-		LD.set_quick_key_unique(_bind_target, kc)
+		var rc := LD.set_quick_key_unique(_bind_target, kc)
 		_bind_target = ""
 		_bind_btn = null
+		_set_note("" if rc == OK else Loc.txt("Could not save your sets"))
+		# Перерисовка в обоих случаях: при отказе она возвращает прежнюю
+		# клавишу, иначе кнопка показывала бы несохранённый бинд.
 		refresh_rail.call()
 	else:
 		# Черновик ещё не в файле - бинд копится до сохранения.
@@ -401,6 +414,13 @@ func _apply_qk_btn(btn: Button, qk: int) -> void:
 		btn.text = "?"
 		btn.add_theme_color_override("font_color", VTKSurface.TEXT_OFF)
 		VTKSurface.style_button(btn)
+
+# Единая точка показа отказа записи в рейле: текст и видимость вместе.
+func _set_note(msg: String) -> void:
+	if _rail_note == null:
+		return
+	_rail_note.text = msg
+	_rail_note.visible = msg != ""
 
 # Бинд, который показывает кнопка на странице Готово: нажатый в захвате,
 # если он есть, иначе сохранённый у редактируемого сета.
