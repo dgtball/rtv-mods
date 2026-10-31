@@ -44,6 +44,9 @@ var _editor: RefCounted = null
 
 # tabs
 var _tab_btns: Array = []
+# Стабильные ключи вкладок: локализованные тексты меняются при переводе,
+# ключи — нет. _switch_tab и _rebuild_ui работают только по ним.
+var _tab_keys: Array = []
 var _tab_containers: Dictionary = {}
 var _ui_nodes: Array = []
 var _current_tab: String = ""
@@ -405,18 +408,21 @@ func _build_ui() -> void:
 	mid.add_theme_constant_override("separation", 4)
 	rail.add_child(mid)
 
-	var tabs = [Loc.txt("Sets"), Loc.txt("Teleport")]
-	for tname in tabs:
+	# Пара «ключ — локализованный текст»: ключ стабильный (по нему живут
+	# контейнеры и _switch_tab), текст — только на кнопке.
+	var tabs := [["sets", Loc.txt("Sets")], ["teleport", Loc.txt("Teleport")]]
+	for pair in tabs:
 		var btn = Button.new()
-		btn.text = tname
+		btn.text = pair[1]
 		btn.custom_minimum_size = Vector2(VTKLook.TAB_W, VTKLook.TAB_H)
 		btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		btn.add_theme_font_size_override("font_size", 13)
-		var tn = tname
-		btn.pressed.connect(func(): _switch_tab(tn))
+		var tkey: String = pair[0]
+		btn.pressed.connect(func(): _switch_tab(tkey))
 		_attach_motion(btn)
 		mid.add_child(btn)
 		_tab_btns.append(btn)
+		_tab_keys.append(tkey)
 
 	var right := _make_header_zone(true)
 	rail.add_child(right)
@@ -459,23 +465,23 @@ func _build_ui() -> void:
 	_scroll.add_child(_main_vbox)
 	_scroll.resized.connect(_fit_height)
 
-	for tname in tabs:
+	for pair in tabs:
 		var vb = VBoxContainer.new()
-		vb.name = tname
+		vb.name = pair[0]
 		vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		vb.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		vb.hide()
 		_main_vbox.add_child(vb)
-		_tab_containers[tname] = vb
+		_tab_containers[pair[0]] = vb
 
 	_build_sets_pane()
 	_features._ensure_travel()
 	_tp_tab = TeleportTab.new()
 	_tp_tab.hover = Callable(self, "_attach_row_hover")
 	_tp_tab.motion = Callable(self, "_attach_motion")
-	_tp_tab._build_teleport_tab(_tab_containers[Loc.txt("Teleport")], _features.travel(), game_data)
+	_tp_tab._build_teleport_tab(_tab_containers["teleport"], _features.travel(), game_data)
 
-	_switch_tab(Loc.txt("Sets"))
+	_switch_tab("sets")
 	_fit_window()
 	if not get_viewport().size_changed.is_connected(_fit_window):
 		get_viewport().size_changed.connect(_fit_window)
@@ -505,25 +511,25 @@ func _fit_height() -> void:
 
 
 
-func _switch_tab(name: String) -> void:
+func _switch_tab(key: String) -> void:
 	if _current_tab != "" and _tab_containers.has(_current_tab):
 		_tab_containers[_current_tab].hide()
 	# Оверлей живёт на _panel, а не в контейнере таба, поэтому прячется сам:
 	# при уходе с «Сетов» - скрыть, при возврате - вернуть открытую панель.
 	if _editor._att_overlay != null:
-		if _current_tab == Loc.txt("Sets") and name != Loc.txt("Sets"):
+		if _current_tab == "sets" and key != "sets":
 			_editor._att_overlay.visible = false
-	_current_tab = name
-	if name == Loc.txt("Teleport"):
+	_current_tab = key
+	if key == "teleport":
 		_features._ensure_travel()
 		refresh_teleport_rows()
-	if _tab_containers.has(name):
-		_tab_containers[name].show()
-	if name == Loc.txt("Sets"):
+	if _tab_containers.has(key):
+		_tab_containers[key].show()
+	if key == "sets":
 		refresh(RefreshScope.OVERLAY)
 	for i in range(_tab_btns.size()):
 		var btn = _tab_btns[i] as Button
-		var is_active = btn.text == name
+		var is_active = i < _tab_keys.size() and _tab_keys[i] == key
 		# Стиль ставится во все три состояния: у прозрачной вкладки Godot иначе
 		# дорисует дефолтную плашку на ховере и нажатии.
 		var style: StyleBox = _make_tab_active_style() if is_active else _make_tab_style()
@@ -549,7 +555,7 @@ func refresh_teleport_rows() -> void:
 # ============== TAB: Сеты ==============
 
 func _build_sets_pane() -> void:
-	_rail._build_loadouts_tab(_tab_containers[Loc.txt("Sets")])
+	_rail._build_loadouts_tab(_tab_containers["sets"])
 	_editor.build(_rail._right_box)
 	_rail._refresh_preview()
 
@@ -610,6 +616,7 @@ func _clear_ui() -> void:
 			n.queue_free()
 	_ui_nodes.clear()
 	_tab_btns.clear()
+	_tab_keys.clear()
 	_tab_containers.clear()
 	_scroll = null
 	_frame = null
@@ -617,18 +624,18 @@ func _clear_ui() -> void:
 	_panel = null
 
 # Пересборка UI на месте после смены языка. Активную вкладку восстанавливаем
-# по позиции: _current_tab хранит локализованную строку, а после перевода
-# имена вкладок меняются и по имени прежний ключ не находится.
+# по стабильному ключу: локализованные тексты после перевода меняются,
+# _tab_keys - нет.
 func _rebuild_ui() -> void:
 	var idx := -1
-	for i in range(_tab_btns.size()):
-		if (_tab_btns[i] as Button).text == _current_tab:
+	for i in range(_tab_keys.size()):
+		if _tab_keys[i] == _current_tab:
 			idx = i
 			break
 	_clear_ui()
 	_build_ui()
-	if idx >= 0 and idx < _tab_btns.size():
-		_switch_tab((_tab_btns[idx] as Button).text)
+	if idx >= 0 and idx < _tab_keys.size():
+		_switch_tab(_tab_keys[idx])
 
 # ============== SAVE / LOAD / DELETE ==============
 
