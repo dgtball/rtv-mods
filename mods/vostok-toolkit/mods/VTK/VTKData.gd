@@ -307,10 +307,13 @@ static func remove(name: String) -> int:
 		kept.append(ld)
 	return save_all(kept)
 
-# drop_name - прежнее имя при переименовании: старую запись убираем в той же
-# записи файла. remove + replace_set давали ДВА сохранения, и падение второго
-# оставляло файл без старого сета и ещё без нового.
-static func replace_set(set_name: String, equip_dict: Dictionary, gear_list: Array, drop_name: String = "") -> int:
+# drop_name - прежнее имя при переименовании; kept_key - его хоткей;
+# claim_key - новый бинд (сильнее kept_key и снимает этот код с других сетов,
+# как set_quick_key_unique). Всё одной записью: между remove и replace_set
+# файл успевал побывать без сета, а каждая запись - stringify всего массива
+# и копия в .bak.
+static func replace_set(set_name: String, equip_dict: Dictionary, gear_list: Array,
+		drop_name: String = "", kept_key := 0, claim_key := 0) -> int:
 	var all = get_all()
 	if drop_name != "" and drop_name != set_name:
 		var kept := []
@@ -319,20 +322,28 @@ static func replace_set(set_name: String, equip_dict: Dictionary, gear_list: Arr
 				continue
 			kept.append(ld)
 		all = kept
+	var entry_key := claim_key if claim_key != 0 else kept_key
 	var found := false
 	for i in range(all.size()):
-		if typeof(all[i]) != TYPE_DICTIONARY or str(all[i].get("name")) != set_name:
+		if typeof(all[i]) != TYPE_DICTIONARY:
 			continue
-		var n := _norm(all[i])
-		n["equip"] = equip_dict.duplicate(true)
-		n["gear"] = gear_list.duplicate(true)
-		all[i] = n
-		found = true
-		break
+		var nm := str(all[i].get("name"))
+		if nm == set_name:
+			var n := _norm(all[i])
+			n["equip"] = equip_dict.duplicate(true)
+			n["gear"] = gear_list.duplicate(true)
+			if claim_key != 0:
+				n["quick_key"] = claim_key
+			elif kept_key != 0:
+				n["quick_key"] = kept_key
+			all[i] = n
+			found = true
+		elif claim_key != 0 and int(all[i].get("quick_key", 0)) == claim_key:
+			all[i]["quick_key"] = 0
 	if not found:
 		all.append({
 			"name": set_name,
-			"quick_key": 0,
+			"quick_key": entry_key,
 			"equip": equip_dict.duplicate(true),
 			"gear": gear_list.duplicate(true),
 		})

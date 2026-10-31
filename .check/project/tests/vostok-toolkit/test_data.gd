@@ -26,6 +26,7 @@ func _run() -> void:
 	t_save_returns_ok()
 	t_save_reports_open_error()
 	t_replace_set_drops_old_name_in_one_write()
+	t_replace_set_applies_quick_keys()
 	t_prop()
 	print("")
 	if fails == 0:
@@ -151,6 +152,37 @@ func t_replace_set_drops_old_name_in_one_write() -> void:
 	ck(names.size() == 2, "replace_set: осталось ровно два сета")
 	ck(names.has("New") and names.has("Keep") and not names.has("Old"),
 		"replace_set: старое имя убрано, новое добавлено")
+
+# Один вызов = одна запись: хоткей переименованного сета сохраняется, новый
+# бинд снимает тот же код с других сетов, отдельные save для этого не нужны.
+func t_replace_set_applies_quick_keys() -> void:
+	_clean()
+	var a := _ld("A")
+	a["quick_key"] = 9
+	var b := _ld("B")
+	b["quick_key"] = 7
+	var c := _ld("C")
+	c["quick_key"] = 3
+	VTKData.save_all([a, b, c])
+
+	# Новый бинд сильнее старого и снимает тот же код с других сетов.
+	var rc := VTKData.replace_set("B2", {}, [], "B", 7, 9)
+	ck(rc == OK, "replace_set с новым биндом: запись прошла")
+	ck(int(VTKData.get_set("B2").get("quick_key", 0)) == 9, "новый бинд записан")
+	ck(int(VTKData.get_set("A").get("quick_key", 0)) == 0, "чужой бинд на той же клавише снят")
+	ck(int(VTKData.get_set("C").get("quick_key", 0)) == 3, "посторонний бинд не тронут")
+	ck(VTKData.get_set("B").is_empty(), "старое имя удалено той же записью")
+
+	# Переименование без нового бинда: хоткей переезжает, чужие коды целы.
+	rc = VTKData.replace_set("B3", {}, [], "B2", 9, 0)
+	ck(rc == OK, "replace_set с переносом хоткея: запись прошла")
+	ck(int(VTKData.get_set("B3").get("quick_key", 0)) == 9, "хоткей переехал на новое имя")
+	ck(int(VTKData.get_set("C").get("quick_key", 0)) == 3, "чужой хоткей не тронут")
+
+	# Новый сет без бинда создаётся с ключом 0.
+	rc = VTKData.replace_set("Fresh", {}, [], "", 0, 0)
+	ck(rc == OK and int(VTKData.get_set("Fresh").get("quick_key", 0)) == 0,
+		"новый сет без бинда создаётся с ключом 0")
 
 # Валидный JSON чужой формы - не порча байтов: карантин не нужен, данные
 # читаются из .bak. Раньше такой файл уезжал в .corrupt-*, и мод возвращал
