@@ -32,6 +32,17 @@ class FakeNoteCard extends Node:
 class FakeNotesIface extends Node:
 	var notesList = null
 
+# Заглушка RTVModLib: считает вызовы и отдаёт различимые хэндлы, как настоящий.
+class FakeHookLib extends Node:
+	var names: Array = []
+	var ids: Array = []
+
+	func hook(hook_name: String, _cb) -> int:
+		var id := ids.size() + 1
+		names.append(hook_name)
+		ids.append(id)
+		return id
+
 func t_task_note_removed_on_complete() -> void:
 	var ldr := FakeLoaderNotes.new()
 	ldr.name = "Loader"
@@ -59,6 +70,9 @@ func t_task_note_removed_on_complete() -> void:
 # interface-initializetasks-post (void, ждал args+_result) и
 # interface-startinput-post: _on_tasks_startinput() брал лишний _result, и
 # кнопка Deposit не включалась.
+# Словарь ниже - полный список всех 25 колбэков: новый хук добавляется сюда же,
+# иначе он тихо выпадет из проверки арности. _on_notes_rendered держит 1 из-за
+# дефолта _result = null (X1, 5.3.5).
 func t_post_callback_arity() -> void:
 	var h = TestHooks.new()
 	root.add_child(h)
@@ -78,6 +92,16 @@ func t_post_callback_arity() -> void:
 		"_on_release_post": 0,
 		"_on_death_ready": 0,
 		"_on_death_load_pressed": 0,
+		"_on_ai_weapon_damage": 4,
+		"_on_ai_explosion": 2,
+		"_on_ai_death": 2,
+		"_on_task_complete_pressed": 0,
+		"_on_context_take_replace": 0,
+		"_on_context_split_replace": 0,
+		"_on_pickup_interact_pre": 0,
+		"_on_fasttransfer_pre": 0,
+		"_on_contexttransfer_pre": 0,
+		"_on_grab_pre": 0,
 	}
 	for m in expected:
 		var argc := Callable(h, m).get_argument_count()
@@ -334,6 +358,7 @@ func _run() -> void:
 	t_completed_note_drops_open_card()
 	t_selected_stacks_skips_queued_cells()
 	t_post_callback_arity()
+	t_hook_handles_are_counted()
 	t_equip_pickup_free()
 	t_equip_pickup_merge()
 	t_equip_pickup_partial_leftover()
@@ -1451,3 +1476,28 @@ func t_selected_stacks_skips_queued_cells() -> void:
 
 	iface.free()
 	h.free()
+
+# X6: лог считал сумму пяти массивов и +2, то есть печатал 22 при 25 хуках - и
+# врал ещё до всякой поломки. Единственная честная цифра - число хэндлов,
+# вернувшихся из hook(), поэтому их надо складывать в одном месте.
+func t_hook_handles_are_counted() -> void:
+	var h = TestHooks.new()
+	root.add_child(h)
+	var lib := FakeHookLib.new()
+	root.add_child(lib)
+	h._lib = lib
+	h._do_register()
+	ck(lib.names.size() == 25, "регистрируются все 25 хуков")
+	ck(h._hook_ids.size() == lib.names.size(), "каждый hook() кладёт хэндл в _hook_ids")
+	var seen := {}
+	for id in h._hook_ids:
+		seen[id] = true
+	ck(seen.size() == h._hook_ids.size(), "хэндлы различимы")
+	var uniq := {}
+	for n in lib.names:
+		uniq[n] = true
+	ck(uniq.size() == lib.names.size(), "имена хуков не повторяются")
+	h._do_register()
+	ck(lib.names.size() == 25, "повторный _do_register не регистрирует хуки заново")
+	h.queue_free()
+	lib.queue_free()

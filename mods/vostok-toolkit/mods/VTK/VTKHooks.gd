@@ -5,11 +5,8 @@ const Log = preload("res://mods/VTK/VTKLog.gd")
 var _registered: bool = false
 var _lib = null
 var _kill_count: int = 0
-var _hooks_kc: Array = []
-var _hooks_notes: Array = []
-var _hooks_deposits: Array = []
-var _hooks_equip: Array = []
-var _hooks_context: Array = []
+# Хэндлы всех 25 хуков: единственный источник цифры в логе регистрации.
+var _hook_ids: Array = []
 
 const KC = preload("res://mods/VTK/VTKKillCounter.gd")
 const Notes = preload("res://mods/VTK/VTKNotes.gd")
@@ -122,33 +119,33 @@ func _do_register() -> void:
 		Log.log("[VTK] Cannot register hooks: no RTVModLib")
 		return
 	Log.log("[VTK] Registering hooks...")
-	_lib.hook("controller-_physics_process-post", _on_controller_process)
-	_hooks_kc.append(_lib.hook("ai-weapondamage-pre", _on_ai_weapon_damage))
-	_hooks_kc.append(_lib.hook("ai-explosiondamage-pre", _on_ai_explosion))
-	_hooks_kc.append(_lib.hook("ai-death-pre", _on_ai_death))
-	_hooks_notes.append(_lib.hook("trader-completetask-post", _on_task_completed))
-	_hooks_notes.append(_lib.hook("interface-initializenotes-post", _on_notes_rendered))
-	_hooks_deposits.append(_lib.hook("interface-initializetasks-post", _on_tasks_rendered))
-	_hooks_deposits.append(_lib.hook("interface-startinput-post", _on_tasks_startinput))
-	_hooks_deposits.append(_lib.hook("task-_on_complete_pressed", _on_task_complete_pressed))
-	_lib.hook("loader-newgame-post", _on_newgame_post)
-	_lib.hook("compiler-spawn-post", _on_compiler_spawn)
-	_lib.hook("death-_ready-post", _on_death_ready)
-	_lib.hook("death-_on_load_pressed", _on_death_load_pressed)
-	_hooks_equip.append(_lib.hook("loader-loadcharacter-post", _on_loadcharacter_post))
-	_hooks_context.append(_lib.hook("context-update-post", _on_context_update_post))
-	_hooks_context.append(_lib.hook("interface-contexttake", _on_context_take_replace))
-	_hooks_context.append(_lib.hook("interface-contextsplit", _on_context_split_replace))
-	_hooks_equip.append(_lib.hook("pickup-interact-pre", _on_pickup_interact_pre))
-	_hooks_equip.append(_lib.hook("pickup-interact-post", _on_pickup_interact_post))
-	_hooks_equip.append(_lib.hook("interface-fasttransfer-pre", _on_fasttransfer_pre))
-	_hooks_equip.append(_lib.hook("interface-fasttransfer-post", _on_fasttransfer_post))
-	_hooks_equip.append(_lib.hook("interface-contexttransfer-pre", _on_contexttransfer_pre))
-	_hooks_equip.append(_lib.hook("interface-contexttransfer-post", _on_contexttransfer_post))
-	_hooks_equip.append(_lib.hook("interface-grab-pre", _on_grab_pre))
-	_hooks_equip.append(_lib.hook("interface-release-post", _on_release_post))
+	_hook_ids.append(_lib.hook("controller-_physics_process-post", _on_controller_process))
+	_hook_ids.append(_lib.hook("ai-weapondamage-pre", _on_ai_weapon_damage))
+	_hook_ids.append(_lib.hook("ai-explosiondamage-pre", _on_ai_explosion))
+	_hook_ids.append(_lib.hook("ai-death-pre", _on_ai_death))
+	_hook_ids.append(_lib.hook("trader-completetask-post", _on_task_completed))
+	_hook_ids.append(_lib.hook("interface-initializenotes-post", _on_notes_rendered))
+	_hook_ids.append(_lib.hook("interface-initializetasks-post", _on_tasks_rendered))
+	_hook_ids.append(_lib.hook("interface-startinput-post", _on_tasks_startinput))
+	_hook_ids.append(_lib.hook("task-_on_complete_pressed", _on_task_complete_pressed))
+	_hook_ids.append(_lib.hook("loader-newgame-post", _on_newgame_post))
+	_hook_ids.append(_lib.hook("compiler-spawn-post", _on_compiler_spawn))
+	_hook_ids.append(_lib.hook("death-_ready-post", _on_death_ready))
+	_hook_ids.append(_lib.hook("death-_on_load_pressed", _on_death_load_pressed))
+	_hook_ids.append(_lib.hook("loader-loadcharacter-post", _on_loadcharacter_post))
+	_hook_ids.append(_lib.hook("context-update-post", _on_context_update_post))
+	_hook_ids.append(_lib.hook("interface-contexttake", _on_context_take_replace))
+	_hook_ids.append(_lib.hook("interface-contextsplit", _on_context_split_replace))
+	_hook_ids.append(_lib.hook("pickup-interact-pre", _on_pickup_interact_pre))
+	_hook_ids.append(_lib.hook("pickup-interact-post", _on_pickup_interact_post))
+	_hook_ids.append(_lib.hook("interface-fasttransfer-pre", _on_fasttransfer_pre))
+	_hook_ids.append(_lib.hook("interface-fasttransfer-post", _on_fasttransfer_post))
+	_hook_ids.append(_lib.hook("interface-contexttransfer-pre", _on_contexttransfer_pre))
+	_hook_ids.append(_lib.hook("interface-contexttransfer-post", _on_contexttransfer_post))
+	_hook_ids.append(_lib.hook("interface-grab-pre", _on_grab_pre))
+	_hook_ids.append(_lib.hook("interface-release-post", _on_release_post))
 	_registered = true
-	Log.log("[VTK] Per-frame hooks registered (" + str(_hooks_kc.size() + _hooks_notes.size() + _hooks_deposits.size() + _hooks_equip.size() + _hooks_context.size() + 2) + " hooks)")
+	Log.log("[VTK] Per-frame hooks registered (" + str(_hook_ids.size()) + " hooks)")
 
 # Compiler.Spawn() - точный момент готовности карты: контроллер уже расставлен
 # ванилой (Compiler.gd:205-220). Телепорт ждёт именно это, а не крутит кадры.
