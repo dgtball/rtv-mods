@@ -188,8 +188,13 @@ func _process(delta: float) -> void:
 		return
 	# Смена сцены дешёвая и должна сбрасывать счётчик сразу; чтение
 	# gameData.shelter - только на тике (0.5 с), HUD и так обновляется там же.
-	var map_changed := get_tree().current_scene != _scene_ref
+	# _scene_ref гаснет в тот же кадр, до выхода по убежищу: иначе
+	# map_changed держится true весь заезд, и каждый кадр идёт
+	# _reset_counters() с обнулением _seen_deaths.
+	var current := get_tree().current_scene
+	var map_changed := current != _scene_ref
 	if map_changed:
+		_scene_ref = current
 		_reset_counters()
 	_accum += delta
 	if _accum < 0.5:
