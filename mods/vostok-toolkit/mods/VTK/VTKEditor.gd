@@ -49,6 +49,9 @@ var _gear_grid_scroll: ScrollContainer = null
 var _att_overlay: Control = null
 var _att_overlay_body: VBoxContainer = null
 var _done_preview: Control = null
+# План композита по (resource_path, размер клетки, поворот, набор обвесов):
+# предметы в рантайме неизменны, поэтому кэш живёт до перезапуска игры.
+var _composite_plans: Dictionary = {}
 
 func _init(ui) -> void:
 	_ui = ui
@@ -1022,21 +1025,42 @@ func _render_composite(box: Panel, res, src: Dictionary, w: int, h: int, rotated
 	var scene = res.get("tetris")
 	if scene == null:
 		return false
+	var plan := _composite_plan(res, src, w, h, rotated)
 	var node: Node2D = scene.instantiate()
-	var meta := _composite_meta(src)
 	for ch in node.get_children():
-		ch.visible = meta["files"].has(str(ch.name))
+		ch.visible = (plan["files"] as Array).has(str(ch.name))
+	node.scale = Vector2(float(plan["scale"]), float(plan["scale"]))
+	node.rotation_degrees = float(plan["rotation"])
+	node.position = plan["position"]
+	box.add_child(node)
+	return true
+
+# Расчёт композита без инстанса сцены: что показать, в каком масштабе и где.
+# Ключ включает имена файлов обвесов - от них зависит и видимость детей, и
+# класс Picker.composite_pack.
+func _composite_plan(res, src: Dictionary, w: int, h: int, rotated: bool) -> Dictionary:
+	var meta := _composite_meta(src)
+	# У ресурса вне каталога resource_path пуст: без id два разных ствола
+	# делили бы один ключ.
+	var rp := str(res.resource_path)
+	var rid := rp if rp != "" else str(res.get_instance_id())
+	var key := "%s|%d|%d|%s|%s" % [rid, w, h, str(rotated), str(meta["files"])]
+	if _composite_plans.has(key):
+		return _composite_plans[key]
 	var pack := Picker.composite_pack(res, meta["classes"])
 	var base = res.get("size")
 	if not (base is Vector2) or base.x <= 0.0 or base.y <= 0.0:
 		base = Vector2(1, 1)
 	var cell := Vector2(w * EQ_CELL + (w - 1) * EQ_GAP, h * EQ_CELL + (h - 1) * EQ_GAP)
 	var place := Picker.composite_placement(base, cell, 8.0, pack, rotated)
-	node.scale = Vector2(place["scale"], place["scale"])
-	node.rotation_degrees = -90.0 if rotated else 0.0
-	node.position = place["position"]
-	box.add_child(node)
-	return true
+	var plan := {
+		"files": meta["files"],
+		"scale": float(place["scale"]),
+		"position": place["position"],
+		"rotation": -90.0 if rotated else 0.0,
+	}
+	_composite_plans[key] = plan
+	return plan
 
 # Размер глифа присутствия по клетке: max(w,h) >= 6 -> L, 4..5 -> M, 2 -> S, 1 -> XS.
 # Реально встречаются S (риг 2×2) и XS (NVG/Player 1×1); L/M - фолбэк, если
