@@ -30,6 +30,7 @@ class FakeIface extends Node:
 class FakeGameData extends Resource:
 	var currentMap := "Village"
 	var previousMap := "Cabin"
+	var isCaching := false
 
 # Наследник с пустым _ready(): VTKTravel._ready грузит res://Resources/GameData.tres,
 # которого в стенде нет. Логика _close_interfaces от этой загрузки не зависит.
@@ -46,6 +47,7 @@ func _run() -> void:
 	t_map_rollback_restores_snapshot()
 	t_map_rollback_without_game_data()
 	t_map_arrived_needs_matching_scene()
+	await t_await_map_ready_confirmed_skips_enter()
 	print("")
 	if fails == 0:
 		print("Travel tests passed")
@@ -118,6 +120,19 @@ func t_map_rollback_without_game_data() -> void:
 	ck(tr._map_state().is_empty(), "без GameData снимок пуст")
 	tr._restore_map({})
 	ck(true, "откат на пустом снимке не падает")
+	tr.queue_free()
+
+# travel_arrived приходит из compiler-spawn-post, а Spawn() вызывается уже
+# после сброса isCaching, поэтому ждать «начала кэша» в этой ветке нечего:
+# флаг больше не поднимется, и цикл выстоит весь CACHE_ENTER_WAIT_FRAMES.
+func t_await_map_ready_confirmed_skips_enter() -> void:
+	var tr := TestTravel.new()
+	root.add_child(tr)
+	tr.game_data = FakeGameData.new()
+	var t0 := Time.get_ticks_msec()
+	await tr._await_map_ready(true)
+	var ms := Time.get_ticks_msec() - t0
+	ck(ms < 1000, "подтверждённый spawn не ждёт фазу кэша (" + str(ms) + " мс)")
 	tr.queue_free()
 
 func t_map_arrived_needs_matching_scene() -> void:

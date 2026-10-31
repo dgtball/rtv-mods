@@ -171,11 +171,13 @@ func _teleport_internal(target_map: String, final_offset: Variant, dest_label: S
 		_busy = false
 		_message("Map " + target_map + " failed to load" + label0, Color.RED)
 		return
-	# Готовность ждём в обеих ветках: travel_arrived приходит из
-	# compiler-spawn-post, а загрузчик после него ещё выставляет isCaching и
-	# поднимает сцену. Раньше ветка с сигналом проверяла is_inside_tree() и до
-	# этого ожидания не доходила вовсе.
-	var ready := await _await_map_ready()
+	# Готовность ждём в обеих ветках, но по-разному: travel_arrived приходит из
+	# compiler-spawn-post, то есть уже после того, как Compiler сбросил
+	# isCaching и вызвал Spawn. Ждать в этой ветке «начала кэша» нечего - флаг
+	# больше не поднимется, и цикл выстоит весь CACHE_ENTER_WAIT_FRAMES впустую
+	# (~3 с). Дренаж и settle нужны обеим веткам.
+	var spawn_confirmed: bool = wait_hook and bool(arrived_flag[0])
+	var ready := await _await_map_ready(spawn_confirmed)
 	if not ready:
 		# Карта та же, но загрузчик не дошёл до settle: точку не ставим, иначе
 		# ранняя расстановка проваливает игрока под пол. Карту не откатываем -
@@ -396,11 +398,14 @@ func _node_forward(node: Node) -> Vector3:
 	return fwd.normalized()
 
 
-func _await_map_ready() -> bool:
+# spawn_confirmed: travel_arrived уже пришёл, значит Compiler сбросил
+# isCaching и вызвал Spawn - фазы «входа в кэш» в этой сцене больше не будет.
+func _await_map_ready(spawn_confirmed: bool = false) -> bool:
 	if not is_inside_tree():
 		return false
+	var enter_guard := 0 if spawn_confirmed else CACHE_ENTER_WAIT_FRAMES
 	var guard := 0
-	while guard < CACHE_ENTER_WAIT_FRAMES and game_data != null and not bool(game_data.get("isCaching")):
+	while guard < enter_guard and game_data != null and not bool(game_data.get("isCaching")):
 		await get_tree().process_frame
 		guard += 1
 	guard = 0
