@@ -1773,6 +1773,12 @@ func _make_item_cell(item, forced_slot = null, gear := false, force_gear := fals
 		str(item.name), 9, VTKSurface.TEXT_DIM, 2)
 
 	var already: bool = _ui._session.draft != null and _ui._session.draft.has_path(path_now)
+	# Рамка набора - один флаг для стиля сборки и обоих ховеров: раньше ховер
+	# опирался на raw already («в наборе вообще»), и предмет, поставленный
+	# шагом 1 в экипировку без снаряжения, после ухода курсора оставался
+	# с рамкой набора, хотя сборка её не ставила.
+	var framed: bool = (already and not gear) \
+		or (gear and _ui._session.draft != null and gi >= 0)
 	if already and not gear:
 		var cur_slot: String = _ui._session.draft.equip_slot_of(path_now)
 		if cur_slot == "":
@@ -1785,10 +1791,11 @@ func _make_item_cell(item, forced_slot = null, gear := false, force_gear := fals
 				cnt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				cnt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 				vbox.add_child(cnt)
+
+	if framed:
 		cell.add_theme_stylebox_override("panel", in_set_style)
 
 	if gear and _ui._session.draft != null and gi >= 0:
-		cell.add_theme_stylebox_override("panel", in_set_style)
 		var desc_g: Dictionary = _ui._session.draft.gear[gi]
 		var cnt_g := Draft.shown_count(desc_g)
 
@@ -1855,11 +1862,11 @@ func _make_item_cell(item, forced_slot = null, gear := false, force_gear := fals
 	# рамку, что стояла до наведения. Прежний общий normal_style гасил её,
 	# и клетка выглядела выбранной ровно до первого наведения.
 	cell.mouse_entered.connect(func():
-		var base_style := in_set_style if already else hover_style
+		var base_style := in_set_style if framed else hover_style
 		cell.add_theme_stylebox_override("panel", base_style)
 	)
 	cell.mouse_exited.connect(func():
-		var base_style := in_set_style if already else normal_style
+		var base_style := in_set_style if framed else normal_style
 		cell.add_theme_stylebox_override("panel", base_style)
 	)
 	return cell
