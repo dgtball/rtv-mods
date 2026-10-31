@@ -1,5 +1,11 @@
 # Changelog
 
+## [5.3.7] - 2026-10-31
+
+### Changed
+
+- Minor internal cleanups.
+
 ## [5.3.6] - 2026-10-31
 
 ### Fixed
