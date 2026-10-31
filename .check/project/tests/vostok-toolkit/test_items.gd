@@ -60,6 +60,16 @@ func t_info() -> void:
 	ck(S.info_of(null).is_empty(), "info_of(null) -> {}")
 	ck(S.info_of(_akm) == info, "info_of повторяет кеш по resource_path")
 	ck(S.item_info(_akm.resource_path) == info, "повторный item_info отдаёт то же из кеша")
+	t_info_cache_remembers_misses()
+
+func t_info_cache_remembers_misses() -> void:
+	ck(not S.cached_info("res://Items/Nope.tres"), "промах ещё не кеширован")
+	ck(S.item_info("res://Items/Nope.tres").is_empty(), "промах по пути вне индекса -> {}")
+	ck(S.cached_info("res://Items/Nope.tres"), "промах кеширован: диск второй раз не читается")
+	var info: Dictionary = S.item_info(_akm.resource_path)
+	ck(info.get("name") == "AKM", "попадание по-прежнему отдаёт info")
+	ck(S.cached_info(_akm.resource_path), "попадание тоже в кеше")
+	ck(not S.cached_info(""), "пустой путь не кешируется")
 
 func t_slots() -> void:
 	ck(S.item_slots(null).is_empty(), "item_slots(null) -> []")

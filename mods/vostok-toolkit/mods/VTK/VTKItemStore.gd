@@ -52,13 +52,30 @@ static func index_of(path: String) -> Variant:
 
 # Сведения о предмете по пути. Пути приходят из сохранённого сета, поэтому
 # за индексом идёт только загрузка - но предмет из базы берётся из индекса
-# без диска.
+# без диска. Промахи кешируются: путь из старого сета, которого больше нет
+# в базе, иначе грузился бы с диска в каждой клетке превью.
 static func item_info(path: String) -> Dictionary:
 	if path == "":
 		return {}
+	if _info_cache.has(path):
+		return _info_cache[path]
 	if _item_index.has(path):
-		return info_of(_item_index[path])
-	return info_of(load(path))
+		var info := info_of(_item_index[path])
+		_info_cache[path] = info
+		return info
+	if not ResourceLoader.exists(path):
+		_info_cache[path] = {}
+		return {}
+	var res = load(path)
+	if res == null:
+		_info_cache[path] = {}
+		return {}
+	var info := info_of(res)
+	_info_cache[path] = info
+	return info
+
+static func cached_info(path: String) -> bool:
+	return path != "" and _info_cache.has(path)
 
 static func info_of(res) -> Dictionary:
 	if res == null:
