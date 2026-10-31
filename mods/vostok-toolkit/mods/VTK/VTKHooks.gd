@@ -21,6 +21,9 @@ const SEEN_DEATHS_TTL_MSEC := 600000
 # Сезон меняется раз в season_cycle_days: проверять его 60 раз в секунду
 # незачем, а get_node_or_null по /root/Simulation — не бесплатная операция.
 const SEASON_APPLY_SEC := 0.5
+# Обход _seen_deaths/_last_damager идёт физическим кадром контроллера; полезная
+# работа — только чистка записей, поэтому 500 мс достаточно.
+const SWEEP_MSEC := 500
 
 var _equip_on: bool = true
 var _pickup_pending: int = 0
@@ -40,6 +43,7 @@ signal travel_arrived
 
 var _last_damager: Dictionary = {}
 var _seen_deaths: Dictionary = {}
+var _sweep_at: int = 0
 
 var _gd_node = null
 
@@ -883,9 +887,17 @@ func _on_controller_process(_delta: float) -> void:
 	var controller = _lib._caller if _lib else null
 	if not is_instance_valid(controller):
 		return
+	# Пустые словари проверяются до времени: после первого же убийства это
+	# самый частый случай, и он не должен ждать окна.
 	if _seen_deaths.is_empty() and _last_damager.is_empty():
 		return
 	var now = Time.get_ticks_msec()
+	if now - _sweep_at < SWEEP_MSEC:
+		return
+	_sweep_at = now
+	_sweep_deaths(now)
+
+func _sweep_deaths(now: int) -> void:
 	var stale_seen: Array = []
 	for iid in _seen_deaths:
 		if now - int(_seen_deaths[iid]) > SEEN_DEATHS_TTL_MSEC:

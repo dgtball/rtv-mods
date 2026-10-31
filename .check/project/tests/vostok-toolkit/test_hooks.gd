@@ -346,6 +346,7 @@ func _run() -> void:
 	t_kill_event()
 	t_attacker_snapshot()
 	t_damage_record_ttl()
+	t_sweep_is_throttled()
 	t_marker_attacker()
 	t_explosion_kill()
 	t_player_rig_weapon()
@@ -767,6 +768,7 @@ func t_damage_record_ttl() -> void:
 	h._last_damager[iid]["t"] = Time.get_ticks_msec() - 60000
 
 	lib._caller = controller
+	h._sweep_at = -100000
 	h._on_controller_process(0.1)
 	ck(h._last_damager.has(iid), "запись живой жертвы переживает окно 15 с")
 
@@ -778,10 +780,40 @@ func t_damage_record_ttl() -> void:
 	h._on_ai_weapon_damage("Chest", 10.0, Vector3.ZERO, null)
 	gone.free()
 	lib._caller = controller
+	h._sweep_at = -100000
 	h._on_controller_process(0.1)
 	ck(not h._last_damager.has(gone_id), "запись освобождённой жертвы вычищается")
 
 	victim.free()
+	controller.free()
+	h.queue_free()
+
+func t_sweep_is_throttled() -> void:
+	var h = TestHooks.new()
+	root.add_child(h)
+	var lib := FakeLib2.new()
+	h._lib = lib
+	var controller := FakeAgent2.new()
+	root.add_child(controller)
+	lib._caller = controller
+
+	var stale := 1000000   # id заведомо несуществующего узла
+	# Устаревшая запись — старше TTL обхода (600 с), а не «минуту назад»: порог
+	# свежести раны (15 с) к чистке _seen_deaths отношения не имеет.
+	var old := Time.get_ticks_msec() - TestHooks.SEEN_DEATHS_TTL_MSEC - 60000
+	h._sweep_at = -100000   # first sweep must not wait for the 500 ms window
+	h._seen_deaths[stale] = old
+	h._on_controller_process(0.1)
+	ck(not h._seen_deaths.has(stale), "первый обход чистит устаревшую запись")
+
+	h._seen_deaths[stale] = old
+	h._on_controller_process(0.1)
+	ck(h._seen_deaths.has(stale), "следующий кадр подряд словари не обходит")
+
+	h._sweep_at = -100000
+	h._on_controller_process(0.1)
+	ck(not h._seen_deaths.has(stale), "после окна обход снова идёт")
+
 	controller.free()
 	h.queue_free()
 
