@@ -293,8 +293,15 @@ static func _add_art(parent: Control, item, alpha: float) -> void:
 # --- сборка карточки заметки ------------------------------------------------
 
 static func augment_note(card, cov_map := {}) -> void:
-	if card == null:
+	if card == null or not (card is Node):
 		return
+	var sig := str(cov_map)
+	# Тот же прогресс на той же карточке (live-refresh после вклада, повторный
+	# проход страховки) - блоки уже верные, сносить и собирать нечего.
+	if card.has_meta("vtk_note_sig") and str(card.get_meta("vtk_note_sig")) == sig \
+			and card.find_child("VTKNoteDeliver", true, false) != null:
+		return
+	card.set_meta("vtk_note_sig", sig)
 	_remove_blocks(card)
 	var task_data = card.get("taskData")
 	if task_data == null:

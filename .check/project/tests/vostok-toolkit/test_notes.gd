@@ -37,6 +37,7 @@ func _init() -> void:
 	t_build_progress_row()
 	t_build_progress()
 	t_augment_note()
+	t_augment_note_skips_unchanged()
 	print("")
 	if fails == 0:
 		print("Notes tests passed")
@@ -269,3 +270,25 @@ func t_augment_note() -> void:
 
 	card.free()
 	empty.free()
+
+# П4: _refresh_notes_for после вклада и страховочный _prune_note_cards в том же
+# кадре зовут augment_note на той же карточке с тем же прогрессом. Блоки уже
+# верные - сносить и собирать заново нечего.
+func t_augment_note_skips_unchanged() -> void:
+	var card := FakeCard.new()
+	var a := {"resource_path": "res://A", "name": "Bandage"}
+	_make_card(card, [a, a], [])
+	var cov := {"res://A": {"got": 1, "need": 2}}
+	N.augment_note(card, cov)
+	var first = card.find_child("VTKNoteDeliver", true, false)
+	ck(first != null, "augment_note: ряд прогресса поставлен")
+
+	N.augment_note(card, cov)
+	ck(card.find_child("VTKNoteDeliver", true, false) == first,
+		"тот же прогресс не пересобирает блок")
+
+	N.augment_note(card, {"res://A": {"got": 2, "need": 2}})
+	ck(card.find_child("VTKNoteDeliver", true, false) != first,
+		"новый прогресс пересобирает блок")
+
+	card.free()
