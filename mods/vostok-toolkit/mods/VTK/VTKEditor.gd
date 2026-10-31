@@ -192,7 +192,7 @@ func _build_editor() -> void:
 	_editor_panel.add_child(_page_done)
 
 	_ui._session.reset_picker_state()
-	_show_page(0)
+	_show_page(0, true)
 	_editor_panel.visible = _ui._session.draft != null
 	_ui.refresh(R_PAGES | R_PREVIEW)
 
@@ -299,8 +299,14 @@ func _make_step_circle(n: int, active: bool) -> Panel:
 	c.add_child(num)
 	return c
 
-func _show_page(n: int) -> void:
-	_ui._session.page = clampi(n, 0, 2)
+func _show_page(n: int, force := false) -> void:
+	var next := clampi(n, 0, 2)
+	# Повторный клик по текущему шагу и сброс цели на той же странице не
+	# должны пересобирать содержимое: visibility и стили уже верные.
+	if not force and next == _ui._session.page:
+		return
+	var prev: int = _ui._session.page
+	_ui._session.page = next
 	if _page_equip != null:
 		_page_equip.visible = _ui._session.page == 0
 	if _page_gear != null:
@@ -331,6 +337,10 @@ func _show_page(n: int) -> void:
 	# При смене шага оверлей перерисовывается по пути новой страницы:
 	# чужая панель закрывается, своя - открывается.
 	_ui.refresh(R_OVERLAY)
+	# «Готово» собирается при входе на шаг, а не на каждое «±» в каталоге:
+	# состав мог измениться, пока страница была скрыта.
+	if next == 2 and prev != 2:
+		_ui.refresh(R_DONE)
 
 func _set_problem(msg: String) -> void:
 	if _page_label != null:
@@ -1550,8 +1560,13 @@ func _set_target_slot(slot: String) -> void:
 	_ui._session.last_placed = ""
 	_ui._session.target_cat = ""
 	_ui._session.target_sub = ""
-	_show_page(0)
-	_ui.refresh(R_PAGES)
+	if _ui._session.page == 0:
+		# Смена цели меняет только шаг 1 и панель обвесов; каталог шага 2 от
+		# слота не зависит намеренно, а «Готово» рисует неинтерактивные клетки.
+		_ui.refresh(R_EQUIP | R_OVERLAY)
+	else:
+		_show_page(0)
+		_ui.refresh(R_EQUIP)
 
 # Живой поиск с дебаунсом: пересборка идёт не на каждый символ, а через
 # короткую паузу. Поле поиска не пересоздаётся и держит курсор.
