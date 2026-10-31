@@ -265,7 +265,7 @@ func _refresh_loadout_list() -> void:
 	_cards_grid = _make_cards_grid()
 	_list_container.add_child(_cards_grid)
 
-	var loadouts = LD.get_all()
+	var loadouts = LD.get_all_norm()
 	if loadouts.is_empty():
 		var empty = Label.new()
 		empty.text = Loc.txt("No saved loadouts")
@@ -278,7 +278,7 @@ func _refresh_loadout_list() -> void:
 		if typeof(ld) != TYPE_DICTIONARY:
 			continue
 		var nm := str(ld.get("name", ""))
-		var pack: Dictionary = LD.get_set(nm)
+		var pack: Dictionary = ld
 		var active := nm == _selected_set
 
 		# Карточка только выбирает: Apply/Edit/клавиша живут в превью справа,

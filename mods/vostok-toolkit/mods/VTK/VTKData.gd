@@ -212,6 +212,16 @@ static func get_set(name: String) -> Dictionary:
 		return {}
 	return _norm(raw)
 
+# Все записи уже в схеме _norm: рейл строит из них карточки одним чтением
+# файла, а не LD.get_set на каждую карточку (тот читает файл заново).
+static func get_all_norm() -> Array:
+	var out := []
+	for ld in get_all():
+		if typeof(ld) != TYPE_DICTIONARY:
+			continue
+		out.append(_norm(ld))
+	return out
+
 static func names() -> Array:
 	var out := []
 	for ld in get_all():

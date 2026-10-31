@@ -27,6 +27,7 @@ func _run() -> void:
 	t_save_reports_open_error()
 	t_replace_set_drops_old_name_in_one_write()
 	t_replace_set_applies_quick_keys()
+	t_get_all_norm()
 	t_prop()
 	print("")
 	if fails == 0:
@@ -225,3 +226,22 @@ func t_norm_halves_independent() -> void:
 		"items": [{"name": "Old"}],
 	})
 	ck((legacy["gear"] as Array).size() == 1, "_norm: legacy items -> gear")
+
+func t_get_all_norm() -> void:
+	_clean()
+	var a := _ld("A")
+	a["quick_key"] = 3
+	a["equip"] = {"Primary": {"path": "res://A.tres"}}
+	var b := _ld("B")
+	b.erase("equip")
+	b.erase("gear")
+	VTKData.save_all([a, b, "not a dict"])
+	var got := VTKData.get_all_norm()
+	ck(got.size() == 2, "get_all_norm: только словари")
+	if got.size() == 2:
+		ck(str(got[0]["name"]) == "A", "get_all_norm: порядок как в файле")
+		ck(int(got[0]["quick_key"]) == 3, "get_all_norm: quick_key на месте")
+		ck(typeof(got[0]["equip"]) == TYPE_DICTIONARY, "get_all_norm: equip нормализован")
+		ck(typeof(got[1]["equip"]) == TYPE_DICTIONARY and typeof(got[1]["gear"]) == TYPE_ARRAY,
+			"get_all_norm: половины сета добиты дефолтами")
+	ck(VTKData.get_all_norm().size() == 2, "get_all_norm: повторный вызов стабилен")
