@@ -24,6 +24,8 @@ func _run() -> void:
 	t_float_int_coercion()
 	t_defaults_cover_every_field()
 	t_cycle_days_is_clamped()
+	t_key_default_is_f3()
+	t_zero_key_falls_back_to_default()
 	print("")
 	if fails == 0:
 		print("Config tests passed")
@@ -66,7 +68,7 @@ func t_missing_key_uses_default() -> void:
 	ck(c.kill_feed_enabled == false, "kill_feed_enabled из конфига")
 	ck(c.kill_counter_enabled == true, "kill_counter_enabled недоступен - default true")
 	ck(c.season_cycle_days == 30, "season_cycle_days недоступен - default 30")
-	ck(c.key_ui_toggle == 0, "key_ui_toggle недоступен - default 0")
+	ck(c.key_ui_toggle == ConfigRec.DEFAULTS["key_ui_toggle"], "key_ui_toggle недоступен - дефолт из DEFAULTS")
 
 func t_primitive_and_plain_string_fall_back() -> void:
 	# _mcm_key_val отбрасывает всё, кроме примитива и словаря с value:
@@ -132,6 +134,28 @@ func t_defaults_cover_every_field() -> void:
 		ck(fields.has(key), "DEFAULTS-ключ %s объявлен полем" % key)
 	for key in fields:
 		ck(ConfigRec.DEFAULTS.has(key), "поле %s есть в DEFAULTS" % key)
+
+func t_key_default_is_f3() -> void:
+	# Дефолт хоткея - F3: старый ноль оставлял окно без клавиши, а README
+	# обещал F3. Сверка с глобальной константой, а не с числом.
+	ck(ConfigRec.DEFAULTS["key_ui_toggle"] == KEY_F3, "DEFAULTS.key_ui_toggle = KEY_F3")
+	var c: ConfigRec = ConfigRec.new()
+	c.read(ConfigFile.new())
+	ck(c.key_ui_toggle == KEY_F3, "свежий конфиг читает ключ как KEY_F3")
+
+func t_zero_key_falls_back_to_default() -> void:
+	# У игрока со старой установкой в config.ini лежит value = 0 («клавиши
+	# нет», выбор ничего): MCM-merge сохранит его как пользовательское
+	# значение, а ноль осмысленной клавишей быть не может - трактуем как
+	# «не выбрано» и подставляем дефолт.
+	var cfg := ConfigFile.new()
+	cfg.set_value("Keycode", "key_ui_toggle", {"value": 0})
+	var c: ConfigRec = ConfigRec.new()
+	c.read(cfg)
+	ck(c.key_ui_toggle == KEY_F3, "ноль в конфиге поднимается до дефолта")
+	cfg.set_value("Keycode", "key_ui_toggle", {"value": KEY_F4})
+	c.read(cfg)
+	ck(c.key_ui_toggle == KEY_F4, "осознанное значение клавиши проходит как есть")
 
 func t_cycle_days_is_clamped() -> void:
 	# Нижняя граница была, верхней не было: 100000 из ручной правки конфига

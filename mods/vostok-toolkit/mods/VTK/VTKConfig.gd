@@ -12,7 +12,7 @@ const Loc = preload("res://mods/VTK/VTKLoc.gd")
 # опечатка в имени члена там падает Parse Error, то есть проверка настоящая),
 # а литерал "en" второй раз не нужен.
 const DEFAULTS := {
-	"key_ui_toggle": 0,
+	"key_ui_toggle": KEY_F3,
 	"language": Loc.DEFAULT,
 	"auto_equip": true,
 	"debug_log": false,
@@ -44,7 +44,11 @@ var season_visuals: bool = DEFAULTS["season_visuals"]
 
 
 func read(cfg: ConfigFile) -> void:
-	key_ui_toggle = int(_val(cfg, "Keycode", "key_ui_toggle", key_ui_toggle))
+	# ZERO в Keycode - «клавиши нет» (MCM не даёт осознанно выбрать ноль), а
+	# не пользовательский выбор: поднимаем до дефолта, иначе у игроков со
+	# старой установкой в merge попадёт ноль и окно останется без клавиши.
+	var raw := int(_val(cfg, "Keycode", "key_ui_toggle", key_ui_toggle))
+	key_ui_toggle = raw if raw != 0 else DEFAULTS["key_ui_toggle"]
 	language = str(_val(cfg, "Dropdown", "language", Loc.get_lang()))
 	auto_equip = bool(_val(cfg, "Bool", "auto_equip", auto_equip))
 	debug_log = bool(_val(cfg, "Bool", "debug_log", debug_log))

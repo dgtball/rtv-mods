@@ -14,6 +14,7 @@ const SetsRail := preload("res://mods/VTK/VTKSetsRail.gd")
 const Session := preload("res://mods/VTK/VTKLoadoutSession.gd")
 const Editor := preload("res://mods/VTK/VTKEditor.gd")
 const VTKLook := preload("res://mods/VTK/VTKLook.gd")
+const ConfigRec := preload("res://mods/VTK/VTKConfig.gd")
 
 const UI_LAYER := 4095
 
@@ -55,7 +56,7 @@ var game_data: Resource = null
 # ui
 var _gold: Color = VTKSurface.GOLD
 
-var _key_ui_toggle: int = 0
+var _key_ui_toggle: int = ConfigRec.DEFAULTS["key_ui_toggle"]
 var _panel_open: bool = false
 var _saved_mouse_mode: int = Input.MOUSE_MODE_CAPTURED
 var _self_paused: bool = false

@@ -17,7 +17,10 @@ func register(host: RefCounted, on_rebuild: Callable, on_key: Callable) -> void:
 	rebuild_ui = on_rebuild
 	set_key_ui_toggle = on_key
 	if not ResourceLoader.exists("res://ModConfigurationMenu/Scripts/Doink Oink/MCM_Helpers.tres"):
-		features._apply_hud()
+		# Без MCM apply() раньше не звался вовсе: хоткей и тумблеры оставались
+		# на нулях хоста, окно было нечем открыть. Полный путь применит
+		# дефолты из конфига-заглушки (или из завалявшегося config.ini).
+		apply(ConfigFile.new())
 		return
 	var MCM = load("res://ModConfigurationMenu/Scripts/Doink Oink/MCM_Helpers.tres")
 	if MCM == null or not MCM.has_method("RegisterConfiguration"):
