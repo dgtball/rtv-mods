@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.3.6] - 2026-10-31
+
+### Fixed
+
+- Completed tasks of a trader added by a game update now count as done, so
+  their notes no longer stay in Notes forever.
+- Days per season is capped at 120, so an edited config can no longer stretch a
+  single season forever.
+
 ## [5.3.5] - 2026-10-31
 
 ### Fixed
