@@ -18,6 +18,9 @@ const SEASONS := preload("res://mods/VTK/VTKSeasons.gd")
 const SEASON_DRV := preload("res://mods/VTK/VTKSeasonDriver.gd")
 const HIT_WINDOW_MSEC := 15000
 const SEEN_DEATHS_TTL_MSEC := 600000
+# Сезон меняется раз в season_cycle_days: проверять его 60 раз в секунду
+# незачем, а get_node_or_null по /root/Simulation — не бесплатная операция.
+const SEASON_APPLY_SEC := 0.5
 
 var _equip_on: bool = true
 var _pickup_pending: int = 0
@@ -48,6 +51,7 @@ var _dyn_enabled := false
 var _dyn_start_offset := 1
 var _dyn_cycle_days := 30
 var _dyn_last_idx := -1
+var _season_poll: float = 0.0
 var _dyn_visuals := true
 var _scene_ref: Node = null
 
@@ -82,7 +86,10 @@ func _process(delta: float) -> void:
 		if _dyn_enabled and sc.has_node(Paths.MENU_DYNAMIC_SELECT):
 			_season_restore()
 	if _dyn_enabled:
-		_season_apply()
+		_season_poll += delta
+		if _season_poll >= SEASON_APPLY_SEC:
+			_season_poll = 0.0
+			_season_apply()
 		if _season_driver != null:
 			_season_driver.tick(delta)
 

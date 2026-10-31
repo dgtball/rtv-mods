@@ -14,6 +14,12 @@ func ck(cond: bool, msg: String) -> void:
 class TestHooks extends "res://mods/VTK/VTKHooks.gd":
 	pass
 
+class SeasonSpy extends TestHooks:
+	var applies := 0
+
+	func _season_apply() -> void:
+		applies += 1
+
 class FakeLoaderNotes extends Node:
 	var notes: Array = []
 	var saved: Array = []
@@ -352,6 +358,7 @@ func _run() -> void:
 	t_death_ready_unlocks_restart_for_permadeath()
 	t_death_load_pressed_runs_restart()
 	t_dynamic_restart_stays_dynamic()
+	t_season_apply_is_throttled()
 	t_death_load_pressed_defers_to_vanilla()
 	t_task_note_removed_on_complete()
 	t_completed_note_card_is_dropped()
@@ -450,6 +457,27 @@ func t_dynamic_restart_stays_dynamic() -> void:
 
 	sim.free()
 	loader.free()
+	h.queue_free()
+
+# Сезон меняется раз в season_cycle_days: опрос /root/Simulation каждый кадр
+# ни к чему. _process накапливает delta и применяет сезон не чаще, чем раз в
+# SEASON_APPLY_SEC; немедленные вызовы (spawn/new_run/resume) остаются как были.
+func t_season_apply_is_throttled() -> void:
+	var h := SeasonSpy.new()
+	root.add_child(h)
+	h._registered = true      # не ходим в _try_register из теста
+	h._dyn_enabled = true
+
+	h._process(0.1)
+	h._process(0.1)
+	ck(h.applies == 0, "первые кадры сезон не применяют")
+
+	h._process(0.4)
+	ck(h.applies == 1, "через SEASON_APPLY_SEC сезон применяется один раз")
+
+	h._process(0.1)
+	ck(h.applies == 1, "следующий кадр не повторяет применение")
+
 	h.queue_free()
 
 class FakeLib2:
