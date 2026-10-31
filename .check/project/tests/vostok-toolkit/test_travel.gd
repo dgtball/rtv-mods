@@ -24,6 +24,13 @@ class FakeIface extends Node:
 	func Close() -> void:
 		closed = true
 
+# Заглушка ванильного GameData: VTKTravel пишет карту через set(), а снимок
+# читает свойствами. Наследуемся от Resource - поле game_data объявлено
+# как Resource, и RefCounted сюда не подойдёт.
+class FakeGameData extends Resource:
+	var currentMap := "Village"
+	var previousMap := "Cabin"
+
 # Наследник с пустым _ready(): VTKTravel._ready грузит res://Resources/GameData.tres,
 # которого в стенде нет. Логика _close_interfaces от этой загрузки не зависит.
 class TestTravel extends "res://mods/VTK/VTKTravel.gd":
@@ -36,6 +43,9 @@ func _init() -> void:
 func _run() -> void:
 	t_close_interfaces_clears_hover()
 	t_close_interfaces_tolerates_missing_iface()
+	t_map_rollback_restores_snapshot()
+	t_map_rollback_without_game_data()
+	t_map_arrived_needs_matching_scene()
 	print("")
 	if fails == 0:
 		print("Travel tests passed")
@@ -80,4 +90,41 @@ func t_close_interfaces_tolerates_missing_iface() -> void:
 	root.add_child(tr)
 	tr._close_interfaces()
 	ck(true, "без Interface _close_interfaces не падает")
+	tr.queue_free()
+
+func t_map_rollback_restores_snapshot() -> void:
+	var tr := TestTravel.new()
+	root.add_child(tr)
+	var gd := FakeGameData.new()
+	tr.game_data = gd
+
+	var snap := tr._map_state()
+	ck(str(snap.get("currentMap")) == "Village", "_map_state снимает currentMap")
+	ck(str(snap.get("previousMap")) == "Cabin", "_map_state снимает previousMap")
+
+	# Так выглядит отказ: цель записана, карта не загрузилась.
+	gd.currentMap = "Terminal"
+	gd.previousMap = "Village"
+	tr._restore_map(snap)
+	ck(gd.currentMap == "Village", "откат возвращает currentMap")
+	ck(gd.previousMap == "Cabin", "откат возвращает previousMap")
+
+	tr.queue_free()
+
+func t_map_rollback_without_game_data() -> void:
+	var tr := TestTravel.new()
+	root.add_child(tr)
+	tr.game_data = null
+	ck(tr._map_state().is_empty(), "без GameData снимок пуст")
+	tr._restore_map({})
+	ck(true, "откат на пустом снимке не падает")
+	tr.queue_free()
+
+func t_map_arrived_needs_matching_scene() -> void:
+	var tr := TestTravel.new()
+	root.add_child(tr)
+	# Без current_scene _current_map_name() отдаёт "", и пустая цель не должна
+	# считаться совпадением: иначе отказ загрузки выглядел бы как успех.
+	ck(not tr._map_arrived("Village"), "без текущей сцены карта не подтверждена")
+	ck(not tr._map_arrived(""), "пустая цель не подтверждается")
 	tr.queue_free()

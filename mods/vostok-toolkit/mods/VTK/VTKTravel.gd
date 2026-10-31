@@ -128,6 +128,7 @@ func _teleport_internal(target_map: String, final_offset: Variant, dest_label: S
 	_has_look_at = false
 	_busy = true
 	var actual_current := _current_map_name()
+	var prev_map := _map_state()
 	_close_interfaces()
 	_save_before_transition(target_map, loader)
 	if game_data != null:
@@ -149,26 +150,38 @@ func _teleport_internal(target_map: String, final_offset: Variant, dest_label: S
 	if not await _wait_scene_change(prev_id):
 		if wait_hook:
 			hooks.disconnect("travel_arrived", cb)
+		_restore_map(prev_map)
 		_busy = false
 		_message("Scene failed to load: " + target_map, Color.RED)
 		return
-	var arrived := true
 	if wait_hook:
 		var guard := 0
 		while not arrived_flag[0] and guard < SCENE_WAIT_FRAMES:
 			await get_tree().process_frame
 			guard += 1
 		hooks.disconnect("travel_arrived", cb)
-		if arrived_flag[0]:
-			arrived = is_inside_tree()
-		else:
-			arrived = await _await_map_ready()
-	else:
-		arrived = await _await_map_ready()
-	if not arrived:
+	var label0 := "" if dest_label == "" else " (" + dest_label + ")"
+	# Успех - совпадение загруженной сцены с целью, а не факт смены сцены:
+	# смена бывает и от смерти, и от загрузки сейва, и от выхода в меню.
+	# Проверка идёт ДО ожидания готовности, потому что _await_map_ready()
+	# сначала ждёт начала isCaching: на чужой сцене она провисела бы весь
+	# CACHE_ENTER_WAIT_FRAMES, прежде чем сообщить об отказе.
+	if not _map_arrived(target_map):
+		_restore_map(prev_map)
 		_busy = false
-		var label0 := dest_label if dest_label == "" else " (" + dest_label + ")"
 		_message("Map " + target_map + " failed to load" + label0, Color.RED)
+		return
+	# Готовность ждём в обеих ветках: travel_arrived приходит из
+	# compiler-spawn-post, а загрузчик после него ещё выставляет isCaching и
+	# поднимает сцену. Раньше ветка с сигналом проверяла is_inside_tree() и до
+	# этого ожидания не доходила вовсе.
+	var ready := await _await_map_ready()
+	if not ready:
+		# Карта та же, но загрузчик не дошёл до settle: точку не ставим, иначе
+		# ранняя расстановка проваливает игрока под пол. Карту не откатываем -
+		# игрок физически на ней, и откат соврал бы в обратную сторону.
+		_busy = false
+		_message("Map " + target_map + " is not ready" + label0, Color.YELLOW)
 		return
 	if loader.has_method("SaveWorld"):
 		loader.SaveWorld()
@@ -247,6 +260,39 @@ func _current_map_name() -> String:
 	if scene == null or scene.scene_file_path == "":
 		return ""
 	return scene.scene_file_path.get_file().get_basename()
+
+
+# Снимок карты для отката. Compiler.Spawn читает gameData.previousMap во
+# время загрузки сцены, поэтому запись идёт ДО LoadScene, а на любом отказе
+# поля возвращаются к снимку - иначе телепорт оставит игрока «на Terminal»,
+# куда он не попал.
+func _map_state() -> Dictionary:
+	if game_data == null:
+		return {}
+	var cur = game_data.get("currentMap")
+	var prev = game_data.get("previousMap")
+	return {
+		"currentMap": "" if cur == null else str(cur),
+		"previousMap": "" if prev == null else str(prev),
+	}
+
+
+func _restore_map(snapshot: Dictionary) -> void:
+	if game_data == null or snapshot.is_empty():
+		return
+	game_data.set("currentMap", str(snapshot.get("currentMap", "")))
+	game_data.set("previousMap", str(snapshot.get("previousMap", "")))
+
+
+# Подтверждение карты: смена current_scene бывает и от смерти, загрузки сейва
+# и выхода в меню, поэтому успех - только совпадение имени загруженной сцены
+# с целью. Пустое имя (сцены нет) совпадением не считается. Проверка
+# is_inside_tree() нужна из-за _current_map_name(): get_tree() у узла вне
+# дерева - null, и вызов упал бы на ровном месте.
+func _map_arrived(target_map: String) -> bool:
+	if target_map == "" or not is_inside_tree():
+		return false
+	return _current_map_name() == target_map
 
 
 func _close_interfaces() -> void:
