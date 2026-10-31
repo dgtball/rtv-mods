@@ -98,13 +98,13 @@ func t_bak_written() -> void:
 	VTKData.save_all([_ld("A")])
 	VTKData.save_all([_ld("B")])
 	var bak := VTKData.SAVE_FILE + ".bak"
-	ck(FileAccess.file_exists(bak), "РІС‚РѕСЂР°СЏ Р·Р°РїРёСЃСЊ СЃРѕР·РґР°С‘С‚ .bak")
+	ck(FileAccess.file_exists(bak), "вторая запись создаёт .bak")
 	var all := VTKData.get_all()
-	ck(all.size() == 1 and str(all[0]["name"]) == "B", "РѕСЃРЅРѕРІРЅРѕР№ = РїРѕСЃР»РµРґРЅСЏСЏ РІРµСЂСЃРёСЏ")
+	ck(all.size() == 1 and str(all[0]["name"]) == "B", "основной = последняя версия")
 	var f := FileAccess.open(bak, FileAccess.READ)
 	var parsed = JSON.parse_string(f.get_as_text())
 	f.close()
-	ck(parsed != null and str(parsed["loadouts"][0]["name"]) == "A", "РІ .bak РїСЂРµРґС‹РґСѓС‰Р°СЏ РІРµСЂСЃРёСЏ")
+	ck(parsed != null and str(parsed["loadouts"][0]["name"]) == "A", "в .bak предыдущая версия")
 
 func t_corrupt_recovers_from_bak() -> void:
 	_clean()
@@ -112,17 +112,17 @@ func t_corrupt_recovers_from_bak() -> void:
 	VTKData.save_all([_ld("B")])
 	_write_main("}{ not json")
 	var all := VTKData.get_all()
-	ck(all.size() == 1 and str(all[0]["name"]) == "A", "Р±РёС‚С‹Р№ РѕСЃРЅРѕРІРЅРѕР№ -> РіСЂСѓР·РёРј .bak")
-	ck(_corrupt_count() >= 1, "Р±РёС‚С‹Р№ РѕСЃРЅРѕРІРЅРѕР№ РѕС‚Р»РѕР¶РµРЅ РІ .corrupt")
+	ck(all.size() == 1 and str(all[0]["name"]) == "A", "битый основной -> грузим .bak")
+	ck(_corrupt_count() >= 1, "битый основной отложен в .corrupt")
 
 func t_corrupt_without_bak() -> void:
 	_clean()
 	_write_main("garbage")
 	var all := VTKData.get_all()
-	ck(all.is_empty(), "Р±РёС‚С‹Р№ Р±РµР· .bak -> РїСѓСЃС‚Рѕ")
-	ck(_corrupt_count() == 1, "Р±РёС‚С‹Р№ Р±РµР· .bak РѕС‚Р»РѕР¶РµРЅ РІ .corrupt")
+	ck(all.is_empty(), "битый без .bak -> пусто")
+	ck(_corrupt_count() == 1, "битый без .bak отложен в .corrupt")
 	VTKData.get_all()
-	ck(_corrupt_count() == 1, "РїРѕРІС‚РѕСЂРЅС‹Р№ get_all РЅРµ РїР»РѕРґРёС‚ .corrupt")
+	ck(_corrupt_count() == 1, "повторный get_all не плодит .corrupt")
 
 func t_save_returns_ok() -> void:
 	_clean()

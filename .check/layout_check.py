@@ -483,6 +483,28 @@ FUNCS = [
 ]
 
 
+# X19: русский текст прошёл через cp1251 и стал «РЎРµС‚» - двойное
+# кодирование. Roundtrip line.encode("cp1251").decode("utf-8") ловит ровно
+# это: валидный кириллический/ASCII текст после него не распаковывается или
+# не меняется. C1-управляющие (U+0080-U+009F) roundtrip проходит - смешанная
+# кодировка чинится руками, поэтому флагается отдельно.
+C1_RE = re.compile(r"[\u0080-\u009f]")
+
+
+def mojibake_targets():
+    """README-карточки модов, CHANGELOG-и и headless-тесты со строками."""
+    pats = [
+        os.path.join(REPO_ROOT, "README.md"),
+        os.path.join(REPO_ROOT, "mods", "*", "*.md"),
+        os.path.join(REPO_ROOT, ".check", "project", "tests", "**", "*.gd"),
+    ]
+    seen = set()
+    for p in pats:
+        for path in sorted(glob.glob(p, recursive=True)):
+            seen.add(os.path.abspath(path))
+    return sorted(seen)
+
+
 def esc(s):
     return s.encode("ascii", "backslashreplace").decode("ascii")
 
@@ -621,9 +643,36 @@ def main():
                       % (os.path.basename(path),
                          os.path.relpath(path, REPO_ROOT).replace("\\", "/"), n))
 
-    print("GONE: %d, GONE_RE: %d, PRESENT: %d, FUNCS: %d, HOOKS_GONE: %d, HEX: %d, NUL: %d, HOOKS: %d"
+    moji_rows = 0
+    moji_report = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "mojibake_report.txt")
+    report = io.open(moji_report, "w", encoding="utf-8", newline="\n")
+    for path in mojibake_targets():
+        rel = os.path.relpath(path, REPO_ROOT).replace("\\", "/")
+        src = io.open(path, encoding="utf-8", errors="replace").read()
+        for n, line in enumerate(src.splitlines(), 1):
+            s = line.rstrip("\r")
+            if C1_RE.search(s):
+                moji_rows += 1
+                bad += 1
+                report.write("%s:%d: C1-control char: %s\n" % (rel, n, s))
+                continue
+            try:
+                fixed = s.encode("cp1251").decode("utf-8")
+            except (UnicodeError, ValueError):
+                continue
+            if fixed != s:
+                moji_rows += 1
+                bad += 1
+                report.write("%s:%d: double-encoded: %s\n" % (rel, n, fixed))
+    report.close()
+    if moji_rows:
+        print("  MOJIBAKE счёт в %s (выхлоп UTF-8: консоль кириллицу искажает)"
+              % os.path.relpath(moji_report, REPO_ROOT).replace("\\", "/"))
+
+    print("GONE: %d, GONE_RE: %d, PRESENT: %d, FUNCS: %d, HOOKS_GONE: %d, HEX: %d, NUL: %d, HOOKS: %d, MOJIBAKE: %d"
           % (len(GONE), len(GONE_RE), len(PRESENT), len(FUNCS),
-             len(HOOKS_GONE), hex_hits, nul_rows, len(hooks)))
+             len(HOOKS_GONE), hex_hits, nul_rows, len(hooks), moji_rows))
     if bad:
         print("RESULT: раскладка разошлась с планом: %d" % bad)
         sys.exit(1)
