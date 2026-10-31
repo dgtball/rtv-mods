@@ -48,11 +48,19 @@ static func group_items(items) -> Array:
 			order.append({"item": it, "count": 1})
 	return order
 
+# Шесть полей TraderSave, которые пишет ванильный Loader.SaveTrader. Фолбэк на
+# случай пустого/нечитаемого ресурса; ключи строчными, как их ждёт is_completed.
+const TRADER_KEYS := ["generalist", "doctor", "gunsmith", "driver", "hunter", "grandma"]
+
+# Служебный массив того же ресурса: taskNotes хранит TaskData для вкладки Notes
+# (Loader.SaveTaskNotes/LoadTaskNotes), а не сданные задачи торговца.
+const TRADER_SKIP := ["tasknotes"]
+
 static func completed_lists(traders) -> Dictionary:
 	var out := {}
 	if traders == null:
 		return out
-	for k in ["generalist", "doctor", "gunsmith", "driver", "hunter", "grandma"]:
+	for k in _trader_keys(traders):
 		var names = traders.get(k)
 		if typeof(names) != TYPE_ARRAY:
 			continue
@@ -60,6 +68,29 @@ static func completed_lists(traders) -> Dictionary:
 		for n in names:
 			set[str(n)] = true
 		out[k] = set
+	return out
+
+# Ключи берём из самого ресурса: седьмой торговец в апдейте получит поле в
+# TraderSave, и его задачи станут считаться сданными без правки мода. Только
+# свойства-массивы, объявленные скриптом: script/name и строковые поля ключами
+# быть не должны, а служебный taskNotes отсекается по имени. Dictionary -
+# прежний вход (тесты), литерал остаётся для него.
+static func _trader_keys(traders) -> Array:
+	var out: Array = []
+	if typeof(traders) == TYPE_DICTIONARY:
+		return TRADER_KEYS.duplicate()
+	if traders is Object and traders.has_method("get_property_list"):
+		for p in traders.get_property_list():
+			if int(p.get("type")) != TYPE_ARRAY:
+				continue
+			if not (int(p.get("usage", 0)) & PROPERTY_USAGE_SCRIPT_VARIABLE):
+				continue
+			var key := str(p.get("name")).to_lower()
+			if TRADER_SKIP.has(key):
+				continue
+			out.append(key)
+	if out.is_empty():
+		return TRADER_KEYS.duplicate()
 	return out
 
 static func is_completed(task_data, completed) -> bool:

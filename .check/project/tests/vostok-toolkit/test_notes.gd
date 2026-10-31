@@ -2,6 +2,19 @@ extends SceneTree
 
 const N = preload("res://mods/VTK/VTKNotes.gd")
 
+# Заглушка TraderSave: шесть ванильных полей, седьмой торговец, служебный
+# taskNotes и строка - ровно то, что апдейт игры может добавить в ресурс.
+class FakeTraderSave extends Resource:
+	var generalist := []
+	var doctor := []
+	var gunsmith := []
+	var driver := []
+	var hunter := []
+	var grandma := []
+	var nomads := []
+	var taskNotes := []
+	var note := ""
+
 var fails := 0
 
 func ck(cond: bool, msg: String) -> void:
@@ -56,6 +69,17 @@ func t_completed_lists() -> void:
 	ck(got.has("doctor") and got["doctor"].has("A"), "completed_lists: doctor")
 	ck(got.has("generalist") and got["generalist"].has("C"), "completed_lists: generalist")
 	ck(N.completed_lists(null).is_empty(), "completed_lists: null -> пусто")
+	# X4: ключи берутся из самого TraderSave. Иначе седьмой торговец из апдейта
+	# молча остался бы без учёта сданных задач - заметки висят вечно.
+	var save := FakeTraderSave.new()
+	save.doctor = ["A"]
+	save.nomads = ["N"]
+	var from_res := N.completed_lists(save)
+	ck(from_res.has("doctor") and from_res["doctor"].has("A"), "completed_lists: поля ресурса читаются")
+	ck(from_res.has("nomads") and from_res["nomads"].has("N"), "completed_lists: седьмой торговец из свойства")
+	ck(not from_res.has("note"), "completed_lists: не-массив в ключи не попадает")
+	ck(not from_res.has("tasknotes"), "completed_lists: taskNotes не становится ключом")
+	ck(N.completed_lists(Resource.new()).is_empty(), "completed_lists: пустой ресурс -> пусто")
 
 func t_is_completed() -> void:
 	var completed := N.completed_lists({"doctor": ["A"]})
