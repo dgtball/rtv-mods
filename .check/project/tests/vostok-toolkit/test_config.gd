@@ -22,6 +22,8 @@ func _run() -> void:
 	t_primitive_and_plain_string_fall_back()
 	t_full_round_trip()
 	t_float_int_coercion()
+	t_defaults_cover_every_field()
+	t_cycle_days_is_clamped()
 	print("")
 	if fails == 0:
 		print("Config tests passed")
@@ -31,21 +33,17 @@ func _run() -> void:
 		quit(1)
 
 func t_empty_cfg_keeps_defaults() -> void:
-	# Пустой ConfigFile - свежая установка без config.ini. Дефолты обязаны
-	# совпасть с регистрационными записями VTKMCMBridge.
+	# Пустой ConfigFile - свежая установка без config.ini. Дефолты берём из
+	# DEFAULTS, а не переписываем руками: литерал жил в трёх местах.
 	var c: ConfigRec = ConfigRec.new()
 	c.read(ConfigFile.new())
-	ck(c.key_ui_toggle == 0, "key_ui_toggle default 0")
+	for key in ConfigRec.DEFAULTS:
+		if key == "language":
+			continue
+		ck(c.get(key) == ConfigRec.DEFAULTS[key],
+			"%s default берётся из DEFAULTS" % key)
 	ck(c.language == Loc.get_lang(), "language default = текущий язык (свежий = en)")
-	ck(c.auto_equip == true, "auto_equip default true")
-	ck(c.debug_log == false, "debug_log default false")
-	ck(c.tp_unlocked_shelters_only == false, "tp_unlocked_shelters_only default false")
-	ck(c.kill_counter_enabled == true, "kill_counter_enabled default true")
-	ck(c.kill_feed_enabled == true, "kill_feed_enabled default true")
-	ck(c.season_enabled == true, "season_enabled default true")
-	ck(c.season_start == "summer", "season_start default summer")
-	ck(c.season_cycle_days == 30, "season_cycle_days default 30")
-	ck(c.season_visuals == true, "season_visuals default true")
+	ck(ConfigRec.DEFAULTS["language"] == Loc.DEFAULT, "DEFAULTS.language = Loc.DEFAULT")
 
 func t_dict_value_wins() -> void:
 	# Типовой случай: MCM кладёт словарь с name/tooltip и внутри value.
@@ -118,3 +116,31 @@ func t_float_int_coercion() -> void:
 	var c: ConfigRec = ConfigRec.new()
 	c.read(cfg)
 	ck(c.season_cycle_days == 2, "Int-значение приводится к int")
+
+func t_defaults_cover_every_field() -> void:
+	# Словарь и объявления полей не могут разъехаться: иначе регистрация MCM
+	# получит другой дефолт, чем свежая установка. Список полей не переписываем -
+	# читаем его у самого объекта.
+	var c: ConfigRec = ConfigRec.new()
+	var fields := {}
+	for p in c.get_property_list():
+		if not (int(p.get("usage", 0)) & PROPERTY_USAGE_SCRIPT_VARIABLE):
+			continue
+		fields[str(p.get("name"))] = true
+	ck(fields.size() == ConfigRec.DEFAULTS.size(), "полей и ключей DEFAULTS поровну")
+	for key in ConfigRec.DEFAULTS:
+		ck(fields.has(key), "DEFAULTS-ключ %s объявлен полем" % key)
+	for key in fields:
+		ck(ConfigRec.DEFAULTS.has(key), "поле %s есть в DEFAULTS" % key)
+
+func t_cycle_days_is_clamped() -> void:
+	# Нижняя граница была, верхней не было: 100000 из ручной правки конфига
+	# уводил сезон в бесконечность одного сезона.
+	var cfg := ConfigFile.new()
+	cfg.set_value("Int", "season_cycle_days", {"value": 100000})
+	var c: ConfigRec = ConfigRec.new()
+	c.read(cfg)
+	ck(c.season_cycle_days == ConfigRec.SEASON_MAX_DAYS, "верхняя граница дней сезона")
+	cfg.set_value("Int", "season_cycle_days", {"value": 0})
+	c.read(cfg)
+	ck(c.season_cycle_days == ConfigRec.SEASON_MIN_DAYS, "нижняя граница дней сезона")

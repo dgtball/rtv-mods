@@ -1,23 +1,45 @@
 extends RefCounted
-# Типизированный срез MCM-конфига: 11 ключей. Дефолты полей - это же, что
-# лежит в регистрационных записях VTKMCMBridge (там плюс name/tooltip/menu_pos,
-# их в рекорд не тянем). Разбор - read(), он держит прежнюю семантику
-# _mcm_key_val: приоритет d["value"] внутри словаря, иначе примитив, иначе
-# дефолт.
+# Типизированный срез MCM-конфига: 11 ключей. Дефолты живут в DEFAULTS, и его
+# читают объявления полей, регистрация VTKMCMBridge и тест. Разбор - read(), он
+# держит прежнюю семантику _mcm_key_val: приоритет d["value"] внутри словаря,
+# иначе примитив, иначе дефолт.
 
 const Loc = preload("res://mods/VTK/VTKLoc.gd")
 
-var key_ui_toggle: int = 0
-var language: String = Loc.DEFAULT
-var auto_equip: bool = true
-var debug_log: bool = false
-var tp_unlocked_shelters_only: bool = false
-var kill_counter_enabled: bool = true
-var kill_feed_enabled: bool = true
-var season_enabled: bool = true
-var season_start: String = "summer"
-var season_cycle_days: int = 30
-var season_visuals: bool = true
+# Единственный источник дефолтов: объявления полей, регистрация MCM и тест
+# читают этот словарь. Литерал "en" вместо Loc.DEFAULT намеренно: константа
+# чужого скрипта внутри const-словаря - лишняя зависимость от версии Godot,
+# а равенство держит тест (DEFAULTS["language"] == Loc.DEFAULT).
+const DEFAULTS := {
+	"key_ui_toggle": 0,
+	"language": "en",
+	"auto_equip": true,
+	"debug_log": false,
+	"tp_unlocked_shelters_only": false,
+	"kill_counter_enabled": true,
+	"kill_feed_enabled": true,
+	"season_enabled": true,
+	"season_start": "summer",
+	"season_cycle_days": 30,
+	"season_visuals": true,
+}
+
+# Те же числа, что в minRange/maxRange регистрации MCM. Кламп здесь, а не только
+# в UI: config.ini правится руками, а MCM можно обойти.
+const SEASON_MIN_DAYS := 1
+const SEASON_MAX_DAYS := 120
+
+var key_ui_toggle: int = DEFAULTS["key_ui_toggle"]
+var language: String = DEFAULTS["language"]
+var auto_equip: bool = DEFAULTS["auto_equip"]
+var debug_log: bool = DEFAULTS["debug_log"]
+var tp_unlocked_shelters_only: bool = DEFAULTS["tp_unlocked_shelters_only"]
+var kill_counter_enabled: bool = DEFAULTS["kill_counter_enabled"]
+var kill_feed_enabled: bool = DEFAULTS["kill_feed_enabled"]
+var season_enabled: bool = DEFAULTS["season_enabled"]
+var season_start: String = DEFAULTS["season_start"]
+var season_cycle_days: int = DEFAULTS["season_cycle_days"]
+var season_visuals: bool = DEFAULTS["season_visuals"]
 
 
 func read(cfg: ConfigFile) -> void:
@@ -30,7 +52,7 @@ func read(cfg: ConfigFile) -> void:
 	kill_feed_enabled = bool(_val(cfg, "Bool", "kill_feed_enabled", kill_feed_enabled))
 	season_enabled = bool(_val(cfg, "Bool", "season_enabled", season_enabled))
 	season_start = str(_val(cfg, "Dropdown", "season_start", season_start))
-	season_cycle_days = maxi(1, int(_val(cfg, "Int", "season_cycle_days", season_cycle_days)))
+	season_cycle_days = clampi(int(_val(cfg, "Int", "season_cycle_days", season_cycle_days)), SEASON_MIN_DAYS, SEASON_MAX_DAYS)
 	season_visuals = bool(_val(cfg, "Bool", "season_visuals", season_visuals))
 
 
