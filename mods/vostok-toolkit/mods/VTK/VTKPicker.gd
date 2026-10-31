@@ -109,19 +109,22 @@ static var _subcat_cache: Dictionary = {}
 
 # Кроп непрозрачной области иконки: AtlasTexture на оригинальном ресурсе, файлы
 # игры не трогает. used_rect расширен на 3 пикселя и обрезан по границе текстуры,
-# filter_clip убирает размытие по краю. Кэш по instance_id: иконки приходят из
-# одного набора ресурсов и переживают перестроение UI.
+# filter_clip убирает размытие по краю. Кэш по resource_path: путь стабилен, а
+# instance_id - адрес объекта, и после перезагрузки каталога освобождённый id
+# мог достаться чужой текстуре (у собственности без пути остаётся фолбэк на
+# instance_id).
 #
 # rotate разворачивает кроп на 90° против часовой (дуло вверх) и отдаёт
 # ImageTexture: у стволов иконка вытянута вдоль горизонтали, а клетка Primary/
 # Secondary вытянута по вертикали. Оригинал не мутируем - get_region копирует.
-# Кэш разведён на два ключа на один instance_id (повёрнутый и нет): одна и та
+# Кэш разведён на два ключа на одну текстуру (повёрнутый и нет): одна и та
 # же иконка встречается и в слоте оружия, и в каталоге.
 static func item_art(texture: Texture2D, rotate := false) -> Texture2D:
 	if texture == null:
 		return null
-	var key := texture.get_instance_id()
-	var ckey := key * 2 + (1 if rotate else 0)
+	var path: String = texture.resource_path
+	var base: String = path if path != "" else str(texture.get_instance_id())
+	var ckey := base + (":r" if rotate else "")
 	if _art_cache.has(ckey):
 		return _art_cache[ckey]
 	var image := texture.get_image()
@@ -148,6 +151,12 @@ static func item_art(texture: Texture2D, rotate := false) -> Texture2D:
 		art = atlas
 	_art_cache[ckey] = art
 	return art
+
+static func clear_cache() -> void:
+	# Каталог пересобран - кеш от прошлого набора ресурсов теряет смысл; тот же
+	# контракт, что у чистки кешей ItemStore (info/иконки).
+	_art_cache.clear()
+	_subcat_cache.clear()
 
 # Ключи таблицы групп в её порядке: [["weapon", "Weapons"], ...] -> ["weapon", ...].
 static func group_keys(groups: Array) -> Array:

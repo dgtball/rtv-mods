@@ -7,6 +7,9 @@ extends RefCounted
 ## ветки headless-тест не берёт, остальное покрыто test_items.gd.
 
 const LD := preload("res://mods/VTK/VTKData.gd")
+# Кеш обрезки иконок живёт в VTKPicker и чистится вместе с каталогом: цикла
+# preload нет - Picker каталога не знает.
+const Pick := preload("res://mods/VTK/VTKPicker.gd")
 
 static var _db_items: Array = []
 # resource_path -> Resource. Строки сетов хранят пути, а панелям обвесов нужен
@@ -27,6 +30,9 @@ static func clear() -> void:
 	_db_items.clear()
 	_item_index.clear()
 	_info_cache.clear()
+	_icon_cache.clear()
+	# Кеш обрезки/подкатегорий от прежнего набора ресурсов - туда же.
+	Pick.clear_cache()
 
 # Наполнение из db.master.items: запись без имени - не предмет каталога.
 static func rebuild(items: Array) -> void:

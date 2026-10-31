@@ -30,6 +30,8 @@ func _init() -> void:
 	t_att_panel_needed()
 	t_group_attachments()
 	t_item_art()
+	t_art_key_by_path()
+	t_art_cache_cleared()
 	print("")
 	if fails == 0:
 		print("Picker tests passed")
@@ -154,6 +156,49 @@ func t_item_art() -> void:
 		"item_art поворот 90° меняет стороны кропа")
 	ck(P.item_art(tex, true) == rot, "повёрнутый item_art кэшируется отдельно")
 	ck(P.item_art(tex) != rot, "поворот и без поворота - разные записи кэша")
+
+func t_art_key_by_path() -> void:
+	# Ключ кеша - resource_path: путь стабилен между перезагрузками каталога,
+	# instance_id - адрес объекта, после перезагрузки мог достаться чужой
+	# текстуре. Движок не даёт двум ресурсам владеть одним путём разом, поэтому
+	# сценарий перезагрузки: первая отдаёт путь, новая его подхватывает и
+	# обязана взять уже собранный кроп (у неё другой instance_id).
+	P.clear_cache()
+	var img_a := Image.create(8, 8, false, Image.FORMAT_RGBA8)
+	img_a.fill(Color(1, 0, 0, 1))
+	var a := ImageTexture.create_from_image(img_a)
+	a.resource_path = "res://test_icon_a.png"
+	var art_a := P.item_art(a)
+	ck(art_a is AtlasTexture, "первая текстура с путём кропается и кешируется")
+	var img_b := Image.create(8, 8, false, Image.FORMAT_RGBA8)
+	img_b.fill(Color(0, 1, 0, 1))
+	var b := ImageTexture.create_from_image(img_b)
+	a.resource_path = ""
+	b.resource_path = "res://test_icon_a.png"
+	var art_b := P.item_art(b)
+	ck(art_b == art_a, "новая текстура с прежним путём берётся из кеша по пути")
+
+func t_art_cache_cleared() -> void:
+	# clear_cache чистит кроп и подкатегории и безопасен на повторном вызове.
+	P.clear_cache()
+	P.clear_cache()
+	ck(P.subcategory_of("res://test_x.tres", "Weapon") == "", "после чистки таблицы пусты и не бросают")
+	var img_a := Image.create(8, 8, false, Image.FORMAT_RGBA8)
+	img_a.fill(Color(1, 0, 0, 1))
+	var a := ImageTexture.create_from_image(img_a)
+	a.resource_path = "res://test_icon_clear.png"
+	var art_a := P.item_art(a)
+	var rot := P.item_art(a, true)
+	ck(rot != art_a, "повёрнутый кроп - отдельная запись")
+	P.clear_cache()
+	var art_a2 := P.item_art(a)
+	ck(art_a2 != art_a, "после clear_cache кроп пересобирается заново")
+	# Текстуры без пути кеш работает по instance_id.
+	var img_n := Image.create(4, 4, false, Image.FORMAT_RGBA8)
+	img_n.fill(Color(0, 0, 1, 1))
+	var n := ImageTexture.create_from_image(img_n)
+	var art_n := P.item_art(n)
+	ck(P.item_art(n) == art_n, "без пути кеш по instance_id держит")
 
 func t_equip_group_of() -> void:
 	ck(P.equip_group_of("Weapon", ["Primary"]) == "weapon", "оружие в Primary -> Weapons")
