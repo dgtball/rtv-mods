@@ -19,6 +19,14 @@ const COL_PARTIAL := Color(0.420, 0.306, 0.141)   # 6b4e24
 const COL_BORDER := Surface.BORDER
 const COL_INK := Color(0.847, 0.804, 0.745)       # d8cdbe
 
+# Шесть полей TraderSave, которые пишет ванильный Loader.SaveTrader. Фолбэк на
+# случай пустого/нечитаемого ресурса; ключи строчными, как их ждёт is_completed.
+const TRADER_KEYS := ["generalist", "doctor", "gunsmith", "driver", "hunter", "grandma"]
+
+# Служебный массив того же ресурса: taskNotes хранит TaskData для вкладки Notes
+# (Loader.SaveTaskNotes/LoadTaskNotes), а не сданные задачи торговца.
+const TRADER_SKIP := ["tasknotes"]
+
 ## Ключ группировки: у предмета из БД стабильно есть resource_path; фолбэк —
 ## имя, затем str(). Notes и покрытие вкладов считают группы одинаково.
 static func item_key(item) -> String:
@@ -47,14 +55,6 @@ static func group_items(items) -> Array:
 			index[key] = order.size()
 			order.append({"item": it, "count": 1})
 	return order
-
-# Шесть полей TraderSave, которые пишет ванильный Loader.SaveTrader. Фолбэк на
-# случай пустого/нечитаемого ресурса; ключи строчными, как их ждёт is_completed.
-const TRADER_KEYS := ["generalist", "doctor", "gunsmith", "driver", "hunter", "grandma"]
-
-# Служебный массив того же ресурса: taskNotes хранит TaskData для вкладки Notes
-# (Loader.SaveTaskNotes/LoadTaskNotes), а не сданные задачи торговца.
-const TRADER_SKIP := ["tasknotes"]
 
 static func completed_lists(traders) -> Dictionary:
 	var out := {}

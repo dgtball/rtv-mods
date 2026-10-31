@@ -7,12 +7,13 @@ extends RefCounted
 const Loc = preload("res://mods/VTK/VTKLoc.gd")
 
 # Единственный источник дефолтов: объявления полей, регистрация MCM и тест
-# читают этот словарь. Литерал "en" вместо Loc.DEFAULT намеренно: константа
-# чужого скрипта внутри const-словаря - лишняя зависимость от версии Godot,
-# а равенство держит тест (DEFAULTS["language"] == Loc.DEFAULT).
+# читают этот словарь. "language" берётся из Loc.DEFAULT: константа чужого
+# скрипта внутри const-словаря компилируется в 4.6.3 (проверено на стенде:
+# опечатка в имени члена там падает Parse Error, то есть проверка настоящая),
+# а литерал "en" второй раз не нужен.
 const DEFAULTS := {
 	"key_ui_toggle": 0,
-	"language": "en",
+	"language": Loc.DEFAULT,
 	"auto_equip": true,
 	"debug_log": false,
 	"tp_unlocked_shelters_only": false,
