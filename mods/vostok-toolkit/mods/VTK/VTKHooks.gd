@@ -904,15 +904,18 @@ func _on_notes_rendered(_result) -> void:
 	if list == null or not (list is Node):
 		return
 	var ldr = get_node_or_null(Paths.LOADER)
-	var traders = null
-	if FileAccess.file_exists(Paths.TRADER_SAVE):
-		traders = load(Paths.TRADER_SAVE)
-	var completed = Notes.completed_lists(traders)
 	var notes = []
 	if ldr != null and ldr.has_method("LoadTaskNotes"):
 		notes = ldr.call("LoadTaskNotes")
-	for card in list.get_children():
-		if card == null or not is_instance_valid(card) or card.is_queued_for_deletion():
+	_prune_note_cards(_live_children(list), notes, Notes.completed_lists(_traders()), ldr)
+
+# Сданные заметки: данные уже почищены при сдаче задачи, но ваниль построила
+# карточки до post-хука, поэтому строку надо убрать здесь же - иначе она
+# висит до переоткрытия вкладки. Цикл вынесен из _on_notes_rendered, чтобы
+# его можно было проверить headless, не читая user://Traders.tres.
+func _prune_note_cards(cards: Array, notes: Array, completed: Dictionary, ldr) -> void:
+	for card in cards:
+		if card == null or not is_instance_valid(card):
 			continue
 		var task_data = card.get("taskData")
 		if task_data == null:
@@ -921,6 +924,7 @@ func _on_notes_rendered(_result) -> void:
 			var note = Notes.find_note(notes, task_data)
 			if note != null and ldr != null and ldr.has_method("SaveTaskNotes"):
 				ldr.call("SaveTaskNotes", note, false)
+			card.queue_free()
 			continue
 		Notes.augment_note(card, _notes_cov_map(task_data))
 

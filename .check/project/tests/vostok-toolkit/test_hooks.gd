@@ -26,6 +26,9 @@ class FakeLoaderNotes extends Node:
 		if not add and notes.has(task):
 			notes.erase(task)
 
+class FakeNoteCard extends Node:
+	var taskData = null
+
 func t_task_note_removed_on_complete() -> void:
 	var ldr := FakeLoaderNotes.new()
 	ldr.name = "Loader"
@@ -324,6 +327,7 @@ func _run() -> void:
 	t_dynamic_restart_stays_dynamic()
 	t_death_load_pressed_defers_to_vanilla()
 	t_task_note_removed_on_complete()
+	t_completed_note_card_is_dropped()
 	t_post_callback_arity()
 	t_equip_pickup_free()
 	t_equip_pickup_merge()
@@ -1345,3 +1349,32 @@ func t_equip_container_stack_merge() -> void:
 		"слияние: экипированный стек вырос на перенесённые 20")
 	h.queue_free()
 	c["iface"].free()
+
+# Х3: ваниль строит карточки из LoadTaskNotes() ДО post-хука, поэтому сданная
+# заметка висела на экране до переоткрытия вкладки. Данные при этом уже
+# почищены - терялась только строка.
+func t_completed_note_card_is_dropped() -> void:
+	var h = TestHooks.new()
+	root.add_child(h)
+	var ldr := FakeLoaderNotes.new()
+	ldr.name = "Loader"
+	root.add_child(ldr)
+	var note := {"name": "Duty Calls", "trader": "Doctor"}
+	ldr.notes = [note]
+
+	var card = FakeNoteCard.new()
+	card.taskData = {"name": "Duty Calls", "trader": "Doctor"}
+	root.add_child(card)
+
+	h._prune_note_cards([card], ldr.notes, {"doctor": {"Duty Calls": true}}, ldr)
+	ck(card.is_queued_for_deletion(), "сданная заметка убирается сразу")
+	ck(ldr.saved.size() == 1 and ldr.saved[0][1] == false, "и стирается из сейва заметок")
+
+	var live = FakeNoteCard.new()
+	live.taskData = {"name": "Still here", "trader": "Doctor"}
+	root.add_child(live)
+	h._prune_note_cards([live], [], {}, ldr)
+	ck(not live.is_queued_for_deletion(), "несданная заметка остаётся в списке")
+
+	h.free()
+	ldr.free()
