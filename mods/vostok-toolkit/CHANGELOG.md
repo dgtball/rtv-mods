@@ -1,5 +1,22 @@
 # Changelog
 
+## [5.3.8] - 2026-10-31
+
+### Fixed
+
+- The panel can now be opened with F3 by default, even when the settings menu is not installed.
+- The kill counter no longer shows a count from a previous run when it was
+  turned off during the restart.
+- An item worn in an equipment slot no longer stays highlighted in the
+  inventory step after you move the mouse over it.
+- Filter chips and the Reset button no longer flash the game's own grey
+  highlight on hover.
+- Closing the panel no longer unpauses the game when the panel was opened over
+  the vanilla pause menu.
+- Seasonal colours are no longer left applied when you leave a Dynamic run to
+  the main menu.
+- The empty presets list no longer shows an internal file path.
+
 ## [5.3.7] - 2026-10-31
 
 ### Changed
