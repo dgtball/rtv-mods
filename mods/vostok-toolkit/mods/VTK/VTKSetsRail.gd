@@ -271,11 +271,6 @@ func _refresh_loadout_list() -> void:
 		empty.text = Loc.txt("No saved loadouts")
 		empty.add_theme_color_override("font_color", VTKSurface.GREY_DIM)
 		_list_container.add_child(empty)
-		var debug = Label.new()
-		debug.text = Loc.txt("file: ") + str(OS.get_user_data_dir()) + "/MCM/vostok-toolkit/VTKsets.json"
-		debug.add_theme_font_size_override("font_size", 8)
-		debug.add_theme_color_override("font_color", VTKSurface.TEXT_OFF)
-		_list_container.add_child(debug)
 		_list_container.add_child(CreateCard.new(_ui._start_new_draft, Loc.txt("+ Create loadout")))
 		return
 

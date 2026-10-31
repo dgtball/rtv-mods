@@ -151,7 +151,6 @@ const RU := {
 	' items · ': ' предметов · ',
 	'[rounds]': '[патроны]',
 	'+ Create loadout': '+ Создать сет',
-	'file: ': 'файл: ',
 	'in the tutorial': 'в туториале',
 	'Not unlocked yet': 'Ещё не открыто',
 }
