@@ -41,13 +41,19 @@ func _ready() -> void:
 	_panel.visible = false
 	add_child(_panel)
 	get_tree().node_added.connect(_on_node_added)
+	# Счётчик рождается выключенным: кадры ему нужны только когда _enabled.
+	set_process(false)
 
 func set_enabled(v: bool) -> void:
 	_enabled = v
+	# Выключенный счётчик не должен ни обрабатываться каждый кадр, ни копить
+	# id узлов: в _pending раньше попадал любой узел, включая UI мода.
+	set_process(v)
 	_panel.visible = v
 	if v:
 		_reseed()
-	if not v:
+	else:
+		_pending.clear()
 		_kills = 0
 		_alive_cnt = 0
 		_nomad_cnt = 0
@@ -58,6 +64,8 @@ func _on_node_added(node: Node) -> void:
 	# Батчим: загрузчик за кадр добавляет целые поддеревья, и call_deferred на
 	# каждый узел — это отдельный instance_from_id + agent_kind lookup. Копим
 	# id, разбираем одним проходом раз за кадр в начале своего _process.
+	if not _enabled:
+		return
 	_pending.append(node.get_instance_id())
 
 func _drain_pending() -> void:

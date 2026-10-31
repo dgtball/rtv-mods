@@ -31,6 +31,7 @@ func _init() -> void:
 
 func _run() -> void:
 	t_agent_kind()
+	t_kc_disabled_ignores_nodes()
 	t_agent_display_name()
 	t_feed_segments()
 	t_feed_fade()
@@ -63,6 +64,26 @@ func t_agent_kind() -> void:
 	ck(KC.agent_kind(plain) == "", "узел без variant -> пусто")
 	n.queue_free()
 	plain.queue_free()
+
+# Выключенный счётчик не должен ни крутить _process, ни копить в _pending id
+# узлов: в _pending раньше попадал любой узел дерева, включая UI мода, хотя
+# разбирать его было некому.
+func t_kc_disabled_ignores_nodes() -> void:
+	var kc = KC.new()
+	root.add_child(kc)
+	kc.set_enabled(false)
+	ck(not kc.is_processing(), "выключенный счётчик не крутит _process")
+
+	var probe := Node.new()
+	root.add_child(probe)
+	ck(kc._pending.is_empty(), "выключенный счётчик не копит узлы (в т.ч. UI мода)")
+
+	kc.set_enabled(true)
+	ck(kc.is_processing(), "включённый счётчик снова обрабатывается")
+	ck(kc._pending.is_empty(), "включение не оставляет мусора в _pending")
+
+	probe.free()
+	kc.free()
 
 func t_agent_display_name() -> void:
 	var n := FakeAgent.new()
