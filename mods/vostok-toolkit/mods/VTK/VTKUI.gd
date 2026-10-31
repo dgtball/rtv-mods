@@ -595,9 +595,9 @@ class RefreshScope:
 	const PREVIEW := 32
 	const PAGES := EQUIP | GEAR | DONE | OVERLAY
 
-func refresh(scope: int) -> void:
+func refresh(scope: int, found = null) -> void:
 	if scope & RefreshScope.EQUIP:
-		_editor._refresh_page_equipment()
+		_editor._refresh_page_equipment(found)
 	if scope & RefreshScope.GEAR:
 		_editor._refresh_gear_catalog()
 	if scope & RefreshScope.DONE:

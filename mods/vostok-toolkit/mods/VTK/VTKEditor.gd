@@ -931,13 +931,13 @@ func _refresh_page_done() -> void:
 		_ui._rail._make_control_row(
 			[_name_input, _ui._rail._done_bind_btn, save_btn, cancel_btn])))
 
-func _refresh_page_equipment() -> void:
-	# Один обход каталога на пересборку: и шапка фильтров, и полки берут один
-	# и тот же набор, а _items_for_target проходит весь каталог целиком.
-	var found := _items_for_target()
-	_rebuild_target_bar(found)
+func _refresh_page_equipment(found = null) -> void:
+	# Один обход каталога на пересборку: вызывающий может передать уже
+	# посчитанный набор (живой поиск), иначе считаем здесь.
+	var items: Array = found if typeof(found) == TYPE_ARRAY else _items_for_target()
+	_rebuild_target_bar(items)
 	_refresh_slots()
-	_rebuild_shelves(found)
+	_rebuild_shelves(items)
 
 func _refresh_slots() -> void:
 	if _equip_grid_box == null:
@@ -1531,20 +1531,20 @@ func _target_subs(found: Array, cat: String) -> Array:
 # Смена запроса меняет набор найденного: под категорию или подкатегорию
 # могло остаться одно или ноль предметов, и фильтр без чипов молча пускал бы
 # пустую сетку. Сбрасываем только то, чего больше нет в данных.
-func _validate_target_filters() -> void:
+func _validate_target_filters(found = null) -> void:
 	if _ui._session.target_cat == "" and _ui._session.target_sub == "":
 		return
-	var found := _items_for_target()
-	var cats := _target_cats(found)
+	var items: Array = found if typeof(found) == TYPE_ARRAY else _items_for_target()
+	var cats := _target_cats(items)
 	if _ui._session.target_cat != "":
 		if not cats.has(_ui._session.target_cat):
 			_ui._session.target_cat = ""
 			_ui._session.target_sub = ""
-		elif _ui._session.target_sub != "" and not _target_subs(found, _ui._session.target_cat).has(_ui._session.target_sub):
+		elif _ui._session.target_sub != "" and not _target_subs(items, _ui._session.target_cat).has(_ui._session.target_sub):
 			_ui._session.target_sub = ""
 		return
 	if cats.size() == 1:
-		if _ui._session.target_sub != "" and not _target_subs(found, cats[0]).has(_ui._session.target_sub):
+		if _ui._session.target_sub != "" and not _target_subs(items, cats[0]).has(_ui._session.target_sub):
 			_ui._session.target_sub = ""
 	else:
 		_ui._session.target_sub = ""
@@ -1586,8 +1586,11 @@ func _set_search(t: String) -> void:
 		_search_debounce.start()
 
 func _apply_search() -> void:
-	_validate_target_filters()
-	_ui.refresh(R_EQUIP)
+	# Набор считается один раз и отдаётся и валидатору, и пересборке: раньше
+	# каждый символ проходил весь каталог дважды (_entry на каждый предмет).
+	var found := _items_for_target()
+	_validate_target_filters(found)
+	_ui.refresh(R_EQUIP, found)
 
 # Запись каталога для обоих шагов: предмет и его место в каждой таксономии.
 # Группы вычисляет Picker, а не строка type здесь: иначе шаг 1 и шаг 2 разошлись

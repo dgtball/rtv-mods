@@ -428,8 +428,8 @@ FUNCS = [
     ], "три шага делят всю ширину, а подпись страницы прижата вправо и не съедает остаток"),
     ("_set_search", ["_search_debounce.start()"],
      "живой поиск дебаунсится перед пересборкой"),
-    ("_apply_search", ["_validate_target_filters()"],
-     "применение поиска валидирует фильтры до пересборки сетки"),
+    ("_apply_search", ["_validate_target_filters(found)"],
+     "живой поиск валидирует фильтры на посчитанном наборе, а не считает его дважды"),
     ("_build_loadouts_tab", [
         "row.add_child(rail_panel)",
         "rail_panel.add_child(_rail_box)",
