@@ -1,5 +1,11 @@
 # Changelog
 
+## [5.3.10] - 2026-10-31
+
+### Fixed
+
+- The cassette player can now be picked for the player slot when building a set.
+
 ## [5.3.9] - 2026-10-31
 
 ### Changed

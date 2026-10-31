@@ -63,8 +63,10 @@ const INVENTORY_GROUPS := [
 	["furniture", "Furniture"],
 ]
 
-# Слот -> группа шага 1. Слота, которого здесь нет (Armor у бронеплит, Player),
-# на шаге 1 не существует: шаг показывает только то, что встаёт в клетку.
+# Слот -> группа шага 1. Слота, которого здесь нет (Armor у бронеплит), на шаге 1
+# не существует: шаг показывает только то, что встаёт в клетку. Обратное тоже
+# верно: каждая клетка сетки обязана иметь группу, иначе она кликабельна, но
+# всегда отвечает "Nothing fits" - так выпал Player у кассетного плеера.
 const EQUIP_SLOT_GROUPS := {
 	"Primary": "weapon", "Secondary": "weapon", "Knife": "weapon",
 	"Grenade_1": "weapon", "Grenade_2": "weapon",
@@ -72,7 +74,7 @@ const EQUIP_SLOT_GROUPS := {
 	"Torso": "clothing", "Head": "clothing", "Hands": "clothing",
 	"Helmet": "clothing", "Backpack": "clothing", "Rig": "clothing",
 	"Light": "gear", "NVG": "gear", "Time": "gear", "Map": "gear",
-	"Matches": "gear",
+	"Matches": "gear", "Player": "gear",
 }
 
 # Слот -> подпись подкатегории шага 1. Тождество, кроме гранат: два гнезда -
@@ -224,10 +226,10 @@ static func inventory_group_of(type, slots) -> String:
 # JCMDatabase.gd), в конце группы мебели из FURN_SUB_FOLDERS: у мебели подпись
 # считается по папке ассета, а не по SUB_FOLDERS.
 const SUBCATEGORY_ORDER := [
-	# Слоты шага 1. Гранаты схлопнуты в один чип, Player на шаге 1 не бывает.
+	# Слоты шага 1. Гранаты схлопнуты в один чип.
 	"Primary", "Secondary", "Knife", "Grenade", "Backpack", "Rig", "Helmet",
 	"Head", "Torso", "Legs", "Belt", "Feet", "Hands", "Light", "Time", "Map",
-	"NVG", "Matches",
+	"NVG", "Player", "Matches",
 	# Классы шага 2.
 	"Assault Rifles", "Sniper Rifles", "Shotguns", "Pistols", "SMGs",
 	"Knives", "Grenades",

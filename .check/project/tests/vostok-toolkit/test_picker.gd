@@ -87,6 +87,16 @@ func t_equip_layout() -> void:
 	var one_cells: Array = one.get("cells", [])
 	ck(one_cells.size() == 1 and str(one_cells[0][0]) == "Head", "недостающие слоты выпадают")
 	ck(P.equip_layout([]).get("cells", []).is_empty(), "пустой каталог даёт пустую раскладку")
+	# Инвариант раскладки: клетку, которую сетка рисует, шаг 1 обязан уметь
+	# заполнить. Слот в EQUIP_GRID без группы в EQUIP_SLOT_GROUPS даёт
+	# кликабельную клетку и "Nothing fits" на любой клик - так выпал Player
+	# (кассетный плеер).
+	var grid := {}
+	for row in P.EQUIP_GRID:
+		grid[str(row[0])] = true
+		ck(P.EQUIP_SLOT_GROUPS.has(str(row[0])), "у клетки сетки есть группа шага 1: " + str(row[0]))
+	for key in P.EQUIP_SLOT_GROUPS.keys():
+		ck(grid.has(str(key)), "группа шага 1 не висит без клетки сетки: " + str(key))
 
 func t_matches_slot() -> void:
 	ck(P.matches_slot(["Primary", "Secondary"], "Secondary") == true, "слот из списка подходит")
@@ -206,6 +216,7 @@ func t_equip_group_of() -> void:
 	ck(P.equip_group_of("Clothing", ["Head"]) == "clothing", "шапка -> Clothing")
 	ck(P.equip_group_of("Electronics", ["Light"]) == "gear", "фонарик -> Gear")
 	ck(P.equip_group_of("Misc", ["Matches"]) == "gear", "спички -> Gear")
+	ck(P.equip_group_of("Electronics", ["Player"]) == "gear", "кассетный плеер в слоте Player -> Gear")
 	ck(P.equip_group_of("Fishing", ["Primary", "Secondary"]) == "hobby", "удилище -> Hobby, не Weapons")
 	ck(P.equip_group_of("Instrument", ["Primary", "Secondary"]) == "hobby", "гитара -> Hobby")
 	ck(P.equip_group_of("Ammo", []) == "", "патроны без слота на шаге 1 не показываются")
@@ -221,6 +232,7 @@ func t_equip_subs_of() -> void:
 	ck(P.equip_subs_of("Grenade", ["Grenade_1"]) == ["Grenade"], "граната: подпись без номера слота")
 	ck(P.equip_subs_of("Grenade", ["Grenade_1", "Grenade_2"]) == ["Grenade"], "два гнезда гранат схлопываются")
 	ck(P.equip_subs_of("Fishing", ["Primary", "Secondary"]).is_empty(), "у Hobby подкатегорий нет")
+	ck(P.equip_subs_of("Electronics", ["Player"]) == ["Player"], "Player - своя подкатегория шага 1")
 	ck(P.equip_subs_of("Ammo", []).is_empty(), "вне шага 1 - без подкатегорий")
 	ck(P.equip_subs_of("Weapon", ["Primary", "Armor"]) == ["Primary"], "слот вне шага 1 в подкатегории не попадает")
 
@@ -316,6 +328,8 @@ func t_order_subcategories() -> void:
 		"неизвестные подкатегории идут после таблицы, по алфавиту")
 	ck(P.order_subcategories(["Head", "Primary", "Light"]) == ["Primary", "Head", "Light"],
 		"подписи слотов шага 1 стоят впереди в порядке SLOT_ORDER")
+	ck(P.order_subcategories(["Matches", "Player", "NVG"]) == ["NVG", "Player", "Matches"],
+		"Player стоит между NVG и Matches, как в SLOT_ORDER")
 
 func t_furn_subcategories() -> void:
 	ck(P.subcategory_of("res://Assets/Radio/Radio_F.tres", "Furniture") == "Appliances & Electronics",
