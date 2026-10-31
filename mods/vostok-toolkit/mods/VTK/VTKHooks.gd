@@ -13,6 +13,7 @@ const Notes = preload("res://mods/VTK/VTKNotes.gd")
 const VTKDeposits = preload("res://mods/VTK/VTKDeposits.gd")
 const VTKData = preload("res://mods/VTK/VTKData.gd")
 const EquipFlow = preload("res://mods/VTK/VTKEquip.gd")
+const Items := preload("res://mods/VTK/VTKItemStore.gd")
 const ConfigRec := preload("res://mods/VTK/VTKConfig.gd")
 const SEASONS := preload("res://mods/VTK/VTKSeasons.gd")
 const SEASON_DRV := preload("res://mods/VTK/VTKSeasonDriver.gd")
@@ -865,23 +866,16 @@ func _weapon_str(v) -> String:
 	return ""
 
 # Граната: имя оружия — это предмет из папки Grenades (принадлежность по
-# resource_path, как подкатегории в Picker).
+# resource_path, как подкатегории в Picker). Поиск идёт по индексу имён каталога:
+# нормализация общая, поэтому имена с дефисом/пробелом находятся надёжнее, а
+# перебора всего списка предметов на каждое событие боя нет.
 func _is_grenade(weapon: String) -> bool:
 	if weapon == "":
 		return false
-	var db = get_tree().root.get_node_or_null(Paths.DATABASE)
-	if db == null or not ("master" in db):
+	var item = Items.item_by_name(weapon)
+	if item == null:
 		return false
-	var master = db.get("master")
-	if master == null or not ("items" in master):
-		return false
-	for item in master.items:
-		if item == null:
-			continue
-		if str(item.name).strip_edges() != weapon:
-			continue
-		return String(item.resource_path).contains("/Grenades/")
-	return false
+	return String(item.resource_path).contains("/Grenades/")
 
 func _on_controller_process(_delta: float) -> void:
 	var controller = _lib._caller if _lib else null

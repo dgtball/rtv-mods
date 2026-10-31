@@ -26,6 +26,7 @@ func _item(item_name: String, path: String, item_type: String, item_slots: Array
 
 func _init() -> void:
 	t_rebuild()
+	t_name_index()
 	t_info()
 	t_slots()
 	t_cells()
@@ -47,6 +48,20 @@ func t_rebuild() -> void:
 	ck(S.all()[0] == _akm, "rebuild сохраняет порядок валидных")
 	ck(S.index_of(_akm.resource_path) == _akm, "rebuild наполняет индекс по resource_path")
 	ck(S.index_of("res://Items/Nope.tres") == null, "путь вне индекса -> null")
+
+func t_name_index() -> void:
+	var aks: Variant = _item("AKS-74U", "res://Items/Weapons/AKS/AKS_74U.tres", "Weapon", ["Primary"])
+	var mag: Variant = _item("AKS-74U_Magazine", "res://Items/Magazines/AKS_74U_Magazine.tres", "Magazine", [])
+	# Имя файла совпадает с чужим именем: приоритет у настоящего имени.
+	var clash: Variant = _item("Old Rifle", "res://Items/Weapons/Old/AKM.tres", "Weapon", ["Primary"])
+	S.rebuild([aks, mag, clash, _akm])
+	ck(S.norm_name("AKS-74U") == "aks_74u", "norm_name: дефис в подчёркивание, нижний регистр")
+	ck(S.item_by_name("AKS-74U") == aks, "поиск по имени")
+	ck(S.item_by_name("aks 74u") == aks, "поиск нормализует ввод")
+	ck(S.item_by_name("AKS_74U_Magazine") == mag, "магазин находится отдельно от ствола")
+	ck(S.item_by_name("AKM") == _akm, "имя приоритетнее имени файла")
+	ck(S.item_by_name("") == null, "пустое имя -> null")
+	ck(S.item_by_name("Nothing") == null, "неизвестное имя -> null")
 
 func t_info() -> void:
 	ck(S.item_info("").is_empty(), "item_info по пустому пути -> {}")

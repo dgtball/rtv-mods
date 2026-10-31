@@ -57,6 +57,7 @@ static func push_entry(entries: Array, entry: Dictionary, max_rows: int) -> Arra
 
 const Surface = preload("res://mods/VTK/VTKSurface.gd")
 const Picker = preload("res://mods/VTK/VTKPicker.gd")
+const Items := preload("res://mods/VTK/VTKItemStore.gd")
 
 const GRENADE_SVG := "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\"><ellipse cx=\"16\" cy=\"20\" rx=\"9\" ry=\"10\" fill=\"#6f7a5a\" stroke=\"#3d4433\" stroke-width=\"2\"/><rect x=\"13\" y=\"6\" width=\"6\" height=\"5\" rx=\"1\" fill=\"#8a8f7a\" stroke=\"#3d4433\" stroke-width=\"1.5\"/><path d=\"M19 8 q7 1 7 7\" fill=\"none\" stroke=\"#c9c2b2\" stroke-width=\"2\"/><path d=\"M26 15 l0 4\" fill=\"none\" stroke=\"#c9c2b2\" stroke-width=\"2\"/></svg>"
 # Перекрестие HS — из утверждённого макета (killfeed-mockup.html), цвет = HS_GOLD.
@@ -205,41 +206,30 @@ func _add_tex(row: HBoxContainer, tex: Texture2D, width_mul: float = 1.0) -> voi
 func _hs_texture() -> Texture2D:
 	return Surface.svg_texture(HS_SVG)
 
-# Оружие: имя из события -> предмет Database -> иконка предмета (как в сетах).
+# Оружие: имя из события -> предмет каталога -> иконка предмета (как в сетах).
 # item_art кропит прозрачные поля, иначе иконка оружия едва видна в строке 15px.
 #
 # Имя приходит из data.file рига или имени AI-узла (AKS_74U, AK-12, AKS-74U),
 # а item.name может быть переименован модом RealGunAndAttachmentNames — поэтому
-# сравнение нормализованное и дополнительно по basename resource_path.
+# сравнение нормализованное и идёт через индекс имён каталога, а не перебором
+# всего списка предметов на каждую строку ленты.
 static func norm_weapon(s: String) -> String:
-	return s.strip_edges().to_lower().replace("-", "_").replace(" ", "_")
+	return Items.norm_name(s)
 
 func _weapon_texture(weapon: String) -> Texture2D:
 	if weapon == "":
 		return null
-	var db = get_tree().root.get_node_or_null(Paths.DATABASE)
-	if db == null or not ("master" in db):
+	var item = Items.item_by_name(weapon)
+	if item == null:
 		return null
-	var master = db.get("master")
-	if master == null or not ("items" in master):
-		return null
-	var w := norm_weapon(weapon)
-	for item in master.items:
-		if item == null:
-			continue
-		var hit := norm_weapon(str(item.name)) == w
-		if not hit and String(item.resource_path) != "":
-			hit = norm_weapon(String(item.resource_path).get_file().get_basename()) == w
-		if not hit:
-			continue
-		var ui = get_node_or_null(Paths.UI_ROOT)
-		var icon = null
-		if ui != null and ui.has_method("_item_icon"):
-			icon = ui.call("_item_icon", item)
-		if icon is Texture2D:
-			return Picker.item_art(icon)
-		if "icon" in item and item["icon"] is Texture2D:
-			return Picker.item_art(item["icon"])
+	var ui = get_node_or_null(Paths.UI_ROOT)
+	var icon = null
+	if ui != null and ui.has_method("_item_icon"):
+		icon = ui.call("_item_icon", item)
+	if icon is Texture2D:
+		return Picker.item_art(icon)
+	if "icon" in item and item["icon"] is Texture2D:
+		return Picker.item_art(item["icon"])
 	return null
 
 func _in_shelter() -> bool:

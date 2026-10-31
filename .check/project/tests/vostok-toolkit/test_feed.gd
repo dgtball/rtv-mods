@@ -1,6 +1,7 @@
 extends SceneTree
 
 const KC = preload("res://mods/VTK/VTKKillCounter.gd")
+const Items = preload("res://mods/VTK/VTKItemStore.gd")
 
 var fails := 0
 
@@ -201,6 +202,8 @@ func t_feed_norm_weapon() -> void:
 	ck(Feed.norm_weapon("M28") == "m28", "простое имя не ломается")
 	ck(Feed.norm_weapon("Remington 870") == Feed.norm_weapon("Remington-870"), "пробел и дефис равны")
 	ck(Feed.norm_weapon("AKM") != Feed.norm_weapon("AKM_Magazine"), "магазин не путается со стволом")
+	ck(Feed.norm_weapon("AKS-74U") == Items.norm_name("AKS-74U"),
+		"лента нормализует имя тем же правилом, что и каталог")
 
 func t_log_warn_once() -> void:
 	var Log = preload("res://mods/VTK/VTKLog.gd")
