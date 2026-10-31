@@ -356,6 +356,7 @@ func _run() -> void:
 	t_task_note_removed_on_complete()
 	t_completed_note_card_is_dropped()
 	t_completed_note_drops_open_card()
+	t_startinput_renders_only_target()
 	t_selected_stacks_skips_queued_cells()
 	t_post_callback_arity()
 	t_hook_handles_are_counted()
@@ -1501,3 +1502,40 @@ func t_hook_handles_are_counted() -> void:
 	ck(lib.names.size() == 25, "повторный _do_register не регистрирует хуки заново")
 	h.queue_free()
 	lib.queue_free()
+
+# П1: клик по карточке задачи меняет только inputTarget, то есть disabled у
+# Deposit/Complete одной карточки. Полный проход списка на каждый клик - работа
+# в мусор, а с леджером и Traders.tres - ещё и чтение файла на карточку.
+class RenderSpy extends TestHooks:
+	var drawn: Array = []
+
+	func _render_task_card(_iface, card, _traders = null) -> void:
+		drawn.append(card)
+
+class TaskIface extends Node:
+	var taskList = null
+	var inputTarget = null
+
+func t_startinput_renders_only_target() -> void:
+	var h := RenderSpy.new()
+	root.add_child(h)
+	var iface := TaskIface.new()
+	root.add_child(iface)
+	iface.taskList = GridContainer.new()
+	iface.add_child(iface.taskList)
+	var lib := FakeLib2.new()
+	lib._caller = iface
+	h._lib = lib
+	var a := FakeNoteCard.new()
+	var b := FakeNoteCard.new()
+	iface.taskList.add_child(a)
+	iface.taskList.add_child(b)
+	iface.inputTarget = a
+
+	h._on_tasks_startinput(a)
+	ck(h.drawn.size() == 1, "StartInput рисует одну карточку, а не весь список")
+	if h.drawn.size() == 1:
+		ck(h.drawn[0] == a, "рисуется именно карточка-цель")
+
+	iface.free()
+	h.queue_free()

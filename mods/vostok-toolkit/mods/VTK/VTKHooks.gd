@@ -1105,8 +1105,15 @@ func _on_tasks_rendered() -> void:
 	_gc_ledger()
 	_render_all_tasks(iface)
 
-func _on_tasks_startinput(_target) -> void:
-	_on_tasks_rendered()
+func _on_tasks_startinput(target) -> void:
+	var iface = _lib._caller if _lib else null
+	if iface == null or not is_instance_valid(iface) or target == null or not (target is Node):
+		# Неизвестная цель - безопасный откат к прежнему полному проходу.
+		_on_tasks_rendered()
+		return
+	# Клик по карточке меняет только inputTarget, то есть disabled у Deposit и
+	# Complete одной карточки: полный обход списка тут не нужен.
+	_render_task_card(iface, target)
 
 func _render_all_tasks(iface) -> void:
 	var list = iface.get("taskList")
