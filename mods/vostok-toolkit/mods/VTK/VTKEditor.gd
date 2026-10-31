@@ -889,8 +889,15 @@ func _build_page_done() -> Control:
 	_ui._rail._apply_qk_btn(_ui._rail._bind_btn, _ui._rail._display_qk())
 	_ui._rail._bind_btn.pressed.connect(func(): _ui._rail._begin_bind("", _ui._rail._done_bind_btn, true))
 
-	_done_preview = _ui._rail._build_set_preview({}, [], false, _ui._rail._make_control_row([]))
-	v.add_child(_done_preview)
+	# Пустая оболочка: полное превью с составом строит _refresh_page_done.
+	# Прежняя сборка пустого превью тут же выбрасывалась первым refresh(R_PAGES).
+	# Флаги зеркалят _build_set_preview(fill = false): EXPAND только по ширине.
+	var shell := VBoxContainer.new()
+	shell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	shell.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	shell.add_theme_constant_override("separation", 6)
+	_done_preview = shell
+	v.add_child(shell)
 	return v
 
 # Сводка перед сохранением: что уйдёт в сет. Пересобирается целиком тем же
