@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.3.11] - 2026-10-31
+
+### Changed
+
+- Saving a set now shows the saved set right away, so it is clear the set was
+  stored.
+- Items you receive in a task note now use the same framed cells as the items
+  you hand in.
+
 ## [5.3.10] - 2026-10-31
 
 ### Fixed
