@@ -60,6 +60,10 @@ var _gold: Color = VTKSurface.GOLD
 
 var _key_ui_toggle: int = ConfigRec.DEFAULTS["key_ui_toggle"]
 var _panel_open: bool = false
+# Первое открытие после сборки оболочки (или смены языка) делает полный
+# проход по страницам; дальше страницы живут собранными, а на открытии
+# обновляются только данные: список сетов, превью и строки телепорта.
+var _content_ready: bool = false
 var _saved_mouse_mode: int = Input.MOUSE_MODE_CAPTURED
 var _self_paused: bool = false
 # Пауза, уже стоявшая на открытии окна (ванильное меню поверх панели). Гасить
@@ -207,7 +211,11 @@ func set_panel_open(open: bool) -> void:
 			get_tree().paused = true
 		# Окно сначала получает размер, потом содержимое тянется до его низа.
 		_fit_window()
-		refresh(RefreshScope.PAGES | RefreshScope.LIST | RefreshScope.PREVIEW)
+		if _content_ready:
+			refresh(RefreshScope.LIST | RefreshScope.PREVIEW)
+		else:
+			_content_ready = true
+			refresh(RefreshScope.PAGES | RefreshScope.LIST | RefreshScope.PREVIEW)
 		refresh_teleport_rows()
 		_fit_height()
 	else:
@@ -630,6 +638,7 @@ func _clear_ui() -> void:
 	_frame = null
 	_main_vbox = null
 	_panel = null
+	_content_ready = false
 
 # Пересборка UI на месте после смены языка. Активную вкладку восстанавливаем
 # по стабильному ключу: локализованные тексты после перевода меняются,
