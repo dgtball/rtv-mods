@@ -1423,7 +1423,13 @@ func _rebuild_target_bar(found: Array) -> void:
 	reset.tooltip_text = Loc.txt("Reset")
 	var any_on: bool = _ui._session.target_cat != "" or _ui._session.target_sub != ""
 	reset.add_theme_stylebox_override("normal", _ui._make_chip_style(any_on))
-	reset.add_theme_color_override("font_color", _ui._gold if any_on else VTKSurface.BROWN)
+	reset.add_theme_stylebox_override("hover", _ui._make_chip_style(any_on, true))
+	reset.add_theme_stylebox_override("pressed", _ui._make_chip_style(true, true))
+	reset.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var reset_ink: Color = _ui._gold if any_on else VTKSurface.BROWN
+	reset.add_theme_color_override("font_color", reset_ink)
+	reset.add_theme_color_override("font_hover_color", reset_ink)
+	reset.add_theme_color_override("font_pressed_color", reset_ink)
 	reset.pressed.connect(_reset_target_filters)
 	line.add_child(reset)
 
@@ -1452,7 +1458,13 @@ func _make_filter_chip(key: String, on: bool, level: bool = false) -> Button:
 	b.add_theme_font_size_override("font_size", 9)
 	b.tooltip_text = name_txt
 	b.add_theme_stylebox_override("normal", _ui._make_chip_style(on))
-	b.add_theme_color_override("font_color", _ui._gold if on else VTKSurface.TEXT_SOFT)
+	b.add_theme_stylebox_override("hover", _ui._make_chip_style(on, true))
+	b.add_theme_stylebox_override("pressed", _ui._make_chip_style(true, true))
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	var chip_ink: Color = _ui._gold if on else VTKSurface.TEXT_SOFT
+	b.add_theme_color_override("font_color", chip_ink)
+	b.add_theme_color_override("font_hover_color", chip_ink)
+	b.add_theme_color_override("font_pressed_color", chip_ink)
 	_ui._attach_motion(b)
 	if level:
 		b.pressed.connect(func(): _set_target_sub(key))
