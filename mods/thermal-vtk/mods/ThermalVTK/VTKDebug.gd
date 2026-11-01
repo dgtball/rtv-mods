@@ -4,6 +4,10 @@ extends RefCounted
 # default; turned on from the MCM "Debug log" option.
 
 const LOG_PATH := "user://MCM/thermal-vtk/debug.log"
+# The file is the only sink. Until 2.3.0 every line was also print()ed, which
+# put the same diagnostic stream into godot.log. Rotation then keeps a
+# long-lived install from growing the file without bound.
+const MAX_BYTES := 4 * 1024 * 1024
 
 static var enabled := false
 static var _file: FileAccess = null
@@ -13,10 +17,25 @@ static func set_enabled(v: bool) -> void:
 	if enabled:
 		_open()
 
+# Append-only log would grow forever: rotate once per session and keep the
+# previous session next to it as debug.log.old.
+static func _rotate() -> void:
+	var probe := FileAccess.open(LOG_PATH, FileAccess.READ)
+	if probe == null:
+		return
+	var size := probe.get_length()
+	probe.close()
+	if size < MAX_BYTES:
+		return
+	if FileAccess.file_exists(LOG_PATH + ".old"):
+		DirAccess.remove_absolute(LOG_PATH + ".old")
+	DirAccess.rename_absolute(LOG_PATH, LOG_PATH + ".old")
+
 static func _open() -> void:
 	if _file != null:
 		return
 	DirAccess.make_dir_recursive_absolute("user://MCM/thermal-vtk")
+	_rotate()
 	# WRITE_READ, not READ_WRITE: READ_WRITE refuses to create a missing file,
 	# WRITE_READ creates it and still does not truncate, so sessions append.
 	_file = FileAccess.open(LOG_PATH, FileAccess.WRITE_READ)
@@ -32,10 +51,10 @@ static func log(tag: String, msg: String) -> void:
 		return
 	_open()
 	var line := "[%s]%s" % [_now_str(), fmt(tag, msg)]
-	if _file != null:
-		_file.store_line(line)
-		_file.flush()
-	print(line)
+	if _file == null:
+		return
+	_file.store_line(line)
+	_file.flush()
 
 static func fmt(tag: String, msg: String) -> String:
 	return "[%s] %s" % [tag, msg]

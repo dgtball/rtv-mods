@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.3.0] - 2026-11-01
+
+### Added
+- NPC nametags, health bars and trigger timers have their own MCM switch
+  (`NPC labels (debug)`), and they no longer need thermal vision or the NVG
+  helmet: the debug log stays the master switch, the label toggle refines it.
+
+### Changed
+- The diagnostic log no longer mirrors every line into `godot.log`; it writes
+  to `user://MCM/thermal-vtk/debug.log` only.
+- The log rotates by itself: when a session starts with a file over 4 MB, the
+  previous session is kept as `debug.log.old`.
+- The heartbeat line now fires every 5 seconds and only when the numbers
+  change; the scope probe fires once a second instead of twice.
+
 ## [2.2.0] - 2026-10-26
 
 ### Changed

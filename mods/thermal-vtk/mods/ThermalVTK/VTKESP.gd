@@ -34,6 +34,9 @@ var xray_layer: bool = false
 var p_decay := 30.0
 var p_dist := 60.0
 var p_nomad_marker: bool = true
+# NPC nametags: their own switch under Diagnostics, so the diagnostic overlay
+# can stay on without the log and without the NVG helmet.
+var p_npc_labels: bool = true
 var p_color_normal: Color = States.DEFAULT_NORMAL
 var p_color_combat: Color = States.DEFAULT_COMBAT
 var p_color_defend: Color = States.DEFAULT_DEFEND
@@ -98,6 +101,7 @@ var p_cal_index: int = 0
 # ThermalVTK._apply_mode.
 var marker_visible: bool = false
 var _dbg_cd: float = 0.0
+var _dbg_sig: String = ""
 var _dbg_cand: int = 0
 var _dbg_keep: int = 0
 var _dbg_applied: int = 0
@@ -135,12 +139,19 @@ func set_layers(contour: bool, xray: bool) -> void:
 func _any_layer() -> bool:
 	return contour_layer or xray_layer
 
+# Labels are a diagnostic layer of their own: the log is the master switch and
+# the npc_labels toggle is the refinement. Thermal vision and the NVG helmet are
+# not required.
+func _labels_on() -> bool:
+	return Dbg.enabled and p_npc_labels
+
 # MCM snapshot in, MCM-driven params out. Lives-ahead-of-the-tree safe: the
 # headless tests instantiate this node without the game around it.
 func apply_config(rec) -> void:
 	p_decay = rec.corpse_decay
 	p_dist = rec.outline_distance
 	p_nomad_marker = rec.nomad_marker
+	p_npc_labels = rec.npc_labels
 	p_color_normal = rec.color_normal
 	p_color_combat = rec.color_combat
 	p_color_defend = rec.color_defend
@@ -400,7 +411,7 @@ func _process(delta: float) -> void:
 	if _hook_ids.is_empty() and _hook_wait_cd <= 0.0:
 		_hook_wait_cd = 0.5
 		_register_hooks()
-	if not _any_layer():
+	if not _any_layer() and not _labels_on():
 		_weapon.set_scope_mode(false, false)
 		if not _pending.is_empty():
 			_pending.clear()
@@ -426,7 +437,7 @@ func _process(delta: float) -> void:
 	var ppos_v = _player_pos()
 	if ppos_v != null:
 		var ppos: Vector3 = ppos_v
-		if _any_layer():
+		if _any_layer() or _labels_on():
 			_draw(ppos)
 	var now := _now()
 	_overlay_sync(now)
@@ -436,9 +447,15 @@ func _dbg_tick(delta: float, ppos: Variant) -> void:
 	_dbg_cd -= delta
 	if _dbg_cd > 0.0:
 		return
-	_dbg_cd = 1.0
+	_dbg_cd = 5.0
 	if not Dbg.enabled:
 		return
+	# Only log when the numbers move: an idle session used to write a line every
+	# second for hours.
+	var sig := "%d/%d/%d/%d" % [_entries.size(), _dbg_cand, _dbg_keep, _dbg_applied]
+	if sig == _dbg_sig:
+		return
+	_dbg_sig = sig
 	var where := "no player in group Player"
 	if ppos != null:
 		var p: Vector3 = ppos
@@ -476,7 +493,7 @@ func _scope_probe(delta: float) -> void:
 	_scope_dbg_cd -= delta
 	if _scope_dbg_cd > 0.0:
 		return
-	_scope_dbg_cd = 0.5
+	_scope_dbg_cd = 1.0
 	var gd := _gd_cached()
 	if gd == null:
 		return
@@ -488,8 +505,9 @@ func _scope_probe(delta: float) -> void:
 # ---------------------------------------------------------------------------
 # Debug state labels (only while the diagnostic log is on)
 # ---------------------------------------------------------------------------
-# Debug state labels are shown whenever the diagnostic log is on, regardless of
-# thermal vision or the NVG helmet: they are a diagnostic, not a gameplay layer.
+# Debug state labels need the diagnostic log on (the master debug switch) plus
+# their own npc_labels toggle; thermal vision and the NVG helmet are not
+# required, so states can be checked in plain daylight.
 
 func _ids_for_frame() -> Array:
 	if _ids_stamp != _frame:
@@ -596,12 +614,12 @@ func _overlay_sync(now: float) -> void:
 	var menu_on := false
 	if gd != null:
 		menu_on = bool(gd.get("menu")) or bool(gd.get("settings")) or bool(gd.get("isDead")) or bool(gd.get("isTransitioning"))
-	if cam == null or menu_on or (not _any_layer() and not Dbg.enabled):
+	if cam == null or menu_on or (not _any_layer() and not _labels_on()):
 		_overlay.clear()
 		return
 	var items: Array = []
 	var diamonds: Array = []
-	if Dbg.enabled:
+	if _labels_on():
 		for id in _want:
 			if not _entries.has(id):
 				continue
