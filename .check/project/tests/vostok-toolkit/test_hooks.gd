@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Hooks = preload("res://mods/VTK/VTKHooks.gd")
+const KC = preload("res://mods/VTK/VTKKillCounter.gd")
 
 var fails := 0
 
@@ -347,6 +348,7 @@ func _run() -> void:
 	t_attacker_snapshot()
 	t_damage_record_ttl()
 	t_sweep_is_throttled()
+	t_kill_counter_birth_in_disabled()
 	t_marker_attacker()
 	t_explosion_kill()
 	t_player_rig_weapon()
@@ -478,6 +480,11 @@ func t_season_apply_is_throttled() -> void:
 
 	h._process(0.1)
 	ck(h.applies == 1, "следующий кадр не повторяет применение")
+
+	# Второй проход: после окна SEASON_APPLY_SEC сезон применяется снова.
+	h._season_poll = TestHooks.SEASON_APPLY_SEC
+	h._process(0.0)
+	ck(h.applies == 2, "второй проход через SEASON_APPLY_SEC применяет снова")
 
 	h.queue_free()
 
@@ -1696,3 +1703,26 @@ func t_gc_ledger_once() -> void:
 	ck(h.writes == 1, "повторный проход уже не проверяет ключи")
 
 	h.queue_free()
+
+func t_kill_counter_birth_in_disabled() -> void:
+	var kc = KC.new()
+	root.add_child(kc)
+	ck(not kc.is_processing(), "rozhdyonnyy vyklyuchennyy ne krutit _process")
+	kc.set_enabled(false)
+	ck(not kc.is_processing(), "vyklyuchennyy schetchik ne krutit _process")
+
+	var probe = Node.new()
+	root.add_child(probe)
+	ck(kc._pending.is_empty(), "vyklyuchennyy schetchik ne kopit uzly")
+
+	kc.set_enabled(true)
+	ck(kc.is_processing(), "vklyuchennyy schetchik snova obrabatyvaetsya")
+	ck(kc._pending.is_empty(), "vklyuchenie ne ostavlyaet musora")
+
+	var probe2 = Node.new()
+	root.add_child(probe2)
+	ck(kc._pending.size() == 1, "vklyuchennyy schetchik kopit fiktivnyy uzel")
+
+	probe.free()
+	probe2.free()
+	kc.free()

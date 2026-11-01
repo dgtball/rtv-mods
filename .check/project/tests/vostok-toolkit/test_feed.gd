@@ -72,6 +72,8 @@ func t_agent_kind() -> void:
 func t_kc_disabled_ignores_nodes() -> void:
 	var kc = KC.new()
 	root.add_child(kc)
+	# Рождается выключенным: _ready сам вызывает set_process(false).
+	ck(not kc.is_processing(), "рождённый выключенным не крутит _process")
 	kc.set_enabled(false)
 	ck(not kc.is_processing(), "выключенный счётчик не крутит _process")
 
@@ -83,7 +85,13 @@ func t_kc_disabled_ignores_nodes() -> void:
 	ck(kc.is_processing(), "включённый счётчик снова обрабатывается")
 	ck(kc._pending.is_empty(), "включение не оставляет мусора в _pending")
 
+	# После включения узел, добавленный в дерево, копится в _pending.
+	var probe2 := Node.new()
+	root.add_child(probe2)
+	ck(kc._pending.size() == 1, "включённый счётчик копит фиктивный узел в _pending")
+
 	probe.free()
+	probe2.free()
 	kc.free()
 
 func t_agent_display_name() -> void:
