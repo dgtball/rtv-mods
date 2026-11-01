@@ -35,14 +35,13 @@ float depth_metres(float ndc, vec2 uv, mat4 inv_proj) {
 void fragment() {
 	float facing = abs(dot(normalize(NORMAL), normalize(VIEW)));
 	float edge = 1.0 - facing;
-	vec3 colour = state_key * vtk_key_gain;
-	float a = pow(edge, rim_power);
-	// Rim 0 is the full-body fill, mirroring the depth-tested ring.
-	if (rim_power <= 0.01) {
-		a = 0.85;
-		colour = state_key;
+	// Rim 0 fills the body with the same key as the ring, so the detector
+	// repaints it in the reference state colour; see the depth shader.
+	float a = 1.0;
+	if (rim_power > 0.01) {
+		a = pow(edge, rim_power);
 	}
-	ALBEDO = colour;
+	ALBEDO = state_key * vtk_key_gain;
 	ALPHA = a * (1.0 - cool);
 
 	float scene_m = depth_metres(texture(depth_tex, SCREEN_UV).r, SCREEN_UV, INV_PROJECTION_MATRIX);

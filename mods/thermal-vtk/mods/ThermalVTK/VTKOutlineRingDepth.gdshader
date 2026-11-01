@@ -17,15 +17,15 @@ void vertex() {
 void fragment() {
 	float facing = abs(dot(normalize(NORMAL), normalize(VIEW)));
 	float edge = 1.0 - facing;
-	vec3 colour = state_key * vtk_key_gain;
-	float a = pow(edge, rim_power);
-	// Rim 0 is a deliberate full-body fill, not the pow(x, 0) = 1 blowout that
-	// read as white with speckles: a solid silhouette in the raw state colour,
-	// which keeps its hue instead of clipping through the daylight gain.
-	if (rim_power <= 0.01) {
-		a = 0.85;
-		colour = state_key;
+	// Rim 0 is the full-body fill. It must emit the SAME key as the ring at
+	// full alpha: the NVG detector only repaints pixels that match the key, and
+	// a dimmed or blended colour falls through to the background palette (that
+	// is what made the fill cream indoors and orange outside). pow(x, 0) is
+	// undefined in GLSL, which also left speckles; the branch avoids it.
+	float a = 1.0;
+	if (rim_power > 0.01) {
+		a = pow(edge, rim_power);
 	}
-	ALBEDO = colour;
+	ALBEDO = state_key * vtk_key_gain;
 	ALPHA = a * (1.0 - cool);
 }
