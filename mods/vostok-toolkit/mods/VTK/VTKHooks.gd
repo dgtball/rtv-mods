@@ -184,7 +184,8 @@ func _on_compiler_spawn() -> void:
 # LoadWorld no longer restores permadeath. Sync the live value and patch the saved
 # world so the chosen difficulty survives regardless of hook order.
 func _on_newgame_post(difficulty, season) -> void:
-	# Граница забега: счёт и атрибуции прошлого забега не должны дотянуться
+	_traders_cache = null
+	_traders_cached = false	# Граница забега: счёт и атрибуции прошлого забега не должны дотянуться
 	# до нового, когда HUD был выключен в момент рестарта (сцену считывает
 	# только включённый счётчик). В set_enabled нельзя - его зовёт
 	# apply_config на каждом применении MCM, счёт посреди забега обнулился бы.
@@ -970,10 +971,22 @@ func _prune_note_cards(cards: Array, notes: Array, completed: Dictionary, ldr, l
 
 const DEPOSITS_META := "vtk_deposits"
 
-func _traders() -> Variant:
+var _traders_cache: Variant = null
+var _traders_cached: bool = false
+
+func _traders(force_reload: bool = false) -> Variant:
+	if force_reload:
+		_traders_cache = null
+		_traders_cached = false
+	if _traders_cached:
+		return _traders_cache
 	if not FileAccess.file_exists(Paths.TRADER_SAVE):
+		_traders_cache = null
+		_traders_cached = true
 		return null
-	return load(Paths.TRADER_SAVE)
+	_traders_cache = load(Paths.TRADER_SAVE)
+	_traders_cached = true
+	return _traders_cache
 
 func _ledger_from(traders) -> Dictionary:
 	if traders == null:
@@ -1030,13 +1043,7 @@ func _resource_exists(path: String) -> bool:
 	return ResourceLoader.exists(path)
 
 func _live_children(grid) -> Array:
-	var out: Array = []
-	if grid == null or not (grid is Node):
-		return out
-	for c in grid.get_children():
-		if c != null and is_instance_valid(c) and not c.is_queued_for_deletion():
-			out.append(c)
-	return out
+	return VTKDeposits._live_children(grid)
 
 func _slots_from_grid(grid) -> Array:
 	var entries: Array = []
@@ -1085,11 +1092,7 @@ func _notes_cov_map(task_data, ledger = null) -> Dictionary:
 		task = led[key]
 	for i in range(deliver.size()):
 		var item = deliver[i]
-		var req := 1
-		if item != null:
-			var da := int(item.get("defaultAmount"))
-			if da >= 1 and str(item.get("subtype")) != "Magazine":
-				req = da
+		var req := VTKDeposits.required_for(item)
 		var dep := int(task.get(i, 0))
 		if dep > req:
 			dep = req

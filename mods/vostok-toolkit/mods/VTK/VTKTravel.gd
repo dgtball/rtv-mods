@@ -206,7 +206,7 @@ func _hooks() -> Node:
 		# сейвов. Раньше промах гасил обе функции без следа.
 		Log.warn_once(Paths.UI_ROOT, "travel: VTKUI autoload missing")
 		return null
-	var h := ui.get_node_or_null(Paths.HOOKS)
+	var h := Paths.hooks_node(ui)
 	if h == null:
 		Log.warn_once(Paths.UI_ROOT + "/" + Paths.HOOKS, "travel: VTKHooks missing")
 	return h

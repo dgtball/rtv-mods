@@ -39,6 +39,11 @@ const MENU_DYNAMIC_SELECT := "Modes/Season/Dynamic/Select"
 # игры его не наследуют — тянем ресурс темы и берём default_font.
 const THEME := "res://UI/Themes/Theme.tres"
 
+static func hooks_node(parent: Node) -> Node:
+	if parent == null or not (parent is Node):
+		return null
+	return parent.get_node_or_null(HOOKS)
+
 static var _hud_font: Font = null
 
 static func hud_font() -> Font:

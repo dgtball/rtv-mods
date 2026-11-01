@@ -1617,7 +1617,7 @@ class TradersSpy extends TestHooks:
 	var traders_obj = null
 	var seen: Array = []
 
-	func _traders() -> Variant:
+	func _traders(force_reload: bool = false) -> Variant:
 		calls += 1
 		return traders_obj
 

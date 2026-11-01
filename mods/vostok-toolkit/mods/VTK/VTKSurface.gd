@@ -215,3 +215,15 @@ static func style_button(button: Button, accent: bool = false, danger: bool = fa
 	for state in ["normal", "hover", "pressed", "disabled"]:
 		button.add_theme_stylebox_override(state, surface(state, accent, danger, false, ml, mr, mt, mb))
 	button.add_theme_stylebox_override("focus", focus_style())
+
+static func _clear_children(container: Control) -> void:
+	if container == null or not (container is Node):
+		return
+	for child in container.get_children():
+		if child is Node:
+			container.remove_child(child)
+			child.queue_free()
+
+static func _clear_box(node) -> void:
+	if node != null and (node is Node):
+		_clear_children(node as Control)

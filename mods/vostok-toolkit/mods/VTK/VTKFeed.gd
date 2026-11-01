@@ -94,7 +94,7 @@ func _connect_hooks() -> void:
 		# молчали одинаково. warn_once печатает только при включённом Log.enabled.
 		Log.warn_once(Paths.UI_ROOT, "kill feed: VTKUI autoload missing")
 		return
-	var h = p.get_node_or_null(Paths.HOOKS)
+	var h = Paths.hooks_node(p)
 	if h == null or not h.has_signal("kill_event"):
 		Log.warn_once(Paths.UI_ROOT + "/" + Paths.HOOKS, "kill feed: VTKHooks.kill_event missing")
 		return

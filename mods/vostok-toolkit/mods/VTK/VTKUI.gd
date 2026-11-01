@@ -738,3 +738,14 @@ func _delete_loadout(name: String) -> void:
 		_cancel_draft()
 	else:
 		refresh(RefreshScope.LIST | RefreshScope.PREVIEW)
+
+func _clear_children(container: Control) -> void:
+	_clear_box(container)
+
+func _clear_box(node) -> void:
+	if node == null or not (node is Node):
+		return
+	for child in node.get_children():
+		if child is Node:
+			node.remove_child(child)
+			child.queue_free()

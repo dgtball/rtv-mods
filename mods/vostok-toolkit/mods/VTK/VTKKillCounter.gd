@@ -168,7 +168,7 @@ func _get_hooks() -> Node:
 		# узел жил, но считал ноль. Один след на путь.
 		Log.warn_once(Paths.UI_ROOT, "kill counter: VTKUI autoload missing")
 		return _hooks_node
-	_hooks_node = parent.get_node_or_null(Paths.HOOKS)
+	_hooks_node = Paths.hooks_node(parent)
 	if _hooks_node == null:
 		Log.warn_once(Paths.UI_ROOT + "/" + Paths.HOOKS, "kill counter: VTKHooks missing")
 	return _hooks_node

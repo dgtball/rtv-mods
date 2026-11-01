@@ -125,6 +125,26 @@ static func prune_missing(ledger: Dictionary, exists: Callable) -> Dictionary:
 		out[k] = _dup_task(ledger[k])
 	return out
 
+static func _live_children(grid) -> Array:
+	var out: Array = []
+	if grid == null or not (grid is Node):
+		return out
+	for c in grid.get_children():
+		if c != null and is_instance_valid(c) and not c.is_queued_for_deletion():
+			out.append(c)
+	return out
+
+static func required_for(item) -> int:
+	var req := 1
+	if item != null:
+		var da := int(item.get("defaultAmount"))
+		if da >= 1 and str(item.get("subtype")) != "Magazine":
+			req = da
+	return req
+
+static func needed_amount(item) -> int:
+	return required_for(item)
+
 static func badge_text(deposited: int, required: int) -> String:
 	return str(deposited) + " / " + str(required)
 
