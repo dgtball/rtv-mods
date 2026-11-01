@@ -5,7 +5,6 @@ extends Control
 # by VTKESP so it is drawn after the thermal shader.
 
 const FONT_SIZE := 14
-const HEALTH_WIDTH := 48.0
 
 var _items: Array = []
 var _diamonds: Array = []
@@ -39,8 +38,6 @@ func _draw() -> void:
 		return
 	const MARKER_R := 12.0
 	const LINE_H := 17.0
-	const BAR_H := 3.0
-	const BAR_GAP := 2.0
 	const HEAD_GAP := 10.0
 
 	# Diamonds first (behind text).
@@ -73,7 +70,6 @@ func _draw() -> void:
 		var header: String = str(it["header"])
 		var status_txt: String = str(it["status"])
 		var suffix_txt: String = str(it["suffix"])
-		var frac: float = clampf(float(it["health"]), 0.0, 1.0)
 		var alpha: float = 1.0
 		var dist_m: float = float(it["dist"]) if it.has("dist") else 0.0
 		var dist_cap: float = float(it["dist_cap"]) if it.has("dist_cap") else 1.0
@@ -91,17 +87,17 @@ func _draw() -> void:
 			var origin_s := Vector2(screen.x - font.get_string_size(status_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x / 2.0, head_y + LINE_H)
 			draw_string_outline(font, origin_s, status_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, 4, Color(0.0, 0.0, 0.0, 0.85))
 			draw_string(font, origin_s, status_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, c)
-		# Under the body: the bar sits directly above the trigger timer, so the
-		# health and the reveal countdown read as one block at the feet.
-		var feet_anchor: Vector3 = it["feet"] if it.has("feet") else anchor
-		var feet_y := screen.y
-		if not cam.is_position_behind(feet_anchor):
-			feet_y = cam.unproject_position(feet_anchor).y
-		var origin_bar_y := feet_y + 4.0
-		var bar := Rect2(screen.x - HEALTH_WIDTH / 2.0, origin_bar_y, HEALTH_WIDTH, BAR_H)
-		draw_rect(bar.grow(0.5), Color(0.0, 0.0, 0.0, 0.6))
-		draw_rect(Rect2(bar.position, Vector2(bar.size.x * frac, bar.size.y)), Color(Color.RED.lerp(Color.GREEN, frac), alpha))
-		if suffix_txt != "":
-			var origin_f := Vector2(screen.x - font.get_string_size(suffix_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x / 2.0, origin_bar_y + BAR_H + BAR_GAP)
-			draw_string_outline(font, origin_f, suffix_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, 4, Color(0.0, 0.0, 0.0, 0.85))
-			draw_string(font, origin_f, suffix_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, c)
+		# One line under the feet: the trigger timer, when one is live, followed by
+		# the health readout -- "[walk 1.0s 5m] [HP: 64]".
+		var hp_txt: String = str(it["hp"]) if it.has("hp") else ""
+		var foot_txt: String = suffix_txt
+		if hp_txt != "":
+			foot_txt = (foot_txt + " " + hp_txt).strip_edges()
+		if foot_txt != "":
+			var feet_anchor: Vector3 = it["feet"] if it.has("feet") else anchor
+			var feet_y := screen.y
+			if not cam.is_position_behind(feet_anchor):
+				feet_y = cam.unproject_position(feet_anchor).y
+			var origin_f := Vector2(screen.x - font.get_string_size(foot_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x / 2.0, feet_y + 4.0)
+			draw_string_outline(font, origin_f, foot_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, 4, Color(0.0, 0.0, 0.0, 0.85))
+			draw_string(font, origin_f, foot_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, c)

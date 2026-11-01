@@ -32,6 +32,10 @@ static func trigger_suffix(win: Dictionary, now: float) -> String:
 	var left: float = max(0.0, expires - now)
 	return "  [%s %.1fs %.0fm]" % [source, left, dist]
 
+# Single-line health readout: the bar is gone, so the label carries the number.
+static func hp_text(health: float, max_health: float) -> String:
+	return "[HP: %d]" % int(round(health_frac(health, max_health) * 100.0))
+
 static func health_frac(health: float, max_health: float) -> float:
 	if max_health <= 0.0:
 		return 1.0

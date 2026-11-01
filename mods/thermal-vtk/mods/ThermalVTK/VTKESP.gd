@@ -695,7 +695,7 @@ func _overlay_sync(now: float) -> void:
 				"status": VTKLabels.status(state_int, reloading, vs),
 				"suffix": VTKLabels.trigger_suffix(win, now),
 				"color": disp_color,
-				"health": VTKLabels.health_frac(hp, max_h),
+				"hp": VTKLabels.hp_text(hp, max_h),
 				"dist": dist,
 				"dist_cap": p_dist,
 				"feet": node.global_position,

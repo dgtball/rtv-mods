@@ -1,37 +1,31 @@
 # Changelog
 
-## [2.4.0] - 2026-11-01
+## [2.2.2] - 2026-11-01
+
+### Added
+- NPC nametags, the health readout and trigger timers have their own MCM switch
+  ("NPC labels (debug)"), and they no longer need thermal vision or the NVG
+  helmet: the debug log stays the master switch, the label toggle refines it.
 
 ### Changed
-- MCM names: "NPC ESP", "Mine ESP" and "Daylight Brightness"; the nomad marker is
-  now "Nomads marker" and sits third in the thermal section, right after the
+- MCM names: "NPC ESP", "Mine ESP" and "Daylight Brightness"; the nomad marker
+  is now "Nomads marker" and sits third in the thermal section, right after the
   palette hotkey.
-- The friendly-nomad marker is an inverted triangle instead of a diamond, so it
-  points at the head, and it obeys the Distance setting like the outlines: no
-  marker over bots out of range, and no oversized glyph at long range.
-- NPC labels no longer need thermal vision or the NVG helmet. With the debug log
-  on they appear in plain daylight, and they obey the Distance setting too.
-- The health bar moved under the body, right above the trigger timer, and the
-  trigger timer now uses the NPC state colour instead of a fixed yellow.
+- The friendly-nomad marker is an inverted triangle instead of a diamond: it
+  points at the head, and it obeys the Distance setting like the outlines, so
+  there is no marker over bots out of range and no oversized glyph at range.
+- The health bar is gone: the readout is one line under the feet together with
+  the trigger timer, for example "[walk 1.0s 5m] [HP: 64]". The trigger text
+  uses the NPC state colour instead of a fixed yellow.
+- The diagnostic log no longer mirrors every line into godot.log; it writes to
+  user://MCM/thermal-vtk/debug.log only, and rotates to debug.log.old once a
+  session starts with a file over 4 MB.
+- The heartbeat line fires every 5 seconds and only when the numbers change;
+  the scope probe fires once a second instead of twice.
 
 ### Fixed
 - Debug labels stayed hidden without NVG because they were built from the
   outline working set, which is empty while no layer is active.
-
-## [2.3.0] - 2026-11-01
-
-### Added
-- NPC nametags, health bars and trigger timers have their own MCM switch
-  (`NPC labels (debug)`), and they no longer need thermal vision or the NVG
-  helmet: the debug log stays the master switch, the label toggle refines it.
-
-### Changed
-- The diagnostic log no longer mirrors every line into `godot.log`; it writes
-  to `user://MCM/thermal-vtk/debug.log` only.
-- The log rotates by itself: when a session starts with a file over 4 MB, the
-  previous session is kept as `debug.log.old`.
-- The heartbeat line now fires every 5 seconds and only when the numbers
-  change; the scope probe fires once a second instead of twice.
 
 ## [2.2.0] - 2026-10-26
 

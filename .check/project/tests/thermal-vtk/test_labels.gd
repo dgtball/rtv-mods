@@ -55,3 +55,6 @@ func t_health_frac() -> void:
 	ck(Labels.health_frac(50.0, 100.0) == 0.5, "half health")
 	ck(Labels.health_frac(200.0, 100.0) == 1.0, "overkill clamps to 1")
 	ck(Labels.health_frac(50.0, 0.0) == 1.0, "no max falls back to 1")
+	ck(Labels.hp_text(50.0, 100.0) == "[HP: 50]", "hp text reads half health")
+	ck(Labels.hp_text(37.0, 100.0) == "[HP: 37]", "hp text keeps whole percents")
+	ck(Labels.hp_text(200.0, 100.0) == "[HP: 100]", "hp text clamps overkill")
