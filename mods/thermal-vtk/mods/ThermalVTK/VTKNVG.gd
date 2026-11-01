@@ -531,6 +531,8 @@ func _register_key_gain() -> void:
 
 
 func _set_key_gain(g: float) -> void:
+	if Dbg.enabled and absf(clampf(g, 0.01, 10.0) - _key_gain) > 0.05:
+		Dbg.log("DAY", "gain=%.2f strength=%.2f dayMix=%.2f" % [g, set_strength, _day_mix])
 	_key_gain = clampf(g, 0.01, 10.0)
 	_key_set(_mat_mine, MINE_KEY)
 	if _key_gain_registered:
