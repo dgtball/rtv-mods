@@ -236,10 +236,10 @@ func refresh(id: int, opts: Dictionary) -> void:
 		entry["p_grow"] = grow
 
 	var rim_user := float(opts.get("rim", 1.0))
-	if Dbg.enabled and rim_user <= 0.01:
+	if Dbg.enabled and rim_user <= 0.01 and int(_fill_log.get(id, -1)) != int(opts.get("cat", 0)):
 		var t_ms := Time.get_ticks_msec()
 		if t_ms - int(_fill_log.get(id, -100000)) >= 2000:
-			_fill_log[id] = t_ms
+			_fill_log[id] = int(opts.get("cat", 0))
 			Dbg.log("FILL", "id=%d cat=%d key=%.2f/%.2f/%.2f rim=%.2f xray=%s" % [id, int(opts.get("cat", 0)), key.r, key.g, key.b, rim_user, str(bool(opts.get("xray", false)))])
 	# Rim 0 is the full-body fill mode, and the scope band override must not
 	# replace it: the fill has to show in the optic exactly where it is tested.
