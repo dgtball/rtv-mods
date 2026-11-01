@@ -92,7 +92,7 @@ func _process(delta: float) -> void:
 	if _dyn_enabled:
 		_season_poll += delta
 		if _season_poll >= SEASON_APPLY_SEC:
-			_season_poll = 0.0
+			_season_poll -= SEASON_APPLY_SEC
 			_season_apply()
 		if _season_driver != null:
 			_season_driver.tick(delta)
@@ -230,6 +230,7 @@ const MCM_CONFIG := "user://MCM/vostok-toolkit/config.ini"
 const DYNAMIC_SEASON := 3
 
 func _season_new_run(season: int) -> void:
+	_season_poll = 0.0
 	_season_restore()
 	_dyn_last_idx = -1
 	_dyn_enabled = false
@@ -254,6 +255,7 @@ func _season_new_run(season: int) -> void:
 # Загрузка сейва: хук newgame-post не звался, параметры забега берём из меты.
 # Пустая мета (чужой слот без динамики) состояние текущей сессии не трогает.
 func _season_resume() -> void:
+	_season_poll = 0.0
 	var m := _season_meta()
 	if m.is_empty():
 		return

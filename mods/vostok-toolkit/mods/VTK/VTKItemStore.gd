@@ -35,6 +35,13 @@ static func clear() -> void:
 	_name_index.clear()
 	_info_cache.clear()
 	_icon_cache.clear()
+	# Кеши независимы: каждый можно чистить отдельно, clear() - полная сброска.
+
+static func clear_info_cache() -> void:
+	_info_cache.clear()
+
+static func clear_name_index() -> void:
+	_name_index.clear()
 	# Кеш обрезки/подкатегорий от прежнего набора ресурсов - туда же.
 	Pick.clear_cache()
 
@@ -50,9 +57,19 @@ static func rebuild(items: Array) -> void:
 static func norm_name(s: String) -> String:
 	return s.strip_edges().to_lower().replace("-", "_").replace(" ", "_")
 
+# Пересборка только имени-индекса: кеш info привязывается к предметному
+# составу, поэтому rebuild имени очищает и его - независимость кешей в обратную
+# сторону не работает иначе.
+static func rebuild_name_index() -> void:
+	_name_index.clear()
+	_build_name_index()
+
 # Два прохода: сперва настоящие имена, потом имена файлов — только если ключ
 # ещё свободен. Иначе предмет с именем «AKM» проигрывал бы файлу AKM.tres.
 static func _build_name_index() -> void:
+	# Пересборка индекса имени старый info-кеш делает нерелевантным: пути и
+	# состав могли поменяться, поэтому чистим его здесь.
+	_info_cache.clear()
 	for item in _db_items:
 		var k := norm_name(str(item.get("name")))
 		if k != "" and not _name_index.has(k):

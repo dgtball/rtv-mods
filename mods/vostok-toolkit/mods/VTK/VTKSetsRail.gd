@@ -271,6 +271,11 @@ func _refresh_loadout_list() -> void:
 		empty.text = Loc.txt("No saved loadouts")
 		empty.add_theme_color_override("font_color", VTKSurface.GREY_DIM)
 		_list_container.add_child(empty)
+		if OS.is_debug_build():
+			var dbg = Label.new()
+			dbg.text = LD.SAVE_FILE
+			dbg.add_theme_color_override("font_color", VTKSurface.GREY_DIM)
+			_list_container.add_child(dbg)
 		_list_container.add_child(CreateCard.new(_ui._start_new_draft, Loc.txt("+ Create loadout")))
 		return
 

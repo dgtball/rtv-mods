@@ -160,6 +160,12 @@ static func clear_cache() -> void:
 	_art_cache.clear()
 	_subcat_cache.clear()
 
+static func clear_art_cache() -> void:
+	_art_cache.clear()
+
+static func clear_subcat_cache() -> void:
+	_subcat_cache.clear()
+
 # Ключи таблицы групп в её порядке: [["weapon", "Weapons"], ...] -> ["weapon", ...].
 static func group_keys(groups: Array) -> Array:
 	var out: Array = []

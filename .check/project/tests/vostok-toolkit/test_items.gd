@@ -31,6 +31,7 @@ func _init() -> void:
 	t_slots()
 	t_cells()
 	t_icon()
+	t_cache_independence()
 	t_clear()
 	print("")
 	if fails == 0:
@@ -105,6 +106,19 @@ func t_icon() -> void:
 	ck(S.item_icon({"name": "X"}) == null, "item_icon для Dictionary -> null")
 	ck(S.item_icon(_akm) == null, "item_icon для RefCounted -> null")
 	ck(S.item_icon(Resource.new()) == null, "item_icon без .tres-пути -> null")
+
+func t_cache_independence() -> void:
+	S.rebuild([_akm])
+	S.clear_info_cache()
+	ck(not S.cached_info(_akm.resource_path), "clear_info_cache чистит info")
+	ck(S.item_by_name("AKM") == _akm, "clear_info_cache не трогает name_index")
+	S.item_info(_akm.resource_path)
+	ck(S.cached_info(_akm.resource_path), "info снова закеширован")
+	S.rebuild_name_index()
+	ck(not S.cached_info(_akm.resource_path), "rebuild_name_index чистит info_cache")
+	ck(S.item_by_name("AKM") == _akm, "rebuild_name_index пересобирает name_index")
+	S.rebuild([_akm])
+	ck(S.item_by_name("AKM") == _akm, "rebuild восстанавливает оба кеша")
 
 func t_clear() -> void:
 	S.clear()

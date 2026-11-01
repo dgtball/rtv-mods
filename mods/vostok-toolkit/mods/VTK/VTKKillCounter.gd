@@ -51,6 +51,7 @@ func set_enabled(v: bool) -> void:
 	set_process(v)
 	_panel.visible = v
 	if v:
+		_reset_counters()
 		_reseed()
 	else:
 		_pending.clear()

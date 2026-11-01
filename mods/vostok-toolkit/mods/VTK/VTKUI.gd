@@ -69,7 +69,7 @@ var _self_paused: bool = false
 # Пауза, уже стоявшая на открытии окна (ванильное меню поверх панели). Гасить
 # чужую паузу нельзя: закрытие окна иначе останавливало бы чужую систему
 # вместо своей.
-var _paused_before: bool = false
+var _saved_paused: bool = false
 var _scene_ref: Node = null
 var _menu_poll := 0.0
 
@@ -200,8 +200,8 @@ func set_panel_open(open: bool) -> void:
 		_saved_mouse_mode = Input.mouse_mode
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		# Своя пауза ставится только когда игру ещё никто не остановил.
-		_paused_before = get_tree().paused
-		_self_paused = not _paused_before
+		_saved_paused = get_tree().paused
+		_self_paused = not _saved_paused
 		if _self_paused:
 			get_tree().paused = true
 		# Окно сначала получает размер, потом содержимое тянется до его низа.
@@ -216,7 +216,7 @@ func set_panel_open(open: bool) -> void:
 	else:
 		if _self_paused:
 			get_tree().paused = false
-		_paused_before = false
+		_saved_paused = false
 		_self_paused = false
 		Input.mouse_mode = _saved_mouse_mode
 
