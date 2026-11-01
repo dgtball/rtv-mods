@@ -129,7 +129,7 @@ static func _read_file(path: String) -> Dictionary:
 		return {"kind": "foreign"}
 	return {"kind": "ok", "sets": sets}
 
-static func save_all(loadouts: Array) -> int:
+static func save_all(loadouts: Array) -> bool:
 	var real_dir = OS.get_user_data_dir() + "/MCM/vostok-toolkit"
 	var d = DirAccess.open(real_dir)
 	if not d:
@@ -151,24 +151,24 @@ static func save_all(loadouts: Array) -> int:
 			var rm := DirAccess.remove_absolute(ProjectSettings.globalize_path(bak))
 			if rm != OK:
 				Log.error("save_all: cannot replace " + bak + " (code " + str(rm) + ")")
-				return rm
+				return false
 		var cp := DirAccess.copy_absolute(ProjectSettings.globalize_path(SAVE_FILE), ProjectSettings.globalize_path(bak))
 		if cp != OK:
 			Log.error("save_all: cannot back up to " + bak + " (code " + str(cp) + ")")
-			return cp
+			return false
 	var tmp := SAVE_FILE + TMP_SUFFIX
 	var file = FileAccess.open(tmp, FileAccess.WRITE)
 	if file == null:
 		var open_err := FileAccess.get_open_error()
 		Log.error("save_all: cannot open " + tmp + " (code " + str(open_err) + ")")
-		return open_err
+		return false
 	file.store_string(payload)
 	file.close()
 	var move_err := _replace(tmp, SAVE_FILE)
 	if move_err != OK:
 		Log.error("save_all: cannot move into place (code " + str(move_err) + ")")
-		return move_err
-	return OK
+		return false
+	return true
 
 # Атомарная замена: пишем в .tmp и переносим на место основного. На Windows
 # rename поверх существующего файла может упасть - тогда убираем цель и
@@ -308,7 +308,7 @@ static func _preferred_slot(path: String) -> String:
 
 # ---------- set writes ----------
 
-static func remove(name: String) -> int:
+static func remove(name: String) -> bool:
 	var all = get_all()
 	var kept := []
 	for ld in all:
@@ -323,7 +323,7 @@ static func remove(name: String) -> int:
 # файл успевал побывать без сета, а каждая запись - stringify всего массива
 # и копия в .bak.
 static func replace_set(set_name: String, equip_dict: Dictionary, gear_list: Array,
-		drop_name: String = "", kept_key := 0, claim_key := 0) -> int:
+		drop_name: String = "", kept_key := 0, claim_key := 0) -> bool:
 	var all = get_all()
 	if drop_name != "" and drop_name != set_name:
 		var kept := []
@@ -361,18 +361,18 @@ static func replace_set(set_name: String, equip_dict: Dictionary, gear_list: Arr
 
 # ---------- hotkeys ----------
 
-static func set_quick_key(name: String, keycode: int) -> int:
+static func set_quick_key(name: String, keycode: int) -> bool:
 	var all = get_all()
 	for i in range(all.size()):
 		if typeof(all[i]) == TYPE_DICTIONARY and str(all[i].get("name")) == name:
 			all[i]["quick_key"] = keycode
 			return save_all(all)
 	# Сета нет - менять нечего: это не отказ записи.
-	return OK
+	return true
 
 # Одна клавиша - один сет: перед назначением чужой бинд на этом коде
 # снимается, иначе get_name_by_quick_key отдала бы первого попавшегося.
-static func set_quick_key_unique(name: String, keycode: int) -> int:
+static func set_quick_key_unique(name: String, keycode: int) -> bool:
 	var all = get_all()
 	var found := false
 	for i in range(all.size()):
@@ -385,7 +385,7 @@ static func set_quick_key_unique(name: String, keycode: int) -> int:
 		elif keycode != 0 and int(all[i].get("quick_key", 0)) == keycode:
 			all[i]["quick_key"] = 0
 	if not found:
-		return OK
+		return true
 	return save_all(all)
 
 static func get_name_by_quick_key(keycode: int) -> String:

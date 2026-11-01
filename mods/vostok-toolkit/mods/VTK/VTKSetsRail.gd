@@ -365,7 +365,7 @@ func _handle_bind_key(event: InputEventKey) -> void:
 		var rc := LD.set_quick_key_unique(_bind_target, kc)
 		_bind_target = ""
 		_bind_btn = null
-		_set_note("" if rc == OK else Loc.txt("Could not save your sets"))
+		_set_note("" if rc else Loc.txt("Could not save your sets"))
 		# Перерисовка в обоих случаях: при отказе она возвращает прежнюю
 		# клавишу, иначе кнопка показывала бы несохранённый бинд.
 		refresh_rail.call()

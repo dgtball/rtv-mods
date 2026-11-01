@@ -128,7 +128,7 @@ func t_corrupt_without_bak() -> void:
 
 func t_save_returns_ok() -> void:
 	_clean()
-	ck(VTKData.save_all([_ld("A")]) == OK, "save_all: успешная запись -> OK")
+	ck(VTKData.save_all([_ld("A")]) == true, "save_all: успешная запись -> true")
 
 # Отказ записи: каталог на месте .tmp не открывается на запись. Раньше
 # save_all молча возвращал void, и вызывающий не мог отличить отказ от успеха.
@@ -138,7 +138,7 @@ func t_save_reports_open_error() -> void:
 	var tmp_dir := _g(VTKData.SAVE_FILE + ".tmp")
 	DirAccess.make_dir_recursive_absolute(tmp_dir)
 	var rc := VTKData.save_all([_ld("B")])
-	ck(rc != OK, "save_all: неоткрываемый .tmp -> код ошибки")
+	ck(not rc, "save_all: неоткрываемый .tmp -> false")
 	ck(str(VTKData.get_all()[0]["name"]) == "A", "save_all: основной файл не тронут")
 	_clean()
 
@@ -148,7 +148,7 @@ func t_replace_set_drops_old_name_in_one_write() -> void:
 	_clean()
 	VTKData.save_all([_ld("Old"), _ld("Keep")])
 	var rc := VTKData.replace_set("New", {}, [], "Old")
-	ck(rc == OK, "replace_set с drop_name -> OK")
+	ck(rc == true, "replace_set с drop_name -> true")
 	var names := VTKData.names()
 	ck(names.size() == 2, "replace_set: осталось ровно два сета")
 	ck(names.has("New") and names.has("Keep") and not names.has("Old"),
@@ -168,7 +168,7 @@ func t_replace_set_applies_quick_keys() -> void:
 
 	# Новый бинд сильнее старого и снимает тот же код с других сетов.
 	var rc := VTKData.replace_set("B2", {}, [], "B", 7, 9)
-	ck(rc == OK, "replace_set с новым биндом: запись прошла")
+	ck(rc == true, "replace_set с новым биндом: запись прошла")
 	ck(int(VTKData.get_set("B2").get("quick_key", 0)) == 9, "новый бинд записан")
 	ck(int(VTKData.get_set("A").get("quick_key", 0)) == 0, "чужой бинд на той же клавише снят")
 	ck(int(VTKData.get_set("C").get("quick_key", 0)) == 3, "посторонний бинд не тронут")
@@ -176,13 +176,13 @@ func t_replace_set_applies_quick_keys() -> void:
 
 	# Переименование без нового бинда: хоткей переезжает, чужие коды целы.
 	rc = VTKData.replace_set("B3", {}, [], "B2", 9, 0)
-	ck(rc == OK, "replace_set с переносом хоткея: запись прошла")
+	ck(rc == true, "replace_set с переносом хоткея: запись прошла")
 	ck(int(VTKData.get_set("B3").get("quick_key", 0)) == 9, "хоткей переехал на новое имя")
 	ck(int(VTKData.get_set("C").get("quick_key", 0)) == 3, "чужой хоткей не тронут")
 
 	# Новый сет без бинда создаётся с ключом 0.
 	rc = VTKData.replace_set("Fresh", {}, [], "", 0, 0)
-	ck(rc == OK and int(VTKData.get_set("Fresh").get("quick_key", 0)) == 0,
+	ck(rc == true and int(VTKData.get_set("Fresh").get("quick_key", 0)) == 0,
 		"новый сет без бинда создаётся с ключом 0")
 
 # Валидный JSON чужой формы - не порча байтов: карантин не нужен, данные

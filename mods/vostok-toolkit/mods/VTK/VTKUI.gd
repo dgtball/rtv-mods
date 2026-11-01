@@ -696,7 +696,7 @@ func _save_loadout() -> void:
 	var claim: int = _rail._pending_qk
 	var rc := LD.replace_set(name_new, _session.draft.equip, _session.draft.gear,
 		_rail._editing_name, kept_key, claim)
-	if rc != OK:
+	if not rc:
 		_editor._set_problem(Loc.txt("Could not save your sets"))
 		return
 	if claim != 0:
@@ -730,7 +730,7 @@ func _edit_loadout(name: String) -> void:
 	_editor._build_editor()
 
 func _delete_loadout(name: String) -> void:
-	if LD.remove(name) != OK:
+	if not LD.remove(name):
 		_rail._set_note(Loc.txt("Could not save your sets"))
 		return
 	_rail._set_note("")
