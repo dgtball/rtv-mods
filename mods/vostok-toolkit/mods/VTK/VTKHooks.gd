@@ -212,6 +212,11 @@ func patch_world_difficulty(diff: int) -> void:
 
 func _on_loadcharacter_post() -> void:
 	Log.log("[VTK] loadcharacter-post")
+	# Сейв загружен в том же процессе: кэш TraderSave (_traders_cache) может
+	# указывать на объект прошлого забега, поэтому инвалидируем его перед
+	# чтением свежих данных. Граница забега, как _on_newgame_post.
+	_traders_cache = null
+	_traders_cached = false
 	_season_resume()
 
 # --- Динамические сезоны ----------------------------------------------------
