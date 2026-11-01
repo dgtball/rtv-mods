@@ -32,6 +32,7 @@ func _init() -> void:
 	t_item_art()
 	t_art_key_by_path()
 	t_art_cache_cleared()
+	t_clear_caches_independent()
 	print("")
 	if fails == 0:
 		print("Picker tests passed")
@@ -209,6 +210,25 @@ func t_art_cache_cleared() -> void:
 	var n := ImageTexture.create_from_image(img_n)
 	var art_n := P.item_art(n)
 	ck(P.item_art(n) == art_n, "без пути кеш по instance_id держит")
+
+func t_clear_caches_independent() -> void:
+	P.clear_cache()
+	var img := Image.create(4, 4, false, Image.FORMAT_RGBA8)
+	img.fill(Color(1, 0, 0, 1))
+	var n := ImageTexture.create_from_image(img)
+	n.resource_path = "res://test_clear.png"
+	var art1 := P.item_art(n)
+	var sub1 := P.subcategory_of("res://test_clear.tres", "Weapon")
+	P.clear_art_cache()
+	ck(P.item_art(n) != art1, "clear_art_cache сбрасывает кроп")
+	var sub2 := P.subcategory_of("res://test_clear.tres", "Weapon")
+	ck(sub2 == sub1, "clear_art_cache не трогает subcat_cache")
+	P.clear_subcat_cache()
+	var art2 := P.item_art(n)
+	ck(art2 == P.item_art(n), "clear_subcat_cache не трогает art_cache")
+	P.clear_cache()
+	ck(P.subcategory_of("res://test_clear.tres", "Weapon") == sub1, "clear_cache пересчитывает подкатегорию заново")
+	P.clear_cache()
 
 func t_equip_group_of() -> void:
 	ck(P.equip_group_of("Weapon", ["Primary"]) == "weapon", "оружие в Primary -> Weapons")

@@ -65,11 +65,11 @@ var _panel_open: bool = false
 # обновляются только данные: список сетов, превью и строки телепорта.
 var _content_ready: bool = false
 var _saved_mouse_mode: int = Input.MOUSE_MODE_CAPTURED
-var _self_paused: bool = false
 # Пауза, уже стоявшая на открытии окна (ванильное меню поверх панели). Гасить
 # чужую паузу нельзя: закрытие окна иначе останавливало бы чужую систему
-# вместо своей.
+# вместо своей. Хранится рядом с _saved_mouse_mode, восстанавливается при close.
 var _saved_paused: bool = false
+var _self_paused: bool = false
 var _scene_ref: Node = null
 var _menu_poll := 0.0
 
@@ -214,8 +214,10 @@ func set_panel_open(open: bool) -> void:
 		refresh_teleport_rows()
 		_fit_height()
 	else:
-		if _self_paused:
-			get_tree().paused = false
+		# Восстановление состояния паузы, captured рядом с _saved_mouse_mode:
+		# если игра была остановлена сама по себе, возвращаем остановку;
+		# если окно было её источником - снимаем свою.
+		get_tree().paused = _saved_paused
 		_saved_paused = false
 		_self_paused = false
 		Input.mouse_mode = _saved_mouse_mode

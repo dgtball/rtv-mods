@@ -191,18 +191,18 @@ func _is_shelter() -> bool:
 	return bool(gd.get("shelter"))
 
 func _process(delta: float) -> void:
+	# _scene_ref обновляем до любого раннего выхода и даже когда HUD выключен:
+	# иначе map_changed держится true и сбрасывает _seen_deaths каждый кадр.
+	var current := get_tree().current_scene
+	var map_changed := current != _scene_ref
+	_scene_ref = current
+
 	_drain_pending()
 	if not _enabled:
 		return
 	# Смена сцены дешёвая и должна сбрасывать счётчик сразу; чтение
 	# gameData.shelter - только на тике (0.5 с), HUD и так обновляется там же.
-	# _scene_ref гаснет в тот же кадр, до выхода по убежищу: иначе
-	# map_changed держится true весь заезд, и каждый кадр идёт
-	# _reset_counters() с обнулением _seen_deaths.
-	var current := get_tree().current_scene
-	var map_changed := current != _scene_ref
 	if map_changed:
-		_scene_ref = current
 		_reset_counters()
 	_accum += delta
 	if _accum < 0.5:

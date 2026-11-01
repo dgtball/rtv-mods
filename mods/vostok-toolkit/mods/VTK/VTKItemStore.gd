@@ -35,10 +35,16 @@ static func clear() -> void:
 	_name_index.clear()
 	_info_cache.clear()
 	_icon_cache.clear()
+	# Каталог пересобран: кэши обрезки/подкатегорий от прошлого набора ресурсов
+	# теряют смысл - чистим их вместе с каталогом (X18).
+	Pick.clear_cache()
 	# Кеши независимы: каждый можно чистить отдельно, clear() - полная сброска.
 
 static func clear_info_cache() -> void:
 	_info_cache.clear()
+
+static func clear_icon_cache() -> void:
+	_icon_cache.clear()
 
 static func clear_name_index() -> void:
 	_name_index.clear()

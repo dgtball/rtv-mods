@@ -32,6 +32,7 @@ func _init() -> void:
 	t_cells()
 	t_icon()
 	t_cache_independence()
+	t_icon_cache()
 	t_clear()
 	print("")
 	if fails == 0:
@@ -119,6 +120,18 @@ func t_cache_independence() -> void:
 	ck(S.item_by_name("AKM") == _akm, "rebuild_name_index пересобирает name_index")
 	S.rebuild([_akm])
 	ck(S.item_by_name("AKM") == _akm, "rebuild восстанавливает оба кеша")
+
+func t_icon_cache() -> void:
+	S.rebuild([_akm])
+	S.clear_icon_cache()
+	ck(S._icon_cache.is_empty(), "clear_icon_cache чистит иконный кеш")
+	ck(S.item_by_name("AKM") == _akm, "clear_icon_cache не трогает name_index")
+	S.item_info(_akm.resource_path)
+	S.clear_icon_cache()
+	ck(S._info_cache.has(_akm.resource_path), "clear_icon_cache не трогает info_cache")
+	S.clear()
+	ck(S._info_cache.is_empty(), "clear() чистит info_cache")
+	ck(S._icon_cache.is_empty(), "clear() чистит icon_cache")
 
 func t_clear() -> void:
 	S.clear()

@@ -160,6 +160,9 @@ static func clear_cache() -> void:
 	_art_cache.clear()
 	_subcat_cache.clear()
 
+static func clear() -> void:
+	clear_cache()
+
 static func clear_art_cache() -> void:
 	_art_cache.clear()
 
