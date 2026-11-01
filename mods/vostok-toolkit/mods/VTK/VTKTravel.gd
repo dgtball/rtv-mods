@@ -60,6 +60,12 @@ func travel_to_shelter(shelter_name: String) -> void:
 	_teleport_internal(shelter_name, null)
 
 
+func try_travel(target: String) -> bool:
+	# Удобная точка входа с результатом: успех только после подтверждённой
+	# смены сцены, см. _teleport_internal.
+	return await _teleport_internal(target, null, "")
+
+
 func is_shelter_unlocked(shelter_name: String) -> bool:
 	var loader := _loader()
 	if loader != null and loader.has_method("CheckShelterState"):
@@ -114,17 +120,17 @@ func set_unlocked_only(on: bool) -> void:
 	unlocked_only = on
 
 
-func _teleport_internal(target_map: String, final_offset: Variant, dest_label: String = "") -> void:
+func _teleport_internal(target_map: String, final_offset: Variant, dest_label: String = "") -> bool:
 	if _busy:
 		_message("Teleport already in progress", Color.YELLOW)
-		return
+		return false
 	if game_data != null and bool(game_data.get("tutorial")):
 		_message("Teleport unavailable in the tutorial", Color.RED)
-		return
+		return false
 	var loader := _loader()
 	if loader == null or not loader.has_method("LoadScene"):
 		_message("Scene loader not found", Color.RED)
-		return
+		return false
 	_has_look_at = false
 	_busy = true
 	var actual_current := _current_map_name()
@@ -135,7 +141,7 @@ func _teleport_internal(target_map: String, final_offset: Variant, dest_label: S
 		if bool(game_data.get("shelter")) and loader.has_method("SaveShelter"):
 			loader.SaveShelter(actual_current)
 		game_data.set("previousMap", actual_current)
-		game_data.set("currentMap", target_map)
+	# currentMap обновляется только после подтверждённой смены сцены (см. ниже)
 	var prev_id := 0
 	var scene := get_tree().current_scene
 	if scene != null:
@@ -153,7 +159,7 @@ func _teleport_internal(target_map: String, final_offset: Variant, dest_label: S
 		_restore_map(prev_map)
 		_busy = false
 		_message("Scene failed to load: " + target_map, Color.RED)
-		return
+		return false
 	if wait_hook:
 		var guard := 0
 		while not arrived_flag[0] and guard < SCENE_WAIT_FRAMES:
@@ -170,21 +176,26 @@ func _teleport_internal(target_map: String, final_offset: Variant, dest_label: S
 		_restore_map(prev_map)
 		_busy = false
 		_message("Map " + target_map + " failed to load" + label0, Color.RED)
-		return
+		return false
+	# Сцена подтверждена: только теперь фиксируем currentMap. Это не
+	# раньше LoadScene, и не на смерти/выходе в меню (_map_arrived уже
+	# вернул false и откатил previousMap).
+	if game_data != null:
+		game_data.set("currentMap", target_map)
 	# Готовность ждём в обеих ветках, но по-разному: travel_arrived приходит из
 	# compiler-spawn-post, то есть уже после того, как Compiler сбросил
 	# isCaching и вызвал Spawn. Ждать в этой ветке «начала кэша» нечего - флаг
 	# больше не поднимется, и цикл выстоит весь CACHE_ENTER_WAIT_FRAMES впустую
 	# (~3 с). Дренаж и settle нужны обеим веткам.
 	var spawn_confirmed: bool = wait_hook and bool(arrived_flag[0])
-	var ready := await _await_map_ready(spawn_confirmed)
+	var ready := await _await_map_ready(spawn_confirmed, target_map)
 	if not ready:
 		# Карта та же, но загрузчик не дошёл до settle: точку не ставим, иначе
 		# ранняя расстановка проваливает игрока под пол. Карту не откатываем -
 		# игрок физически на ней, и откат соврал бы в обратную сторону.
 		_busy = false
 		_message("Map " + target_map + " is not ready" + label0, Color.YELLOW)
-		return
+		return false
 	if loader.has_method("SaveWorld"):
 		loader.SaveWorld()
 	var point: Variant = _resolve_final_offset(final_offset)
@@ -193,10 +204,11 @@ func _teleport_internal(target_map: String, final_offset: Variant, dest_label: S
 	elif final_offset is Callable:
 		_busy = false
 		_message("Trader not found: " + dest_label + " (you are on " + target_map + ")", Color.RED)
-		return
+		return false
 	_busy = false
 	var dest := target_map if dest_label == "" else target_map + " (" + dest_label + ")"
 	_message("Teleport: " + dest, Color.GREEN)
+	return true
 
 
 func _hooks() -> Node:
@@ -400,7 +412,7 @@ func _node_forward(node: Node) -> Vector3:
 
 # spawn_confirmed: travel_arrived уже пришёл, значит Compiler сбросил
 # isCaching и вызвал Spawn - фазы «входа в кэш» в этой сцене больше не будет.
-func _await_map_ready(spawn_confirmed: bool = false) -> bool:
+func _await_map_ready(spawn_confirmed: bool = false, target_map: String = "") -> bool:
 	if not is_inside_tree():
 		return false
 	var enter_guard := 0 if spawn_confirmed else CACHE_ENTER_WAIT_FRAMES
@@ -416,7 +428,13 @@ func _await_map_ready(spawn_confirmed: bool = false) -> bool:
 	if caching:
 		return false
 	await get_tree().create_timer(MAP_SETTLE_SEC, true, false, true).timeout
-	return is_inside_tree()
+	# Не тавтологический is_inside_tree(): явная ошибка сцены/смена карты
+	# во время ожидания (смерть, выход в меню) должна считаться отказом.
+	if not is_inside_tree():
+		return false
+	if target_map != "" and not _map_arrived(target_map):
+		return false
+	return true
 
 
 func _place_player(target: Vector3) -> void:
