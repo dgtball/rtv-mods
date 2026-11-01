@@ -11,8 +11,6 @@
 - The overlay pulses for as long as the window stays open.
 - A reveal past the ESP Distance (a shot from 70 m with Distance at 60 m) draws
   the whole contour, so triggers still work where the ESP ring is silent.
-- While a window is live the shell ignores the source LOD range, so a bot the
-  game culls at range still gets its contour.
 
 ## [2.2.3] - 2026-11-01
 
