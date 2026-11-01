@@ -9,6 +9,9 @@
   so the reveal no longer shows the model's inner contours and the two effects
   cannot double up.
 - The overlay pulses for as long as the window stays open.
+- The per-footstep HOOK line is gone from the diagnostic log; a reveal still
+  logs one ESP line per tag.
+
 - A reveal past the ESP Distance (a shot from 70 m with Distance at 60 m) draws
   the whole contour, so triggers still work where the ESP ring is silent.
 

@@ -354,8 +354,6 @@ func _on_ai_grenade(phase: int) -> void:
 # Telemetry around the trigger reveal: the tag itself and the registered id
 # go to the diagnostic log, so a crash during load leaves the last statement.
 func _trig_event(source: String, span: float, dist: float) -> void:
-	if Dbg.enabled:
-		Dbg.log("HOOK", "play %s" % source)
 	if span <= 0.0:
 		return
 	# A zero reveal radius turns the source off (matches the outline's own
