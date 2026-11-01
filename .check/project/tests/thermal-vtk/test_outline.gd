@@ -238,20 +238,24 @@ func t_entry_xray() -> void:
 	root.add_child(mesh)
 	var o = Outline.new()
 	o.apply(6, root, {"state_key": Color(0, 1, 0), "grow": 0.01, "cool": 0.0})
-	var xmat: ShaderMaterial = o._items[6]["ring"]
-	ck(xmat.shader == Sh.ring(), "default ring honours walls")
+	var ring: ShaderMaterial = o._items[6]["ring"]
+	var xmat: ShaderMaterial = o._items[6]["xray_mat"]
+	var shell: MeshInstance3D = o._items[6]["pairs"][0]["shell"]
+	ck(ring.shader == Sh.ring(), "the ring always keeps the depth-tested shader")
+	ck(shell.material_overlay == null, "no reveal overlay while idle")
 	o.set_entry_xray(6, true)
-	ck(xmat.shader == Sh.ring_xray(), "entry flip swaps to the x-ray shader")
-	ck(bool(xmat.get_shader_parameter("near_only")), "entry flip lights the x-ray uniform")
-	ck(is_equal_approx(float(xmat.get_shader_parameter("carve")), 0.60), "x-ray carve covers the near hardware")
+	ck(shell.material_overlay == xmat, "a live window attaches the x-ray overlay")
+	ck(ring.shader == Sh.ring(), "the reveal leaves the ring itself alone")
 	o.set_entry_xray(6, true)
-	ck(xmat.shader == Sh.ring_xray(), "same value keeps x-ray")
+	ck(shell.material_overlay == xmat, "same value keeps the overlay")
 	o.set_entry_xray(6, false)
-	ck(xmat.shader == Sh.ring(), "off returns to the depth-tested shader")
-	o.refresh(6, {"state_key": Color(0, 1, 0), "grow": 0.01, "cool": 0.0, "xray": true})
-	ck(xmat.shader == Sh.ring_xray(), "opts xray drives the swap")
+	ck(shell.material_overlay == null, "closing the window lifts the overlay")
+	o.refresh(6, {"state_key": Color(0, 1, 0), "grow": 0.01, "cool": 0.0, "xray": true, "force": true, "pulse": 0.5})
+	ck(shell.material_overlay == xmat, "opts xray attaches the overlay")
+	ck(is_equal_approx(float(xmat.get_shader_parameter("pulse")), 0.5), "opts pulse reaches the overlay")
+	ck(xmat.get_shader_parameter("force") == true, "opts force reaches the overlay")
 	o.refresh(6, {"state_key": Color(0, 1, 0), "grow": 0.01, "cool": 0.0})
-	ck(xmat.shader == Sh.ring(), "opts without xray returns to the depth-tested shader")
+	ck(shell.material_overlay == null, "opts without xray lifts the overlay")
 	root.free()
 
 func t_clear_not_in() -> void:

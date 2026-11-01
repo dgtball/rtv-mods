@@ -758,6 +758,12 @@ func _fill_opts(opts: Dictionary, e: Dictionary, now: float) -> void:
 	opts["brightness"] = p_brightness
 	opts["grow"] = p_thickness
 	opts["xray"] = xray
+	# The overlay paints only where the world hides the bot. Past the ESP
+	# distance there is no ring of its own, so the reveal forces the whole
+	# contour -- that is the 70 m shot case.
+	var esp_live: bool = contour_layer and float(e.get("dist", 0.0)) <= p_dist
+	opts["force"] = xray and not esp_live
+	opts["pulse"] = (0.5 + 0.5 * sin(now * 9.0)) if xray else 0.0
 
 func _nomad_los(e: Dictionary, anchor_world: Vector3) -> bool:
 	if los_probe.is_valid():

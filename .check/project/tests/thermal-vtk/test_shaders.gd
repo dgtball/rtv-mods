@@ -42,10 +42,10 @@ func _run() -> void:
 func t_shaders_compile() -> void:
 	ck(Sh.ring() != null, "idle ring shader")
 	ck(not String(Sh.ring().code).contains("depth_test_disabled"), "idle ring keeps the auto depth test")
-	ck(not String(Sh.ring().code).contains("near_only"), "idle ring has no x-ray uniform")
+	ck(not String(Sh.ring().code).contains("force"), "idle ring has no reveal switch")
 	ck(Sh.ring_xray() != null, "x-ray ring shader")
 	ck(String(Sh.ring_xray().code).contains("depth_test_disabled"), "x-ray ring drops the auto depth test")
-	ck(String(Sh.ring_xray().code).contains("near_only"), "x-ray ring carries the x-ray toggle on a uniform")
+	ck(String(Sh.ring_xray().code).contains("force"), "x-ray ring carries the forced reveal on a uniform")
 
 # Two ring shaders: the idle ring is depth-tested, and only a live trigger
 # window swaps that entry to the depth-free x-ray variant with the manual
@@ -55,8 +55,8 @@ func t_ring_xray_contract() -> void:
 	ck(occ.contains("depth_test_disabled"), "x-ray ring drops the auto test for manual compare")
 	ck(occ.contains("hint_depth_texture"), "x-ray ring reads the scene depth")
 	ck(occ.contains("depth_draw_never"), "x-ray ring never writes depth itself")
-	ck(occ.contains("uniform bool near_only"), "x-ray ring tags the x-ray mode on a uniform")
-	ck(occ.contains("uniform float carve"), "x-ray ring keeps the camera-attached carve as a uniform")
+	ck(occ.contains("uniform bool force"), "x-ray ring tags the forced reveal on a uniform")
+	ck(occ.contains("uniform float pulse"), "x-ray ring carries the reveal pulse")
 	ck(not occ.contains("EXCLUDE_M"), "the carved zone is a uniform, not a constant")
 	ck(FileAccess.file_exists("res://mods/ThermalVTK/VTKOutlineRingDepth.gdshader"), "depth-tested ring shader exists")
 	ck(not FileAccess.file_exists("res://mods/ThermalVTK/VTKProtoRing.gdshader"), "the prototype shader is gone")
@@ -77,7 +77,7 @@ func t_front_rim_uses_abs_dot() -> void:
 
 func t_ring_style_uniforms() -> void:
 	var src := FileAccess.get_file_as_string(RING_RES)
-	for u in ["rim_power", "carve", "near_only"]:
+	for u in ["rim_power", "force", "pulse"]:
 		ck(src.contains("uniform") and src.contains(u), "ring declares %s" % u)
 	ck(not src.contains("outline_style"), "ring no longer declares outline_style")
 	ck(not src.contains("rim_start"), "ring no longer declares rim_start")
@@ -121,8 +121,8 @@ func t_ring_shader_compiles() -> void:
 	ck(params.size() > 0, "ring shader compiled (uniform list not empty)")
 	ck(names.has("rim_power"), "compiled ring shader exposes rim_power")
 	ck(names.has("state_key"), "compiled ring shader exposes state_key")
-	ck(names.has("carve"), "compiled ring shader exposes carve")
-	ck(names.has("near_only"), "compiled ring shader exposes near_only")
+	ck(names.has("force"), "compiled ring shader exposes force")
+	ck(names.has("pulse"), "compiled ring shader exposes pulse")
 	var depth = load("res://mods/ThermalVTK/VTKOutlineRingDepth.gdshader")
 	if depth == null:
 		ck(false, "depth ring shader loads for compile check")
@@ -134,7 +134,7 @@ func t_ring_shader_compiles() -> void:
 	ck(dparams.size() > 0, "depth ring shader compiled (uniform list not empty)")
 	for u in ["state_key", "grow", "rim_power", "cool"]:
 		ck(dnames.has(u), "compiled depth ring shader exposes %s" % u)
-	for u in ["near_only", "carve", "depth_tex"]:
+	for u in ["force", "pulse", "depth_tex"]:
 		ck(not dnames.has(u), "compiled depth ring shader has no %s" % u)
 
 func t_state_keys_in_overlay() -> void:

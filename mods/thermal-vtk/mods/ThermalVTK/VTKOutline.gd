@@ -53,6 +53,11 @@ func _build_ring() -> ShaderMaterial:
 	ring_mat.shader = Shaders.ring()
 	return ring_mat
 
+func _build_xray() -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = Shaders.ring_xray()
+	return mat
+
 # Event-driven per-entry flip: idle rings honour walls; when the frame loop
 # passes opts["xray"] for a bot with a live trigger window, that bot's ring
 # swaps to the depth-free shader and punches through walls while the optic
@@ -65,21 +70,28 @@ func set_entry_xray(id: int, on: bool) -> void:
 	if bool(entry.get("xray", false)) == on:
 		return
 	entry["xray"] = on
-	# A shader swap may reset uniforms; drop the push cache so the next refresh
-	# writes the state again.
+	# The overlay carries its own uniforms; drop the push cache so the next
+	# refresh writes the state again.
 	entry["p_key"] = null
 	entry["p_grow"] = null
 	entry["p_rim"] = null
 	entry["p_cool"] = null
-	var ring_mat: ShaderMaterial = entry["ring"]
-	if ring_mat == null:
+	entry["p_force"] = null
+	entry["p_pulse"] = null
+	var xray_mat: ShaderMaterial = entry.get("xray_mat")
+	if xray_mat == null:
 		return
-	if on:
-		ring_mat.shader = Shaders.ring_xray()
-		ring_mat.set_shader_parameter("near_only", true)
-		ring_mat.set_shader_parameter("carve", CARVE_XRAY)
-	else:
-		ring_mat.shader = Shaders.ring()
+	for pair in entry.get("pairs", []):
+		var shell = pair.get("shell")
+		if shell == null or not is_instance_valid(shell):
+			continue
+		shell.material_overlay = xray_mat if on else null
+		if on:
+			# A reveal must reach past the ESP distance, so while the window is
+			# live the shell stops inheriting the source LOD range.
+			shell.visibility_range_end = 0.0
+		else:
+			_mirror_range(pair.get("src"), shell)
 
 # The scope flag drives the thin in-scope band. The Mask depth-write toggle
 # lives in VTKWeaponOcclusion, driven from the same flags by VTKESP.
@@ -94,11 +106,12 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 		return
 	Dbg.log("OUTLINE", "apply id=%d meshes=%d child_count=%d" % [id, meshes.size(), node.get_child_count()])
 	var ring_mat := _build_ring()
+	var xray_mat := _build_xray()
 	var pairs: Array = []
 	for m in meshes:
 		pairs.append(_make_shell(m, ring_mat))
 	_items[id] = {
-		"meshes": meshes, "pairs": pairs, "ring": ring_mat,
+		"meshes": meshes, "pairs": pairs, "ring": ring_mat, "xray_mat": xray_mat,
 		"node": node, "child_count": node.get_child_count(),
 		"xray": false,
 	}
@@ -187,6 +200,10 @@ func _recollect(id: int, entry: Dictionary) -> void:
 	entry["pairs"] = pairs
 	entry["meshes"] = fresh
 	entry["child_count"] = node.get_child_count()
+	# Rebuilt shells start plain: re-apply a live reveal to the new ones.
+	if bool(entry.get("xray", false)):
+		entry["xray"] = false
+		set_entry_xray(id, true)
 
 func refresh(id: int, opts: Dictionary) -> void:
 	var entry = _items.get(id)
@@ -201,25 +218,45 @@ func refresh(id: int, opts: Dictionary) -> void:
 	var cool := float(opts.get("cool", 0.0))
 
 	var ring_mat: ShaderMaterial = entry["ring"]
+	var xray_mat: ShaderMaterial = entry.get("xray_mat")
+	var force := bool(opts.get("force", false))
+	var pulse := float(opts.get("pulse", 0.0))
 
 	# Compare the last pushed value instead of reading the uniform back: a
 	# get_shader_parameter round-trip per NPC per frame was pure overhead, and
 	# the state key only moves when the bot's category changes.
 	if entry.get("p_key") != key:
 		ring_mat.set_shader_parameter("state_key", key)
+		if xray_mat != null:
+			xray_mat.set_shader_parameter("state_key", key)
 		entry["p_key"] = key
 	if entry.get("p_grow") == null or not is_equal_approx(float(entry["p_grow"]), grow):
 		ring_mat.set_shader_parameter("grow", grow)
+		if xray_mat != null:
+			xray_mat.set_shader_parameter("grow", grow)
 		entry["p_grow"] = grow
 
 	var rim := SCOPE_RIM if _scoped else float(opts.get("rim", 1.0))
 	if entry.get("p_rim") == null or not is_equal_approx(float(entry["p_rim"]), rim):
 		ring_mat.set_shader_parameter("rim_power", rim)
+		if xray_mat != null:
+			xray_mat.set_shader_parameter("rim_power", rim)
 		entry["p_rim"] = rim
 
 	if entry.get("p_cool") == null or not is_equal_approx(float(entry["p_cool"]), cool):
 		ring_mat.set_shader_parameter("cool", cool)
+		if xray_mat != null:
+			xray_mat.set_shader_parameter("cool", cool)
 		entry["p_cool"] = cool
+
+	# Reveal-only uniforms belong to the overlay: the depth-tested ring ignores
+	# them, so there is nothing to push there.
+	if xray_mat != null and entry.get("p_force") != force:
+		xray_mat.set_shader_parameter("force", force)
+		entry["p_force"] = force
+	if xray_mat != null and (entry.get("p_pulse") == null or not is_equal_approx(float(entry["p_pulse"]), pulse)):
+		xray_mat.set_shader_parameter("pulse", pulse)
+		entry["p_pulse"] = pulse
 
 func clear(id: int) -> void:
 	var entry = _items.get(id)

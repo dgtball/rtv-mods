@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.2.4] - 2026-11-01
+
+### Changed
+- X-ray triggers use the same ring as the ESP instead of swapping it for a
+  different, depth-free look. The ring always stays depth-tested; a live window
+  adds an overlay that paints only the part of the silhouette the world hides,
+  so the reveal no longer shows the model's inner contours and the two effects
+  cannot double up.
+- The overlay pulses for as long as the window stays open.
+- A reveal past the ESP Distance (a shot from 70 m with Distance at 60 m) draws
+  the whole contour, so triggers still work where the ESP ring is silent.
+- While a window is live the shell ignores the source LOD range, so a bot the
+  game culls at range still gets its contour.
+
 ## [2.2.3] - 2026-11-01
 
 ### Removed

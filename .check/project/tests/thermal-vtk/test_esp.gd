@@ -265,7 +265,9 @@ func t_label_suffix_independent() -> void:
 	Tracker.tag_trig(resp._entries[rid], "fire", 100.0, rnow + 60.0, 60.0)
 	resp._draw(Vector3.ZERO)
 	var rring: ShaderMaterial = resp._outline._items[rid]["ring"]
-	ck(resp._outline.has(rid) and rring.shader == Sh.ring_xray(), "live window flips x-ray past Distance")
+	ck(resp._outline.has(rid) and rring.shader == Sh.ring(), "reveal past Distance keeps the depth-tested ring")
+	var rshell: MeshInstance3D = resp._outline._items[rid]["pairs"][0]["shell"]
+	ck(rshell.material_overlay == resp._outline._items[rid]["xray_mat"], "reveal past Distance attaches the overlay")
 	# Expire the window: Time stays real (no fake clock), so tag the same way a
 	# timeout ages it — expires behind now. pick_trig erases it and the frame
 	# loop reaches the bot only through the skip branch. 1.10.1: the skip
@@ -516,7 +518,9 @@ func t_xray_layer_without_contour() -> void:
 	esp._draw(Vector3.ZERO)
 	ck(esp._outline.has(id), "reveal draws with the contour off")
 	var ring: ShaderMaterial = esp._outline._items[id]["ring"]
-	ck(ring.shader == Sh.ring_xray(), "the reveal uses the x-ray shader")
+	ck(ring.shader == Sh.ring(), "the reveal keeps the depth-tested ring")
+	var shell: MeshInstance3D = esp._outline._items[id]["pairs"][0]["shell"]
+	ck(shell.material_overlay == esp._outline._items[id]["xray_mat"], "the reveal attaches the overlay")
 	Tracker.tag_trig(esp._entries[id], "fire", 100.0, now - 1.0, 60.0)
 	esp._draw(Vector3.ZERO)
 	ck(not esp._outline.has(id), "an expired window clears the ring")
