@@ -1,6 +1,7 @@
 extends Control
 const Paths = preload("res://mods/VTK/VTKPaths.gd")
 const Log = preload("res://mods/VTK/VTKLog.gd")
+const Hud = preload("res://mods/VTK/VTKHud.gd")
 
 var _enabled: bool = false
 var _label: Label = null
@@ -8,8 +9,9 @@ var _panel: PanelContainer = null
 var _kills: int = 0
 var _alive_cnt: int = 0
 var _nomad_cnt: int = 0
-var _accum: float = 0.0
+var _ticker := Hud.Ticker.new()
 var _was_shelter: bool = false
+
 var _iface: Node = null
 var _hooks_node: Node = null
 var _agents: Dictionary = {}
@@ -24,13 +26,7 @@ func _ready() -> void:
 	_panel = PanelContainer.new()
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_panel.position = Vector2(10, 10)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0, 0, 0, 0.45)
-	sb.content_margin_left = 6.0
-	sb.content_margin_right = 6.0
-	sb.content_margin_top = 1.0
-	sb.content_margin_bottom = 1.0
-	_panel.add_theme_stylebox_override("panel", sb)
+	_panel.add_theme_stylebox_override("panel", Hud.plaque_style(1.0, 1.0))
 	_label = Label.new()
 	_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.7))
 	_label.add_theme_font_size_override("font_size", 13)
@@ -182,13 +178,7 @@ func _reset_counters() -> void:
 		hooks.reset_kills()
 
 func _is_shelter() -> bool:
-	var iface = _get_iface()
-	if iface == null:
-		return false
-	var gd = iface.get("gameData")
-	if gd == null:
-		return false
-	return bool(gd.get("shelter"))
+	return Hud.in_shelter(_get_iface())
 
 func _process(delta: float) -> void:
 	# _scene_ref обновляем до любого раннего выхода и даже когда HUD выключен:
@@ -204,10 +194,8 @@ func _process(delta: float) -> void:
 	# gameData.shelter - только на тике (0.5 с), HUD и так обновляется там же.
 	if map_changed:
 		_reset_counters()
-	_accum += delta
-	if _accum < 0.5:
+	if not _ticker.step(delta):
 		return
-	_accum = 0.0
 	var in_shelter := _is_shelter()
 	if in_shelter and not _was_shelter:
 		_reset_counters()

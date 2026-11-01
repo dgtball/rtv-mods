@@ -582,15 +582,9 @@ func _attach_row_hover(row: Control, make_style: Callable) -> void:
 		row.add_theme_stylebox_override("panel", make_style.call(false)))
 
 # Единый вход перерисовки: область задаётся битмаской RefreshScope. Шаг «±»
-# не пересобирает экипировку, закрытие обвесов - каталог.
-class RefreshScope:
-	const EQUIP := 1
-	const GEAR := 2
-	const DONE := 4
-	const OVERLAY := 8
-	const LIST := 16
-	const PREVIEW := 32
-	const PAGES := EQUIP | GEAR | DONE | OVERLAY
+# не пересобирает экипировку, закрытие обвесов - каталог. Сами константы живут
+# в VTKRefresh.gd: их же читает редактор, поэтому набор один на оба модуля.
+const RefreshScope = preload("res://mods/VTK/VTKRefresh.gd")
 
 func refresh(scope: int, found = null) -> void:
 	if scope & RefreshScope.EQUIP:

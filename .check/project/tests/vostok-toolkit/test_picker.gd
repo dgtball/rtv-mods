@@ -33,6 +33,7 @@ func _init() -> void:
 	t_art_key_by_path()
 	t_art_cache_cleared()
 	t_clear_caches_independent()
+	t_slot_list_shared()
 	print("")
 	if fails == 0:
 		print("Picker tests passed")
@@ -489,3 +490,17 @@ func t_subcategory_of() -> void:
 	# Пустой путь и пустой тип.
 	ck(P.subcategory_of("", "Weapon") == "", "пустой путь -> пусто")
 	ck(P.subcategory_of("res://Items/Weapons/AKM/AKM.tres", null) == "", "пустой тип -> пусто")
+
+# Три нормализатора слотов (Picker, ItemStore, Equip) свёрнуты в один:
+# Picker.slot_list отсеивает мусор, флаг unique решает, сливать ли повторы.
+func t_slot_list_shared() -> void:
+	var E = preload("res://mods/VTK/VTKEquip.gd")
+	var I = preload("res://mods/VTK/VTKItemStore.gd")
+	ck(P.slot_list(["Primary", "", null, "Primary"]) == ["Primary", "Primary"],
+		"slot_list: мусор отсеян, повторы сохранены")
+	ck(P.slot_list(["Primary", "Primary"], true) == ["Primary"],
+		"slot_list(unique): повторы слиты")
+	ck(P.slot_list("Primary").is_empty(), "slot_list: не массив -> []")
+	var item := {"slots": ["Primary", "Primary", ""]}
+	ck(E.slot_names(item) == ["Primary"], "авто-экип: слоты без повторов и пустых")
+	ck(I.item_slots(item) == ["Primary", "Primary"], "item_slots: пустые отсеяны, повторы сохранены")

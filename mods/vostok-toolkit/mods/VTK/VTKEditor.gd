@@ -7,12 +7,7 @@ const Items := preload("res://mods/VTK/VTKItemStore.gd")
 const Draft := preload("res://mods/VTK/VTKDraft.gd")
 const VTKLook := preload("res://mods/VTK/VTKLook.gd")
 
-const R_EQUIP := 1
-const R_GEAR := 2
-const R_DONE := 4
-const R_OVERLAY := 8
-const R_PREVIEW := 32
-const R_PAGES := R_EQUIP | R_GEAR | R_DONE | R_OVERLAY
+const Refresh := preload("res://mods/VTK/VTKRefresh.gd")
 
 var _ui = null
 
@@ -194,7 +189,7 @@ func _build_editor() -> void:
 	_ui._session.reset_picker_state()
 	_show_page(0, true)
 	_editor_panel.visible = _ui._session.draft != null
-	_ui.refresh(R_PAGES | R_PREVIEW)
+	_ui.refresh(Refresh.PAGES | Refresh.PREVIEW)
 
 # Кнопки шагов строятся один раз, переключение идёт через _show_page.
 # Сообщение живёт в том же ряду: отдельная строка ради ошибки вроде
@@ -336,11 +331,11 @@ func _show_page(n: int, force := false) -> void:
 				chk.visible = i < _ui._session.page
 	# При смене шага оверлей перерисовывается по пути новой страницы:
 	# чужая панель закрывается, своя - открывается.
-	_ui.refresh(R_OVERLAY)
+	_ui.refresh(Refresh.OVERLAY)
 	# «Готово» собирается при входе на шаг, а не на каждое «±» в каталоге:
 	# состав мог измениться, пока страница была скрыта.
 	if next == 2 and prev != 2:
-		_ui.refresh(R_DONE)
+		_ui.refresh(Refresh.DONE)
 
 func _set_problem(msg: String) -> void:
 	if _page_label != null:
@@ -583,7 +578,7 @@ func _remove_gear(path: String) -> void:
 		_ui._session.open_equip_att = ""
 		_ui._session.open_gear_att = ""
 	_ui._session.draft.remove_gear(path)
-	_ui.refresh(R_PAGES)
+	_ui.refresh(Refresh.PAGES)
 
 # Единый вид кнопок Full: включено - заливка и золотая точка, выключено -
 # серый контур без точки. Точка - символ в тексте, а не отдельный узел:
@@ -608,7 +603,7 @@ func _make_full_ammo_btn(path: String, _desc: Dictionary) -> Button:
 		if _ui._session.draft == null or cap <= 0.0:
 			return
 		_ui._session.draft.set_gear_amount(path, cap)
-		_ui.refresh(R_PAGES)
+		_ui.refresh(Refresh.PAGES)
 	)
 	return b
 
@@ -624,7 +619,7 @@ func _make_full_mag_btn(path: String, desc: Dictionary) -> Button:
 		# Состояние берём с актуального descriptor'а, а не с захваченного
 		# desc: после пересборки клеток он уже может быть не тем объектом.
 		_ui._session.draft.set_full_mag(path, not Draft.is_full(_ui._session.draft.descriptor_of(path)))
-		_ui.refresh(R_PAGES)
+		_ui.refresh(Refresh.PAGES)
 	)
 	return b
 
@@ -664,7 +659,7 @@ func _set_gear_search(t: String) -> void:
 func _apply_gear_search() -> void:
 	# Только каталог: пересборка страницы пересоздала бы поле поиска и выкинула
 	# бы из него курсор на каждом символе.
-	_ui.refresh(R_GEAR)
+	_ui.refresh(Refresh.GEAR)
 
 # Фасеты и сетка считаются одним проходом: buckets группирует найденное
 # целиком, а считать дважды - значит фильтровать дважды. Поиск применяется
@@ -741,7 +736,7 @@ func _rebuild_gear_facets(facets: Array) -> void:
 	_gear_facets_box.add_child(ChosenRow.new(_ui._session.gear_only_selected,
 		Loc.txt("Only selected"), func():
 			_ui._session.gear_only_selected = not _ui._session.gear_only_selected
-			_ui.refresh(R_GEAR)))
+			_ui.refresh(Refresh.GEAR)))
 
 # Клик по активной строке сворачивает/разворачивает её подкатегории;
 # категория продолжает фильтровать. К возврату ко «Всем предметам» ведёт
@@ -806,7 +801,7 @@ func _gear_subfacets(items) -> Array:
 
 func _set_gear_sub(key: String) -> void:
 	_ui._session.gear_sub_key = "" if _ui._session.gear_sub_key == key else key
-	_ui.refresh(R_GEAR)
+	_ui.refresh(Refresh.GEAR)
 
 # Фасет меняет только набор клеток: предметы из набора не уходят, поэтому
 # открытая панель обвесов остаётся уместной.
@@ -820,7 +815,7 @@ func _set_gear_facet(key: String) -> void:
 		# "Пистолеты" остался бы фильтр "Снайперки" из прошлой ветки.
 		_ui._session.gear_sub_key = ""
 		_ui._session.gear_subs_collapsed = false
-	_ui.refresh(R_GEAR)
+	_ui.refresh(Refresh.GEAR)
 
 func _facet_items(facets: Array, key: String) -> Array:
 	for f in facets:
@@ -891,7 +886,7 @@ func _build_page_done() -> Control:
 	_ui._rail._bind_btn.pressed.connect(func(): _ui._rail._begin_bind("", _ui._rail._done_bind_btn, true))
 
 	# Пустая оболочка: полное превью с составом строит _refresh_page_done.
-	# Прежняя сборка пустого превью тут же выбрасывалась первым refresh(R_PAGES).
+	# Прежняя сборка пустого превью тут же выбрасывалась первым refresh(Refresh.PAGES).
 	# Флаги зеркалят _build_set_preview(fill = false): EXPAND только по ширине.
 	var shell := VBoxContainer.new()
 	shell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1517,16 +1512,16 @@ func _set_target_cat(c: String) -> void:
 	# Смена старшего уровня сбрасывает младший: иначе после "Винтовки" ->
 	# "Пистолеты" остался бы фильтр "Снайперки" из прошлой ветки.
 	_ui._session.target_sub = ""
-	_ui.refresh(R_EQUIP)
+	_ui.refresh(Refresh.EQUIP)
 
 func _set_target_sub(s: String) -> void:
 	_ui._session.target_sub = "" if _ui._session.target_sub == s else s
-	_ui.refresh(R_EQUIP)
+	_ui.refresh(Refresh.EQUIP)
 
 func _reset_target_filters() -> void:
 	_ui._session.target_cat = ""
 	_ui._session.target_sub = ""
-	_ui.refresh(R_EQUIP)
+	_ui.refresh(Refresh.EQUIP)
 
 # Уникальные группы найденного списка в порядке таблицы шага 1, затем
 # остальные по алфавиту - строка фильтров и валидация считают набор одинаково.
@@ -1579,7 +1574,7 @@ func _remove_slot(slot: String) -> void:
 	if _ui._session.target_slot == slot:
 		_ui._session.target_slot = ""
 	_ui._session.draft.remove_slot(slot)
-	_ui.refresh(R_PAGES)
+	_ui.refresh(Refresh.PAGES)
 
 func _set_target_slot(slot: String) -> void:
 	_ui._session.target_slot = slot
@@ -1593,10 +1588,10 @@ func _set_target_slot(slot: String) -> void:
 	if _ui._session.page == 0:
 		# Смена цели меняет только шаг 1 и панель обвесов; каталог шага 2 от
 		# слота не зависит намеренно, а «Готово» рисует неинтерактивные клетки.
-		_ui.refresh(R_EQUIP | R_OVERLAY)
+		_ui.refresh(Refresh.EQUIP | Refresh.OVERLAY)
 	else:
 		_show_page(0)
-		_ui.refresh(R_EQUIP)
+		_ui.refresh(Refresh.EQUIP)
 
 # Живой поиск с дебаунсом: пересборка идёт не на каждый символ, а через
 # короткую паузу. Поле поиска не пересоздаётся и держит курсор.
@@ -1610,7 +1605,7 @@ func _apply_search() -> void:
 	# каждый символ проходил весь каталог дважды (_entry на каждый предмет).
 	var found := _items_for_target()
 	_validate_target_filters(found)
-	_ui.refresh(R_EQUIP, found)
+	_ui.refresh(Refresh.EQUIP, found)
 
 # Запись каталога для обоих шагов: предмет и его место в каждой таксономии.
 # Группы вычисляет Picker, а не строка type здесь: иначе шаг 1 и шаг 2 разошлись
@@ -1740,7 +1735,7 @@ func _bump_gear(path: String, dir: float, count_holder: Control = null) -> void:
 	# Патроны на полу 0 уходят из набора: клетка должна потерять рамку набора
 	# и чип «×N», а это уже другая разметка — пересобираем каталог.
 	if _ui._session.draft.amount_of(path) <= 0.0:
-		_ui.refresh(R_GEAR)
+		_ui.refresh(Refresh.GEAR)
 		return
 	if count_holder != null and count_holder.has_meta("vtk_count"):
 		var lbl = count_holder.get_meta("vtk_count")
@@ -1748,11 +1743,11 @@ func _bump_gear(path: String, dir: float, count_holder: Control = null) -> void:
 			lbl.text = str(int(_ui._session.draft.amount_of(path)))
 			return
 	# Вызывающий не передал клетку (тест/будущий вызов): прежнее поведение.
-	_ui.refresh(R_GEAR | R_DONE)
+	_ui.refresh(Refresh.GEAR | Refresh.DONE)
 
 func _toggle_attachment_panel(path: String) -> void:
 	_ui._session.toggle_attachment_target(path)
-	_ui.refresh(R_OVERLAY)
+	_ui.refresh(Refresh.OVERLAY)
 
 # Оверлей рендерит панель текущей страницы: путь своя у Экипировки и
 # Снаряжения; при пустом пути или закрытом черновике прячется.
@@ -1775,7 +1770,7 @@ func _refresh_att_overlay() -> void:
 
 func _close_att_overlay() -> void:
 	_ui._session.clear_attachments()
-	_ui.refresh(R_OVERLAY)
+	_ui.refresh(Refresh.OVERLAY)
 
 # Иконка предмета: кроп прозрачных полей через Picker.item_art и режим
 # сохранения пропорций. Общая для клеток шага 1/2 и чипа инвентаря.
@@ -2009,7 +2004,7 @@ func _after_place() -> void:
 			and _att_panel_needed(_ui._item_info(_ui._session.last_placed)):
 		_ui._session.set_attachment_target(_ui._session.last_placed)
 	_ui._session.last_placed = ""
-	_ui.refresh(R_PAGES)
+	_ui.refresh(Refresh.PAGES)
 
 # У обоймы единственный "обвес" — совместимый патрон, и он уезжает в
 # slotData.nested, который игра не читает: количество патронов в обойме целиком
@@ -2163,7 +2158,7 @@ func _make_att_cell(owner_path: String, grp: String, att_res) -> Control:
 			_ui._session.draft.toggle_attachment(owner_path, str(att_res.resource_path), grp, _att_group_of)
 			# Панель остаётся открытой: подбор обвесов идёт списком, и закрывать
 			# её после каждого клика значило бы кликать дважды на каждый обвес.
-			_ui.refresh(R_PAGES)
+			_ui.refresh(Refresh.PAGES)
 	)
 	cell.mouse_entered.connect(func():
 		if not on:
@@ -2193,7 +2188,7 @@ func _build_mag_panel(path: String, desc: Dictionary) -> Control:
 		if _ui._session.draft == null:
 			return
 		_ui._session.draft.set_full_mag(path, is_on)
-		_ui.refresh(R_PAGES)
+		_ui.refresh(Refresh.PAGES)
 	)
 	row.add_child(b)
 

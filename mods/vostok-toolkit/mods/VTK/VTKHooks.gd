@@ -6,7 +6,7 @@ var _registered: bool = false
 var _lib = null
 var _kill_count: int = 0
 # Хэндлы всех 25 хуков: единственный источник цифры в логе регистрации.
-var _hook_ids: Array = []
+var _hook_ids: Array[int] = []
 
 const KC = preload("res://mods/VTK/VTKKillCounter.gd")
 const Notes = preload("res://mods/VTK/VTKNotes.gd")

@@ -1,6 +1,7 @@
 extends SceneTree
 
 const KC = preload("res://mods/VTK/VTKKillCounter.gd")
+const Hud = preload("res://mods/VTK/VTKHud.gd")
 const Items = preload("res://mods/VTK/VTKItemStore.gd")
 const Item = preload("res://stubs/ItemData.gd")
 
@@ -43,6 +44,7 @@ func _run() -> void:
 	t_feed_norm_weapon()
 	t_feed_index_second_pass()
 	t_log_warn_once()
+	t_hud_shared()
 	print("")
 	if fails == 0:
 		print("tests passed")
@@ -244,3 +246,22 @@ func t_feed_index_second_pass() -> void:
 	ck(Feed.norm_weapon("AKS_74U") == Items.norm_name("AKS-74U"),
 		"lenta normalizuet imya uzla tem zhe pravilom, chto i katalog")
 	Items.clear()
+
+# Плашка, чтение убежища и каденция тика жили двумя копиями в счётчике и ленте:
+# контракт общих частей держим здесь, чтобы копии снова не разошлись.
+func t_hud_shared() -> void:
+	var sb := Hud.plaque_style(1.0, 1.0)
+	ck(is_equal_approx(sb.bg_color.a, 0.45), "плашка: чёрный 0.45")
+	ck(is_equal_approx(sb.content_margin_left, 6.0) and is_equal_approx(sb.content_margin_right, 6.0),
+		"плашка: поля 6 px по горизонтали")
+	var bare := Hud.plaque_style()
+	ck(is_equal_approx(bare.content_margin_top, 0.0) and is_equal_approx(bare.content_margin_bottom, 0.0),
+		"плашка: у ленты без вертикальных полей")
+	ck(Hud.in_shelter({"gameData": {"shelter": true}}), "убежище: gameData.shelter = true")
+	ck(not Hud.in_shelter({"gameData": {"shelter": false}}), "убежище: shelter = false")
+	ck(not Hud.in_shelter({"gameData": null}), "убежище: gameData нет")
+	ck(not Hud.in_shelter(null), "убежище: интерфейса нет")
+	var ticker = Hud.Ticker.new()
+	ck(not ticker.step(0.3), "тикер: 0.3 с — ещё не тик")
+	ck(ticker.step(0.3), "тикер: 0.6 с — тик")
+	ck(not ticker.step(0.3), "тикер: остаток сброшен, тик снова через 0.5 с")

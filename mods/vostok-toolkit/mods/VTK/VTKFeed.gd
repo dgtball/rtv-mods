@@ -1,6 +1,7 @@
 extends Control
 const Paths = preload("res://mods/VTK/VTKPaths.gd")
 const Log = preload("res://mods/VTK/VTKLog.gd")
+const Hud = preload("res://mods/VTK/VTKHud.gd")
 
 # Лента убийств. Чистая логика (цвета, сегменты, вытеснение, fade) — static,
 # чтобы тестировалась headless; рендер и игровые пути — только в экземпляре.
@@ -70,7 +71,7 @@ var _rows: Array = []
 var _vbox: VBoxContainer = null
 var _scene_ref: Node = null
 var _was_shelter: bool = false
-var _accum: float = 0.0
+var _ticker := Hud.Ticker.new()
 var _iface_cache = null
 var _hooks: Node = null
 
@@ -141,13 +142,7 @@ func _add_row(ev: Dictionary) -> void:
 	# Подложка по макету: слегка затемнённый StyleBoxFlat, padding 6px по горизонтали.
 	var panel := PanelContainer.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0, 0, 0, 0.45)
-	sb.content_margin_left = 6.0
-	sb.content_margin_right = 6.0
-	sb.content_margin_top = 0.0
-	sb.content_margin_bottom = 0.0
-	panel.add_theme_stylebox_override("panel", sb)
+	panel.add_theme_stylebox_override("panel", Hud.plaque_style())
 	panel.add_child(row)
 	_vbox.add_child(panel)
 	var dropped: Array = push_entry(_rows, {"node": panel, "age": 0.0}, MAX_ROWS)
@@ -235,13 +230,7 @@ func _weapon_texture(weapon: String) -> Texture2D:
 func _in_shelter() -> bool:
 	if _iface_cache == null or not is_instance_valid(_iface_cache):
 		_iface_cache = get_tree().root.get_node_or_null(Paths.INTERFACE)
-	var iface = _iface_cache
-	if iface == null or not ("gameData" in iface):
-		return false
-	var gd = iface.get("gameData")
-	if gd == null:
-		return false
-	return bool(gd.get("shelter"))
+	return Hud.in_shelter(_iface_cache)
 
 func _process(delta: float) -> void:
 	if not _enabled:
@@ -252,9 +241,7 @@ func _process(delta: float) -> void:
 	if get_tree().current_scene != _scene_ref:
 		_scene_ref = get_tree().current_scene
 		clear()
-	_accum += delta
-	if _accum >= 0.5:
-		_accum = 0.0
+	if _ticker.step(delta):
 		var in_shelter := _in_shelter()
 		if in_shelter and not _was_shelter:
 			clear()

@@ -237,7 +237,7 @@ HEX_RE = re.compile(r'Color\("#')
 
 PRESENT = [
     "_page_columns",
-    "class RefreshScope:",
+    "const RefreshScope = preload(",
     "func refresh(",
     "SIDE_WIDTH := 232",
     "_on_slot_row_input",

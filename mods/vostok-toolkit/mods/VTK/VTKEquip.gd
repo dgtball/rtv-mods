@@ -1,6 +1,7 @@
 extends RefCounted
 
 const VTKData = preload("res://mods/VTK/VTKData.gd")
+const Pick = preload("res://mods/VTK/VTKPicker.gd")
 
 # Логика авто-экипировки: что делать с предметом, попавшим в инвентарь, и
 # арифметика докладывания в уже экипированный стек. Ни load(), ни путей внутрь
@@ -8,16 +9,9 @@ const VTKData = preload("res://mods/VTK/VTKData.gd")
 # через get(), поэтому покрыто headless-тестом test_equip.gd.
 
 static func slot_names(item_res) -> Array:
-	var out: Array = []
 	if item_res == null:
-		return out
-	var slots = item_res.get("slots")
-	if slots is Array:
-		for s in slots:
-			var n := str(s)
-			if n != "" and not out.has(n):
-				out.append(n)
-	return out
+		return []
+	return Pick.slot_list(item_res.get("slots"), true)
 
 static func is_equipment(item_res) -> bool:
 	return not slot_names(item_res).is_empty()

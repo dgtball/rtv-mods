@@ -170,10 +170,7 @@ static func item_icon(res) -> Texture2D:
 static func item_slots(item) -> Array:
 	if item == null:
 		return []
-	var slots = item.get("slots")
-	if typeof(slots) != TYPE_ARRAY:
-		return []
-	return slots
+	return Pick.slot_list(item.get("slots"))
 
 # Ресурс предмета слота для иконки. Пустой дескриптор - null.
 static func cell_resource(desc: Dictionary) -> Variant:
