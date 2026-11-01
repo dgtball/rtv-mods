@@ -92,8 +92,8 @@ func t_noon_lowers_exposure() -> void:
 	var sim: FakeSim = w["sim"]
 	_reset(nvg, env, sim, 1200.0)
 	nvg._daylight_tick(1.0)
-	ck(absf(env.tonemap_exposure - 0.99) < 0.005, "noon lowers exposure to 33%")
-	ck(absf(nvg._day_factor - 0.33) < 0.001, "noon sets the day factor floor")
+	ck(absf(env.tonemap_exposure - 0.66) < 0.005, "noon lowers exposure to 22%")
+	ck(absf(nvg._day_factor - 0.22) < 0.001, "noon sets the day factor floor")
 	ck(absf(nvg._day_mix - 1.0) < 0.001, "noon runs the shader curve at full strength")
 	ck(nvg._key_gain > 3.0, "noon raises the key gain to compensate")
 	w["map"].free()
@@ -134,7 +134,7 @@ func t_vanilla_rewrite_rebaselines() -> void:
 	env.tonemap_exposure = 2.5
 	nvg._daylight_tick(0.016)
 	ck(absf(nvg._vanilla_exposure - 2.5) < 0.001, "vanilla ResetCheck rewrites become the baseline")
-	ck(absf(env.tonemap_exposure - 0.825) < 0.005, "the rewrite is compensated from the new baseline")
+	ck(absf(env.tonemap_exposure - 0.55) < 0.005, "the rewrite is compensated from the new baseline")
 	w["map"].free()
 
 func t_toggle_restores_exposure() -> void:

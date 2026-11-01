@@ -9,7 +9,7 @@ extends RefCounted
 # matching key gain, so the detector keys keep their night-time on-screen
 # colour while the background stops clipping.
 
-const MIN_FACTOR := 0.33
+const MIN_FACTOR := 0.22
 const RESPONSE := 1.5
 const INDOOR_FACTOR := 0.15
 # A blocked sky ray: roof, canopy or deep shadow. Softer than an interior.
