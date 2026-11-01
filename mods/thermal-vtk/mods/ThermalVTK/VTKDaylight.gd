@@ -26,13 +26,20 @@ const WEATHER_FACTORS := {
 	"Storm": 0.45,
 }
 
+# The game ships two seasons and the sim field is binary: 1 summer, 2 winter.
+# Vostok Toolkit maps its four seasons onto the same field (VTKSeasonDriver.gd:56
+# writes 2 for winter and 1 for everything else), so ThermalVTK stays correct
+# with and without the toolkit installed.
+const SEASON_SUMMER := 1
+const SEASON_WINTER := 2
+
 # 0..1 daylight, with sunrise/sunset moved for the winter season.
-static func sun_level(time: float, season: int = 1) -> float:
+static func sun_level(time: float, season: int = SEASON_SUMMER) -> float:
 	var dawn_a := 5.0
 	var dawn_b := 8.0
 	var dusk_a := 19.0
 	var dusk_b := 22.0
-	if season == 2:
+	if season == SEASON_WINTER:
 		dawn_a = 7.0
 		dawn_b = 9.0
 		dusk_a = 16.0
@@ -53,7 +60,7 @@ static func light_level(time: float, weather: String, season: int, indoor: bool,
 		# Under a roof or in deep shade there is no open sky to bounce snow
 		# light, so the winter bonus stays out of this branch.
 		light *= COVER_FACTOR
-	elif season == 2:
+	elif season == SEASON_WINTER:
 		# Snow bounces daylight, it does not create any: scale the current
 		# light so winter midnight stays exactly as dark as summer midnight.
 		light = minf(1.0, light * (1.0 + SNOW_BONUS))
@@ -74,7 +81,7 @@ static func day_factor(light: float) -> float:
 # are unaffected: substitution happens before the palette. Blended by the
 # same light level that drives exposure, 1.0 everywhere else.
 static func snow_trim(season: int, indoor: bool, shelter: bool, light: float) -> float:
-	if season != 2 or indoor or shelter:
+	if season != SEASON_WINTER or indoor or shelter:
 		return 1.0
 	return lerpf(SNOW_TRIM_NIGHT, SNOW_TRIM_DAY, clampf(light, 0.0, 1.0))
 
@@ -82,6 +89,12 @@ static func snow_trim(season: int, indoor: bool, shelter: bool, light: float) ->
 # the background before the thermal palette.
 static func day_mix(factor: float) -> float:
 	return clampf((1.0 - factor) / (1.0 - MIN_FACTOR), 0.0, 1.0)
+
+# Daylight strength: 0 leaves the vanilla exposure untouched, 1 applies the
+# model in full. Everything downstream (exposure, key gain, day mix) must use
+# this one effective factor, or the ring colour drifts from the exposure.
+static func strength_factor(factor: float, strength: float) -> float:
+	return lerpf(1.0, factor, clampf(strength, 0.0, 1.0))
 
 # Restores a key's pre-tonemap radiance: exposure is multiplied by `factor`,
 # so the emitted key is divided by it. At alpha 1 the on-screen key is then

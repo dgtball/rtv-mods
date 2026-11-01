@@ -81,6 +81,9 @@ func t_day_factor() -> void:
 	ck(near(D.day_factor(2.0), 0.33), "overbright clamps to full daylight")
 
 func t_day_mix() -> void:
+	ck(near(D.strength_factor(D.day_factor(1.0), 0.0), 1.0), "strength 0 keeps the vanilla exposure")
+	ck(near(D.strength_factor(D.day_factor(1.0), 1.0), 0.33), "strength 1 applies the model")
+	ck(near(D.strength_factor(D.day_factor(1.0), 0.5), 0.665), "strength 0.5 lands in between")
 	ck(near(D.day_mix(1.0), 0.0), "night has no curve")
 	ck(near(D.day_mix(0.33), 1.0), "full daylight runs the curve at full strength")
 	ck(near(D.day_mix(0.665), 0.5), "half compensation is a half curve")

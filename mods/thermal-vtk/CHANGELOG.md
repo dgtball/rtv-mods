@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.3.0] - 2026-11-01
+
+### Added
+- "Daylight strength": 0 leaves the vanilla NVG exposure alone, 1 applies the
+  daylight model in full. Exposure, key gain and the tone curve all follow that
+  one factor, so ring colours stay put at any strength.
+
+### Changed
+- Daylight compensation now notices a roof, a canopy or deep shade: a sky probe
+  every half second trims the light to 45% instead of assuming open sky.
+- The light level is smoothed over about two seconds, so a passing storm no
+  longer pops the frame.
+- The clock, weather and indoor flags are read four times a second instead of
+  every frame.
+- "Daylight Brightness" is now "Highlight softness" (same key, same behaviour).
+
+### Note
+- The sim ships two seasons (1 summer, 2 winter). Vostok Toolkit maps its four
+  seasons onto the same field, so ThermalVTK behaves identically with and
+  without the toolkit installed.
+
 ## [2.2.4] - 2026-11-01
 
 ### Changed

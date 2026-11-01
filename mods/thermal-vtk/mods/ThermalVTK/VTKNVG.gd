@@ -75,6 +75,7 @@ var set_world: float = 1.70
 # Daylight highlight rolloff knee (shader "highlightKnee"); 1.0 = off.
 var set_highlight_knee: float = 0.6
 var set_daylight: bool = true
+var set_strength: float = 1.0
 # Brightness of the state key the ESP outlines emit; the overlay uses it to
 # scale the substituted state colour.
 var set_state_brightness: float = 0.6
@@ -111,6 +112,16 @@ var _day_mix: float = 0.0
 var _key_gain: float = 1.0
 var _cover_cd: float = 0.0
 var _covered: bool = false
+# Smoothed light level: weather steps and dawn are one-pole filtered before they
+# reach the exposure, so a passing storm does not pop the frame.
+var _sim_cd: float = 0.0
+var _sim_time: float = 1200.0
+var _sim_weather: String = "Neutral"
+var _sim_season: int = 1
+var _sim_indoor: bool = false
+var _sim_shelter: bool = false
+var _light_sm: float = 0.0
+var _light_seeded: bool = false
 # Winter snow trim on the background (see VTKDaylight.snow_trim). Not part of
 # the keys: substitution reads the washed pixel before the palette.
 var _snow_trim: float = 1.0
@@ -442,14 +453,30 @@ func _daylight_tick(delta: float) -> void:
 		# last baseline instead of dropping the exposure for one frame.
 		if cur >= 1.9:
 			_vanilla_exposure = cur
+	_sim_cd -= delta
+	if _sim_cd <= 0.0:
+		# Five lookups a frame added up for nothing: the clock, the weather and
+		# the indoor flags do not change between physics ticks.
+		_sim_cd = 0.25
+		_sim_time = float(_sim_value("time", 1200.0))
+		_sim_weather = String(_sim_value("weather", "Neutral"))
+		_sim_season = int(_sim_value("season", 1))
+		_sim_indoor = _game_flag("indoor")
+		_sim_shelter = _game_flag("shelter")
 	var light := Daylight.light_level(
-		float(_sim_value("time", 1200.0)),
-		String(_sim_value("weather", "Neutral")),
-		int(_sim_value("season", 1)),
-		_game_flag("indoor"),
-		_game_flag("shelter"),
+		_sim_time,
+		_sim_weather,
+		_sim_season,
+		_sim_indoor,
+		_sim_shelter,
 		_sky_covered(delta))
-	var target := Daylight.day_factor(light)
+	if not _light_seeded:
+		_light_sm = light
+		_light_seeded = true
+	else:
+		_light_sm = Daylight.step(_light_sm, light, delta, 2.0)
+	light = _light_sm
+	var target := Daylight.strength_factor(Daylight.day_factor(light), set_strength)
 	_day_factor = target if _last_exposure < 0.0 else Daylight.step(_day_factor, target, delta)
 	var want := _vanilla_exposure * _day_factor
 	if absf(want - cur) > 0.002:
@@ -475,6 +502,9 @@ func _reset_daylight() -> void:
 	_day_factor = 1.0
 	_day_mix = 0.0
 	_snow_trim = 1.0
+	_light_sm = 0.0
+	_light_seeded = false
+	_sim_cd = 0.0
 	_sim = null
 	_world = null
 	_env = null
