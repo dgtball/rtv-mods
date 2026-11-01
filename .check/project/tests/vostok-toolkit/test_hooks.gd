@@ -418,7 +418,7 @@ func t_ironman_restart_restores_difficulty() -> void:
 
 	var h = TestHooks.new()
 	root.add_child(h)
-	h._on_restart_pressed(gd, null, true)
+	h._on_restart_pressed(gd, true)
 
 	ck(loader.new_game_called, "ironman-рестарт зовёт Loader.NewGame")
 	ck(loader.new_game_difficulty == 3, "NewGame получает difficulty 3")
@@ -453,7 +453,7 @@ func t_dynamic_restart_stays_dynamic() -> void:
 	var h = TestHooks.new()
 	root.add_child(h)
 	h._dyn_enabled = true
-	h._on_restart_pressed(gd, null, true)
+	h._on_restart_pressed(gd, true)
 
 	ck(loader.new_game_called, "dynamic-рестарт зовёт NewGame")
 	ck(loader.new_game_season == 3, "dynamic-рестарт сохраняет Dynamic (сезон 3), а не ванильный")

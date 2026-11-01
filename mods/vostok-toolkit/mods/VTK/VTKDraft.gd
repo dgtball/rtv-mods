@@ -13,7 +13,7 @@ func _init(p_name: String = "", p_equip: Dictionary = {}, p_gear: Array = []) ->
 	equip = p_equip.duplicate(true)
 	gear = p_gear.duplicate(true)
 
-static func slot_of(slots) -> String:
+static func _test_slot_of(slots) -> String:
 	if typeof(slots) != TYPE_ARRAY or slots.size() == 0:
 		return ""
 	return str(slots[0])
@@ -29,7 +29,7 @@ func free_slot_of(slots) -> String:
 			return n
 	return ""
 
-static func slot_label(slots) -> String:
+static func _test_slot_label(slots) -> String:
 	if typeof(slots) != TYPE_ARRAY:
 		return ""
 	var names := []
@@ -37,8 +37,7 @@ static func slot_label(slots) -> String:
 		names.append(str(s))
 	return ", ".join(names)
 
-static func _desc(path: String, item_name: String, amount: float, type_name: String) -> Dictionary:
-	return {"name": item_name, "path": path, "amount": amount, "type": type_name}
+static func _desc(path: String, item_name: String, amount: float, type_name: String) -> Dictionary:	return {"name": item_name, "path": path, "amount": amount, "type": type_name}
 
 # counted = true для обойм. Обойма в игре stackable = false, а её amount — это
 # количество патронов внутри. Поэтому в сете обоймы считаются штуками в
@@ -163,7 +162,7 @@ func descriptor_of(path: String) -> Dictionary:
 		return gear[idx]
 	return {}
 
-func set_attachments(path: String, atts: Array) -> void:
+func _test_set_attachments(path: String, atts: Array) -> void:
 	var d := descriptor_of(path)
 	if not d.is_empty():
 		d["attachments"] = atts.duplicate(true)
@@ -255,13 +254,13 @@ func clear() -> void:
 func is_empty() -> bool:
 	return equip.is_empty() and gear.is_empty()
 
-func equip_count() -> int:
+func _test_equip_count() -> int:
 	return equip.size()
 
 func item_count() -> int:
 	return equip.size() + gear.size()
 
-func to_saved() -> Dictionary:
+func _test_to_saved() -> Dictionary:
 	return {"equip": equip.duplicate(true), "gear": gear.duplicate(true)}
 
 func load_from(ld) -> void:

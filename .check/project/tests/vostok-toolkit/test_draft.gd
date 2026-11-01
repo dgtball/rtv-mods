@@ -46,9 +46,9 @@ func _init() -> void:
 		quit(1)
 
 func t_slot_of() -> void:
-	ck(Draft.slot_of(["Primary", "Secondary"]) == "Primary", "slot_of берёт первый")
-	ck(Draft.slot_of([]) == "", "slot_of пустого массива пустой")
-	ck(Draft.slot_of(null) == "", "slot_of null пустой")
+	ck(Draft._test_slot_of(["Primary", "Secondary"]) == "Primary", "slot_of берёт первый")
+	ck(Draft._test_slot_of([]) == "", "slot_of пустого массива пустой")
+	ck(Draft._test_slot_of(null) == "", "slot_of null пустой")
 
 func t_free_slot_of() -> void:
 	var d = Draft.new()
@@ -108,7 +108,7 @@ func t_add_to_slot() -> void:
 	# обвесы вытесненного предмета уходят вместе с ним
 	var h = Draft.new()
 	h.add("res://v.tres", "АК", ["Primary"], 1.0, "Weapon")
-	h.set_attachments("res://v.tres", ["res://pso.tres"])
+	h._test_set_attachments("res://v.tres", ["res://pso.tres"])
 	ck(h.add_to_slot("res://v2.tres", "АК-2", ["Primary"], 1.0, "Weapon", "Primary") == "Primary",
 		"оружие вытеснено из Primary")
 	ck(not h.descriptor_of("res://v.tres").has("attachments"),
@@ -152,8 +152,8 @@ func t_whole_amount() -> void:
 	ck(Data._whole(116.0) == 116 and Data._whole(0.5) == 0.5, "значения равны исходным")
 
 func t_slot_label() -> void:
-	ck(Draft.slot_label(["Primary", "Secondary"]) == "Primary, Secondary", "slot_label через запятую")
-	ck(Draft.slot_label([]) == "", "slot_label пустого массива пустой")
+	ck(Draft._test_slot_label(["Primary", "Secondary"]) == "Primary, Secondary", "slot_label через запятую")
+	ck(Draft._test_slot_label([]) == "", "slot_label пустого массива пустой")
 
 func t_gear_increments() -> void:
 	var d = Draft.new()
@@ -194,7 +194,7 @@ func t_remove_scoped() -> void:
 func t_attachments() -> void:
 	var d = Draft.new()
 	d.add("res://v.tres", "АК", ["Primary"], 1.0, "Weapon")
-	d.set_attachments("res://v.tres", ["res://att.tres"])
+	d._test_set_attachments("res://v.tres", ["res://att.tres"])
 	ck(d.descriptor_of("res://v.tres").get("attachments", []).size() == 1, "вложение записано в дескриптор")
 
 func _grp_stub() -> Callable:
@@ -315,7 +315,7 @@ func t_toggle_guards() -> void:
 	# set_attachments поверх toggle остаётся доступным
 	var s = Draft.new()
 	s.add(w, "АКС", ["Primary"], 1.0, "Weapon")
-	s.set_attachments(w, ["res://att_pso.tres", "res://att_muz.tres"])
+	s._test_set_attachments(w, ["res://att_pso.tres", "res://att_muz.tres"])
 	ck((s.descriptor_of(w)["attachments"] as Array).size() == 2, "set_attachments не сломали")
 	s.toggle_attachment(w, "res://att_grip.tres", "Grip", grp_of)
 	ck((s.descriptor_of(w)["attachments"] as Array).size() == 3,
@@ -328,7 +328,7 @@ func t_to_saved_and_back() -> void:
 	var d = Draft.new("Стрелок")
 	d.add("res://v.tres", "АК", ["Primary"], 1.0, "Weapon")
 	d.add("res://a.tres", "Аптечка", [], 2.0, "Medical")
-	var saved: Dictionary = d.to_saved()
+	var saved: Dictionary = d._test_to_saved()
 	ck(saved["equip"].size() == 1, "to_saved: один слот")
 	ck(saved["gear"].size() == 1, "to_saved: одна запись gear")
 	var d2 = Draft.new()
@@ -349,34 +349,34 @@ func t_guards() -> void:
 	ck(d.has_path("res://a.tres"), "has_path видит gear-предмет")
 	ck(not d.has_path("res://нет.tres"), "has_path не видит неизвестный путь")
 	ck(not d.is_empty(), "is_empty до clear ложь")
-	ck(d.equip_count() == 1, "equip_count считает занятый слот")
+	ck(d._test_equip_count() == 1, "equip_count считает занятый слот")
 	d.set_gear_amount("res://a.tres", 5.0)
 	ck(d.amount_of("res://a.tres") == 5.0, "set_gear_amount пишет положительное значение")
 	ck(d.gear_index_of("res://a.tres") >= 0, "set_gear_amount не удаляет запись")
 	d.set_gear_amount("res://a.tres", 0.0)
 	ck(not d.has_path("res://a.tres"), "set_gear_amount 0.0 удаляет запись")
 	ck(d.item_count() == 1, "item_count уменьшился после удаления")
-	ck(d.to_saved()["gear"].size() == 0, "to_saved не содержит удалённой записи")
+	ck(d._test_to_saved()["gear"].size() == 0, "to_saved не содержит удалённой записи")
 	d.add("res://a.tres", "Аптечка", [], 2.0, "Medical")
 	ck(d.item_count() == 2, "предмет вернулся в gear")
 	d.set_gear_amount("res://a.tres", -3.0)
 	ck(not d.has_path("res://a.tres"), "set_gear_amount с минусом тоже удаление")
 	ck(d.item_count() == 1, "item_count уменьшился после удаления по минусу")
-	ck(Draft.slot_of(null) == "", "slot_of null пустой")
-	ck(Draft.slot_label(null) == "", "slot_label null пустой")
+	ck(Draft._test_slot_of(null) == "", "slot_of null пустой")
+	ck(Draft._test_slot_label(null) == "", "slot_label null пустой")
 	d.clear()
 	ck(d.is_empty(), "is_empty после clear истина")
-	ck(d.equip_count() == 0, "equip_count после clear ноль")
+	ck(d._test_equip_count() == 0, "equip_count после clear ноль")
 	ck(d.item_count() == 0, "item_count после clear ноль")
 	var d3 = Draft.new()
 	d3.load_from(null)
 	ck(d3.item_count() == 0, "load_from не-Dictionary не ломает черновик")
 	d3.load_from({"name": "Пусто"})
-	ck(d3.equip_count() == 0, "load_from без equip и gear даёт пусто")
+	ck(d3._test_equip_count() == 0, "load_from без equip и gear даёт пусто")
 	ck(d3.item_count() == 0, "load_from без equip и gear пуст по составу")
 	d3.load_from({"name": "Стрелок", "equip": {"Primary": {"path": "res://v.tres", "amount": 1.0}}, "gear": [{"path": "res://a.tres", "amount": 2.0}]})
 	ck(d3.set_name == "Стрелок", "load_from с ключами читает имя")
-	ck(d3.equip_count() == 1, "load_from с ключами читает equip")
+	ck(d3._test_equip_count() == 1, "load_from с ключами читает equip")
 	ck(d3.item_count() == 2, "load_from с ключами читает gear")
 	var d4 = Draft.new()
 	d4.equip[5] = {"name": "АК", "path": "res://v.tres", "amount": 3.0, "type": "Weapon"}
@@ -391,13 +391,13 @@ func t_add_clamp() -> void:
 	ck(g.gear.size() == 1, "add без слотов с минусом всё равно создаёт запись gear")
 	ck(g.has_path("res://a.tres"), "add без слотов с минусом не выбрасывает предмет")
 	ck(g.amount_of("res://a.tres") == 0.0, "add без слотов клампит минус к нулю")
-	ck(float(g.to_saved()["gear"][0]["amount"]) == 0.0, "to_saved несёт amount 0.0 у gear-записи")
+	ck(float(g._test_to_saved()["gear"][0]["amount"]) == 0.0, "to_saved несёт amount 0.0 у gear-записи")
 	var e = Draft.new()
 	e.add("res://v.tres", "АК", ["Primary"], -2.0, "Weapon")
 	ck(e.equip.has("Primary"), "add в слот с минусом всё равно создаёт дескриптор")
 	ck(e.has_path("res://v.tres"), "add в слот с минусом не выбрасывает предмет")
 	ck(e.amount_of("res://v.tres") == 0.0, "add в слот клампит минус к нулю")
-	ck(float(e.to_saved()["equip"]["Primary"]["amount"]) == 0.0, "to_saved несёт amount 0.0 у слота")
+	ck(float(e._test_to_saved()["equip"]["Primary"]["amount"]) == 0.0, "to_saved несёт amount 0.0 у слота")
 	var p = Draft.new()
 	p.add("res://b.tres", "Бинт", [], 2.0, "Medical")
 	ck(p.amount_of("res://b.tres") == 2.0, "add без слотов не режет положительное количество")
@@ -460,7 +460,7 @@ func t_magazines() -> void:
 	ck(float(d.gear[0].get("amount", -1.0)) == 0.0, "set_gear_amount не пишет в amount обоймы")
 	d.set_gear_amount(mag, 0.0)
 	ck(d.gear.is_empty(), "обойма до нуля удаляется")
-	var back: Dictionary = d.to_saved()
+	var back: Dictionary = d._test_to_saved()
 	ck(typeof(back["gear"]) == TYPE_ARRAY and back["gear"].is_empty(), "to_saved пережил удаление обоймы")
 	var old = Draft.new()
 	old.gear = [{"name": "Старая обойма", "path": mag, "amount": 8.0, "type": "Attachment"}]

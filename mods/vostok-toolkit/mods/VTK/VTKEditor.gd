@@ -11,7 +11,6 @@ const R_EQUIP := 1
 const R_GEAR := 2
 const R_DONE := 4
 const R_OVERLAY := 8
-const R_LIST := 16
 const R_PREVIEW := 32
 const R_PAGES := R_EQUIP | R_GEAR | R_DONE | R_OVERLAY
 
@@ -39,7 +38,6 @@ var _step_labels: Array = []
 var _step_circles: Array = []
 var _step_numbers: Array = []
 var _step_checks: Array = []
-var _gear_search_field: LineEdit = null
 var _gear_facets_box: VBoxContainer = null
 var _gear_grid: GridContainer = null
 var _gear_grid_scroll: ScrollContainer = null
@@ -161,7 +159,6 @@ func _build_editor() -> void:
 	_ui._rail._done_bind_btn = null
 	_ui._rail._pending_qk = 0
 	_done_preview = null
-	_gear_search_field = null
 	_gear_facets_box = null
 	_gear_grid = null
 	_ui._session.gear_facet_key = ""
@@ -502,7 +499,6 @@ func _build_page_gear() -> Control:
 	# Отдельное поле поиска: запрос шага 1 относится к выбору предмета в слот
 	# и не должен молча фильтровать снаряжение, и наоборот.
 	var search := _make_search_field(func(t): _set_gear_search(t))
-	_gear_search_field = search
 	main.add_child(search)
 	# Тот же дебаунс, что у шага 1: без него каталог пересобирался на каждый символ.
 	if _gear_search_debounce != null and is_instance_valid(_gear_search_debounce):
@@ -747,9 +743,6 @@ func _make_facet_row(facet: Dictionary, level: bool) -> Control:
 	_ui._attach_row_hover(row, func(hv: bool): return _make_slot_style(active, hv))
 	_ui._attach_motion(row)
 	row.gui_input.connect(func(ev): _on_facet_input(ev, key, level))
-	if level:
-		row.add_theme_constant_override("margin_left", 10)
-
 	var hb := HBoxContainer.new()
 	hb.add_theme_constant_override("separation", 6)
 	hb.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1322,9 +1315,7 @@ func _on_slot_row_input(ev: InputEvent, slot: String, desc: Dictionary) -> void:
 		return
 	_set_target_slot(slot)
 
-func _make_slot_style(active: bool, hover: bool = false, empty: bool = false) -> StyleBox:
-	if empty:
-		return VTKSurface.surface("hover" if hover else "disabled", active, false, active, 4, 4, 2, 2)
+func _make_slot_style(active: bool, hover: bool = false) -> StyleBox:
 	return VTKSurface.surface("hover" if hover else "normal", active, false, active, 4, 4, 2, 2)
 
 # Точка-индикатор 7x7. Отдельный узел, а не символ в тексте: цвет задаётся
@@ -2134,7 +2125,6 @@ func _build_att_panel(path: String) -> Control:
 		flow.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		flow.add_theme_constant_override("h_separation", 4)
 		flow.add_theme_constant_override("v_separation", 2)
-		flow.add_theme_constant_override("margin_left", 8)
 		for a in g.get("items", []):
 			flow.add_child(_make_att_cell(path, grp, Items.attachment_resource(a)))
 		vb.add_child(flow)
@@ -2194,7 +2184,6 @@ func _build_mag_panel(path: String, desc: Dictionary) -> Control:
 	panel.add_theme_stylebox_override("panel", VTKSurface.panel(true, 10))
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 4)
-	row.add_theme_constant_override("margin_left", 8)
 	panel.add_child(row)
 
 	var b := ToggleSwitch.new()

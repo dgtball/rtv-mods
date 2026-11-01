@@ -96,8 +96,8 @@ const TYPE_GROUPS := {
 	"helmet": "clothing", "backpack": "clothing", "armor": "clothing",
 	"medical": "medical",
 	"consumable": "food", "consumables": "food", "fish": "food",
-	"fishing": "gear", "instrument": "gear", "music": "gear",
-	"misc": "tools", "tool": "tools", "key": "tools",
+	"fishing": "gear", "instrument": "gear",
+	"misc": "tools", "key": "tools",
 	"literature": "tools", "lore": "tools", "electronics": "tools",
 	"furniture": "furniture",
 }
@@ -368,8 +368,7 @@ const SUB_FOLDERS := {
 	"Armor_Plate_II": "Armor Plates", "Armor_Plate_IIIA": "Armor Plates",
 	"Armor_Plate_III": "Armor Plates", "Armor_Plate_III+": "Armor Plates",
 	"Armor_Plate_IV": "Armor Plates",
-	"Backpack_Bag": "Backpacks", "Potato_Box": "Canned Goods",
-}
+	}
 
 # Подкатегории мебели. Путь мебели: res://Assets/<Папка>/..._F.tres, поэтому
 # ключ - второй сегмент пути, а не предпоследний, как в SUB_FOLDERS. Папка,

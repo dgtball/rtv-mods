@@ -28,7 +28,6 @@ const SWEEP_MSEC := 500
 
 var _equip_on: bool = true
 var _pickup_pending: int = 0
-var _equip_debug: bool = false
 # Авто-экип из контейнера: запоминаем узел/ресурс/количество между pre и post.
 var _xfer_node: Node = null
 var _xfer_res = null
@@ -100,9 +99,6 @@ func _process(delta: float) -> void:
 
 func set_equip_enabled(on: bool) -> void:
 	_equip_on = on
-
-func set_equip_debug(on: bool) -> void:
-	_equip_debug = on
 
 const GAME_DATA_RES := Paths.GAME_DATA
 
@@ -1411,7 +1407,7 @@ func _on_death_load_pressed() -> void:
 		blocker.mouse_filter = Control.MOUSE_FILTER_STOP
 	if death.has_method("PlayClick"):
 		death.PlayClick()
-	_on_restart_pressed(VTKData.prop(death, "gameData", null), death, true)
+	_on_restart_pressed(VTKData.prop(death, "gameData", null), true)
 
 func _resolve_start_season() -> int:
 	if _dyn_enabled:
@@ -1423,7 +1419,7 @@ func _resolve_start_season() -> int:
 			return int(s)
 	return 1
 
-func _on_restart_pressed(gd, root, ironman: bool) -> void:
+func _on_restart_pressed(gd, ironman: bool) -> void:
 	Log.log("[VTK] Restart: starting new game...")
 	_gd_node = null
 	if gd == null:

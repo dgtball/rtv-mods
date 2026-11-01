@@ -105,8 +105,6 @@ func _unlock_dynamic_menu() -> void:
 	if sel.text == "Locked":
 		sel.text = "Select"
 
-var _late_initialized: bool = false
-
 func _ready() -> void:
 	name = "VTKUI"
 	layer = UI_LAYER
@@ -157,9 +155,6 @@ func _migrate_mcm_dir() -> void:
 	Log.log("[VTK] MCM dir migrated: loadouts -> vostok-toolkit (" + str(copied) + " file(s))")
 
 func _init_later() -> void:
-	if _late_initialized:
-		return
-	_late_initialized = true
 	_migrate_mcm_dir()
 	# Обе миграции - до _load_items и регистрации в MCM: обеим нужен готовый
 	# каталог MCM/vostok-toolkit.
