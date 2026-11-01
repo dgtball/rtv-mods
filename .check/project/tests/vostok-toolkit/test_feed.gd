@@ -2,6 +2,7 @@ extends SceneTree
 
 const KC = preload("res://mods/VTK/VTKKillCounter.gd")
 const Items = preload("res://mods/VTK/VTKItemStore.gd")
+const Item = preload("res://stubs/ItemData.gd")
 
 var fails := 0
 
@@ -40,6 +41,7 @@ func _run() -> void:
 	t_feed_hs_svg()
 	t_feed_skull_svg()
 	t_feed_norm_weapon()
+	t_feed_index_second_pass()
 	t_log_warn_once()
 	print("")
 	if fails == 0:
@@ -228,3 +230,17 @@ func t_log_warn_once() -> void:
 	ck(Log._warned.size() == 2, "warn_once: один след на путь, повтор не плодит")
 	ck(Log._warned.has("/root/Nope") and Log._warned.has("/root/Other"), "warn_once: оба пути помечены")
 	Log.enabled = false
+func t_feed_index_second_pass() -> void:
+	var Feed = preload("res://mods/VTK/VTKFeed.gd")
+	var renamed: Variant = Item.new()
+	renamed.name = "RGAAN Renamed Rifle"
+	renamed.resource_path = "res://Items/Weapons/AKS/AKS-74U.tres"
+	renamed.type = "Weapon"
+	renamed.slots = ["Primary"]
+	Items.clear()
+	Items.rebuild([renamed])
+	ck(Items.item_by_name("AKS_74U") == renamed,
+		"vtoroy prokhod po imeni fayla nakhodit pereimenovannyy predmet")
+	ck(Feed.norm_weapon("AKS_74U") == Items.norm_name("AKS-74U"),
+		"lenta normalizuet imya uzla tem zhe pravilom, chto i katalog")
+	Items.clear()
