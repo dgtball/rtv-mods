@@ -1,6 +1,6 @@
 # Vostok Toolkit
 
-A quality-of-life toolkit for **Road to Vostok** — loadout presets, smarter tasks, dynamic seasons, kill stats, a dynamic killfeed and fast travel, all in one mod.
+Everything a Vostok run needs in one mod: loadout presets, dynamic seasons, fast travel, kill stats and an ironman restart.
 
 **Version:** 5.4.0 · **Loader:** Metro Mod Loader 3.4.2 · **Game:** 0.2.3.0 · **Language:** RU / EN
 
