@@ -85,13 +85,10 @@ func set_entry_xray(id: int, on: bool) -> void:
 		var shell = pair.get("shell")
 		if shell == null or not is_instance_valid(shell):
 			continue
+		# Only the overlay changes: the shell keeps its own LOD range, so a
+		# distant reveal draws the LOD the game would draw anyway (LOD0 ends at
+		# 10 m, LOD1 reaches 200 m) instead of stacking every level at once.
 		shell.material_overlay = xray_mat if on else null
-		if on:
-			# A reveal must reach past the ESP distance, so while the window is
-			# live the shell stops inheriting the source LOD range.
-			shell.visibility_range_end = 0.0
-		else:
-			_mirror_range(pair.get("src"), shell)
 
 # The scope flag drives the thin in-scope band. The Mask depth-write toggle
 # lives in VTKWeaponOcclusion, driven from the same flags by VTKESP.
