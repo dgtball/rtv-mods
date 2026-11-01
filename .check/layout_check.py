@@ -492,11 +492,19 @@ C1_RE = re.compile(r"[\u0080-\u009f]")
 
 
 def mojibake_targets():
-    """README-карточки модов, CHANGELOG-и и headless-тесты со строками."""
+    """README-карточки модов, CHANGELOG-и, headless-тесты и исходники всех модов.
+
+    Исходники добавлены после реального случая: `Set-Content -Encoding utf8`
+    поверх файла без явного чтения в UTF-8 перекодировал русские комментарии
+    VTKPicker.gd в «Р§РёСЃС‚С‹Рµ», и стенд этого не заметил - глоб обходил только
+    карточки и тесты. Комментарии при упаковке срезаются, поэтому игрок бага не
+    видел, но исходник был испорчен.
+    """
     pats = [
         os.path.join(REPO_ROOT, "README.md"),
         os.path.join(REPO_ROOT, "mods", "*", "*.md"),
         os.path.join(REPO_ROOT, ".check", "project", "tests", "**", "*.gd"),
+        ALL_SOURCES_GLOB,
     ]
     seen = set()
     for p in pats:
