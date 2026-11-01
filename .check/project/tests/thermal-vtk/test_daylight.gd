@@ -61,6 +61,10 @@ func t_light_indoor() -> void:
 	ck(near(D.light_level(1200.0, "Neutral", 1, true, false), 0.15), "indoor noon keeps only 15%")
 	ck(near(D.light_level(1200.0, "Neutral", 1, false, true), 0.15), "shelter noon keeps only 15%")
 	ck(near(D.light_level(0.0, "Neutral", 1, true, false), 0.0), "indoor night stays dark")
+	ck(near(D.light_level(1200.0, "Neutral", 1, false, false, true), 0.45), "covered noon keeps 45%")
+	ck(near(D.light_level(0.0, "Neutral", 1, false, false, true), 0.0), "covered night stays dark")
+	ck(near(D.light_level(1200.0, "Neutral", 1, true, false, true), 0.15), "indoor wins over covered")
+	ck(near(D.light_level(1800.0, "Neutral", 2, false, false, true), 0.2593 * 0.45), "covered winter skips the snow bounce")
 
 func t_light_winter() -> void:
 	ck(near(D.light_level(1200.0, "Neutral", 2, false, false), 1.0), "winter noon is full light")

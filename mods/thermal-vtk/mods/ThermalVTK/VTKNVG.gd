@@ -3,6 +3,7 @@ const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
 const Settings = preload("res://mods/ThermalVTK/VTKSettings.gd")
 const Daylight = preload("res://mods/ThermalVTK/VTKDaylight.gd")
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
+const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 
 # Owns the NVG overlay shader, plus the thermal/mines layer that rides on it.
 #
@@ -29,6 +30,9 @@ const GAME_DATA_RES := Paths.GAME_DATA
 const NVG_SCRIPT_SUFFIX := "NVG.gd"
 const SHADER_RES := "res://mods/ThermalVTK/VTKNVG.gdshader"
 const KEY_GAIN_PARAM := &"vtk_key_gain"
+# Sky probe cadence and reach.
+const COVER_EVERY := 0.5
+const COVER_UP := 60.0
 
 # Сколько кадров подряд пробовать поставить шейдер, если NVG-узел уже найден,
 # но его Overlay ещё не готов (ванильный _ready ждёт ~0.1 c). ~60 кадров.
@@ -105,6 +109,8 @@ var _scope_rotate: bool = false
 var _day_factor: float = 1.0
 var _day_mix: float = 0.0
 var _key_gain: float = 1.0
+var _cover_cd: float = 0.0
+var _covered: bool = false
 # Winter snow trim on the background (see VTKDaylight.snow_trim). Not part of
 # the keys: substitution reads the washed pixel before the palette.
 var _snow_trim: float = 1.0
@@ -382,6 +388,47 @@ func _process(delta: float) -> void:
 # Write the compensated exposure every frame. The vanilla ResetCheck runs in
 # _physics_process and re-applies the device power on its own cadence; _process
 # runs after physics, so this value is the one the frame is rendered with.
+# Sky probe: the clock model cannot see a roof, a canopy or deep shade, so a
+# single ray straight up decides whether the frame is under cover. One ray per
+# half second is plenty: the factor it feeds is smoothed anyway.
+func _sky_covered(delta: float) -> bool:
+	_cover_cd -= delta
+	if _cover_cd > 0.0:
+		return _covered
+	_cover_cd = COVER_EVERY
+	_covered = false
+	if not is_inside_tree():
+		return false
+	var vp := get_viewport()
+	if vp == null:
+		return false
+	var cam := vp.get_camera_3d()
+	var world := vp.find_world_3d()
+	if cam == null or world == null:
+		return false
+	var space := world.direct_space_state
+	if space == null:
+		return false
+	var q := PhysicsRayQueryParameters3D.new()
+	q.from = cam.global_position
+	q.to = cam.global_position + Vector3.UP * COVER_UP
+	q.collide_with_areas = false
+	q.collide_with_bodies = true
+	var excl: Array[RID] = []
+	for p in get_tree().get_nodes_in_group("Player"):
+		_collect_rids(p, excl)
+	q.exclude = excl
+	_covered = not space.intersect_ray(q).is_empty()
+	return _covered
+
+func _collect_rids(root: Node, out: Array[RID]) -> void:
+	if root == null or not is_instance_valid(root):
+		return
+	if root is CollisionObject3D:
+		out.append((root as CollisionObject3D).get_rid())
+	for c in root.get_children():
+		_collect_rids(c, out)
+
 func _daylight_tick(delta: float) -> void:
 	if not set_daylight or not _installed:
 		return
@@ -400,7 +447,8 @@ func _daylight_tick(delta: float) -> void:
 		String(_sim_value("weather", "Neutral")),
 		int(_sim_value("season", 1)),
 		_game_flag("indoor"),
-		_game_flag("shelter"))
+		_game_flag("shelter"),
+		_sky_covered(delta))
 	var target := Daylight.day_factor(light)
 	_day_factor = target if _last_exposure < 0.0 else Daylight.step(_day_factor, target, delta)
 	var want := _vanilla_exposure * _day_factor

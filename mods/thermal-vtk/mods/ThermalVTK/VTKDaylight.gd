@@ -12,6 +12,8 @@ extends RefCounted
 const MIN_FACTOR := 0.33
 const RESPONSE := 1.5
 const INDOOR_FACTOR := 0.15
+# A blocked sky ray: roof, canopy or deep shadow. Softer than an interior.
+const COVER_FACTOR := 0.45
 const SNOW_BONUS := 0.15
 # Winter background trim, measured 2026-10-24 in the Minefield snow field.
 const SNOW_TRIM_DAY := 0.80
@@ -43,10 +45,14 @@ static func sun_level(time: float, season: int = 1) -> float:
 static func weather_factor(weather: String) -> float:
 	return float(WEATHER_FACTORS.get(weather, 1.0))
 
-static func light_level(time: float, weather: String, season: int, indoor: bool, shelter: bool) -> float:
+static func light_level(time: float, weather: String, season: int, indoor: bool, shelter: bool, covered: bool = false) -> float:
 	var light := sun_level(time, season) * weather_factor(weather)
 	if indoor or shelter:
 		light *= INDOOR_FACTOR
+	elif covered:
+		# Under a roof or in deep shade there is no open sky to bounce snow
+		# light, so the winter bonus stays out of this branch.
+		light *= COVER_FACTOR
 	elif season == 2:
 		# Snow bounces daylight, it does not create any: scale the current
 		# light so winter midnight stays exactly as dark as summer midnight.
