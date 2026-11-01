@@ -101,7 +101,7 @@ func t_state_key_uniform() -> void:
 	# inverse of the exposure reduction: the post-tonemap pixel stays at the
 	# calibrated night value. The gain is 1.0 at night.
 	ck(src.contains("global uniform float vtk_key_gain"), "ring reads the daylight key gain")
-	ck(src.contains("ALBEDO = state_key * vtk_key_gain;"), "ring scales the state key by the daylight gain")
+	ck(src.contains("state_key * vtk_key_gain"), "ring scales the state key by the daylight gain")
 
 # The body fill is gone: the outline emits only the ring key and the overlay
 # substitutes the display colour after the palette.

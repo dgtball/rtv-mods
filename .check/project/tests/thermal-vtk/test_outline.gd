@@ -126,7 +126,7 @@ func t_material_key_contract() -> void:
 	var ring: ShaderMaterial = o._items[11]["ring"]
 	var ring_code := String(ring.shader.code)
 	ck(ring_code.contains("global uniform float vtk_key_gain"), "ring material reads the daylight gain")
-	ck(ring_code.contains("ALBEDO = state_key * vtk_key_gain;"), "ring material scales the key by the daylight gain")
+	ck(ring_code.contains("state_key * vtk_key_gain"), "ring material scales the key by the daylight gain")
 	root.free()
 
 # The ring draws on ghost shells: a sibling copy of the mesh receives

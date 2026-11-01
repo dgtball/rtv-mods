@@ -35,8 +35,15 @@ float depth_metres(float ndc, vec2 uv, mat4 inv_proj) {
 void fragment() {
 	float facing = abs(dot(normalize(NORMAL), normalize(VIEW)));
 	float edge = 1.0 - facing;
-	ALBEDO = state_key * vtk_key_gain;
-	ALPHA = pow(edge, rim_power) * (1.0 - cool);
+	vec3 colour = state_key * vtk_key_gain;
+	float a = pow(edge, rim_power);
+	// Rim 0 is the full-body fill, mirroring the depth-tested ring.
+	if (rim_power <= 0.01) {
+		a = 0.85;
+		colour = state_key;
+	}
+	ALBEDO = colour;
+	ALPHA = a * (1.0 - cool);
 
 	float scene_m = depth_metres(texture(depth_tex, SCREEN_UV).r, SCREEN_UV, INV_PROJECTION_MATRIX);
 	float frag_m = depth_metres(FRAGCOORD.z, SCREEN_UV, INV_PROJECTION_MATRIX);
