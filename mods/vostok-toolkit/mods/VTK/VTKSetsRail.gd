@@ -227,7 +227,7 @@ func _make_cards_grid() -> GridContainer:
 # штатный компонент рамки убран из вёрстки, поэтому рамка рисуется вручную.
 # Loc во внутреннем классе недоступен - текст приходит аргументом.
 class CreateCard extends Panel:
-	const S := preload("res://mods/VTK/VTKSurface.gd")
+	const S := VTKSurface
 
 	var _action: Callable
 

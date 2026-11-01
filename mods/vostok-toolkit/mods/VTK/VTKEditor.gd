@@ -437,17 +437,31 @@ func _page_columns(title: String, side: Control, main: Control, width := SIDE_WI
 	h.add_child(mv)
 	return h
 
+# Общий стиль поля ввода: поиск шага 2 и имя сета на «Готово» одинаковы,
+# чтобы форма не меняла вид при переключении страниц.
+func _make_input_field(placeholder: String, initial: String = "") -> LineEdit:
+	var field := LineEdit.new()
+	field.placeholder_text = placeholder
+	field.add_theme_color_override("font_color", VTKSurface.FIELD_INK)
+	field.add_theme_color_override("placeholder_color", VTKSurface.GREY_DIM)
+	field.add_theme_stylebox_override("normal", VTKSurface.panel(true, 10))
+	field.add_theme_stylebox_override("focus", VTKSurface.focus_style())
+	field.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if initial != "":
+		field.text = initial
+	return field
+
 func _make_search_field(on_change: Callable) -> LineEdit:
-	var search := LineEdit.new()
-	search.placeholder_text = Loc.txt("Search items...")
-	search.add_theme_color_override("font_color", VTKSurface.FIELD_INK)
-	search.add_theme_color_override("placeholder_color", VTKSurface.GREY_DIM)
-	search.add_theme_stylebox_override("normal", VTKSurface.panel(true, 10))
-	search.add_theme_stylebox_override("focus", VTKSurface.focus_style())
-	search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var search := _make_input_field(Loc.txt("Search items..."))
 	search.text_changed.connect(on_change)
 	return search
 
+func _add_empty_note(container: Control) -> void:
+	var note := Label.new()
+	note.text = Loc.txt("Nothing fits")
+	note.add_theme_font_size_override("font_size", 11)
+	note.add_theme_color_override("font_color", VTKSurface.GREY_DIM)
+	container.add_child(note)
 func _build_page_equipment() -> Control:
 	var v := _page_wrap()
 
@@ -670,7 +684,7 @@ func _refresh_gear_catalog() -> void:
 # штрих рисуется в _draw, Loc передаётся текстом. Внутреннему классу недоступен
 # _ui._gold внешнего скрипта, поэтому цвет дублируется константой.
 class ChosenRow extends PanelContainer:
-	const S := preload("res://mods/VTK/VTKSurface.gd")
+	const S := VTKSurface
 	const GOLD := VTKSurface.GOLD_SOFT
 
 	var _on := false
@@ -838,11 +852,7 @@ func _rebuild_gear_grid(facets: Array) -> void:
 				picked.append(e)
 		found = picked
 	if found.is_empty():
-		var note := Label.new()
-		note.text = Loc.txt("Nothing fits")
-		note.add_theme_font_size_override("font_size", 11)
-		note.add_theme_color_override("font_color", VTKSurface.GREY_DIM)
-		_gear_grid.add_child(note)
+		_add_empty_note(_gear_grid)
 		return
 	for entry in found:
 		var res = entry.get("item")
@@ -868,12 +878,7 @@ func _build_page_done() -> Control:
 	# Карточка состава; имя сета и кнопка хоткея живут в полосе управления над
 	# карточками, как в превью. Узлы создаются один раз и перевешиваются в
 	# полосу при каждой пересборке (_refresh_page_done), чтобы не терять текст.
-	_name_input = LineEdit.new()
-	_name_input.placeholder_text = Loc.txt("Enter a name...")
-	_name_input.add_theme_color_override("font_color", VTKSurface.FIELD_INK)
-	_name_input.add_theme_color_override("placeholder_color", VTKSurface.GREY_DIM)
-	_name_input.add_theme_stylebox_override("normal", VTKSurface.panel(true, 10))
-	_name_input.add_theme_stylebox_override("focus", VTKSurface.focus_style())
+	_name_input = _make_input_field(Loc.txt("Enter a name..."))
 	if _ui._session.draft != null:
 		_name_input.text = _ui._session.draft.set_name
 
@@ -1659,11 +1664,7 @@ func _rebuild_shelves(found: Array) -> void:
 				only_sub.append(e)
 		found = only_sub
 	if found.is_empty():
-		var note := Label.new()
-		note.text = Loc.txt("Nothing fits")
-		note.add_theme_font_size_override("font_size", 11)
-		note.add_theme_color_override("font_color", VTKSurface.GREY_DIM)
-		_shelves_box.add_child(note)
+		_add_empty_note(_shelves_box)
 		return
 	for shelf in Picker.buckets(found, "eq_group", Picker.group_keys(Picker.EQUIP_GROUPS), false):
 		_shelves_box.add_child(_make_shelf(shelf))
@@ -2016,9 +2017,8 @@ func _after_place() -> void:
 # заполнения: ВКЛ = maxAmount патронов, ВЫКЛ = пустая обойма.
 # Панель обвесов и панель обоймы больше не строятся как CheckButton-списки с
 # независимыми галочками: выбор одиночный по группе, и переключение делает
-# черновик, а не лямбда, которая правит словарь на месте. Старые
-# _build_magazine_panel, _build_attachment_panel и _connect_att_cb удалены
-# вместе с этими правилами; ниже только две панели, которые им на смену.
+# черновик, а не лямбда, которая правит словарь на месте.
+# Ниже только две панели на смену удалённым старым.
 
 # Имя группы обвесов. Словарь, а не Loc.txt(grp): subtype из данных приходит в
 # игровом регистре и не совпадает ни с одним ключом локализации, так что
