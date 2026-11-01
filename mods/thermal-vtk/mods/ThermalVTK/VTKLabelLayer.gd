@@ -39,6 +39,7 @@ func _draw() -> void:
 	const MARKER_R := 12.0
 	const LINE_H := 17.0
 	const HEAD_GAP := 10.0
+	var vs := get_viewport_rect().size
 
 	# Diamonds first (behind text).
 	var diamond_color := Color(0.30, 1.0, 0.35)
@@ -50,7 +51,12 @@ func _draw() -> void:
 		if cam.is_position_behind(anchor):
 			continue
 		var p := cam.unproject_position(anchor)
-		if p.x != p.x or p.y != p.y:
+		# A marker projected onto the camera plane comes back as inf, and a
+		# polygon with non-finite or wildly off-screen points fails Godot's
+		# triangulation (canvas_item_add_polygon -> Invalid polygon data).
+		if not is_finite(p.x) or not is_finite(p.y):
+			continue
+		if p.x < -64.0 or p.y < -64.0 or p.x > vs.x + 64.0 or p.y > vs.y + 64.0:
 			continue
 		var r := MARKER_R
 		# Inverted triangle: the tip points at the head, so the marker reads as
@@ -67,6 +73,10 @@ func _draw() -> void:
 		if cam.is_position_behind(anchor):
 			continue
 		var screen := cam.unproject_position(anchor)
+		if not is_finite(screen.x) or not is_finite(screen.y):
+			continue
+		if screen.x < -64.0 or screen.y < -64.0 or screen.x > vs.x + 64.0 or screen.y > vs.y + 64.0:
+			continue
 		var header: String = str(it["header"])
 		var status_txt: String = str(it["status"])
 		var suffix_txt: String = str(it["suffix"])
