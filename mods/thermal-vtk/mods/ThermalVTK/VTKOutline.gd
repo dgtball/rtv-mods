@@ -233,7 +233,10 @@ func refresh(id: int, opts: Dictionary) -> void:
 			xray_mat.set_shader_parameter("grow", grow)
 		entry["p_grow"] = grow
 
-	var rim := SCOPE_RIM if _scoped else float(opts.get("rim", 1.0))
+	var rim_user := float(opts.get("rim", 1.0))
+	# Rim 0 is the full-body fill mode, and the scope band override must not
+	# replace it: the fill has to show in the optic exactly where it is tested.
+	var rim := SCOPE_RIM if (_scoped and rim_user > 0.01) else rim_user
 	if entry.get("p_rim") == null or not is_equal_approx(float(entry["p_rim"]), rim):
 		ring_mat.set_shader_parameter("rim_power", rim)
 		if xray_mat != null:

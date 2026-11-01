@@ -12,6 +12,9 @@
 - The per-footstep HOOK line is gone from the diagnostic log; a reveal still
   logs one ESP line per tag.
 
+- Rim 0 is now a deliberate full-body fill: a solid silhouette in the NPC state
+  colour (calm yellow, combat red, defending blue), shown in the scope as well,
+  instead of the blown-out white body the old pow(x, 0) produced.
 - A reveal past the ESP Distance (a shot from 70 m with Distance at 60 m) draws
   the whole contour, so triggers still work where the ESP ring is silent.
 
