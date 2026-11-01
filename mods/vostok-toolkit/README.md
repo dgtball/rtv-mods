@@ -1,6 +1,6 @@
 # Vostok Toolkit
 
-A quality-of-life toolkit for **Road to Vostok** — loadout presets, smarter tasks, thermal vision, kill stats, a dynamic killfeed and fast travel, all in one mod.
+A quality-of-life toolkit for **Road to Vostok** — loadout presets, smarter tasks, dynamic seasons, kill stats, a dynamic killfeed and fast travel, all in one mod.
 
 **Version:** 5.4.0 · **Loader:** Metro Mod Loader 3.4.2 · **Game:** 0.2.3.0 · **Language:** RU / EN
 
@@ -8,14 +8,15 @@ A quality-of-life toolkit for **Road to Vostok** — loadout presets, smarter ta
 
 | Feature | What it does |
 |---|---|
+| **Ironman Restart** | Death-screen Restart button for permadeath runs (+ Apartments map). |
 | **Loadout Presets** | Save equipment/inventory as a preset and bind it to a hotkey. |
+| **Dynamic seasons** | Play and watch as one season gives way to another. |
 | **Auto-equip** | Items with slots are equipped on pickup (MCM toggle). |
 | **Matches stack in equip** | Matches stack right into the equipment slot. |
+| **Item delete** | Delete an item straight from the inventory. |
 | **Better Tasks** | Completed-quest auto-cleanup, partial hand-in, Notes icon rows. |
-| **Thermal Vision (NVG)** | World heat glow, mine highlighting, friendly Nomad markers. |
 | **Kill Stats & Killfeed** | HUD kill/enemy counter and a dynamic killfeed. |
 | **Fast Travel** | Move between maps, shelters and traders. |
-| **Ironman Restart** | Death-screen Restart button for permadeath runs (+ Apartments map). |
 
 ## Installation
 
@@ -45,9 +46,9 @@ Compatible with LateStart. Tested alongside ElegantHUD, JCM and other common mod
 
 ## Credits
 
-- Juuzoz' Cheat Menu [JCM](https://vostokmods.net/mod/juuzoz-cheat-menu-jcm) by juuzoz_ — the starting point for the loadout idea
-- [Thermal Vision](https://www.nexusmods.com/roadtovostok/mods/141) by Vito921 — inspiration for the thermal rework
+- [Juuzoz' Cheat Menu - JCM](https://vostokmods.net/mod/juuzoz-cheat-menu-jcm) by juuzoz_ — the starting point for the loadout idea
 - [Partial Task Hand-In](https://modworkshop.net/mod/56789) by Ryujiro — inspired partial task hand-in
+- [Season Expansion System](https://modworkshop.net/mod/56781) by Peter Master — I believe he will return and update his mods.
 
 ## Development note
 
