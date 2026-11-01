@@ -5,7 +5,7 @@ separate `.vmz` archives and can be installed on their own — there is no share
 
 | Mod | What it does | Version | README |
 |---|---|---|---|
-| **Vostok Toolkit** (`vostok-toolkit`) | Loadout presets, partial task hand-in, Notes icon rows, kill stats and killfeed, fast travel | 5.3.13 | [mods/vostok-toolkit/README.md](mods/vostok-toolkit/README.md) |
+| **Vostok Toolkit** (`vostok-toolkit`) | Loadout presets, partial task hand-in, Notes icon rows, kill stats and killfeed, fast travel | 5.4.0 | [mods/vostok-toolkit/README.md](mods/vostok-toolkit/README.md) |
 | **ThermalVTK** (`thermal-vtk`) | Standalone thermal vision / NVG overlay with heat glow and ESP | 2.2.0 | [mods/thermal-vtk/README.md](mods/thermal-vtk/README.md) |
 | **Road To Loot** (`road-to-loot`) | Per-instance rarity tiers and affixes for looted weapons and clothing | 0.3.4 | [mods/road-to-loot/README.md](mods/road-to-loot/README.md) |
 | **Freeze for JCM** (`jcm-freeze`) | Freezes NPCs, the BTR and the helicopter on demand (JCM addon) | 1.2.0 | [mods/jcm-freeze/README.md](mods/jcm-freeze/README.md) |
@@ -35,12 +35,12 @@ powershell -ExecutionPolicy Bypass -File pack.ps1 -All          # all four archi
 powershell -ExecutionPolicy Bypass -File pack.ps1 -Mod thermal-vtk
 ```
 
-Archives land in `dist/` and keep their historical names, so they drop straight into the game's
+Archives land in `dist/` and use the names below, so they drop straight into the game's
 `mods` folder:
 
 | Mod | Archive |
 |---|---|
-| Vostok Toolkit | `dist/Loadouts.vmz` |
+| Vostok Toolkit | `dist/VostokToolkit.vmz` |
 | ThermalVTK | `dist/ThermalVTK.vmz` |
 | Road To Loot | `dist/RoadToLoot.vmz` |
 | Freeze for JCM | `dist/Freeze.vmz` |
@@ -57,7 +57,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .check\check.ps1
 ```
 
 `check.ps1` copies every mod's sources into the headless Godot project under `.check/project/`,
-parse-checks each script and runs all 41 test scripts. Godot **4.6.3** must be on `PATH`, otherwise
+parse-checks each script and runs all 43 test scripts. Godot **4.6.3** must be on `PATH`, otherwise
 pass `-Godot <path to Godot_*_console.exe>`.
 
 `layout_check.py` guards the Toolkit loadout UI against layout regressions: symbols that must not

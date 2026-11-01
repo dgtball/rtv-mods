@@ -1,10 +1,10 @@
-; Стенд синтаксической проверки модов Loadouts.
+; Стенд синтаксической проверки модов Vostok Toolkit.
 ; Копия настоящего проекта игры не нужна: скрипты только парсятся.
 config_version=5
 
 [application]
 
-config/name="LoadoutsCheck"
+config/name="VTKCheck"
 
 [debug]
 

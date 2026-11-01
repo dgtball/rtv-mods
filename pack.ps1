@@ -18,14 +18,14 @@ if ($extra.Count -gt 0) {
 }
 
 # One row per mod: Slug is the folder under mods\, Folder is the folder name
-# inside the .vmz (mods\<Folder>\ at the archive root), Artifact is the historic
-# file name the players already install, VersionFile says whether the mod ships
-# a version.txt next to its scripts (jcm-freeze does not).
+# inside the .vmz (mods\<Folder>\ at the archive root), Artifact is the file name
+# players install (5.4.0 renamed the historic Loadouts.vmz), VersionFile says
+# whether the mod ships a version.txt next to its scripts (jcm-freeze does not).
 $mods = @(
-    @{ Slug = "vostok-toolkit"; Folder = "VTK";        Artifact = "Loadouts.vmz";    VersionFile = $true  },
-    @{ Slug = "thermal-vtk";    Folder = "ThermalVTK"; Artifact = "ThermalVTK.vmz";  VersionFile = $true  },
-    @{ Slug = "road-to-loot";   Folder = "RoadToLoot"; Artifact = "RoadToLoot.vmz";  VersionFile = $true  },
-    @{ Slug = "jcm-freeze";     Folder = "jcm-freeze"; Artifact = "Freeze.vmz";      VersionFile = $false }
+    @{ Slug = "vostok-toolkit"; Folder = "VTK";        Artifact = "VostokToolkit.vmz"; VersionFile = $true  },
+    @{ Slug = "thermal-vtk";    Folder = "ThermalVTK"; Artifact = "ThermalVTK.vmz";   VersionFile = $true  },
+    @{ Slug = "road-to-loot";   Folder = "RoadToLoot"; Artifact = "RoadToLoot.vmz";   VersionFile = $true  },
+    @{ Slug = "jcm-freeze";     Folder = "jcm-freeze"; Artifact = "Freeze.vmz";       VersionFile = $false }
 )
 
 if (-not $OutDir) { $OutDir = Join-Path $PSScriptRoot "dist" }

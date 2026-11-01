@@ -9,7 +9,7 @@
 | Путь | Назначение |
 |---|---|
 | `README.md` | корневой индекс: одна таблица, по строке на мод — описание, версия, ссылка на README мода |
-| `pack.ps1` | единственный сборщик: `pack.ps1 -Mod <slug>` или `-All`; артефакты кладёт в `dist/` под историческими именами `Loadouts.vmz`/`ThermalVTK.vmz`/`RoadToLoot.vmz`/`Freeze.vmz`; `.gd` при упаковке чистится от построчных `#`-комментариев, пустых строк и CR (вес ~на 40% меньше), исходники не меняются |
+| `pack.ps1` | единственный сборщик: `pack.ps1 -Mod <slug>` или `-All`; артефакты кладёт в `dist/` под именами `VostokToolkit.vmz`/`ThermalVTK.vmz`/`RoadToLoot.vmz`/`Freeze.vmz`; `.gd` при упаковке чистится от построчных `#`-комментариев, пустых строк и CR (вес ~на 40% меньше), исходники не меняются |
 | `AGENTS.md` | этот документ: правила, общие для всех модов репозитория |
 | `.check/` | headless-стенд: парсинг/компиляция `.gd` и тесты; в пак не попадает |
 | `mods/vostok-toolkit/` | мод Vostok Toolkit (VTK): сеты, deposits, счётчик убийств, телепорт |
@@ -168,7 +168,7 @@
 2. Прогнать стенд парсинга: `powershell -NoProfile -ExecutionPolicy Bypass -File .check\check.ps1`.
 3. Поднять версию в `mods/<slug>/mod.txt`.
 4. Запустить `powershell -ExecutionPolicy Bypass -File pack.ps1 -Mod <slug>` (или `-All` для всех модов сразу).
-5. Скопировать артефакт из `dist/` (`Loadouts.vmz`/`ThermalVTK.vmz`/`RoadToLoot.vmz`/`Freeze.vmz`) в папку модов игры `D:\SteamLibrary\steamapps\common\Road to Vostok\mods`.
+5. Скопировать артефакт из `dist/` (`VostokToolkit.vmz`/`ThermalVTK.vmz`/`RoadToLoot.vmz`/`Freeze.vmz`) в папку модов игры `D:\SteamLibrary\steamapps\common\Road to Vostok\mods`.
 
 `pack.ps1` при упаковке чистит `.gd` от построчных `#`-комментариев, пустых строк и CR (шейдеры не трогает: в них `#` — препроцессор). Исходники не меняются, вес `.vmz` падает примерно на 40%. Трансформация построчная и потому безопасна: многострочных строк (`"""`) в коде нет, а строки кода остаются дословно.
 

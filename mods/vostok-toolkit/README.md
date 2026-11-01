@@ -2,7 +2,7 @@
 
 A quality-of-life toolkit for **Road to Vostok** — loadout presets, smarter tasks, thermal vision, kill stats, a dynamic killfeed and fast travel, all in one mod.
 
-**Version:** 5.3.13 · **Loader:** Metro Mod Loader 3.4.2 · **Game:** 0.2.3.0 · **Language:** RU / EN
+**Version:** 5.4.0 · **Loader:** Metro Mod Loader 3.4.2 · **Game:** 0.2.3.0 · **Language:** RU / EN
 
 ## Features
 
@@ -20,8 +20,8 @@ A quality-of-life toolkit for **Road to Vostok** — loadout presets, smarter ta
 ## Installation
 
 1. Install Metro Mod Loader for Road to Vostok.
-2. Download `Loadouts.vmz` from [Releases](https://github.com/dgtball/rtv-mods/releases).
-3. Drop it into `Road to Vostok\mods\`.
+2. Download `VostokToolkit.vmz` from [Releases](https://github.com/dgtball/rtv-mods/releases).
+3. Delete the old `Loadouts.vmz` from `Road to Vostok\mods\` if you have one: 5.4.0 renamed the archive, and two copies load the mod twice.
 4. Launch the game.
 
 ## Usage
@@ -31,7 +31,7 @@ A quality-of-life toolkit for **Road to Vostok** — loadout presets, smarter ta
 
 ## Building from source
 
-`Loadouts.vmz` is a zip of the contents of `mods/vostok-toolkit/`: `mod.txt` and `mods/` at the archive root (no top-level folder). Run `pack.ps1 -Mod vostok-toolkit` from the repository root; the archive lands in `dist/`.
+`VostokToolkit.vmz` is a zip of the contents of `mods/vostok-toolkit/`: `mod.txt` and `mods/` at the archive root (no top-level folder). Run `pack.ps1 -Mod vostok-toolkit` from the repository root; the archive lands in `dist/`.
 
 ## Repository layout
 

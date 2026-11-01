@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.4.0] - 2026-11-01
+
+### Changed
+
+- The mod archive is renamed from `Loadouts.vmz` to `VostokToolkit.vmz`.
+  Delete the old `Loadouts.vmz` before installing: while both files sit in
+  `mods`, the game loads the mod twice (duplicate autoload, hooks and kill
+  counter).
+
 ## [5.3.13] - 2026-11-01
 
 ### Fixed
