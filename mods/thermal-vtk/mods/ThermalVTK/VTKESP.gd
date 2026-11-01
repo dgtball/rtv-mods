@@ -491,7 +491,7 @@ func _scope_probe(delta: float) -> void:
 	_scope_dbg_cd -= delta
 	if _scope_dbg_cd > 0.0:
 		return
-	_scope_dbg_cd = 1.0
+	_scope_dbg_cd = 5.0
 	var gd := _gd_cached()
 	if gd == null:
 		return

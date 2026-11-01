@@ -155,7 +155,9 @@ float orbitDist(vec3 c, vec3 k)
 // Detector radius. The mine, state and nomad keys are matched tightly: those
 // branches replace the pixel outright, so a loose radius would paint the
 // wrong colour over unrelated pixels.
-const float DET_TOL_CORE = 0.22;
+// A full-body fill is a large flat area: bloom and the tonemap pull it further
+// from the emitted key than a thin ring ever drifts, so the tolerance is wider.
+const float DET_TOL_CORE = 0.34;
 
 void fragment()
 {
@@ -183,7 +185,7 @@ void fragment()
 		// cannot be the ring, whatever the scope rotation did to its orbit.
 		float washSpread = max(pixelColor.r, max(pixelColor.g, pixelColor.b))
 			- min(pixelColor.r, min(pixelColor.g, pixelColor.b));
-		if (washSpread < 0.10) {
+		if (washSpread < 0.04) {
 			dStC = 99.0;
 		}
 		float dCore = min(dMine, min(dStN, min(dStC, dStD)));
