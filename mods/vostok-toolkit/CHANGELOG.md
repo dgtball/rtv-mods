@@ -1,5 +1,20 @@
 # Changelog
 
+## [5.3.12] - 2026-11-01
+
+### Fixed
+
+- The kill counter no longer keeps stale counts from a previous run after loading
+  a save.
+- Item names and icons stay consistent when the item catalogue is rebuilt.
+- Seasonal colours in a Dynamic run no longer drift off schedule.
+- The game's pause state is restored correctly when closing the toolkit panel.
+- Internal file paths are no longer shown in release builds.
+
+### Changed
+
+- Minor performance improvements.
+
 ## [5.3.11] - 2026-10-31
 
 ### Changed
