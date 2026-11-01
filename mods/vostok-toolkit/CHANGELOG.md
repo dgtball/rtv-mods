@@ -1,5 +1,22 @@
 # Changelog
 
+## [5.3.13] - 2026-11-01
+
+### Fixed
+
+- A fast-travel trip that fails to load no longer leaves the game thinking you are
+  already on the destination map.
+- The kill counter no longer resets itself while you are inside a shelter or with
+  the HUD switched off.
+- Closing the toolkit panel no longer resumes the game while another menu is still
+  open.
+- A preset that cannot be written to disk now shows an error instead of looking
+  saved.
+
+### Changed
+
+- Minor performance improvements.
+
 ## [5.3.12] - 2026-11-01
 
 ### Fixed
