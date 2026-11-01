@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.3] - 2026-11-01
+
+### Removed
+- The dead layout module behind the old 1D label code (VTKLabelLayout.gd) and
+  its headless test. Since 2.2.0 the 2D overlay lays out its own labels, so the
+  module only kept a test alive. Nothing changes in game.
+
 ## [2.2.2] - 2026-11-01
 
 ### Added

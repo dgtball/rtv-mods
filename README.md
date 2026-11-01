@@ -54,7 +54,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .check\check.ps1
 ```
 
 `check.ps1` copies every mod's sources into the headless Godot project under `.check/project/`,
-parse-checks each script and runs all 43 test scripts. Godot **4.6.3** must be on `PATH`, otherwise
+parse-checks each script and runs all 42 test scripts. Godot **4.6.3** must be on `PATH`, otherwise
 pass `-Godot <path to Godot_*_console.exe>`.
 
 `layout_check.py` guards the Toolkit loadout UI against layout regressions: symbols that must not
