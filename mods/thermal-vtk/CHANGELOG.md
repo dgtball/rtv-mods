@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.4.0] - 2026-11-01
+
+### Changed
+- MCM names: "NPC ESP", "Mine ESP" and "Daylight Brightness"; the nomad marker is
+  now "Nomads marker" and sits third in the thermal section, right after the
+  palette hotkey.
+- The friendly-nomad marker is an inverted triangle instead of a diamond, so it
+  points at the head, and it obeys the Distance setting like the outlines: no
+  marker over bots out of range, and no oversized glyph at long range.
+- NPC labels no longer need thermal vision or the NVG helmet. With the debug log
+  on they appear in plain daylight, and they obey the Distance setting too.
+- The health bar moved under the body, right above the trigger timer, and the
+  trigger timer now uses the NPC state colour instead of a fixed yellow.
+
+### Fixed
+- Debug labels stayed hidden without NVG because they were built from the
+  outline working set, which is empty while no layer is active.
+
 ## [2.3.0] - 2026-11-01
 
 ### Added

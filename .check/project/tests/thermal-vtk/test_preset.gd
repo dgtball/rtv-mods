@@ -86,7 +86,10 @@ func t_single_state_source() -> void:
 func t_mcm_labels() -> void:
 	var src := FileAccess.get_file_as_string(SRC)
 	var set_src := FileAccess.get_file_as_string(SET_SRC)
-	ck((src + set_src).contains("NPC highlighting (ESP)"), "the contour entry is called NPC highlighting (ESP)")
+	ck((src + set_src).contains('"NPC ESP"'), "the contour entry is called NPC ESP")
+	ck(set_src.contains('"Mine ESP"'), "the mine entry is called Mine ESP")
+	ck(set_src.contains('"Nomads marker"'), "the nomad entry is called Nomads marker")
+	ck(set_src.contains('"Daylight Brightness"'), "the highlight rolloff entry is called Daylight Brightness")
 	ck((src + set_src).contains("Rim"), "the rim entry lost the Outline prefix")
 	ck((src + set_src).contains("\"Thickness\""), "the thickness entry lost the Outline prefix")
 	ck(set_src.contains("\"Brightness\""), "the brightness entry lost the Outline prefix")

@@ -620,7 +620,9 @@ func _overlay_sync(now: float) -> void:
 	var items: Array = []
 	var diamonds: Array = []
 	if _labels_on():
-		for id in _want:
+		# Labels are independent of the layers, so they walk every tracked entry
+		# instead of the outline working set (which stays empty without NVG).
+		for id in _ids_for_frame():
 			if not _entries.has(id):
 				continue
 			var e: Dictionary = _entries[id]
@@ -631,6 +633,8 @@ func _overlay_sync(now: float) -> void:
 			if bool(e.get("dead", false)) or bool(node.get("dead")):
 				continue
 			var dist: float = float(e.get("dist", 0.0))
+			if dist > p_dist:
+				continue
 			var node_var = node.get("variant")
 			var max_h := 1.0
 			var hp := 1.0
@@ -708,6 +712,10 @@ func _overlay_sync(now: float) -> void:
 			if not bool(e.get("nomad", false)):
 				continue
 			if bool(e.get("dead", false)) or bool(node.get("dead")):
+				continue
+			# Same Distance gate as the outlines: far bots get no marker, which
+			# is what made a fixed-size glyph look huge over a distant model.
+			if float(e.get("dist", 0.0)) > p_dist:
 				continue
 			var anchor: Vector3 = _head_world(node)
 			var xray_live: bool = bool(e.get("xray_live", false))

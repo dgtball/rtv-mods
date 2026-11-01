@@ -37,7 +37,7 @@ func _draw() -> void:
 	var font := get_theme_default_font()
 	if font == null:
 		return
-	const DIAMOND_R := 18.0
+	const MARKER_R := 12.0
 	const LINE_H := 17.0
 	const BAR_H := 3.0
 	const BAR_GAP := 2.0
@@ -55,12 +55,12 @@ func _draw() -> void:
 		var p := cam.unproject_position(anchor)
 		if p.x != p.x or p.y != p.y:
 			continue
-		var r := DIAMOND_R
-		var poly := PackedVector2Array([p + Vector2(0.0, -r), p + Vector2(r, 0.0), p + Vector2(0.0, r), p + Vector2(-r, 0.0)])
-		if poly[0] == poly[1] or poly[1] == poly[2] or poly[2] == poly[3] or poly[3] == poly[0]:
-			continue
+		var r := MARKER_R
+		# Inverted triangle: the tip points at the head, so the marker reads as
+		# "this NPC" and cannot be mistaken for a mine.
+		var poly := PackedVector2Array([p + Vector2(0.0, r), p + Vector2(-r * 0.9, -r * 0.7), p + Vector2(r * 0.9, -r * 0.7)])
 		draw_colored_polygon(poly, diamond_color)
-		var outline_pts := PackedVector2Array([p + Vector2(0.0, -r), p + Vector2(r, 0.0), p + Vector2(0.0, r), p + Vector2(-r, 0.0), p + Vector2(0.0, -r)])
+		var outline_pts := PackedVector2Array([poly[0], poly[1], poly[2], poly[0]])
 		draw_polyline(outline_pts, Color(0.0, 0.0, 0.0, 0.85), 1.5)
 
 	# Items over the diamond.
@@ -83,7 +83,7 @@ func _draw() -> void:
 		var text_h: float = LINE_H
 		if status_txt != "":
 			text_h += LINE_H
-		var head_y := screen.y - (text_h + BAR_GAP + BAR_H) - HEAD_GAP + LINE_H
+		var head_y := screen.y - text_h - HEAD_GAP + LINE_H
 		var origin_h := Vector2(screen.x - font.get_string_size(header, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x / 2.0, head_y)
 		draw_string_outline(font, origin_h, header, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, 4, Color(0.0, 0.0, 0.0, 0.85))
 		draw_string(font, origin_h, header, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, c)
@@ -91,14 +91,17 @@ func _draw() -> void:
 			var origin_s := Vector2(screen.x - font.get_string_size(status_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x / 2.0, head_y + LINE_H)
 			draw_string_outline(font, origin_s, status_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, 4, Color(0.0, 0.0, 0.0, 0.85))
 			draw_string(font, origin_s, status_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, c)
-		var origin_bar_y := head_y + text_h + BAR_GAP
+		# Under the body: the bar sits directly above the trigger timer, so the
+		# health and the reveal countdown read as one block at the feet.
+		var feet_anchor: Vector3 = it["feet"] if it.has("feet") else anchor
+		var feet_y := screen.y
+		if not cam.is_position_behind(feet_anchor):
+			feet_y = cam.unproject_position(feet_anchor).y
+		var origin_bar_y := feet_y + 4.0
 		var bar := Rect2(screen.x - HEALTH_WIDTH / 2.0, origin_bar_y, HEALTH_WIDTH, BAR_H)
 		draw_rect(bar.grow(0.5), Color(0.0, 0.0, 0.0, 0.6))
 		draw_rect(Rect2(bar.position, Vector2(bar.size.x * frac, bar.size.y)), Color(Color.RED.lerp(Color.GREEN, frac), alpha))
 		if suffix_txt != "":
-			var feet_anchor: Vector3 = it["feet"] if it.has("feet") else anchor
-			if not cam.is_position_behind(feet_anchor):
-				var feet_screen := cam.unproject_position(feet_anchor)
-				var origin_f := Vector2(screen.x - font.get_string_size(suffix_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x / 2.0, feet_screen.y + 4.0)
-				draw_string_outline(font, origin_f, suffix_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, 4, Color(0.0, 0.0, 0.0, 0.85))
-				draw_string(font, origin_f, suffix_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, Color(1.0, 1.0, 0.0, 0.9))
+			var origin_f := Vector2(screen.x - font.get_string_size(suffix_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x / 2.0, origin_bar_y + BAR_H + BAR_GAP)
+			draw_string_outline(font, origin_f, suffix_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, 4, Color(0.0, 0.0, 0.0, 0.85))
+			draw_string(font, origin_f, suffix_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE, c)
