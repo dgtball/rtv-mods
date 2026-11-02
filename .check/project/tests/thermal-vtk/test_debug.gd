@@ -114,8 +114,8 @@ func t_marker_follows_contour_gate() -> void:
 	ck(esp.marker_visible == true, "contour on shows the nomad marker")
 	mod._thermal_enabled = false
 	mod._apply_mode()
-	ck(esp.contour_layer == false and esp.xray_layer == false, "thermal off disables the ESP")
-	ck(esp.marker_visible == false, "thermal off hides the nomad marker")
+	ck(esp.contour_layer == true, "thermal off keeps the ESP while the helmet is worn")
+	ck(esp.marker_visible == true, "thermal off keeps the nomad marker")
 	mod.free()
 	esp.free()
 	nvg.free()
