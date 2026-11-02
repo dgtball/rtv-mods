@@ -279,6 +279,7 @@ func refresh(id: int, opts: Dictionary) -> void:
 	if fill_body != null and fill_ring != null and bool(entry.get("fill_mode", false)):
 		fill_body.set_shader_parameter("state_key", key)
 		fill_body.set_shader_parameter("cool", cool)
+		fill_body.set_shader_parameter("grow", 0.004)
 		fill_ring.set_shader_parameter("state_key", key)
 		fill_ring.set_shader_parameter("grow", grow)
 		fill_ring.set_shader_parameter("rim_power", rim)

@@ -8,6 +8,13 @@ stencil_mode write, 1;
 uniform vec3 state_key : source_color = vec3(1.0, 0.0, 0.0);
 global uniform float vtk_key_gain = 1.0;
 uniform float cool : hint_range(0.0, 1.0, 0.01) = 0.0;
+// A hair outside the body: the shell is a sibling mesh, so at equal depth the
+// body would win the depth test and the fill would vanish.
+uniform float grow : hint_range(0.0, 0.05, 0.001) = 0.004;
+
+void vertex() {
+	VERTEX += NORMAL * grow;
+}
 
 void fragment() {
 	ALBEDO = state_key * vtk_key_gain;
