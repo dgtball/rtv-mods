@@ -20,6 +20,7 @@ class Rec:
 	var debug_log: bool = false
 	var npc_labels: bool = true
 	var outline_enabled: bool = true
+	var body_fill: bool = false
 	var outline_xray: bool = true
 	var thermal_mines: bool = true
 	var nomad_marker: bool = true
@@ -76,15 +77,16 @@ const DESCRIPTORS: Array[Dictionary] = [
 	# The outline_xray toggle gates only the wall flash: trigger windows
 	# (tags and the debug label countdown) run regardless of it.
 	{"sect": "Bool", "key": "outline_enabled", "name": "NPC ESP", "def": true, "cat": "01. ThermalVision", "pos": 3, "tip": "Draw state-coloured body outlines over NPCs while thermal vision is on. Off = full-screen thermal only."},
-	{"sect": "Bool", "key": "outline_xray", "name": "X-ray Triggers", "def": true, "cat": "01. ThermalVision", "pos": 4, "tip": "While on, the NPC ring lights up through walls only while a sound event is live: gunfire, shouts, idle chatter, footsteps, reloads, pain cries or grenade throws. Between events the outline stays a normal ring behind walls. The reveal timers themselves show on the debug labels regardless of this toggle."},
-	{"sect": "Bool", "key": "thermal_mines", "name": "Mine ESP", "def": true, "cat": "01. ThermalVision", "pos": 5, "tip": "Highlight mines while thermal vision is on."},
+	{"sect": "Bool", "key": "body_fill", "name": "Full body fill", "def": false, "cat": "01. ThermalVision", "pos": 4, "tip": "Paint the whole NPC silhouette instead of a ring. The rim is still drawn around the fill, and walls still clip it."},
+	{"sect": "Bool", "key": "outline_xray", "name": "X-ray Triggers", "def": true, "cat": "01. ThermalVision", "pos": 5, "tip": "While on, the NPC ring lights up through walls only while a sound event is live: gunfire, shouts, idle chatter, footsteps, reloads, pain cries or grenade throws. Between events the outline stays a normal ring behind walls. The reveal timers themselves show on the debug labels regardless of this toggle."},
+	{"sect": "Bool", "key": "thermal_mines", "name": "Mine ESP", "def": true, "cat": "01. ThermalVision", "pos": 6, "tip": "Highlight mines while thermal vision is on."},
 	{"sect": "Bool", "key": "nomad_marker", "name": "Nomads marker", "def": true, "cat": "01. ThermalVision", "pos": 2, "tip": "Draw a small triangle over friendly nomads while thermal vision is on. Obeys the Distance setting. Independent of the debug log."},
-	{"sect": "Float", "key": "nvg_noise", "name": "NVG noise", "def": 0.0, "min": 0.0, "max": 60.0, "step": 0.5, "cat": "01. ThermalVision", "pos": 6, "tip": "Grain amount over the NVG image. Lower is cleaner. Vanilla is fixed at 10."},
-	{"sect": "Float", "key": "nvg_white", "name": "NVG brightness", "def": 1.0, "min": 0.05, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 7, "tip": "Brightness of the NVG image. 1 = full brightness; lower darkens the whole overlay."},
-	{"sect": "Float", "key": "thermal_world", "name": "World brightness", "def": 1.70, "min": 1.0, "max": 4.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 8, "tip": "How bright the surrounding world reads in thermal."},
-	{"sect": "Bool", "key": "daylight_compensation", "name": "Daylight compensation", "def": true, "cat": "01. ThermalVision", "pos": 9, "tip": "In bright daylight, lower the game's exposure so snow and sky keep detail instead of washing out. No effect at night; interiors are only slightly trimmed."},
-	{"sect": "Float", "key": "daylight_strength", "name": "Daylight strength", "def": 1.0, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 10, "tip": "How much daylight compensation is applied at all. 0 = vanilla NVG exposure, 1 = full compensation."},
-	{"sect": "Float", "key": "thermal_highlight_knee", "name": "Highlight softness", "def": 0.6, "min": 0.3, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 11, "tip": "In daylight, background pixels brighter than this (snow, sky, clouds) bend into a softer highlight and keep their detail instead of washing out. Lower = stronger trim. Night is unaffected; 1.0 disables it."},
+	{"sect": "Float", "key": "nvg_noise", "name": "NVG noise", "def": 0.0, "min": 0.0, "max": 60.0, "step": 0.5, "cat": "01. ThermalVision", "pos": 7, "tip": "Grain amount over the NVG image. Lower is cleaner. Vanilla is fixed at 10."},
+	{"sect": "Float", "key": "nvg_white", "name": "NVG brightness", "def": 1.0, "min": 0.05, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 8, "tip": "Brightness of the NVG image. 1 = full brightness; lower darkens the whole overlay."},
+	{"sect": "Float", "key": "thermal_world", "name": "World brightness", "def": 1.70, "min": 1.0, "max": 4.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 9, "tip": "How bright the surrounding world reads in thermal."},
+	{"sect": "Bool", "key": "daylight_compensation", "name": "Daylight compensation", "def": true, "cat": "01. ThermalVision", "pos": 10, "tip": "In bright daylight, lower the game's exposure so snow and sky keep detail instead of washing out. No effect at night; interiors are only slightly trimmed."},
+	{"sect": "Float", "key": "daylight_strength", "name": "Daylight strength", "def": 1.0, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 11, "tip": "How much daylight compensation is applied at all. 0 = vanilla NVG exposure, 1 = full compensation."},
+	{"sect": "Float", "key": "thermal_highlight_knee", "name": "Highlight softness", "def": 0.6, "min": 0.3, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 12, "tip": "In daylight, background pixels brighter than this (snow, sky, clouds) bend into a softer highlight and keep their detail instead of washing out. Lower = stronger trim. Night is unaffected; 1.0 disables it."},
 	{"sect": "Float", "key": "outline_distance", "name": "Distance", "def": 60.0, "min": 0.0, "max": 300.0, "step": 10.0, "cat": "02. NPC", "pos": 0, "tip": "Maximum distance for an outline. Outlines are hidden past this range."},
 	{"sect": "Float", "key": "outline_rim", "name": "Rim", "def": 2.0, "min": 0.0, "max": 6.0, "step": 0.5, "cat": "02. NPC", "pos": 1, "tip": "Edge sharpness of the outline. 1.0 is a linear falloff; higher values tighten the band toward the silhouette."},
 	{"sect": "Float", "key": "outline_thickness", "name": "Thickness", "def": 0.006, "min": 0.001, "max": 0.02, "step": 0.001, "cat": "02. NPC", "pos": 2, "tip": "How far the outline band grows beyond the body."},
@@ -155,6 +157,7 @@ static func read(cfg: ConfigFile) -> Rec:
 	rec.debug_log = bool(_val(cfg, "Bool", "debug_log", rec.debug_log))
 	rec.npc_labels = bool(_val(cfg, "Bool", "npc_labels", rec.npc_labels))
 	rec.outline_enabled = bool(_val(cfg, "Bool", "outline_enabled", rec.outline_enabled))
+	rec.body_fill = bool(_val(cfg, "Bool", "body_fill", rec.body_fill))
 	rec.outline_xray = bool(_val(cfg, "Bool", "outline_xray", rec.outline_xray))
 	rec.thermal_mines = bool(_val(cfg, "Bool", "thermal_mines", rec.thermal_mines))
 	rec.nomad_marker = bool(_val(cfg, "Bool", "nomad_marker", rec.nomad_marker))

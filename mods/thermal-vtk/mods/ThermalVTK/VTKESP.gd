@@ -34,6 +34,7 @@ var xray_layer: bool = false
 var p_decay := 30.0
 var p_dist := 60.0
 var p_nomad_marker: bool = true
+var p_body_fill: bool = false
 # NPC nametags: their own switch under Diagnostics, so the diagnostic overlay
 # can stay on without the log and without the NVG helmet.
 var p_npc_labels: bool = true
@@ -151,6 +152,7 @@ func apply_config(rec) -> void:
 	p_decay = rec.corpse_decay
 	p_dist = rec.outline_distance
 	p_nomad_marker = rec.nomad_marker
+	p_body_fill = rec.body_fill
 	p_npc_labels = rec.npc_labels
 	p_color_normal = rec.color_normal
 	p_color_combat = rec.color_combat
@@ -762,6 +764,7 @@ func _fill_opts(opts: Dictionary, e: Dictionary, now: float) -> void:
 	var esp_live: bool = contour_layer and float(e.get("dist", 0.0)) <= p_dist
 	opts["force"] = xray and not esp_live
 	opts["pulse"] = (0.5 + 0.5 * sin(now * 9.0)) if xray else 0.0
+	opts["fill"] = p_body_fill
 
 func _nomad_los(e: Dictionary, anchor_world: Vector3) -> bool:
 	if los_probe.is_valid():

@@ -60,6 +60,19 @@ func _build_xray() -> ShaderMaterial:
 	mat.shader = Shaders.ring_xray()
 	return mat
 
+# Full-body style needs two materials chained: the body writes stencil 1, the
+# ring reads it and paints only outside the body.
+func _build_fill_body() -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = Shaders.body_fill()
+	return mat
+
+func _build_fill_ring(body_mat: ShaderMaterial) -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = Shaders.ring_stencil()
+	body_mat.next_pass = mat
+	return mat
+
 # Event-driven per-entry flip: idle rings honour walls; when the frame loop
 # passes opts["xray"] for a bot with a live trigger window, that bot's ring
 # swaps to the depth-free shader and punches through walls while the optic
@@ -106,11 +119,14 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 	Dbg.log("OUTLINE", "apply id=%d meshes=%d child_count=%d" % [id, meshes.size(), node.get_child_count()])
 	var ring_mat := _build_ring()
 	var xray_mat := _build_xray()
+	var fill_body := _build_fill_body()
+	var fill_ring := _build_fill_ring(fill_body)
 	var pairs: Array = []
 	for m in meshes:
 		pairs.append(_make_shell(m, ring_mat))
 	_items[id] = {
 		"meshes": meshes, "pairs": pairs, "ring": ring_mat, "xray_mat": xray_mat,
+		"fill_body": fill_body, "fill_ring": fill_ring, "fill_mode": false,
 		"node": node, "child_count": node.get_child_count(),
 		"xray": false,
 	}
@@ -209,6 +225,7 @@ func refresh(id: int, opts: Dictionary) -> void:
 	if entry == null:
 		return
 	set_entry_xray(id, bool(opts.get("xray", false)))
+	set_entry_fill(id, bool(opts.get("fill", false)))
 	var node = entry.get("node")
 	if node != null and is_instance_valid(node) and node.get_child_count() != int(entry.get("child_count", -1)):
 		_recollect(id, entry)
@@ -256,6 +273,17 @@ func refresh(id: int, opts: Dictionary) -> void:
 			xray_mat.set_shader_parameter("cool", cool)
 		entry["p_cool"] = cool
 
+	# The full-body pair shares the same state colour and rim feel.
+	var fill_body: ShaderMaterial = entry.get("fill_body")
+	var fill_ring: ShaderMaterial = entry.get("fill_ring")
+	if fill_body != null and fill_ring != null and bool(entry.get("fill_mode", false)):
+		fill_body.set_shader_parameter("state_key", key)
+		fill_body.set_shader_parameter("cool", cool)
+		fill_ring.set_shader_parameter("state_key", key)
+		fill_ring.set_shader_parameter("grow", grow)
+		fill_ring.set_shader_parameter("rim_power", rim)
+		fill_ring.set_shader_parameter("cool", cool)
+
 	# Reveal-only uniforms belong to the overlay: the depth-tested ring ignores
 	# them, so there is nothing to push there.
 	if xray_mat != null and entry.get("p_force") != force:
@@ -264,6 +292,20 @@ func refresh(id: int, opts: Dictionary) -> void:
 	if xray_mat != null and (entry.get("p_pulse") == null or not is_equal_approx(float(entry["p_pulse"]), pulse)):
 		xray_mat.set_shader_parameter("pulse", pulse)
 		entry["p_pulse"] = pulse
+
+func set_entry_fill(id: int, on: bool) -> void:
+	var entry = _items.get(id)
+	if entry == null:
+		return
+	if bool(entry.get("fill_mode", false)) == on:
+		return
+	entry["fill_mode"] = on
+	var body_mat: ShaderMaterial = entry.get("fill_body")
+	for pair in entry.get("pairs", []):
+		var shell = pair.get("shell")
+		if shell == null or not is_instance_valid(shell):
+			continue
+		shell.material_override = body_mat if on else entry["ring"]
 
 func clear(id: int) -> void:
 	var entry = _items.get(id)
