@@ -156,12 +156,23 @@ func _probe_center() -> void:
 
 func _apply_mode() -> void:
 	if _esp != null and is_instance_valid(_esp):
-		# Two independent layers on the thermal stack: the contour (rings and
-		# the nomad marker) and the x-ray reveals. Either one can run alone.
-		# Diagnostic: the ESP follows the helmet, not the thermal switch, so the same
-		# NPC can be compared with the palette on and off.
-		var on := _nvg_active()
-		_esp.set_layers(on and _outline_enabled, on and _xray_enabled)
+		# The ESP only shows while the thermal vision actually runs: the goggles
+		# alone (vanilla NVG) do not carry it. The thermal switch owns that.
+		var on := _nvg_active() and _thermal_enabled
+		var contour: bool = on and _outline_enabled
+		var xray: bool = on and _xray_enabled
+		_esp.set_layers(contour, xray)
+		# The mask feeds both layers: the ring is read from it, and a live
+		# x-ray reveal is written into it with the depth test disabled. It is
+		# the only thing that costs a second world pass, so the layer switch
+		# arms it and the per-frame demand gate below decides whether it can
+		# actually render.
+		if _nvg != null and is_instance_valid(_nvg) and _nvg.has_method("set_esp_mask"):
+			_nvg.set_esp_mask(contour or xray)
+			if _esp != null and is_instance_valid(_esp):
+				_nvg.set_mask_scale(_esp.p_mask_resolution)
+				_nvg.set_mask_cadence(int(_esp.p_mask_cadence))
+			_push_mask_gate()
 
 func _nvg_active() -> bool:
 	if _nvg == null or not is_instance_valid(_nvg):
@@ -173,10 +184,27 @@ func _nvg_active() -> bool:
 # with the helmet off and only appear on the next hotkey change.
 func _process(_delta: float) -> void:
 	var worn := _nvg_active()
-	if worn == _nvg_worn:
+	if worn != _nvg_worn:
+		_nvg_worn = worn
+		_apply_mode()
+	_push_mask_gate()
+
+# The mask renders the world a second time, so it is only enabled while a ring
+# is actually on screen (VTKESP.wants_mask), not for every frame the layers are
+# on. An empty map therefore costs nothing, and a fight only pays for the
+# shells that exist. Demand is one frame old at worst: this coordinator runs
+# before its ESP child.
+func _push_mask_gate() -> void:
+	if _nvg == null or not is_instance_valid(_nvg) or not _nvg.has_method("set_esp_demand"):
 		return
-	_nvg_worn = worn
-	_apply_mode()
+	var demand := false
+	var reach := 0.0
+	if _esp != null and is_instance_valid(_esp):
+		demand = bool(_esp.wants_mask())
+		reach = float(_esp.mask_reach())
+	_nvg.set_esp_demand(demand)
+	if _nvg.has_method("set_esp_reach"):
+		_nvg.set_esp_reach(reach)
 
 # Toast channel exposed by the game's /root/Loader (loader.Message).
 func _notify(text: String, color: Color) -> void:

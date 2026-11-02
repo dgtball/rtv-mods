@@ -18,6 +18,7 @@ func _run() -> void:
 	t_dirty_batches_setters()
 	t_mine_retry_is_bounded()
 	t_off_upkeep_clears_dead_mines()
+	t_mask_demand_gate()
 	t_script_kind_cache()
 	print("")
 	if fails == 0:
@@ -67,6 +68,25 @@ func t_off_upkeep_clears_dead_mines() -> void:
 	ck(nvg._mines.is_empty(), "a freed mine is dropped while thermal is off")
 	nvg._off_frame_upkeep()
 	ck(nvg._mines.is_empty(), "the early return keeps the next pass cheap")
+	nvg.free()
+
+# The mask pass renders the world a second time. Arming the layer is not
+# enough: it also needs a ring on screen (ThermalVTK polls VTKESP), and the
+# mask must stop the instant that demand goes away instead of freezing on the
+# last texture.
+func t_mask_demand_gate() -> void:
+	var nvg = NVG.new()
+	root.add_child(nvg)
+	ck(nvg._mask != null, "the NVG owns the mask")
+	nvg.set_esp_mask(true)
+	ck(not nvg._mask.is_enabled(), "layers armed without demand leave the mask off")
+	nvg.set_esp_demand(true)
+	ck(nvg._mask.is_enabled(), "demand turns the second pass on")
+	nvg.set_esp_reach(60.0)
+	ck(nvg._mask._reach == 60.0, "reach is forwarded to the mask camera")
+	nvg.set_esp_demand(false)
+	ck(not nvg._mask.is_enabled(), "demand off stops the second pass")
+	nvg.set_esp_mask(false)
 	nvg.free()
 
 # The script verdict is cached per script, not per node: the map load queues

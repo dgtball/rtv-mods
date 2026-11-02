@@ -38,6 +38,10 @@ var p_decay := 30.0
 var p_dist := 60.0
 var p_nomad_marker: bool = true
 var p_body_fill: bool = false
+var p_fill_alpha: float = 0.85
+var p_fill_grow: float = 0.004
+var p_mask_resolution: float = 1.0
+var p_mask_cadence: float = 1.0
 # NPC nametags: their own switch under Diagnostics, so the diagnostic overlay
 # can stay on without the log and without the NVG helmet.
 var p_npc_labels: bool = true
@@ -142,6 +146,27 @@ func set_layers(contour: bool, xray: bool) -> void:
 
 func _any_layer() -> bool:
 	return contour_layer or xray_layer
+
+# Mask demand. The second world pass is only worth its cost while a shell is
+# actually wanted: `_want` is rebuilt by _draw and holds exactly the ids the
+# outline keeps for this frame. The NVG coordinator polls this each frame
+# (ThermalVTK._push_mask_gate).
+func wants_mask() -> bool:
+	return _any_layer() and not _want.is_empty()
+
+# Farthest ring on screen right now; the mask camera clips the world there
+# instead of at the picture camera's far plane. `_want` is rebuilt by _draw and
+# `dist` is stored on every entry in the same pass, so a fight at 15 m pays for
+# 25 m of world, not the full Distance slider.
+func mask_reach() -> float:
+	if not _any_layer():
+		return 0.0
+	var r := 0.0
+	for id in _want_ids:
+		if not _entries.has(id):
+			continue
+		r = maxf(r, float(_entries[id].get("dist", 0.0)))
+	return r
 
 # Labels are a diagnostic layer of their own: the log is the master switch and
 # the npc_labels toggle is the refinement. Thermal vision and the NVG helmet are
@@ -786,6 +811,8 @@ func _fill_opts(opts: Dictionary, e: Dictionary, now: float) -> void:
 	opts["force"] = xray and not esp_live
 	opts["pulse"] = (0.5 + 0.5 * sin(now * 9.0)) if xray else 0.0
 	opts["fill"] = p_body_fill
+	opts["fill_alpha"] = 0.2
+	opts["fill_grow"] = 0.004
 
 func _nomad_los(e: Dictionary, anchor_world: Vector3) -> bool:
 	if los_probe.is_valid():

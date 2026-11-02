@@ -1,22 +1,17 @@
-extends RefCounted
-# Builds the outline shaders. The idle ring uses the normal depth test so the
-# world, the weapon and the sight hardware clip it; the x-ray ring swaps to the
-# depth-free variant only while a trigger window is live.
+﻿extends RefCounted
+# Builds the ESP mask shaders. The ring and the body fill write a category
+# colour into the mask viewport (VTKEspMask.gd); the NVG overlay substitutes
+# the display colour from that mask, so no key has to survive the tonemap.
 
-const RING_DEPTH_SRC := preload("res://mods/ThermalVTK/VTKOutlineRingDepth.gdshader")
-const RING_XRAY_SRC := preload("res://mods/ThermalVTK/VTKOutlineRingOccluded.gdshader")
-# Full-body style: body pass writes stencil 1, ring pass draws outside it.
-const BODY_FILL_SRC := preload("res://mods/ThermalVTK/VTKOutlineBodyFill.gdshader")
-const RING_STENCIL_SRC := preload("res://mods/ThermalVTK/VTKOutlineRingStencil.gdshader")
+const MASK_RING_SRC := preload("res://mods/ThermalVTK/VTKEspMaskRing.gdshader")
+const MASK_FILL_SRC := preload("res://mods/ThermalVTK/VTKEspMaskFill.gdshader")
+const MASK_XRAY_SRC := preload("res://mods/ThermalVTK/VTKEspMaskXray.gdshader")
 
-static func ring() -> Shader:
-	return RING_DEPTH_SRC
+static func mask_ring() -> Shader:
+	return MASK_RING_SRC
 
-static func ring_xray() -> Shader:
-	return RING_XRAY_SRC
+static func mask_fill() -> Shader:
+	return MASK_FILL_SRC
 
-static func body_fill() -> Shader:
-	return BODY_FILL_SRC
-
-static func ring_stencil() -> Shader:
-	return RING_STENCIL_SRC
+static func mask_xray() -> Shader:
+	return MASK_XRAY_SRC

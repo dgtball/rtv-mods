@@ -1,9 +1,10 @@
-extends Node
+﻿extends Node
 const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
 const Settings = preload("res://mods/ThermalVTK/VTKSettings.gd")
 const Daylight = preload("res://mods/ThermalVTK/VTKDaylight.gd")
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
+const EspMask = preload("res://mods/ThermalVTK/VTKEspMask.gd")
 
 # Owns the NVG overlay shader, plus the thermal/mines layer that rides on it.
 #
@@ -52,16 +53,9 @@ const MINE_KEY := Color(0.0, 0.0, 1.0)
 # EMITS the raw key; only the detector compares against it.
 const DET_MINE := Color(0.50, 0.06, 0.94)
 
-# Contour state keys (emitted by VTKStates.KEY_*; these are the measured post-NVG
-# values from the F7 ring probe). The unshaded ring is thin, so its on-screen
-# colour is the key blended with the background by glow/tonemap -- matching the
-# raw keys misses. Probe averages (motion-gated, 3 runs): normal (1,0,0)->
-# (1.00,0.21,0.16), combat (0,1,1)->(0.82,1.00,1.00), defend (1,0,1)->
-# (1.00,0.34,1.00). The ring still EMITS the raw keys; only the detector
-# compares against these.
-const DET_ST_NORMAL := Color(1.00, 0.21, 0.16)
-const DET_ST_COMBAT := Color(0.82, 1.00, 1.00)
-const DET_ST_DEFEND := Color(1.00, 0.34, 1.00)
+# Contour state keys are gone since 2.4.0: the ring writes a category colour
+# into the ESP mask viewport (VTKEspMask) and this overlay substitutes the
+# display colour from the mask, so no key has to survive the tonemap.
 
 # settings
 var set_nvg_noise: float = 0.0
@@ -89,6 +83,19 @@ var _installed: bool = false
 var _install_retry: int = 0
 
 var _mat_mine: StandardMaterial3D = null
+# ESP mask viewport: owns the second world pass the contour shells draw into.
+# Created here because this module owns the overlay material that samples it.
+var _mask: Node = null
+# `_esp_on` is the layer switch (armed by ThermalVTK._apply_mode); `_esp_demand`
+# is whether a ring is actually on screen this frame. The mask only renders
+# when both hold, so an empty map pays nothing for the second world pass.
+var _esp_on: bool = false
+var _esp_demand: bool = false
+var _esp_reach: float = 0.0
+var _mask_scale: float = 1.0
+var _mask_cadence_int: int = 1
+var _mask_counter: int = 0
+var _esp_demand_prev: bool = false
 
 var _mines: Dictionary = {}
 var _mine_watch: Dictionary = {}
@@ -155,6 +162,12 @@ func _ready() -> void:
 	# unshaded+emission StandardMaterial3D.
 	_mat_mine = _key_material(MINE_KEY)
 	_register_key_gain()
+
+	# The contour's second view. Added as our child so it shares the main tree
+	# (and therefore the game's World3D) and dies with the overlay.
+	_mask = EspMask.new()
+	add_child(_mask)
+	_sync_mask()
 
 	get_tree().node_added.connect(_on_node_added)
 	_scene_ref = get_tree().current_scene
@@ -300,9 +313,7 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("highlightKnee", set_highlight_knee)
 	nvg_mat.set_shader_parameter("nvgWhite", set_nvg_white)
 	nvg_mat.set_shader_parameter("mineKey", DET_MINE)
-	nvg_mat.set_shader_parameter("stNormalKey", DET_ST_NORMAL)
-	nvg_mat.set_shader_parameter("stCombatKey", DET_ST_COMBAT)
-	nvg_mat.set_shader_parameter("stDefendKey", DET_ST_DEFEND)
+	_push_mask(nvg_mat)
 	# Fallbacks are the VTKStates defaults, not copies: a profile without a
 	# colour section and a fresh profile paint the same three colours.
 	nvg_mat.set_shader_parameter("stNormalColor", _state_colors.get("state_normal", States.DEFAULT_NORMAL))
@@ -313,11 +324,94 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("scopeRotate", _scope_rotate)
 
 
+# The contour asks for the mask through ThermalVTK._apply_mode: this arms the
+# layer switch. The per-frame demand below decides whether the pass runs.
+func set_esp_mask(on: bool) -> void:
+	if _esp_on == on:
+		return
+	_esp_on = on
+	_sync_mask()
+
+# A ring is on screen this frame (ThermalVTK polls VTKESP.wants_mask). Turning
+# the mask off here also turns the shader substitution off, so the frozen
+# texture from the last rendered frame can never linger on screen.
+func set_esp_demand(on: bool) -> void:
+	if _esp_demand == on:
+		return
+	_esp_demand = on
+	_sync_mask()
+
+# Longest ring distance; the mask camera clips its world pass there.
+func set_esp_reach(distance: float) -> void:
+	distance = maxf(distance, 0.0)
+	if is_equal_approx(distance, _esp_reach):
+		return
+	_esp_reach = distance
+	if _mask != null and is_instance_valid(_mask):
+		_mask.set_reach(_esp_reach)
+
+func set_mask_scale(scale: float) -> void:
+	if scale < 0.5:
+		scale = 0.5
+	if scale > 1.0:
+		scale = 1.0
+	if is_equal_approx(scale, _mask_scale):
+		return
+	_mask_scale = scale
+	if _mask != null and is_instance_valid(_mask):
+		_mask.set_scale(scale)
+	_dirty = true
+
+func set_mask_cadence(n: int) -> void:
+	if n < 1:
+		n = 1
+	if n > 4:
+		n = 4
+	if n == _mask_cadence_int:
+		return
+	_mask_cadence_int = n
+
+# chord keeping espOn uniform in sync even before the 0.1 s tick.
+func _push_esp_on() -> void:
+	if _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
+		return
+	var mat = _nvg_mat_node.get("material")
+	if mat is ShaderMaterial:
+		(mat as ShaderMaterial).set_shader_parameter("espOn", _esp_render_on())
+
+func _sync_mask() -> void:
+	var force_first := _esp_demand and not _esp_demand_prev
+	_esp_demand_prev = _esp_demand
+	var render: bool = _esp_render_on()
+	if render and not force_first:
+		render = (_mask_counter % max(_mask_cadence_int, 1) == 0)
+	if _mask != null and is_instance_valid(_mask):
+		_mask.set_reach(_esp_reach)
+		_mask.set_scale(_mask_scale)
+		_mask.set_enabled(render)
+	_push_esp_on()
+	_dirty = true
+
+# The uniform tick is 0.1 s; a demand edge must not wait for it, or the ring
+# would blink on the first frames of every NPC.
+func _esp_render_on() -> bool:
+	return _esp_on and _esp_demand
+
+# Bind the mask texture and its switch. The texture is a ViewportTexture that
+# stays valid across frames, so this only runs on a dirty material.
+func _push_mask(nvg_mat) -> void:
+	nvg_mat.set_shader_parameter("espOn", _esp_render_on())
+	if _mask == null or not is_instance_valid(_mask):
+		return
+	var tex: Texture2D = _mask.texture()
+	if tex != null:
+		nvg_mat.set_shader_parameter("esp_mask", tex)
+
+
 func _nvg_active() -> bool:
 	if _game_data == null or not _game_data.has_method("get"):
 		return false
 	return bool(_game_data.get("NVG"))
-
 
 # Public read for the coordinator (ThermalVTK), which gates the contour ESP on
 # the vanilla NVG being worn. See ThermalVTK._process.
@@ -326,7 +420,12 @@ func nvg_active() -> bool:
 
 
 func _process(delta: float) -> void:
-	_drain_pending()
+	_mask_counter += 1
+	# The mask camera mirrors the picture camera every frame: fov, offsets and
+	# transform are what the scope animates, so this is the only place that has
+	# to know about the optic. Only while demand says a ring is visible.
+	if _esp_render_on() and _mask != null and is_instance_valid(_mask):
+		_mask.sync(get_viewport())
 	if get_tree().current_scene != _scene_ref:
 		_scene_ref = get_tree().current_scene
 		_mines.clear()

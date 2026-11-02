@@ -44,7 +44,22 @@ const KEY_DEFEND := Color(1.0, 0.0, 1.0)
 
 const CATEGORY_KEY_COLORS: Array[Color] = [KEY_NORMAL, KEY_COMBAT, KEY_DEFEND]
 
+# Mask channel keys (VTKEspMask). These never reach the screen: the shell
+# writes them into the mask viewport and VTKNVG.gdshader recovers the category
+# from the dominant channel. Pure primaries on purpose -- the world behind the
+# shell adds to the mask pixel, so only the channel gap survives, and the equal
+# channels of a two-channel key like (0,1,1) would cancel out.
+const MASK_NORMAL := Color(1.0, 0.0, 0.0, 1)
+const MASK_COMBAT := Color(0.0, 1.0, 0.0, 1)
+const MASK_DEFEND := Color(0.0, 0.0, 1.0, 1)
+const CATEGORY_MASK_COLORS: Array[Color] = [MASK_NORMAL, MASK_COMBAT, MASK_DEFEND]
 
+
+
+static func mask_key(cat: int) -> Color:
+	if cat < 0 or cat >= CATEGORY_MASK_COLORS.size():
+		return MASK_NORMAL
+	return CATEGORY_MASK_COLORS[cat]
 
 static func state_key(cat: int) -> Color:
 	if cat < 0 or cat >= CATEGORY_KEY_COLORS.size():

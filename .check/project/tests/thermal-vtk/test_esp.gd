@@ -1,4 +1,4 @@
-extends SceneTree
+﻿extends SceneTree
 
 const ESP = preload("res://mods/ThermalVTK/VTKESP.gd")
 const S = preload("res://mods/ThermalVTK/VTKStates.gd")
@@ -50,6 +50,7 @@ func _run() -> void:
 	t_label_reads_stored_window()
 	t_xray_layer_without_contour()
 	t_layers_drive_marker()
+	t_mask_demand()
 	t_weapon_runs_without_contour()
 	print("")
 	if fails == 0:
@@ -265,9 +266,9 @@ func t_label_suffix_independent() -> void:
 	Tracker.tag_trig(resp._entries[rid], "fire", 100.0, rnow + 60.0, 60.0)
 	resp._draw(Vector3.ZERO)
 	var rring: ShaderMaterial = resp._outline._items[rid]["ring"]
-	ck(resp._outline.has(rid) and rring.shader == Sh.ring(), "reveal past Distance keeps the depth-tested ring")
+	ck(resp._outline.has(rid) and rring.shader == Sh.mask_ring(), "reveal past Distance keeps the depth-tested ring")
 	var rshell: MeshInstance3D = resp._outline._items[rid]["pairs"][0]["shell"]
-	ck(rshell.material_overlay == resp._outline._items[rid]["xray_mat"], "reveal past Distance attaches the overlay")
+	ck(rshell.material_override == resp._outline._items[rid]["xray_mat"], "reveal past Distance swaps the shell material")
 	# Expire the window: Time stays real (no fake clock), so tag the same way a
 	# timeout ages it — expires behind now. pick_trig erases it and the frame
 	# loop reaches the bot only through the skip branch. 1.10.1: the skip
@@ -518,9 +519,9 @@ func t_xray_layer_without_contour() -> void:
 	esp._draw(Vector3.ZERO)
 	ck(esp._outline.has(id), "reveal draws with the contour off")
 	var ring: ShaderMaterial = esp._outline._items[id]["ring"]
-	ck(ring.shader == Sh.ring(), "the reveal keeps the depth-tested ring")
+	ck(ring.shader == Sh.mask_ring(), "the reveal keeps the depth-tested ring")
 	var shell: MeshInstance3D = esp._outline._items[id]["pairs"][0]["shell"]
-	ck(shell.material_overlay == esp._outline._items[id]["xray_mat"], "the reveal attaches the overlay")
+	ck(shell.material_override == esp._outline._items[id]["xray_mat"], "the reveal swaps the shell material")
 	Tracker.tag_trig(esp._entries[id], "fire", 100.0, now - 1.0, 60.0)
 	esp._draw(Vector3.ZERO)
 	ck(not esp._outline.has(id), "an expired window clears the ring")
@@ -538,6 +539,55 @@ func t_layers_drive_marker() -> void:
 	esp.set_layers(false, false)
 	ck(not esp.contour_layer and not esp.xray_layer, "both layers can be off")
 	esp.free()
+
+# The mask is a second world pass, so it is only demanded while a shell is
+# actually wanted: no NPC in range and no live reveal means no mask at all.
+# The reach is the farthest shell the current layers can produce.
+func t_mask_demand() -> void:
+	var scene := Node3D.new()
+	scene.name = "Map_mask_demand"
+	var bot := FakeBot.new()
+	bot.name = "AI_Bandit_mask_demand"
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	bot.add_child(mesh)
+	scene.add_child(bot)
+	bot.global_position = Vector3(0.0, 0.0, -50.0)
+	root.add_child(scene)
+	current_scene = scene
+	var esp = ESP.new()
+	esp.name = "VTKESP_mask_demand"
+	root.add_child(esp)
+	esp.p_trig = false
+	esp.p_dist = 5.0
+	esp.set_layers(true, false)
+	esp._draw(Vector3.ZERO)
+	ck(not esp.wants_mask(), "an empty range demands no mask")
+	ck(esp.mask_reach() == 0.0, "no ring means no reach")
+	bot.global_position = Vector3(0.0, 0.0, -2.0)
+	esp._draw(Vector3.ZERO)
+	ck(esp.wants_mask(), "a ring in range demands the mask")
+	ck(esp.mask_reach() == 2.0, "reach follows the actual ring distance")
+	bot.global_position = Vector3(0.0, 0.0, -50.0)
+	esp._draw(Vector3.ZERO)
+	ck(not esp.wants_mask(), "a ring outside Distance does not demand the mask")
+	esp.p_dist = 60.0
+	esp._draw(Vector3.ZERO)
+	ck(esp.wants_mask(), "a ring inside Distance demands the mask again")
+	ck(esp.mask_reach() == 50.0, "reach follows the new ring distance")
+	# X-ray alone: a live reveal keeps the pass alive and its distance is the
+	# reach, even though the contour layer is off.
+	esp.set_layers(false, true)
+	esp.p_trig = true
+	Tracker.tag_trig(esp._entries[bot.get_instance_id()], "fire", 100.0, esp._now() + 60.0, 60.0)
+	esp._draw(Vector3.ZERO)
+	ck(esp.wants_mask(), "a live reveal demands the mask")
+	ck(esp.mask_reach() == 50.0, "reach follows the revealed NPC")
+	esp.set_layers(false, false)
+	ck(not esp.wants_mask(), "layers off demands no mask")
+	ck(esp.mask_reach() == 0.0, "layers off clears the reach")
+	esp.free()
+	scene.queue_free()
 
 func t_weapon_runs_without_contour() -> void:
 	var scene := Node3D.new()

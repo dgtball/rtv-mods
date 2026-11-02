@@ -1,5 +1,67 @@
 # Changelog
 
+## [2.4.6] - 2026-11-02
+
+### Changed
+- Removed the experimental MCM knobs (mask resolution, cadence, fill opacity
+  and fill grow) that were added for testing. Baseline mask settings restored
+  to full quality by default; fill opacity fixed at 0.2.
+
+## [2.4.5] - 2026-11-02
+
+### Added
+- 'Mask resolution' (50/75/100 %) and 'Mask cadence' (every frame or every
+  other frame) now live in the MCM menu, so the 2nd-world-pass cost can be
+  tuned without rebuilding.
+- 'Fill grow' is exposed for the full-body silhouette.
+
+### Fixed
+- none.
+
+## [2.4.4] - 2026-11-02
+
+### Changed
+- The mask viewport no longer renders positional shadow maps and uses a
+  slightly coarser LOD; this lowers the cost of each NPC pass without
+  touching the ring shape or the edge quality.
+- 'Full body fill' opacity is now tunable from the menu (0.1..1.0), so the
+  fill can be kept transparent while debugging the cost.
+
+## [2.4.3] - 2026-11-02
+
+### Changed
+- ESP contours no longer draw while thermal vision is off: the goggles alone
+  (vanilla night vision) keep the thermal picture, but the NPC outline now
+  appears only with thermal vision switched on.
+
+## [2.4.2] - 2026-11-02
+
+### Fixed
+- NPC outline lines are crisp again, with the same edge quality as before
+  2.4.1: the outline is rendered at full screen resolution with the same
+  antialiasing as the main picture.
+
+## [2.4.1] - 2026-11-02
+
+### Fixed
+- Frame rate with NPC outlines enabled is back to the plain night-vision level
+  when no NPC is in range; the outline no longer keeps rendering the whole
+  world for nothing.
+- Fights no longer halve the frame rate: the outline pass only covers the
+  distance it can actually draw, so distant scenery is skipped.
+
+## [2.4.0] - 2026-11-02
+
+### Changed
+- NPC contour colours no longer wash out in daylight, snow or after a palette
+  change: the state colour is exact in every condition.
+- Outlines are still cut by walls and by the weapon, and the x-ray reveal still
+  reaches through walls.
+
+### Note
+- Looking through a magnifying scope with PIP on no longer shows contours
+  inside the glass; the thermal picture there is unchanged.
+
 ## [2.3.0] - 2026-11-01
 
 ### Added

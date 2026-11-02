@@ -42,13 +42,18 @@ uniform float nvgWhite : hint_range(0.05, 1.0, 0.05) = 1.0;
 
 uniform vec3 mineKey : source_color = vec3(0.0, 0.0, 1.0);
 
-// Contour ESP state keys. The ring emits these fixed colours; the frame is
-// NVG-processed before this shader sees it, so the *Key uniforms hold the
-// measured post-NVG (washed) values (see VTKNVG.gd DET_ST_*). The *Color
-// uniforms are the per-state display colours, substituted AFTER the palette.
-uniform vec3 stNormalKey : source_color = vec3(1.0, 0.21, 0.16);
-uniform vec3 stCombatKey : source_color = vec3(0.82, 1.0, 1.0);
-uniform vec3 stDefendKey : source_color = vec3(1.0, 0.34, 1.0);
+// Contour ESP: the ring/fill is no longer detected in the frame. The shells
+// write a category colour into a separate mask viewport (VTKEspMask) whose
+// own Environment is linear, so the pixel arrives exact -- no wash, no
+// day/night calibration, no exposure coupling. The category is read from the
+// dominant channel; the world behind the shell adds to the mask pixel, which
+// is why the mask keys are pure primaries (VTKStates.MASK_*).
+// The mask renders at the picture's resolution with MSAA 4x, and the overlay
+// samples it 1:1 through SCREEN_UV, so nearest is exact: no extra blur on the
+// ring edge.
+uniform sampler2D esp_mask : filter_linear, repeat_disable;
+uniform bool espOn = false;
+
 uniform vec3 stNormalColor : source_color = vec3(1.0, 0.72, 0.28);
 uniform vec3 stCombatColor : source_color = vec3(0.95, 0.18, 0.15);
 uniform vec3 stDefendColor : source_color = vec3(0.62, 0.30, 0.95);
@@ -159,6 +164,48 @@ float orbitDist(vec3 c, vec3 k)
 // from the emitted key than a thin ring ever drifts, so the tolerance is wider.
 const float DET_TOL_CORE = 0.34;
 
+// Contour ESP mask. The shell writes a pure primary onto the mask's world
+// pixel, so the category is the channel that stands out from the other two:
+// gap = channel - max(other two). Coverage lands in the same gap, which is what
+// keeps the soft rim: a 30% shell over any background still leaves ~0.3.
+// ESP_GATE rejects pixels where no shell dominates; ESP_FULL is the gap of a
+// fully opaque shell.
+const float ESP_GATE = 0.06;
+const float ESP_FULL = 0.55;
+
+float EspGap(vec3 m, int channel)
+{
+	if (channel == 0) {
+		return m.r - max(m.g, m.b);
+	}
+	if (channel == 1) {
+		return m.g - max(m.r, m.b);
+	}
+	return m.b - max(m.r, m.g);
+}
+
+// Returns 0 when no shell is in the mask, else the masked-in display colour
+// with its coverage in alpha.
+vec4 EspColor(vec2 uv)
+{
+	vec3 m = texture(esp_mask, uv).rgb;
+	float dN = EspGap(m, 0);
+	float dC = EspGap(m, 1);
+	float dD = EspGap(m, 2);
+	float d = max(dN, max(dC, dD));
+	if (d <= ESP_GATE) {
+		return vec4(0.0);
+	}
+	vec3 c = stNormalColor;
+	if (dC >= dN && dC >= dD) {
+		c = stCombatColor;
+	} else if (dD >= dN && dD >= dC) {
+		c = stDefendColor;
+	}
+	float a = clamp(d / ESP_FULL, 0.0, 1.0);
+	return vec4(c * stateBright, a);
+}
+
 void fragment()
 {
 	vec4 pixelColor = texture(screen_texture, SCREEN_UV);
@@ -170,26 +217,7 @@ void fragment()
 
 	vec4 color;
 	if (thermalMode) {
-		// Pick whichever key is CLOSEST: an if/elif chain would let an
-		// earlier check steal matches that belong to a later key.
 		float dMine = orbitDist(pixelColor.rgb, mineKey);
-		float dStN = orbitDist(pixelColor.rgb, stNormalKey);
-		float dStC = orbitDist(pixelColor.rgb, stCombatKey);
-		float dStD = orbitDist(pixelColor.rgb, stDefendKey);
-		// Wash guard for the combat key. Combat is the only two-channel-
-		// saturated key, so a fully washed pixel (daylight sky, snow, cloud
-		// decks) converges onto its measured orbit and painted the whole sky
-		// combat-red plus red speckles on bright snow. The ring pixel keeps
-		// one channel behind by ~0.18 (see DET_ST_COMBAT in VTKNVG.gd); a
-		// white wash has all channels together. Spread below the margin
-		// cannot be the ring, whatever the scope rotation did to its orbit.
-		float washSpread = max(pixelColor.r, max(pixelColor.g, pixelColor.b))
-			- min(pixelColor.r, min(pixelColor.g, pixelColor.b));
-		if (washSpread < 0.04) {
-			dStC = 99.0;
-		}
-		float dCore = min(dMine, min(dStN, min(dStC, dStD)));
-
 		float rawLuminance = dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114));
 		// Shoulder BEFORE the clamp: the top of the range bends down while the
 		// gradient still exists; the clamp afterwards sees values that stop at
@@ -201,19 +229,10 @@ void fragment()
 			luminance = mix(luminance, lifted, dayMix);
 		}
 		vec3 backgroundColor = ThermalPalette(luminance) * 0.7;
-		if (dCore < DET_TOL_CORE) {
-			// Closest wins. Order (exact ties only): mine, states.
-			if (dCore == dMine) {
-				color = vec4(mineColor, pixelColor.a);
-			} else if (dCore == dStN) {
-				color = vec4(stNormalColor * stateBright, pixelColor.a);
-			} else if (dCore == dStC) {
-				color = vec4(stCombatColor * stateBright, pixelColor.a);
-			} else if (dCore == dStD) {
-				color = vec4(stDefendColor * stateBright, pixelColor.a);
-			} else {
-				color = vec4(backgroundColor, pixelColor.a);
-			}
+		if (dMine < DET_TOL_CORE) {
+			// The mine key is still detected in the frame: mines are not part
+			// of the ESP mask yet.
+			color = vec4(mineColor, pixelColor.a);
 		} else {
 			color = vec4(backgroundColor, pixelColor.a);
 		}
@@ -234,6 +253,14 @@ void fragment()
 		// tinted shell.
 		if (orbitDist(pixelColor.rgb, mineKey) < 0.15) {
 			color = vec4(mineColor, pixelColor.a);
+		}
+	}
+	// The mask is substituted last: the state colour comes from the mask, not
+	// from the frame, so it must not be re-tinted by the palette above.
+	if (espOn) {
+		vec4 esp = EspColor(SCREEN_UV);
+		if (esp.a > 0.0) {
+			color = vec4(mix(color.rgb, esp.rgb, esp.a), color.a);
 		}
 	}
 	color.rgb *= nvgWhite;
