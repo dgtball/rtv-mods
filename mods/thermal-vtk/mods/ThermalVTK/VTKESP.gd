@@ -21,6 +21,9 @@ const CAP := 24
 # Frames between line-of-sight raycasts per nomad. The id spreads the checks
 # across frames, so a squad of nomads costs one raycast every few frames.
 const LOS_EVERY := 6
+# A stationary bot can flicker between combat and cover states. The colour
+# only follows a category that held for this long.
+const CAT_HOLD := 0.35
 # Movement speeds above this threshold reveal the bot at the far (sprint)
 # distance instead of the walking one (the ITH walk/run/sprint idea).
 const RUN_SPEED := 2.0
@@ -509,6 +512,24 @@ func _scope_probe(delta: float) -> void:
 # their own npc_labels toggle; thermal vision and the NVG helmet are not
 # required, so states can be checked in plain daylight.
 
+# Hysteresis for the state colour: a one-frame flicker between combat and
+# cover must not repaint the NPC.
+func _apply_state_held(e: Dictionary, state: int, now: float) -> void:
+	var before: int = int(e.get("cat", States.NORMAL))
+	Tracker.apply_state(e, state)
+	var fresh: int = int(e.get("cat", States.NORMAL))
+	if fresh == before:
+		e["cat_pend"] = fresh
+		e["cat_since"] = now
+		return
+	if int(e.get("cat_pend", -1)) == fresh and now - float(e.get("cat_since", 0.0)) >= CAT_HOLD:
+		e["cat_since"] = now
+		return
+	if int(e.get("cat_pend", -1)) != fresh:
+		e["cat_pend"] = fresh
+		e["cat_since"] = now
+	e["cat"] = before
+
 func _ids_for_frame() -> Array:
 	if _ids_stamp != _frame:
 		_ids_frame = _entries.keys()
@@ -551,7 +572,7 @@ func _draw(ppos: Vector3) -> void:
 		var xray: bool = xray_layer and p_trig and not win.is_empty() and dist <= float(win.get("dist", 0.0))
 		e["xray_live"] = xray
 		if _frame % POLL_EVERY == 0:
-			Tracker.apply_state(e, _read_state(node))
+			_apply_state_held(e, _read_state(node), now)
 		if contour_layer and dist <= p_dist:
 			var c: Dictionary
 			if used < _cand_pool.size():
