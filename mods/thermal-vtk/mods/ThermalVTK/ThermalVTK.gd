@@ -158,7 +158,9 @@ func _apply_mode() -> void:
 	if _esp != null and is_instance_valid(_esp):
 		# Two independent layers on the thermal stack: the contour (rings and
 		# the nomad marker) and the x-ray reveals. Either one can run alone.
-		var on := _thermal_enabled and _nvg_active()
+		# Diagnostic: the ESP follows the helmet, not the thermal switch, so the same
+		# NPC can be compared with the palette on and off.
+		var on := _nvg_active()
 		_esp.set_layers(on and _outline_enabled, on and _xray_enabled)
 
 func _nvg_active() -> bool:
