@@ -194,6 +194,14 @@ func t_player_name_invalid_values() -> void:
 	cfg.set_value("String", "player_name", 7)
 	c.read(cfg)
 	ck(c.player_name == "Player", "нестроковый примитив -> Player")
+	# Bool отдельным случаем: 42 и 7 ловятся как "не строка", а true/false
+	# стоит проверить сам по себе - str(true) дал бы в ленте "true".
+	cfg.set_value("String", "player_name", {"value": true})
+	c.read(cfg)
+	ck(c.player_name == "Player", "bool в value -> Player")
+	cfg.set_value("String", "player_name", false)
+	c.read(cfg)
+	ck(c.player_name == "Player", "bool-примитив -> Player")
 
 func t_player_name_is_cleaned() -> void:
 	ck(ConfigRec.clean_player_name("  Vasya  ") == "Vasya", "пробелы по краям срезаны")
