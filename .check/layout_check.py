@@ -283,6 +283,8 @@ PRESENT = [
     "open_gear_att",
     "kill_counter_enabled",
     "kill_feed_enabled",
+    "player_name",
+    "set_player_name",
     "04. KillFeed",
     "func _apply_hud(",
     "func _ensure_hud(",

@@ -1,5 +1,11 @@
 # Changelog
 
+## [5.5.0] - 2026-11-06
+
+### Added
+
+- You can set your own name in the mod settings; the kill feed shows it instead of Player.
+
 ## [5.4.0] - 2026-11-01
 
 ### Changed

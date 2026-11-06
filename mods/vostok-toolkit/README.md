@@ -2,7 +2,7 @@
 
 Everything a Vostok run needs in one mod: loadout presets, dynamic seasons, fast travel, kill stats and an ironman restart.
 
-**Version:** 5.4.0 · **Loader:** Metro Mod Loader 3.4.2 · **Game:** 0.2.3.0 · **Language:** RU / EN
+**Version:** 5.5.0 · **Loader:** Metro Mod Loader 3.4.2 · **Game:** 0.2.3.0 · **Language:** RU / EN
 
 ## Features
 
@@ -15,7 +15,7 @@ Everything a Vostok run needs in one mod: loadout presets, dynamic seasons, fast
 | **Matches stack in equip** | Matches stack right into the equipment slot. |
 | **Item delete** | Delete an item straight from the inventory. |
 | **Better Tasks** | Completed-quest auto-cleanup, partial hand-in, Notes icon rows. |
-| **Kill Stats & Killfeed** | HUD kill/enemy counter and a dynamic killfeed. |
+| **Kill Stats & Killfeed** | HUD kill/enemy counter and a dynamic killfeed that shows your own name (set in MCM). |
 | **Fast Travel** | Move between maps, shelters and traders. |
 
 ## Installation
