@@ -27,6 +27,9 @@ const SEASON_APPLY_SEC := 0.5
 const SWEEP_MSEC := 500
 
 var _equip_on: bool = true
+# Имя игрока в ленте. Дефолт совпадает с прежним литералом: без настройки
+# поведение мода не меняется.
+var _player_name: String = "Player"
 var _pickup_pending: int = 0
 # Авто-экип из контейнера: запоминаем узел/ресурс/количество между pre и post.
 var _xfer_node: Node = null
@@ -99,6 +102,10 @@ func _process(delta: float) -> void:
 
 func set_equip_enabled(on: bool) -> void:
 	_equip_on = on
+
+func set_player_name(v: String) -> void:
+	var name := v.strip_edges()
+	_player_name = name if name != "" else "Player"
 
 const GAME_DATA_RES := Paths.GAME_DATA
 
@@ -712,7 +719,7 @@ func _on_ai_weapon_damage(_hitbox, _damage, _vector, id) -> void:
 	if id != null and is_instance_valid(id) and id is Node:
 		if id.is_in_group("Player"):
 			rec["killer_kind"] = "player"
-			rec["killer_name"] = "Player"
+			rec["killer_name"] = _player_name
 			rec["weapon"] = _rig_weapon_name()
 		else:
 			# Игра отдаёт атакующего как ID-маркер, а не агента:
@@ -744,7 +751,7 @@ func _on_ai_explosion(_direction, id) -> void:
 	if id != null and is_instance_valid(id) and id is Node:
 		if id.is_in_group("Player"):
 			rec["killer_kind"] = "player"
-			rec["killer_name"] = "Player"
+			rec["killer_name"] = _player_name
 		else:
 			var atk := _agent_root(id)
 			var kind := KC.agent_kind(atk)

@@ -345,6 +345,7 @@ func _init() -> void:
 
 func _run() -> void:
 	t_kill_event()
+	t_player_name()
 	t_attacker_snapshot()
 	t_damage_record_ttl()
 	t_sweep_is_throttled()
@@ -1726,3 +1727,56 @@ func t_kill_counter_birth_in_disabled() -> void:
 	probe.free()
 	probe2.free()
 	kc.free()
+
+# Ник игрока живёт в записи о ране, рядом с именем AI-убийцы: лента остаётся
+# самодостаточным снимком и ничего не знает о конфиге.
+func t_player_name() -> void:
+	var evs: Array = []
+	var h = TestHooks.new()
+	root.add_child(h)
+	h.connect("kill_event", func(ev: Dictionary) -> void: evs.append(ev))
+	h._lib = FakeLib2.new()
+	var player := FakeAgent2.new()
+	player.add_to_group("Player")
+	root.add_child(player)
+
+	var v1 := FakeAgent2.new()
+	v1.name = "AI_Bandit"
+	v1.variant.faction = 1
+	root.add_child(v1)
+	h.set_player_name("Vasya")
+	h._lib._caller = v1
+	h._on_ai_weapon_damage("Chest", 10.0, Vector3.ZERO, player)
+	h._lib._caller = v1
+	h._on_ai_death(Vector3.ZERO, null)
+
+	var v2 := FakeAgent2.new()
+	v2.name = "AI_Bandit"
+	v2.variant.faction = 1
+	root.add_child(v2)
+	h._lib._caller = v2
+	h._on_ai_explosion(Vector3.ZERO, player)
+	h._lib._caller = v2
+	h._on_ai_death(Vector3.ZERO, null)
+
+	var v3 := FakeAgent2.new()
+	v3.name = "AI_Bandit"
+	v3.variant.faction = 1
+	root.add_child(v3)
+	h.set_player_name("   ")
+	h._lib._caller = v3
+	h._on_ai_weapon_damage("Chest", 10.0, Vector3.ZERO, player)
+	h._lib._caller = v3
+	h._on_ai_death(Vector3.ZERO, null)
+
+	ck(evs.size() == 3, "три события игрока")
+	if evs.size() == 3:
+		ck(str(evs[0]["killer_name"]) == "Vasya", "ник в оружейном килле")
+		ck(str(evs[1]["killer_name"]) == "Vasya" and bool(evs[1]["grenade"]), "ник в гранатном килле")
+		ck(str(evs[2]["killer_name"]) == "Player", "пустой ник -> Player")
+
+	v1.free()
+	v2.free()
+	v3.free()
+	player.free()
+	h.queue_free()
