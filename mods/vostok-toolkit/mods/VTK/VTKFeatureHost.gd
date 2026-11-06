@@ -27,6 +27,9 @@ var _hud_canvas = null
 
 var _kc_mcm: bool = true
 var _feed_mcm: bool = true
+# Держим ник у себя, чтобы отдать его узлу хуков в любом порядке: конфиг может
+# примениться и до, и после создания узла.
+var _player_name: String = "Player"
 
 func _init(root: Node) -> void:
 	_root = root
@@ -36,6 +39,7 @@ func _ensure_hooks() -> void:
 		return
 	_hooks = Hooks.new()
 	_root.add_child(_hooks)
+	_hooks.set_player_name(_player_name)
 
 func travel() -> Node:
 	_ensure_travel()
@@ -64,6 +68,9 @@ func set_travel_unlocked(only: bool) -> void:
 # автоэкип -> телепорт (термал удалён в 5.2.0).
 func apply_config(c: ConfigRec) -> void:
 	set_hud(c.kill_counter_enabled, c.kill_feed_enabled)
+	_player_name = c.player_name
+	if _hooks != null and is_instance_valid(_hooks):
+		_hooks.set_player_name(_player_name)
 	set_equip(c.auto_equip)
 	set_travel_unlocked(c.tp_unlocked_shelters_only)
 
