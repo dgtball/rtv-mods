@@ -70,9 +70,14 @@ func register(host: RefCounted, on_rebuild: Callable, on_key: Callable) -> void:
 				if s == "Info":
 					existing.set_value(s, k, cfg.get_value(s, k, {}))
 					continue
+				# На первом запуске после обновления мода новые ключи (которых
+				# ещё нет в старом config.ini) попадают в existing только через
+				# слияние. Но apply() не пишет файл - сохранение происходит по
+				# кнопке "Save" в MCM. Чтобы новый ключ появился в файле без
+				# нажатия Save, добавляем все отсутствующие ключи ДО слияния
+				# ( preserves user values for existing keys).
 				if not existing.has_section_key(s, k):
 					existing.set_value(s, k, cfg.get_value(s, k, {}))
-					continue
 				var old_v = existing.get_value(s, k, {})
 				var new_v = cfg.get_value(s, k, {})
 				if typeof(old_v) == TYPE_DICTIONARY and typeof(new_v) == TYPE_DICTIONARY:

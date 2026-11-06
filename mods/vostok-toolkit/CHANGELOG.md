@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.5.1] - 2026-11-06
+
+### Fixed
+
+- A fresh install or an install update no longer hides new MCM settings until you
+  press Save: new keys (such as the player name in Kill Feed) are written to
+  `config.ini` the moment the mod loads, so they appear in the UI immediately.
+
 ## [5.5.0] - 2026-11-06
 
 ### Added
