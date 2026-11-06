@@ -25,6 +25,9 @@ func _run() -> void:
 	t_defaults_cover_every_field()
 	t_cycle_days_is_clamped()
 	t_key_default_is_f3()
+	t_player_name_round_trip()
+	t_player_name_invalid_values()
+	t_player_name_is_cleaned()
 	t_zero_key_falls_back_to_default()
 	print("")
 	if fails == 0:
@@ -83,7 +86,7 @@ func t_primitive_and_plain_string_fall_back() -> void:
 	ck(c.language == Loc.get_lang(), "language-строка отброшена - текущий язык")
 
 func t_full_round_trip() -> void:
-	# Все 11 ключей разом - как их пишет MCM в config.ini.
+	# Все 12 ключей разом - как их пишет MCM в config.ini.
 	var cfg := ConfigFile.new()
 	cfg.set_value("Keycode", "key_ui_toggle", {"value": 90})
 	cfg.set_value("Dropdown", "language", {"value": "ru"})
@@ -96,6 +99,7 @@ func t_full_round_trip() -> void:
 	cfg.set_value("Dropdown", "season_start", {"value": "winter"})
 	cfg.set_value("Int", "season_cycle_days", {"value": 7})
 	cfg.set_value("Bool", "season_visuals", {"value": false})
+	cfg.set_value("String", "player_name", {"value": "Vasya"})
 	var c: ConfigRec = ConfigRec.new()
 	c.read(cfg)
 	ck(c.key_ui_toggle == 90, "round trip key_ui_toggle")
@@ -109,6 +113,7 @@ func t_full_round_trip() -> void:
 	ck(c.season_start == "winter", "round trip season_start")
 	ck(c.season_cycle_days == 7, "round trip season_cycle_days")
 	ck(c.season_visuals == false, "round trip season_visuals")
+	ck(c.player_name == "Vasya", "round trip player_name")
 
 func t_float_int_coercion() -> void:
 	# Int-секция может приехать как число с плавающей точкой - кастуем,
@@ -168,3 +173,33 @@ func t_cycle_days_is_clamped() -> void:
 	cfg.set_value("Int", "season_cycle_days", {"value": 0})
 	c.read(cfg)
 	ck(c.season_cycle_days == ConfigRec.SEASON_MIN_DAYS, "нижняя граница дней сезона")
+
+func t_player_name_round_trip() -> void:
+	# MCM пишет словарь, ручная правка config.ini - голую строку; обе формы живут.
+	var cfg := ConfigFile.new()
+	cfg.set_value("String", "player_name", {"value": "Vasya"})
+	var c: ConfigRec = ConfigRec.new()
+	c.read(cfg)
+	ck(c.player_name == "Vasya", "player_name из словаря MCM")
+	cfg.set_value("String", "player_name", "Kolya")
+	c.read(cfg)
+	ck(c.player_name == "Kolya", "player_name из голой строки")
+
+func t_player_name_invalid_values() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("String", "player_name", {"value": 42})
+	var c: ConfigRec = ConfigRec.new()
+	c.read(cfg)
+	ck(c.player_name == "Player", "нестроковое value -> Player")
+	cfg.set_value("String", "player_name", 7)
+	c.read(cfg)
+	ck(c.player_name == "Player", "нестроковый примитив -> Player")
+
+func t_player_name_is_cleaned() -> void:
+	ck(ConfigRec.clean_player_name("  Vasya  ") == "Vasya", "пробелы по краям срезаны")
+	ck(ConfigRec.clean_player_name("ABCDEFGHIJKLMNOPQRST") == "ABCDEFGHIJKLMNO", "20 символов -> 15")
+	ck(ConfigRec.clean_player_name("ABCDEFGHIJKLMN x") == "ABCDEFGHIJKLMN", "пробел на 15-й позиции срезается")
+	ck(ConfigRec.clean_player_name("Вася") == "Player", "кириллица выкинута -> Player")
+	ck(ConfigRec.clean_player_name("   ") == "Player", "пробелы -> Player")
+	ck(ConfigRec.clean_player_name("") == "Player", "пусто -> Player")
+	ck(ConfigRec.clean_player_name('A "B" \\ C') == 'A "B" \\ C', "кавычки и слэш остаются текстом")

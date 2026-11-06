@@ -19,6 +19,7 @@ const DEFAULTS := {
 	"tp_unlocked_shelters_only": false,
 	"kill_counter_enabled": true,
 	"kill_feed_enabled": true,
+	"player_name": "Player",
 	"season_enabled": true,
 	"season_start": "summer",
 	"season_cycle_days": 30,
@@ -29,6 +30,9 @@ const DEFAULTS := {
 # в UI: config.ini правится руками, а MCM можно обойти.
 const SEASON_MIN_DAYS := 1
 const SEASON_MAX_DAYS := 120
+# Имя игрока в ленте: 15 символов хватает на видимую строку HUD, а больше
+# плашка не тянет. Печатный ASCII - по правилу репозитория мод не локализуется.
+const PLAYER_NAME_MAX := 15
 
 var key_ui_toggle: int = DEFAULTS["key_ui_toggle"]
 var language: String = DEFAULTS["language"]
@@ -37,6 +41,7 @@ var debug_log: bool = DEFAULTS["debug_log"]
 var tp_unlocked_shelters_only: bool = DEFAULTS["tp_unlocked_shelters_only"]
 var kill_counter_enabled: bool = DEFAULTS["kill_counter_enabled"]
 var kill_feed_enabled: bool = DEFAULTS["kill_feed_enabled"]
+var player_name: String = DEFAULTS["player_name"]
 var season_enabled: bool = DEFAULTS["season_enabled"]
 var season_start: String = DEFAULTS["season_start"]
 var season_cycle_days: int = DEFAULTS["season_cycle_days"]
@@ -55,6 +60,9 @@ func read(cfg: ConfigFile) -> void:
 	tp_unlocked_shelters_only = bool(_val(cfg, "Bool", "tp_unlocked_shelters_only", tp_unlocked_shelters_only))
 	kill_counter_enabled = bool(_val(cfg, "Bool", "kill_counter_enabled", kill_counter_enabled))
 	kill_feed_enabled = bool(_val(cfg, "Bool", "kill_feed_enabled", kill_feed_enabled))
+	# Отдельный читатель, а не _val: _val намеренно отбрасывает строки, иначе
+	# голая строка language затирала бы текущий язык.
+	player_name = clean_player_name(_text(cfg, "String", "player_name", player_name))
 	season_enabled = bool(_val(cfg, "Bool", "season_enabled", season_enabled))
 	season_start = str(_val(cfg, "Dropdown", "season_start", season_start))
 	season_cycle_days = clampi(int(_val(cfg, "Int", "season_cycle_days", season_cycle_days)), SEASON_MIN_DAYS, SEASON_MAX_DAYS)
@@ -68,3 +76,31 @@ static func _val(cfg: ConfigFile, section: String, key: String, fallback: Varian
 	if typeof(d) == TYPE_DICTIONARY and d.has("value"):
 		return d["value"]
 	return d if typeof(d) in [TYPE_BOOL, TYPE_INT, TYPE_FLOAT] else fallback
+
+# Строковый читатель для полей, где строка - законное значение (ник). MCM пишет
+# словарь с value, ручная правка config.ini - голую строку; всё остальное
+# откатывается в fallback, чтобы Int/Bool в чужом ключе не стали текстом "42".
+static func _text(cfg: ConfigFile, section: String, key: String, fallback: String) -> String:
+	if not cfg.has_section_key(section, key):
+		return fallback
+	var d = cfg.get_value(section, key, "")
+	if typeof(d) == TYPE_DICTIONARY:
+		if not d.has("value"):
+			return fallback
+		return d["value"] if typeof(d["value"]) == TYPE_STRING else fallback
+	return d if typeof(d) == TYPE_STRING else fallback
+
+# Кламп живёт здесь, а не в UI: у LineEdit в MCM нет ограничения длины, а
+# config.ini правится руками. Печатный ASCII (0x20..0x7E) - всё прочее (в том
+# числе кириллица) выкидывается; обрезка после трима, чтобы пробел на 15-й
+# позиции не остался хвостом.
+static func clean_player_name(raw: String) -> String:
+	var kept := ""
+	for i in raw.length():
+		var code := raw.unicode_at(i)
+		if code >= 0x20 and code <= 0x7E:
+			kept += String.chr(code)
+	var name := kept.strip_edges()
+	if name.length() > PLAYER_NAME_MAX:
+		name = name.substr(0, PLAYER_NAME_MAX).strip_edges()
+	return name if name != "" else str(DEFAULTS["player_name"])
