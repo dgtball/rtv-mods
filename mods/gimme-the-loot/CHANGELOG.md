@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.0] - 2026-11-08
+
+### Added
+- Registry author + host source for vostokmods metadata.
+
 ## [0.7.1] - 2026-11-08
 
 ### Changed
