@@ -76,6 +76,44 @@ func _init() -> void:
 	var t5: Dictionary = Stats.weapon_totals({})
 	ck(t5.is_empty(), "empty weapon: empty")
 
+	# --- эффект-хелперы: «меньше — лучше» и «больше — лучше» ---
+	ck(abs(Stats.reduction_factor({"recoil": 0.12}, "recoil") - 0.88) < 0.001, "reduction_factor recoil 0.12 -> 0.88")
+	ck(abs(Stats.reduction_factor({}, "recoil") - 1.0) < 0.001, "reduction_factor missing -> 1.0")
+	ck(abs(Stats.reduction_factor({"recoil": 1.4}, "recoil")) < 0.001, "reduction_factor clamps at 0")
+	ck(abs(Stats.reduction_factor({"recoil": -0.2}, "recoil") - 1.0) < 0.001, "reduction_factor clamps at 1")
+	ck(abs(Stats.bonus_factor({"damage": 0.2}, "damage") - 1.2) < 0.001, "bonus_factor damage 0.2 -> 1.2")
+	ck(abs(Stats.bonus_factor({}, "damage") - 1.0) < 0.001, "bonus_factor missing -> 1.0")
+	ck(abs(Stats.bonus_factor({"sprint": -2.0}, "sprint")) < 0.001, "bonus_factor clamps at 0")
+
+	# --- урон: damage + low_hp_damage только на низком HP ---
+	ck(abs(Stats.damage_factor({"damage": 0.2, "low_hp_damage": 0.3}, false) - 1.2) < 0.001, "damage_factor normal")
+	ck(abs(Stats.damage_factor({"damage": 0.2, "low_hp_damage": 0.3}, true) - 1.5) < 0.001, "damage_factor low hp")
+	ck(abs(Stats.damage_factor({}, false) - 1.0) < 0.001, "damage_factor no affixes")
+
+	# --- порог низкого HP ---
+	ck(Stats.is_low_hp(30.0), "is_low_hp at 30")
+	ck(not Stats.is_low_hp(30.5), "is_low_hp above 30")
+	ck(not Stats.is_low_hp(0.0), "is_low_hp dead is false")
+	ck(Stats.is_low_hp(60.0, 200.0), "is_low_hp scales with max hp")
+
+	# --- capacity всегда неотрицателен ---
+	ck(abs(Stats.capacity_bonus({"capacity": 7.0}) - 7.0) < 0.001, "capacity_bonus 7")
+	ck(abs(Stats.capacity_bonus({"capacity": -3.0})) < 0.001, "capacity_bonus clamps at 0")
+
+	# --- sprint и noise теперь входят в суммы одежды ---
+	var s4: Array = []
+	s4.append({
+		"slot_name": "Legs",
+		"item_data": {"type": "Clothing", "insulation": 0.0},
+		"slot_data": {"loot_affixes": [
+			{"stat": "sprint", "value": 0.08, "unit": "pct"},
+			{"stat": "noise", "value": 0.20, "unit": "pct"},
+		]}
+	})
+	var t6: Dictionary = Stats.clothing_totals(s4)
+	ck(abs(t6.get("sprint", 0.0) - 0.08) < 0.001, "sprint is summed")
+	ck(abs(t6.get("noise", 0.0) - 0.20) < 0.001, "noise is summed")
+
 	print("")
 	if fails > 0:
 		print("FAILED: %d" % fails)

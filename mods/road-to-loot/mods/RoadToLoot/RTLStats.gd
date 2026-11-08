@@ -2,7 +2,34 @@ extends RefCounted
 
 const KNOWN_STATS := ["regen", "low_hp_regen", "capacity", "stamina_drain",
 	"insulation", "thirst_drain", "hunger_drain", "sanity_drain",
-	"damage", "recoil", "fire_rate", "low_hp_damage"]
+	"damage", "recoil", "fire_rate", "low_hp_damage", "sprint", "noise"]
+
+# Ниже этого порога срабатывают low_hp_damage и low_hp_regen.
+const LOW_HP_FRACTION := 0.3
+const MAX_HEALTH := 100.0
+
+# «Меньше — лучше»: 0.12 значит x0.88. Сверху фактор зажат в 1.0, чтобы
+# отрицательное значение из легаси-сейва не усиливало эффект.
+static func reduction_factor(totals: Dictionary, stat: String) -> float:
+	return clampf(1.0 - float(totals.get(stat, 0.0)), 0.0, 1.0)
+
+# «Больше — лучше»: 0.12 значит x1.12.
+static func bonus_factor(totals: Dictionary, stat: String) -> float:
+	return maxf(0.0, 1.0 + float(totals.get(stat, 0.0)))
+
+# Урон оружия: бонус damage плюс low_hp_damage, пока HP ниже порога.
+static func damage_factor(totals: Dictionary, low_hp: bool) -> float:
+	var bonus := float(totals.get("damage", 0.0))
+	if low_hp:
+		bonus += float(totals.get("low_hp_damage", 0.0))
+	return maxf(0.0, 1.0 + bonus)
+
+# Мёртвый (0 HP) не «на низком HP»: лечить и добивать некого.
+static func is_low_hp(health: float, max_health: float = MAX_HEALTH) -> bool:
+	return health > 0.0 and health <= max_health * LOW_HP_FRACTION
+
+static func capacity_bonus(totals: Dictionary) -> float:
+	return maxf(0.0, float(totals.get("capacity", 0.0)))
 
 static func clothing_totals(slots: Array) -> Dictionary:
 	var result := {}
