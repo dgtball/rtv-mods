@@ -116,13 +116,13 @@ $tests = [ordered]@{
         "res://tests/thermal-vtk/test_settings.gd", "res://tests/thermal-vtk/test_shaders.gd",
         "res://tests/thermal-vtk/test_states.gd", "res://tests/thermal-vtk/test_tracker.gd",
         "res://tests/thermal-vtk/test_weapon.gd")
-    "road-to-loot" = @(
-        "res://tests/road-to-loot/test_rtl_applicator.gd",
-        "res://tests/road-to-loot/test_rtl_category.gd", "res://tests/road-to-loot/test_rtl_persist.gd",
-        "res://tests/road-to-loot/test_rtl_pool.gd", "res://tests/road-to-loot/test_rtl_roll.gd",
-        "res://tests/road-to-loot/test_rtl_rows.gd", "res://tests/road-to-loot/test_rtl_stats.gd",
-        "res://tests/road-to-loot/test_rtl_text.gd", "res://tests/road-to-loot/test_sidecar.gd",
-        "res://tests/road-to-loot/test_store.gd", "res://tests/road-to-loot/test_rtl_world.gd")
+    "gimme-the-loot" = @(
+        "res://tests/gimme-the-loot/test_rtl_applicator.gd",
+        "res://tests/gimme-the-loot/test_rtl_category.gd", "res://tests/gimme-the-loot/test_rtl_persist.gd",
+        "res://tests/gimme-the-loot/test_rtl_pool.gd", "res://tests/gimme-the-loot/test_rtl_roll.gd",
+        "res://tests/gimme-the-loot/test_rtl_rows.gd", "res://tests/gimme-the-loot/test_rtl_stats.gd",
+        "res://tests/gimme-the-loot/test_rtl_text.gd", "res://tests/gimme-the-loot/test_sidecar.gd",
+        "res://tests/gimme-the-loot/test_store.gd", "res://tests/gimme-the-loot/test_rtl_world.gd")
 }
 $tests = @($tests.Values | ForEach-Object { $_ })
 

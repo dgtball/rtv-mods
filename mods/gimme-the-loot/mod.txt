@@ -1,6 +1,6 @@
 [mod]
-name="Road To Loot"
-id="road-to-loot"
+name="Gimme the Loot"
+id="gimme-the-loot"
 version="0.7.1"
 priority=-1
 
