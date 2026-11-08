@@ -117,6 +117,7 @@ $tests = [ordered]@{
         "res://tests/thermal-vtk/test_states.gd", "res://tests/thermal-vtk/test_tracker.gd",
         "res://tests/thermal-vtk/test_weapon.gd")
     "road-to-loot" = @(
+        "res://tests/road-to-loot/test_rtl_applicator.gd",
         "res://tests/road-to-loot/test_rtl_category.gd", "res://tests/road-to-loot/test_rtl_persist.gd",
         "res://tests/road-to-loot/test_rtl_pool.gd", "res://tests/road-to-loot/test_rtl_roll.gd",
         "res://tests/road-to-loot/test_rtl_rows.gd", "res://tests/road-to-loot/test_rtl_stats.gd",

@@ -10,6 +10,7 @@ const Store = preload("res://mods/RoadToLoot/RTLStore.gd")
 const Category = preload("res://mods/RoadToLoot/RTLCategory.gd")
 const RTLSidecar = preload("res://mods/RoadToLoot/RTLSidecar.gd")
 const World = preload("res://mods/RoadToLoot/RTLWorld.gd")
+const StatsAppl = preload("res://mods/RoadToLoot/RTLStatsApplicator.gd")
 
 const MCM_HELPERS := "res://ModConfigurationMenu/Scripts/Doink Oink/MCM_Helpers.tres"
 
@@ -17,6 +18,7 @@ var _lib = null
 var _cfg = ConfigRec.new()
 var _debug = DebugMod.new()
 var _display = Display.new()
+var _stats = null
 var _sidecar_deferred := false
 var _sidecar_retry := 0
 var _container_watch := 0
@@ -40,6 +42,10 @@ func _ready() -> void:
 		Log.warn("RTVModLib not found; loot hooks are inactive")
 	else:
 		_lib = lib
+		_stats = StatsAppl.new()
+		_stats.name = "RTLStatsApplicator"
+		add_child(_stats)
+		_stats.setup(_lib)
 		_lib.hook("lootcontainer-createloot-post", Callable(self, "tag_created_loot"), 100)
 		_lib.hook("lootcontainer-ailoot-post", Callable(self, "tag_ai_loot"), 100)
 		_lib.hook("lootcontainer-storage-post", Callable(self, "on_container_storage"), 100)
@@ -252,6 +258,7 @@ func on_drop_pre(target) -> void:
 	_drop_ids = _id_set(_map())
 
 func on_drop_post(_target) -> void:
+	_stats_dirty()
 	if _drop_src == null:
 		return
 	var src = _drop_src
@@ -279,6 +286,7 @@ func on_shelter_pre(_shelter_name) -> void:
 	_shelter_ids = _id_set(_map())
 
 func on_shelter_loaded(shelter_name) -> void:
+	_stats_dirty()
 	var ids := _shelter_ids
 	_shelter_ids = {}
 	var map := _map()
@@ -476,6 +484,10 @@ func roll_for(itemData, ctx: Dictionary, rng: RandomNumberGenerator) -> Dictiona
 	var tier: int = Roll.pick_tier(weights, rng.randf())
 	var affixes: Array = Roll.build_affixes(cat, tier, itemData, [], rng)
 	return {"tier": tier, "affixes": affixes}
+
+func _stats_dirty() -> void:
+	if _stats != null:
+		_stats.mark_dirty()
 
 func _iface() -> Node:
 	var tree := get_tree()
@@ -1172,6 +1184,7 @@ func _live_equip_slots(equipment) -> Array:
 	return out
 
 func on_load_character() -> void:
+	_stats_dirty()
 	Log.line("[RTL-DBG] HOOK on_load_character called")
 	var data := _sidecar_read()
 	var data_count := 0
@@ -1200,6 +1213,7 @@ func on_load_character() -> void:
 		Log.line("sidecar: restored " + str(data_count) + " rolls")
 
 func on_new_game(_difficulty, _season) -> void:
+	_stats_dirty()
 	if FileAccess.file_exists(SIDECAR_PATH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SIDECAR_PATH))
 	Log.line("sidecar: cleared for a new run")
