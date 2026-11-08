@@ -1,5 +1,5 @@
 [mod]
-name="Gimme the Loot"
+name="Gimme the Loot by CaptiveAI"
 id="gimme-the-loot"
 version="0.7.1"
 priority=-1
@@ -18,7 +18,7 @@ res://Scripts/WeaponRig.gd = FireEvent, FireInput
 res://Scripts/Tooltip.gd = Update, Info
 
 [dependencies]
-optional=["doinkoink-mcm"]
+required=[]
 
 [updates]
 source=""
