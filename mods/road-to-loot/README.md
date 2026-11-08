@@ -38,8 +38,7 @@ theoretical single-item maxima unless an effect states otherwise.
 | Noise | Clothing | 16% | earshot floor ~4 m |
 | max_hp | Clothing | +4% | +36% (~x1.36) |
 | Perception | Clothing | 30% | ~100% chance |
-| Protection | Clothing (Helmet) | +1 level | +2-3 levels |
-| Damage | Weapon | +12% | up to ~2.4x (per affix stack) |
+| Protection | Clothing (Helmet/Armor plate) | +1 level | +2-3 levels || Damage | Weapon | +12% | up to ~2.4x (per affix stack) |
 | Recoil | Weapon | -12% | up to ~0.7x (multiplier) |
 | Fire rate | Weapon | +8% | up to ~1.4x (cooldown) |
 | Low-HP damage | Weapon | +20% | up to ~5-6x bonus |
