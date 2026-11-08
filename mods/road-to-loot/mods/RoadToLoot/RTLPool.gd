@@ -13,8 +13,6 @@ const POOL: Array = [
 		"ranges": {1: [2, 6], 2: [4, 8], 3: [6, 12]}, "release": 2},
 	{"stat": "recoil", "category": "weapon", "unit": "pct", "weight": 1.0,
 		"ranges": {1: [1, 2], 2: [2, 4], 3: [4, 6]}, "release": 2},
-	{"stat": "fire_rate", "category": "weapon", "unit": "pct", "weight": 0.8,
-		"ranges": {1: [2, 4], 2: [3, 6], 3: [4, 8]}, "release": 2},
 	{"stat": "wear", "category": "weapon", "unit": "pct", "weight": 0.6,
 		"ranges": {1: [2, 4], 2: [4, 8], 3: [6, 12]}, "release": 2},
 	{"stat": "low_hp_damage", "category": "weapon", "unit": "pct", "weight": 0.7,
@@ -43,7 +41,7 @@ const POOL: Array = [
 		"ranges": {1: [5, 8], 2: [7, 12], 3: [10, 16]}, "release": 2},
 	{"stat": "sprint", "category": "clothing", "unit": "pct", "weight": 0.8,
 		"ranges": {1: [1, 2], 2: [2, 4], 3: [4, 6]}, "release": 2},
-	{"stat": "perception", "category": "clothing", "unit": "pct", "weight": 0.5,
+	{"stat": "extra_loot", "category": "clothing", "unit": "pct", "weight": 0.5,
 		"ranges": {1: [1, 1], 2: [2, 3], 3: [3, 4]}, "release": 2},
 	{"stat": "protection", "category": "clothing", "unit": "flat", "weight": 0.5,
 		"ranges": {2: [1, 1], 3: [1, 1]}, "release": 2, "needs": "armor"},
@@ -67,10 +65,10 @@ const MERGED_BASE := {
 # ROW_ORDER: порядок собственных строк тултипа. Слитые статы сюда не входят.
 # Порядок фиксирован, чтобы список не переставлялся от предмета к предмету.
 const ROW_ORDER := [
-	"recoil", "fire_rate", "low_hp_damage", "wear",
+	"recoil", "low_hp_damage", "wear",
 	"regen", "low_hp_regen",
 	"stamina_drain", "thirst_drain", "hunger_drain", "sanity_drain",
-	"noise", "sprint", "perception", "max_hp",
+	"noise", "sprint", "extra_loot", "max_hp",
 ]
 
 # ACTIVE_RELEASE: активный релиз пула. 2 = 0.3.0: статы релизов 1 и 2 (§6 D23)

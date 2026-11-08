@@ -472,7 +472,7 @@ func _affix_protection_for(itemData) -> float:
 	var t: Dictionary = _ensure_totals()
 	return float(t.get("protection", 0.0))
 
-# --- perception (extra loot on container open) ------------------------------
+# --- extra_loot (extra loot on container open) ------------------------------
 
 func on_lootcontainer_interact_post() -> void:
 	var container = _caller()
@@ -484,7 +484,7 @@ func on_lootcontainer_interact_post() -> void:
 	if "locked" in container and bool(container.locked):
 		return
 	var totals := _ensure_totals()
-	var chance := clampf(float(totals.get("perception", 0.0)), 0.0, 1.0)
+	var chance := clampf(float(totals.get("extra_loot", 0.0)), 0.0, 1.0)
 	if chance <= 0.0:
 		return
 	if randf() >= chance:
