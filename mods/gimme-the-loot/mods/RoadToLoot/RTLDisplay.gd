@@ -161,10 +161,6 @@ func apply_tooltip(hint) -> void:
 	var tooltip = _tooltip_node(hint)
 	if tooltip == null:
 		return
-	if _cfg != null and _cfg.hide_vanilla_rarity:
-		var vanilla_rarity = tooltip.get("rarity")
-		if vanilla_rarity != null:
-			vanilla_rarity.visible = false
 	var item = null
 	var iface = tooltip.get("interface")
 	if iface != null:
