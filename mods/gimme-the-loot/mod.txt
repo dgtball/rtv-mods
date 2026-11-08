@@ -1,8 +1,9 @@
 [mod]
-name="Gimme the Loot by CaptiveAI"
+name="Gimme The Loot | GTL"
 id="gimme-the-loot"
 version="0.7.1"
 priority=-1
+author="CaptiveAI"
 
 [autoload]
 RTL="res://mods/RoadToLoot/RTLBoot.gd"
@@ -22,3 +23,6 @@ required=[]
 
 [updates]
 source=""
+
+[registry]
+enabled=true
