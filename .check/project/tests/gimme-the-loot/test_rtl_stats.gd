@@ -79,7 +79,7 @@ func _init() -> void:
 	# --- эффект-хелперы: «меньше — лучше» и «больше — лучше» ---
 	ck(abs(Stats.reduction_factor({"recoil": 0.12}, "recoil") - 0.88) < 0.001, "reduction_factor recoil 0.12 -> 0.88")
 	ck(abs(Stats.reduction_factor({}, "recoil") - 1.0) < 0.001, "reduction_factor missing -> 1.0")
-	ck(abs(Stats.reduction_factor({"recoil": 1.4}, "recoil")) < 0.001, "reduction_factor clamps at 0")
+	ck(abs(Stats.reduction_factor({"recoil": 1.4}, "recoil") - 0.5) < 0.001, "reduction_factor caps at 0.5")
 	ck(abs(Stats.reduction_factor({"recoil": -0.2}, "recoil") - 1.0) < 0.001, "reduction_factor clamps at 1")
 	ck(abs(Stats.bonus_factor({"damage": 0.2}, "damage") - 1.2) < 0.001, "bonus_factor damage 0.2 -> 1.2")
 	ck(abs(Stats.bonus_factor({}, "damage") - 1.0) < 0.001, "bonus_factor missing -> 1.0")
@@ -87,7 +87,7 @@ func _init() -> void:
 
 	# --- урон: damage + low_hp_damage только на низком HP ---
 	ck(abs(Stats.damage_factor({"damage": 0.2, "low_hp_damage": 0.3}, false) - 1.2) < 0.001, "damage_factor normal")
-	ck(abs(Stats.damage_factor({"damage": 0.2, "low_hp_damage": 0.3}, true) - 1.5) < 0.001, "damage_factor low hp")
+	ck(abs(Stats.damage_factor({"damage": 0.2, "low_hp_damage": 0.3}, true) - 1.4) < 0.001, "damage_factor low hp")
 	ck(abs(Stats.damage_factor({}, false) - 1.0) < 0.001, "damage_factor no affixes")
 
 	# --- порог низкого HP ---

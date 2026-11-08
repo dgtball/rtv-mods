@@ -547,8 +547,8 @@ func _hook_sensor_playerheardetection() -> void:
 	if not instance.has_method("PlayerValid") or not instance.PlayerValid():
 		return
 	var totals := _ensure_totals()
-	var running_threshold := 20.0 * float(Stats.reduction_factor(totals, "noise"))
-	var walking_threshold := 5.0 * float(Stats.reduction_factor(totals, "noise"))
+	var running_threshold := maxf(4.0, 20.0 * float(Stats.reduction_factor(totals, "noise")))
+	var walking_threshold := maxf(4.0, 5.0 * float(Stats.reduction_factor(totals, "noise")))
 	var game_data = instance.get("gameData")
 	if game_data == null:
 		return

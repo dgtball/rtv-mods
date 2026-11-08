@@ -12,25 +12,41 @@ const MAX_HEALTH := 100.0
 # «Меньше — лучше»: 0.12 значит x0.88. Сверху фактор зажат в 1.0, чтобы
 # отрицательное значение из легаси-сейва не усиливало эффект.
 static func reduction_factor(totals: Dictionary, stat: String) -> float:
-	return clampf(1.0 - float(totals.get(stat, 0.0)), 0.0, 1.0)
+	var t := float(totals.get(stat, 0.0))
+	# general cap 50% reduction (drains cannot fully zero)
+	return clampf(1.0 - minf(t, 0.5), 0.0, 1.0)
+
 
 # «Больше — лучше»: 0.12 значит x1.12.
+const BONUSES := {
+	"capacity": 50.0,
+	"sprint": 1.0,
+	"max_hp": 1.0,
+	"damage": 1.0,
+	"low_hp_damage": 0.2,
+	"perception": 1.0,
+	"insulation": 100.0,
+}
+# Caps to prevent stacking from killing difficulty.
 static func bonus_factor(totals: Dictionary, stat: String) -> float:
-	return maxf(0.0, 1.0 + float(totals.get(stat, 0.0)))
+	var t := float(totals.get(stat, 0.0))
+	if BONUSES.has(stat):
+		t = minf(t, float(BONUSES[stat]))
+	return maxf(0.0, 1.0 + t)
 
 # Урон оружия: бонус damage плюс low_hp_damage, пока HP ниже порога.
 static func damage_factor(totals: Dictionary, low_hp: bool) -> float:
 	var bonus := float(totals.get("damage", 0.0))
 	if low_hp:
-		bonus += float(totals.get("low_hp_damage", 0.0))
-	return maxf(0.0, 1.0 + bonus)
+		bonus += minf(float(totals.get("low_hp_damage", 0.0)), 0.2)
+	return maxf(0.0, 1.0 + minf(bonus, 1.0))
 
 # Мёртвый (0 HP) не «на низком HP»: лечить и добивать некого.
 static func is_low_hp(health: float, max_health: float = MAX_HEALTH) -> bool:
 	return health > 0.0 and health <= max_health * LOW_HP_FRACTION
 
 static func capacity_bonus(totals: Dictionary) -> float:
-	return maxf(0.0, float(totals.get("capacity", 0.0)))
+	return maxf(0.0, minf(float(totals.get("capacity", 0.0)), 50.0))
 
 static func clothing_totals(slots: Array) -> Dictionary:
 	var result := {}
