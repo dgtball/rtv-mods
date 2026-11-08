@@ -19,11 +19,11 @@ func _init() -> void:
 	ck(not Pool.affix_ids("clothing").has("condition"), "clothing: condition removed")
 	ck(Pool.entry("weapon", "condition").is_empty(), "weapon: no condition entry")
 	ck(Pool.entry("clothing", "condition").is_empty(), "clothing: no condition entry")
-	ck(Pool.POOL.size() == 15, "POOL: 15 entries")
+	ck(Pool.POOL.size() == 16, "POOL: 16 entries")
 
 	# --- релизный гейт: 4 оружейных, 11 одежды ---
 	ck(Pool.entries("weapon").size() == 4, "weapon pool: 4 entries")
-	ck(Pool.entries("clothing").size() == 11, "clothing pool: 11 entries")
+	ck(Pool.entries("clothing").size() == 12, "clothing pool: 12 entries")
 
 	# --- статы, снятые в 0.3.0 ---
 	for gone in ["sway", "penetration", "durability", "max_hp", "condition"]:

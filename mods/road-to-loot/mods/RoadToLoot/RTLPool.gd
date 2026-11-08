@@ -41,6 +41,8 @@ const POOL: Array = [
 		"ranges": {1: [10, 20], 2: [15, 30], 3: [20, 40]}, "release": 2},
 	{"stat": "sprint", "category": "clothing", "unit": "pct", "weight": 0.8,
 		"ranges": {1: [3, 6], 2: [5, 9], 3: [8, 12]}, "release": 2},
+	{"stat": "perception", "category": "clothing", "unit": "pct", "weight": 0.5,
+		"ranges": {1: [5, 10], 2: [10, 20], 3: [20, 30]}, "release": 2},
 	{"stat": "protection", "category": "clothing", "unit": "flat", "weight": 0.5,
 		"ranges": {2: [1, 1], 3: [1, 1]}, "release": 2, "needs": "armor"},
 ]
@@ -64,7 +66,7 @@ const ROW_ORDER := [
 	"recoil", "fire_rate", "low_hp_damage",
 	"regen", "low_hp_regen",
 	"stamina_drain", "thirst_drain", "hunger_drain", "sanity_drain",
-	"noise", "sprint",
+	"noise", "sprint", "perception",
 ]
 
 # ACTIVE_RELEASE: активный релиз пула. 2 = 0.3.0: статы релизов 1 и 2 (§6 D23)

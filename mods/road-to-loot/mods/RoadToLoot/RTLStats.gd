@@ -2,7 +2,8 @@ extends RefCounted
 
 const KNOWN_STATS := ["regen", "low_hp_regen", "capacity", "stamina_drain",
 	"insulation", "thirst_drain", "hunger_drain", "sanity_drain",
-	"damage", "recoil", "fire_rate", "low_hp_damage", "sprint", "noise"]
+	"damage", "recoil", "fire_rate", "low_hp_damage", "sprint", "noise",
+	"protection", "perception"]
 
 # Ниже этого порога срабатывают low_hp_damage и low_hp_regen.
 const LOW_HP_FRACTION := 0.3

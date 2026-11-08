@@ -7,11 +7,11 @@ version="0.5.0"
 RTL="res://mods/RoadToLoot/RTLBoot.gd"
 
 [hooks]
-res://Scripts/LootContainer.gd = CreateLoot, AILoot, Storage
+res://Scripts/LootContainer.gd = CreateLoot, AILoot, Storage, Interact
 res://Scripts/LootSimulation.gd = SpawnItems
 res://Scripts/Item.gd = Initialize
 res://Scripts/Loader.gd = SaveCharacter, LoadCharacter, NewGame, LoadShelter
-res://Scripts/Interface.gd = Drop, UpdateStats
+res://Scripts/Interface.gd = Drop, UpdateStats, PlateCheck, HelmetCheck
 res://Scripts/Character.gd = Stamina, Energy, Hydration, Mental, Health
 res://Scripts/WeaponRig.gd = FireEvent, FireInput
 res://Scripts/Tooltip.gd = Update, Info

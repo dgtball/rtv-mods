@@ -47,6 +47,11 @@ func setup(lib) -> void:
 	_lib.hook("character-mental-post", Callable(self, "on_mental_post"), 1000)
 	_lib.hook("character-health-post", Callable(self, "on_health_post"), 1000)
 	_lib.hook("interface-updatestats-post", Callable(self, "on_updatestats_post"), 1000)
+	_lib.hook("interface-platecheck-pre", Callable(self, "on_platecheck_pre"), 1000)
+	_lib.hook("interface-platecheck-post", Callable(self, "on_platecheck_post"), 1000)
+	_lib.hook("interface-helmetcheck-pre", Callable(self, "on_helmetcheck_pre"), 1000)
+	_lib.hook("interface-helmetcheck-post", Callable(self, "on_helmetcheck_post"), 1000)
+	_lib.hook("lootcontainer-interact-post", Callable(self, "on_lootcontainer_interact_post"), 1000)
 	_lib.hook("weaponrig-fireevent-pre", Callable(self, "on_fireevent_pre"), 1000)
 	_lib.hook("weaponrig-fireevent-post", Callable(self, "on_fireevent_post"), 1000)
 	_lib.hook("weaponrig-fireinput-post", Callable(self, "on_fireinput_post"), 1000)
@@ -184,7 +189,7 @@ func on_health_post(delta) -> void:
 		rate += float(totals.get("low_hp_regen", 0.0))
 	if rate <= 0.0:
 		return
-	data.set("health", minf(Stats.MAX_HEALTH, float(data.get("health")) + rate * float(delta)))
+	data.set("health", minf(1000.0, float(data.get("health")) + rate * float(delta)))
 
 # --- capacity, insulation, sprint ----------------------------------------
 
@@ -333,7 +338,170 @@ func on_fireinput_post() -> void:
 	rig.fireRate = scaled
 	rig.set_meta(META_FIRE_RATE, {"base": current, "scaled": scaled})
 
-# --- nodes ----------------------------------------------------------------
+
+# --- protection (per-instance, temp mutate of shared ItemData) ---------------
+
+const META_PROTECTION := "rtl_protection_base"
+
+func on_platecheck_pre(_penetration) -> void:
+	var iface = _caller()
+	if iface == null or not (iface is Object) or not iface.has_method("get"):
+		return
+	var rigSlot = iface.get("equipmentUI")
+	if rigSlot == null or not rigSlot.has_method("get_child"):
+		return
+	if rigSlot.get_child_count() < 8:
+		return
+	rigSlot = rigSlot.get_child(7)
+	if rigSlot == null or not (rigSlot is Node) or rigSlot.get_child_count() == 0:
+		return
+	var sd = rigSlot.get_child(0).slotData if "slotData" in rigSlot.get_child(0) else null
+	if sd == null:
+		return
+	if not ("nested" in sd):
+		return
+	var nested = sd.nested
+	if not (nested is Array):
+		return
+	for itemData in nested:
+		_stash_apply_protection(itemData)
+
+func on_platecheck_post(_penetration) -> void:
+	var iface = _caller()
+	if iface == null or not iface.has_method("get"):
+		return
+	var rigSlot = iface.get("equipmentUI")
+	if rigSlot == null or rigSlot.get_child_count() < 8:
+		return
+	rigSlot = rigSlot.get_child(7)
+	if rigSlot == null or rigSlot.get_child_count() == 0:
+		return
+	var sd = rigSlot.get_child(0).slotData if "slotData" in rigSlot.get_child(0) else null
+	if sd == null or not ("nested" in sd):
+		return
+	var nested = sd.nested
+	if not (nested is Array):
+		return
+	for itemData in nested:
+		_restore_protection(itemData)
+
+func on_helmetcheck_pre(_penetration) -> void:
+	var iface = _caller()
+	if iface == null or not iface.has_method("get"):
+		return
+	var equipmentUI = iface.get("equipmentUI")
+	if equipmentUI == null or equipmentUI.get_child_count() < 9:
+		return
+	var helmetSlot = equipmentUI.get_child(8)
+	if helmetSlot == null or not (helmetSlot is Node) or helmetSlot.get_child_count() == 0:
+		return
+	var item = helmetSlot.get_child(0)
+	if item == null or not ("slotData" in item) or item.slotData == null:
+		return
+	var itemData = item.slotData.itemData
+	_stash_apply_protection(itemData)
+
+func on_helmetcheck_post(_penetration) -> void:
+	var iface = _caller()
+	if iface == null or not iface.has_method("get"):
+		return
+	var equipmentUI = iface.get("equipmentUI")
+	if equipmentUI == null or equipmentUI.get_child_count() < 9:
+		return
+	var helmetSlot = equipmentUI.get_child(8)
+	if helmetSlot == null or helmetSlot.get_child_count() == 0:
+		return
+	var item = helmetSlot.get_child(0)
+	if item == null or not ("slotData" in item) or item.slotData == null:
+		return
+	var itemData = item.slotData.itemData
+	_restore_protection(itemData)
+
+func _protection_bonus(itemData) -> float:
+	if itemData == null:
+		return 0.0
+	var sd: Variant = null
+	# ItemData itself may carry loot_affixes? No — affixes are on slotData.
+	# For helmets, map through the item's slotData if available is handled by caller.
+	return 0.0
+
+func _stash_apply_protection(itemData) -> void:
+	if itemData == null or not (itemData is Object):
+		return
+	if itemData.has_meta(META_PROTECTION):
+		return
+	var bonus := _affix_protection_for(itemData)
+	if bonus <= 0.0:
+		# mark as visited so restore is a no-op
+		itemData.set_meta(META_PROTECTION, {"base": -1.0})
+		return
+	if not ("protection" in itemData):
+		return
+	var before := float(itemData.protection)
+	itemData.protection = int(round(before + bonus))
+	itemData.set_meta(META_PROTECTION, {"base": before})
+
+func _restore_protection(itemData) -> void:
+	if itemData == null or not (itemData is Object):
+		return
+	if not itemData.has_meta(META_PROTECTION):
+		return
+	var m: Dictionary = itemData.get_meta(META_PROTECTION)
+	itemData.remove_meta(META_PROTECTION)
+	if m.has("base") and float(m.base) >= 0.0:
+		if "protection" in itemData:
+			itemData.protection = m.base if m.base is int else int(round(float(m.base)))
+
+func _affix_protection_for(itemData) -> float:
+	# itemData alone has no affixes; the helmet's protection affix is stored on
+	# its SlotData. The Interface HelmetCheck uses slotData.itemData.protection,
+	# and rigSlot-based items use nested itemData without affixes, so this
+	# descriptor resolves the bonus via the currently equipped gear totals.
+	var t: Dictionary = _ensure_totals()
+	return float(t.get("protection", 0.0))
+
+# --- perception (extra loot on container open) ------------------------------
+
+func on_lootcontainer_interact_post() -> void:
+	var container = _caller()
+	if container == null or not (container is Object):
+		return
+	# Interface lock state mirrors Evolve's guard
+	var iface = null
+	# attempt lock check via the same key Evolve uses
+	if "locked" in container and bool(container.locked):
+		return
+	var totals := _ensure_totals()
+	var chance := clampf(float(totals.get("perception", 0.0)), 0.0, 1.0)
+	if chance <= 0.0:
+		return
+	if randf() >= chance:
+		return
+	# replicate Evolve's random-item selection from container buckets
+	var item_data = _random_container_item(container)
+	if item_data == null:
+		return
+	if container.has_method("CreateLoot"):
+		container.CreateLoot(item_data)
+
+func _random_container_item(container) -> Variant:
+	if container == null:
+		return null
+	var rarityRoll: int = randi_range(1, 30) if ("corpse" in container and bool(container.corpse)) else randi_range(1, 100)
+	if (rarityRoll == 1 or rarityRoll == 100) and "legendaryBucket" in container:
+		var lb = container.legendaryBucket
+		if lb is Array and lb.size() > 0 and randi_range(1, 4) == 1:
+			return lb.pick_random()
+	if rarityRoll <= 5 and "rareBucket" in container:
+		var rb = container.rareBucket
+		if rb is Array and rb.size() > 0 and randi_range(1, 2) == 1:
+			return rb.pick_random()
+	if "commonBucket" in container:
+		var cb = container.commonBucket
+		if cb is Array and cb.size() > 0:
+			return cb.pick_random()
+	return null
+
 
 func _caller() -> Variant:
 	if _lib == null or not ("_caller" in _lib):
