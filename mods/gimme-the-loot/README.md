@@ -1,93 +1,79 @@
-# Road To Loot
+# **Gimme the Loot**
 
-**Version:** 0.7.1
+**Version:** 0.7.2  
+**Mod ID:** `gimme-the-loot`  
+**Author:** CaptiveAI
 
-Standalone loot-rarity mod for Road to Vostok. Weapons and clothing found in
-containers, on bodies and lying on the ground roll a per-instance rarity tier
-with passive affixes.
+Per-instance rarity tiers & real passive affixes for weapons and clothing
+you find in Road to Vostok (containers, corpses, ground-spawned loot).
 
-> **Do not remove this mod from an existing save.** It stores two extra fields
-> on every item. Removing the mod makes the game drop those values.
+> **Do not remove this mod from an existing save.** It stores extra fields
+> on every item (`loot_tier`, `loot_affixes`). Removing the mod drops them.
 
 ## What it does
 
-- Every weapon and piece of clothing you find rolls a rarity: Common (blue),
-  Rare (purple) or Legendary (gold).
-- Rarer items carry more passive affixes (Common 1, Rare 2, Legendary 3).
-- Affixes show in the item tooltip; the cell border is tinted by rarity.
-- Affixes on worn clothing change gameplay: carry capacity, insulation, sprint
-  speed, stamina/hunger/thirst/sanity drain and health regeneration.
-- Affixes on weapons change gameplay: damage, recoil and fire rate; damage and
-  regeneration gain a bonus while your health is below 30%.
-- Military and elite containers shift the odds upward.
+- **Common** — blue border, 1 affix
+- **Rare** — purple border, 2 affixes
+- **Legendary** — gold border, 3 affixes
 
-## Affixes & maximum bonuses
+Affixes are **real** (not cosmetic), e.g. carry capacity, insulation, sprint
+speed, stamina/hunger/thirst/sanity drains, regen, damage, recoil, fire rate.
 
-Stats can come from multiple affixes and items; totals add up, so these are
-theoretical single-item maxima unless an effect states otherwise.
+## Installation
 
-| Stat | Category | Max per affix (T3) | Typical full-set (best case) |
-|---|---|---|---|
-| Capacity | Clothing | +6 kg | +36 kg (9 slots × 4 kg est.) |
-| Insulation | Clothing | +12-16% | up to 90% of total protection |
-| Regen | Clothing | 0.04 HP/s | 0.36 HP/s |
-| Low-HP regen | Clothing | 0.04 HP/s | 0.36 HP/s |
-| Sanity drain | Clothing | -12% | up to zero drain |
-| Thirst/Hunger/Stamina drain | Clothing | -9% | up to zero drain, floored at 20% cost |
-| Sprint | Clothing | +6% | +54% (~x1.54 multiplier) |
-| Noise | Clothing | 16% | earshot floor ~4 m |
-| max_hp | Clothing | +4% | +36% (~x1.36) |
-| Perception | Clothing | 30% | ~100% chance |
-| Protection | Clothing (Helmet/Armor plate) | +1 level | +2-3 levels || Damage | Weapon | +12% | up to ~2.4x (per affix stack) |
-| Recoil | Weapon | -12% | up to ~0.7x (multiplier) |
-| Fire rate | Weapon | +8% | up to ~1.4x (cooldown) |
-| Low-HP damage | Weapon | +20% | up to ~5-6x bonus |
-| Wear | Weapon | +12% extra | up to ~50% extra |
+1. Copy `GimmeTheLoot.vmz` into the game's `mods` folder.
+2. Mod Configuration Menu is optional but recommended.
+
+## Contents summary
+
+- Per-instance tier + affixes survive pick-up, save/load and map travel.
+- Nested implants and plates can receive `protection` and `Wear` affixes.
+- Optional integration with Evolve/ItemClarity **is NOT recommended** for
+  stability: use only one of the three mods.
+
+## Table: maximum affix values (T3)
+
+<|constrain|> Stat | Max |
+|---|---|
+| Capacity | +6 kg |
+| Insulation | +12–16% |
+| Regen | 0.04 HP/s |
+| Low-HP regen | 0.04 HP/s |
+| Sanity drain | −12% |
+| Thirst/Hunger/Stamina drain | −9%–−12% |
+| Sprint | +6% |
+| Noise (AI range) | 16% |
+| max_hp | +4% per affix |
+| Extra Loot | ~100% chance |
+| Protection | +1 level |
+| Damage | +12% |
+| Recoil | −12% |
+| Fire rate | +8% |
+| Low-HP damage | +20% |
+| Wear | +12% extra |
 
 Notes:
-- Base stats on each item are unaffected by RTL.
-- Drain effects are floored (
-  factor >= 0.2) to avoid the game stalling them completely.
-- Noise has a floor of 4 m (never fully silent).
+- Drains are floored at ~20% so they cannot fully stop.
+- Noise is floored at ~4 m.
 
-## Install
+## MCM settings
 
-1. Copy `RoadToLoot.vmz` into the game's `mods` folder.
-2. Mod Configuration Menu is optional, but recommended for the debug tools.
+### 01. Display
+- Paint item cells
+- Show affix block in tooltip
+- Rarity palette
 
-## Debug (for testing)
+### 02. Balance
+- Rarity frequency (0.5–2.0×)
+- Container context hint
 
-Enable "Debug mode" in the MCM menu: force a rarity tier for all finds, or
-re-roll the item under the cursor with the debug hotkey.
+Debug section is **dev-only** (requires `user://rtl_dev` file).
 
-## Build (from the repo)
+## Changelog
 
-```powershell
-powershell -ExecutionPolicy Bypass -File pack.ps1
-```
+See `CHANGELOG.md`.
 
-## Manual test checklist (before a release)
-
-- Container weapon rolls a tier (check the log with "Log rolls").
-- Tooltip shows the rarity line and affixes; the cell border matches.
-- Moving/dropping/stashing/reloading keeps the tier and affixes.
-- Travelling to another map or leaving a shelter keeps the tier and affixes on
-  everything in the backpack, on the body and in the catalog.
-- Corpse loot rolls.
-- World loot (weapons and clothing on the ground) rolls a tier, and the tier
-  survives picking it up.
-- "Force tier" debug applies to all finds.
-- The re-roll hotkey updates the hovered item.
-- Capacity, insulation and sprint on the character screen change with worn
-  affixes and return to normal when the item is removed.
-- Stamina, hunger, thirst and sanity drain slower with the matching affix.
-- Health regenerates with a regen affix, faster below 30% health.
-- A weapon with a damage, recoil or fire-rate affix behaves differently from a
-  plain copy of the same weapon; removing it restores the plain behaviour.
-- Runs without MCM installed.
-- Not recommended to use together with Evolve or ItemClarity: both hook into the same
-  replace-/UI seams, and load-order priority (-1) may overwrite or disable one side;
-  mixing can lead to some affixes being no-ops.
-- No save errors with the mod present.
-
-
+## Links
+- nexusmods.com / moddb: search **Gimme the Loot**
+- GitHub repo: RTVMOD (branch main, folder `mods/gimme-the-loot`)
+PY
