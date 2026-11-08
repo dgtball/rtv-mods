@@ -85,7 +85,9 @@ powershell -ExecutionPolicy Bypass -File pack.ps1
 - A weapon with a damage, recoil or fire-rate affix behaves differently from a
   plain copy of the same weapon; removing it restores the plain behaviour.
 - Runs without MCM installed.
+- Not recommended to use together with Evolve or ItemClarity: both hook into the same
+  replace-/UI seams, and load-order priority (-1) may overwrite or disable one side;
+  mixing can lead to some affixes being no-ops.
 - No save errors with the mod present.
-- Coexists with Evolve and ItemClarity.
 
 
