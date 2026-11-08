@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.7.1] - 2026-11-08
+
+### Changed
+- Trimmed affix ranges (roughly ×2.5) to keep builds balanced without hard caps.
+
 ## [0.7.0] - 2026-11-08
 
 ### Added
