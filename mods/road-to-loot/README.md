@@ -1,6 +1,6 @@
 # Road To Loot
 
-**Version:** 0.4.1
+**Version:** 0.5.0
 
 Standalone loot-rarity mod for Road to Vostok. Weapons and clothing found in
 containers, on bodies and lying on the ground roll a per-instance rarity tier
@@ -15,6 +15,10 @@ with passive affixes.
   Rare (purple) or Legendary (gold).
 - Rarer items carry more passive affixes (Common 1, Rare 2, Legendary 3).
 - Affixes show in the item tooltip; the cell border is tinted by rarity.
+- Affixes on worn clothing change gameplay: carry capacity, insulation, sprint
+  speed, stamina/hunger/thirst/sanity drain and health regeneration.
+- Affixes on weapons change gameplay: damage, recoil and fire rate; damage and
+  regeneration gain a bonus while your health is below 30%.
 - Military and elite containers shift the odds upward.
 
 ## Install
@@ -45,6 +49,12 @@ powershell -ExecutionPolicy Bypass -File pack.ps1
   survives picking it up.
 - "Force tier" debug applies to all finds.
 - The re-roll hotkey updates the hovered item.
+- Capacity, insulation and sprint on the character screen change with worn
+  affixes and return to normal when the item is removed.
+- Stamina, hunger, thirst and sanity drain slower with the matching affix.
+- Health regenerates with a regen affix, faster below 30% health.
+- A weapon with a damage, recoil or fire-rate affix behaves differently from a
+  plain copy of the same weapon; removing it restores the plain behaviour.
 - Runs without MCM installed.
 - No save errors with the mod present.
 - Coexists with Evolve and ItemClarity.

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0] - 2026-11-08
+
+### Added
+- Passive affixes on worn clothing now work: carry capacity, insulation, sprint
+  speed, slower stamina/hunger/thirst/sanity drain, and health regeneration
+  that gets stronger below 30% health.
+- Passive affixes on weapons now work: damage, recoil and fire rate, with a
+  damage bonus while your health is below 30%.
+
+### Changed
+- Noise and protection affixes are still informational only for now.
+
 ## [0.4.1] - 2026-10-29
 
 ### Fixed

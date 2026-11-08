@@ -1,7 +1,7 @@
 [mod]
 name="Road To Loot"
 id="road-to-loot"
-version="0.4.1"
+version="0.5.0"
 
 [autoload]
 RTL="res://mods/RoadToLoot/RTLBoot.gd"
