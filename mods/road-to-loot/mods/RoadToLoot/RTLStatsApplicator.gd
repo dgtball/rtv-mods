@@ -314,6 +314,13 @@ func on_fireevent_post() -> void:
 	for field in base.keys():
 		data.set(field, base[field])
 
+	var slot_data = rig.get("slotData") if (rig is Object) and rig.has_method("get") else null
+	if slot_data != null:
+		var wtot := Stats.weapon_totals(Store.affixes(slot_data))
+		var chance := clampf(float(wtot.get("wear", 0.0)), 0.0, 0.9)
+		if chance > 0.0 and randf() < chance and "condition" in slot_data and int(slot_data.condition) > 0:
+			slot_data.condition -= 1
+
 # fireRate is a cooldown, so a fire-rate bonus divides it. Vanilla writes a fresh
 # base only on the frames it fires, which is exactly what the stored pair detects.
 func on_fireinput_post() -> void:

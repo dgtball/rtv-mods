@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.1] - 2026-11-08
+
+### Added
+- `wear` affix for weapons: increases the chance that the weapon loses
+  condition when fired (no knives).
+
 ## [0.6.0] - 2026-11-08
 
 ### Added

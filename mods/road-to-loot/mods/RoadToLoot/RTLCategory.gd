@@ -8,7 +8,7 @@ const WEAPON_SLOTS := ["Primary", "Secondary", "Knife"]
 const CLOTHING_SLOTS := ["Backpack", "Rig", "Helmet", "Head", "Torso", "Legs", "Belt", "Feet", "Hands"]
 const NON_WEAPON_TYPES := ["Fishing", "Instrument"]
 const KNIFE_TYPE := "Knife"
-const KNIFE_BLOCKED := ["recoil", "fire_rate"]
+const KNIFE_BLOCKED := ["recoil", "fire_rate", "wear"]
 
 static func _field_str(itemData, field: String) -> String:
 	if itemData == null:

@@ -20,10 +20,10 @@ func _init() -> void:
 	ck(not Pool.affix_ids("clothing").has("condition"), "clothing: condition removed")
 	ck(Pool.entry("weapon", "condition").is_empty(), "weapon: no condition entry")
 	ck(Pool.entry("clothing", "condition").is_empty(), "clothing: no condition entry")
-	ck(Pool.POOL.size() == 16, "POOL: 16 entries")
+	ck(Pool.POOL.size() == 17, "POOL: 17 entries")
 
 	# --- релизный гейт: 4 оружейных, 11 одежды ---
-	ck(Pool.entries("weapon").size() == 4, "weapon pool: 4 entries")
+	ck(Pool.entries("weapon").size() == 5, "weapon pool: 5 entries")
 	ck(Pool.entries("clothing").size() == 12, "clothing pool: 12 entries")
 
 	# --- статы, снятые в 0.3.0 ---

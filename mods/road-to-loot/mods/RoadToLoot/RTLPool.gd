@@ -15,6 +15,8 @@ const POOL: Array = [
 		"ranges": {1: [8, 15], 2: [12, 22], 3: [18, 30]}, "release": 2},
 	{"stat": "fire_rate", "category": "weapon", "unit": "pct", "weight": 0.8,
 		"ranges": {1: [5, 10], 2: [8, 14], 3: [10, 20]}, "release": 2},
+	{"stat": "wear", "category": "weapon", "unit": "pct", "weight": 0.6,
+		"ranges": {1: [5, 10], 2: [10, 20], 3: [15, 30]}, "release": 2},
 	{"stat": "low_hp_damage", "category": "weapon", "unit": "pct", "weight": 0.7,
 		"ranges": {1: [15, 25], 2: [25, 35], 3: [35, 50]}, "release": 2},
 
@@ -63,7 +65,7 @@ const MERGED_BASE := {
 # ROW_ORDER: порядок собственных строк тултипа. Слитые статы сюда не входят.
 # Порядок фиксирован, чтобы список не переставлялся от предмета к предмету.
 const ROW_ORDER := [
-	"recoil", "fire_rate", "low_hp_damage",
+	"recoil", "fire_rate", "low_hp_damage", "wear",
 	"regen", "low_hp_regen",
 	"stamina_drain", "thirst_drain", "hunger_drain", "sanity_drain",
 	"noise", "sprint", "perception",
