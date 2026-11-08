@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.3.0] - 2026-11-03
+
+### Added
+- Freeze Vehicle now also freezes the police car in place.
+- The police car's idle, drive, road, music, and siren loops are silenced while frozen and restored on unfreeze.
+
+### Changed
+- Renamed "Freeze BTR & Heli" toggle to "Freeze Vehicle".
+
 ## [1.2.0] - 2026-10-19
 
 ### Added

@@ -1,7 +1,7 @@
 [mod]
 name="Freeze for JCM"
 id="jcm-freeze"
-version="1.2.0"
+version="1.3.0"
 
 [dependencies]
 required=["juuzoz-jcm", "doinkoink-mcm"]
@@ -14,3 +14,4 @@ jcmFreezeMCM="res://mods/jcm-freeze/FreezeMCM.gd"
 res://Scripts/AI.gd = _physics_process
 res://Scripts/BTR.gd = _physics_process
 res://Scripts/Helicopter.gd = _physics_process
+res://Scripts/Police.gd = _physics_process

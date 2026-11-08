@@ -12,6 +12,8 @@ var _bt_audio: Array = []
 var _bt_seen: Dictionary = {}
 var _heli_audio: Array = []
 var _heli_seen: Dictionary = {}
+var _police_audio: Array = []
+var _police_seen: Dictionary = {}
 
 
 func _ready() -> void:
@@ -40,7 +42,7 @@ func _on_lib_ready() -> void:
 
 	_jcm.register_toggle(NPC_ID, "AI", "Freeze NPC", false, _on_npc_toggled)
 	_npc_on = _jcm.is_enabled(NPC_ID)
-	_jcm.register_toggle(VEHICLES_ID, "AI", "Freeze BTR & Heli", false, _on_vehicles_toggled)
+	_jcm.register_toggle(VEHICLES_ID, "AI", "Freeze Vehicle", false, _on_vehicles_toggled)
 	_vehicles_on = _jcm.is_enabled(VEHICLES_ID)
 	_register_hooks()
 	_mcm = get_node_or_null("/root/jcmFreezeMCM")
@@ -50,6 +52,7 @@ func _register_hooks() -> void:
 	_try_hook("ai-_physics_process", _on_ai_process)
 	_try_hook("btr-_physics_process", _on_btr_process)
 	_try_hook("helicopter-_physics_process", _on_heli_process)
+	_try_hook("police-_physics_process", _on_police_process)
 
 
 func _try_hook(name: String, cb: Callable) -> void:
@@ -67,6 +70,7 @@ func _on_vehicles_toggled(enabled: bool) -> void:
 	if not enabled:
 		_restore_btr()
 		_restore_heli()
+		_restore_police()
 
 
 func _on_btr_process(_delta) -> void:
@@ -78,6 +82,11 @@ func _on_btr_process(_delta) -> void:
 func _on_heli_process(_delta) -> void:
 	if _vehicles_on:
 		_silence_heli()
+		_lib.skip_super()
+
+func _on_police_process(_delta) -> void:
+	if _vehicles_on:
+		_silence_police()
 		_lib.skip_super()
 
 
@@ -102,6 +111,16 @@ func _silence_heli() -> void:
 	_heli_seen[key] = true
 	_grab_players(heli, ["Audio"], _heli_audio)
 
+func _silence_police() -> void:
+	var police = _lib._caller
+	if police == null or not is_instance_valid(police):
+		return
+	var key = police.get_instance_id()
+	if _police_seen.has(key):
+		return
+	_police_seen[key] = true
+	_grab_players(police, ["Audio/Idle", "Audio/Drive", "Audio/Road", "Audio/Music_Exterior", "Audio/Music_Interior", "Audio/Siren"], _police_audio)
+
 
 func _grab_players(owner: Node, paths: Array, bag: Array) -> void:
 	for path in paths:
@@ -122,6 +141,11 @@ func _restore_heli() -> void:
 	_restore_players(_heli_audio)
 	_heli_audio.clear()
 	_heli_seen.clear()
+
+func _restore_police() -> void:
+	_restore_players(_police_audio)
+	_police_audio.clear()
+	_police_seen.clear()
 
 
 func _restore_players(bag: Array) -> void:

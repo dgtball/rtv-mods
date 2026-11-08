@@ -11,9 +11,10 @@ testing, or pausing the action without touching the console.
 - **Freeze NPC** — stops every NPC in place. Frozen characters become static:
   the AI simply stops ticking, so animations, patrols, and attacks all halt
   until you switch it back on.
-- **Freeze BTR & Heli** — freezes the BTR and the event helicopter mid-flight.
-  The BTR's engine loop and the helicopter's rotor sound are muted while frozen
-  and return the moment you unfreeze, so a stopped vehicle is also silent.
+- **Freeze Vehicle** — freezes the BTR, the event helicopter, and the police car
+  mid-flight/drive. The BTR's engine loop, the helicopter's rotor sound, and the
+  police car's idle/drive/road loops are muted while frozen and return the moment
+  you unfreeze, so a stopped vehicle is also silent.
 - **Hotkey** — bind a key in MCM to toggle **Freeze NPC** without opening the
   menu. Default is **Numpad 4**; the hotkey is ignored while a menu, the
   settings screen, or a text field is open.
@@ -34,7 +35,7 @@ testing, or pausing the action without touching the console.
 
 ## Controls
 
-- `Freeze NPC` / `Freeze BTR & Heli` — toggles on the AI tab.
+- `Freeze NPC` / `Freeze Vehicle` — toggles on the AI tab.
 - `Toggle Freeze NPC` hotkey — **Numpad 4** by default; rebindable in MCM under
   *Hotkeys*.
 
