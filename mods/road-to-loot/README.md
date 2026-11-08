@@ -21,6 +21,36 @@ with passive affixes.
   regeneration gain a bonus while your health is below 30%.
 - Military and elite containers shift the odds upward.
 
+## Affixes & maximum bonuses
+
+Stats can come from multiple affixes and items; totals add up, so these are
+theoretical single-item maxima unless an effect states otherwise.
+
+| Stat | Category | Max per affix (T3) | Typical full-set (best case) |
+|---|---|---|---|
+| Capacity | Clothing | +6 kg | +36 kg (9 slots × 4 kg est.) |
+| Insulation | Clothing | +12-16% | up to 90% of total protection |
+| Regen | Clothing | 0.04 HP/s | 0.36 HP/s |
+| Low-HP regen | Clothing | 0.04 HP/s | 0.36 HP/s |
+| Sanity drain | Clothing | -12% | up to zero drain |
+| Thirst/Hunger/Stamina drain | Clothing | -9% | up to zero drain, floored at 20% cost |
+| Sprint | Clothing | +6% | +54% (~x1.54 multiplier) |
+| Noise | Clothing | 16% | earshot floor ~4 m |
+| max_hp | Clothing | +4% | +36% (~x1.36) |
+| Perception | Clothing | 30% | ~100% chance |
+| Protection | Clothing (Helmet) | +1 level | +2-3 levels |
+| Damage | Weapon | +12% | up to ~2.4x (per affix stack) |
+| Recoil | Weapon | -12% | up to ~0.7x (multiplier) |
+| Fire rate | Weapon | +8% | up to ~1.4x (cooldown) |
+| Low-HP damage | Weapon | +20% | up to ~5-6x bonus |
+| Wear | Weapon | +12% extra | up to ~50% extra |
+
+Notes:
+- Base stats on each item are unaffected by RTL.
+- Drain effects are floored (
+  factor >= 0.2) to avoid the game stalling them completely.
+- Noise has a floor of 4 m (never fully silent).
+
 ## Install
 
 1. Copy `RoadToLoot.vmz` into the game's `mods` folder.
