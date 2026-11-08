@@ -7,8 +7,8 @@ separate `.vmz` archives and can be installed on their own — there is no share
 |---|---|---|---|
 | **Vostok Toolkit** (`vostok-toolkit`) | Loadout presets, dynamic seasons, partial task hand-in, Notes icon rows, kill stats and killfeed, fast travel | 5.4.0 | [mods/vostok-toolkit/README.md](mods/vostok-toolkit/README.md) |
 | **ThermalVTK** (`thermal-vtk`) | Standalone thermal vision / NVG overlay with heat glow and ESP | 2.4.6 | [mods/thermal-vtk/README.md](mods/thermal-vtk/README.md) |
-| **Gimme the Loot** (`gimme-the-loot`) | Per-instance rarity tiers and affixes for looted weapons and clothing | 0.7.1 | [mods/gimme-the-loot/README.md](mods/gimme-the-loot/README.md) |
-| **Freeze for JCM** (`jcm-freeze`) | Freezes NPCs, the BTR and the helicopter on demand (JCM addon) | 1.2.0 | [mods/jcm-freeze/README.md](mods/jcm-freeze/README.md) |
+| **Gimme the Loot** (`gimme-the-loot`) | Per-instance rarity tiers and affixes for looted weapons and clothing | 0.7.2 | [mods/gimme-the-loot/README.md](mods/gimme-the-loot/README.md) |
+| **Freeze for JCM** (`jcm-freeze`) | Freezes NPCs, the BTR and the helicopter on demand (JCM addon) | 1.3.0 | [mods/jcm-freeze/README.md](mods/jcm-freeze/README.md) |
 
 ## Layout
 
