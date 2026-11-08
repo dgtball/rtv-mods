@@ -47,6 +47,8 @@ const POOL: Array = [
 		"ranges": {1: [5, 10], 2: [10, 20], 3: [20, 30]}, "release": 2},
 	{"stat": "protection", "category": "clothing", "unit": "flat", "weight": 0.5,
 		"ranges": {2: [1, 1], 3: [1, 1]}, "release": 2, "needs": "armor"},
+	{"stat": "max_hp", "category": "clothing", "unit": "pct", "weight": 0.7,
+		"ranges": {1: [2, 4], 2: [4, 8], 3: [8, 12]}, "release": 2},
 ]
 
 # MERGED: аффикс вписывается суммой в ванильную строку тултипа, своей строки не получает.
@@ -68,7 +70,7 @@ const ROW_ORDER := [
 	"recoil", "fire_rate", "low_hp_damage", "wear",
 	"regen", "low_hp_regen",
 	"stamina_drain", "thirst_drain", "hunger_drain", "sanity_drain",
-	"noise", "sprint", "perception",
+	"noise", "sprint", "perception", "max_hp",
 ]
 
 # ACTIVE_RELEASE: активный релиз пула. 2 = 0.3.0: статы релизов 1 и 2 (§6 D23)

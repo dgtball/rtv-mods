@@ -38,7 +38,7 @@ func _init() -> void:
 			{"stat": "insulation", "value": 0.2, "unit": "pct"},
 			{"stat": "capacity", "value": 5.0, "unit": "kg"},
 			{"stat": "stamina_drain", "value": 0.1, "unit": "pct"},
-			{"stat": "max_hp", "value": 3.0, "unit": "flat"},
+			{"stat": "foo_stat", "value": 3.0, "unit": "flat"},
 		],
 	}))
 	equipment.add_child(_make_slot({
@@ -52,7 +52,7 @@ func _init() -> void:
 	ck(abs(totals.get("capacity", 0.0) - 5.0) < 0.001, "capacity = 5")
 	ck(abs(totals.get("stamina_drain", 0.0) - 0.1) < 0.001, "stamina_drain = 0.1")
 	ck(not totals.has("damage"), "weapon affix does not leak into clothing")
-	ck(not totals.has("max_hp"), "stat outside the pool is ignored")
+	ck(not totals.has("foo_stat"), "stat outside the pool is ignored")
 
 	# ресурс SlotData: аффиксы лежат только в метаданных (как после adopt)
 	var slot_data := FakeSlotData.new()

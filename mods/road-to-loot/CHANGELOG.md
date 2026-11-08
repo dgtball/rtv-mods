@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.7.0] - 2026-11-08
+
+### Added
+- `noise` affix for clothing: reduces AI hearing distance when the affix is
+  present.
+- `vitality` affix for clothing: increases maximum health (scaled).
+
+### Changed
+- RTL now loads before Evolve (priority -1) so noise and vitality replace
+  hooks land first.
+
 ## [0.6.1] - 2026-11-08
 
 ### Added

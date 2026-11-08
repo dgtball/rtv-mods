@@ -1,6 +1,6 @@
 # Road To Loot
 
-**Version:** 0.6.1
+**Version:** 0.7.0
 
 Standalone loot-rarity mod for Road to Vostok. Weapons and clothing found in
 containers, on bodies and lying on the ground roll a per-instance rarity tier

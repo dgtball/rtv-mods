@@ -26,6 +26,8 @@ const RECOIL_FIELDS := ["horizontalRecoil", "verticalRecoil", "kick"]
 var _lib = null
 var _totals: Dictionary = {}
 var _dirty := true
+var _vitality_owned := false
+var _noise_owned := false
 
 # Total of every clothing affix currently worn. Called from RTLBoot when the
 # loader or the drop path changes the equipment; the interface post hook keeps
@@ -52,6 +54,9 @@ func setup(lib) -> void:
 	_lib.hook("interface-helmetcheck-pre", Callable(self, "on_helmetcheck_pre"), 1000)
 	_lib.hook("interface-helmetcheck-post", Callable(self, "on_helmetcheck_post"), 1000)
 	_lib.hook("lootcontainer-interact-post", Callable(self, "on_lootcontainer_interact_post"), 1000)
+	# replace-hooks for Phase 2 (noise + vitality): owned separately; priority=-1 makes RTL first
+	_vitality_owned = (_lib.hook("character-clamp", Callable(self, "_hook_character_clamp"), -999) != -1)
+	_noise_owned = (_lib.hook("sensor-playerheardetection", Callable(self, "_hook_sensor_playerheardetection"), -999) != -1)
 	_lib.hook("weaponrig-fireevent-pre", Callable(self, "on_fireevent_pre"), 1000)
 	_lib.hook("weaponrig-fireevent-post", Callable(self, "on_fireevent_post"), 1000)
 	_lib.hook("weaponrig-fireinput-post", Callable(self, "on_fireinput_post"), 1000)
@@ -508,6 +513,50 @@ func _random_container_item(container) -> Variant:
 		if cb is Array and cb.size() > 0:
 			return cb.pick_random()
 	return null
+
+
+
+# --- Phase 2 replace-hooks (noise + max HP) -----------------------------
+
+func _hook_character_clamp() -> void:
+	_lib.skip_super()
+	var instance = _lib._caller
+	if instance == null:
+		return
+	var totals := _ensure_totals()
+	var max_health := 100.0 * float(Stats.bonus_factor(totals, "max_hp"))
+	var game_data = instance.get("gameData")
+	if game_data == null:
+		return
+	game_data.set("health", clampf(float(game_data.get("health")), 0.0, max_health))
+	game_data.set("energy", clampf(float(game_data.get("energy")), 0.0, 100.0))
+	game_data.set("hydration", clampf(float(game_data.get("hydration")), 0.0, 100.0))
+	game_data.set("mental", clampf(float(game_data.get("mental")), 0.0, 100.0))
+	game_data.set("temperature", clampf(float(game_data.get("temperature")), 0.0, 100.0))
+	game_data.set("cat", clampf(float(game_data.get("cat")), 0.0, 100.0))
+	game_data.set("bodyStamina", clampf(float(game_data.get("bodyStamina")), 0.0, 100.0))
+	game_data.set("armStamina", clampf(float(game_data.get("armStamina")), 0.0, 100.0))
+	game_data.set("oxygen", clampf(float(game_data.get("oxygen")), 0.0, 100.0))
+	game_data.set("reputation", clampf(float(game_data.get("reputation")), 0.0, 100.0))
+
+func _hook_sensor_playerheardetection() -> void:
+	_lib.skip_super()
+	var instance = _lib._caller
+	if instance == null:
+		return
+	if not instance.has_method("PlayerValid") or not instance.PlayerValid():
+		return
+	var totals := _ensure_totals()
+	var running_threshold := 20.0 * float(Stats.reduction_factor(totals, "noise"))
+	var walking_threshold := 5.0 * float(Stats.reduction_factor(totals, "noise"))
+	var game_data = instance.get("gameData")
+	if game_data == null:
+		return
+	var player_distance: float = instance.global_position.distance_to(game_data.playerPosition)
+	var owner = instance.get("owner")
+	if (player_distance < running_threshold and game_data.isRunning) or (player_distance < walking_threshold and game_data.isWalking):
+		if owner != null and owner.has("State") and owner.get("currentState") != owner.State.Ambush:
+			instance.Threat(get_tree().get_first_node_in_group("Player"))
 
 
 func _caller() -> Variant:

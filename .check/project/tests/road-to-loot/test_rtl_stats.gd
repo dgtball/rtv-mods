@@ -57,14 +57,14 @@ func _init() -> void:
 		"slot_name": "Armor",
 		"item_data": {"type": "Armor", "insulation": 0.0},
 		"slot_data": {"loot_affixes": [
-			{"stat": "max_hp", "value": 10.0, "unit": "hp"},
+			{"stat": "sway", "value": 10.0, "unit": "hp"},
 			{"stat": "sway", "value": 0.15, "unit": "pct"},
 			{"stat": "condition", "value": 0.20, "unit": "pct"},
 			{"stat": "regen", "value": 0.05, "unit": "rate"},
 		]}
 	})
 	var t3: Dictionary = Stats.clothing_totals(s3)
-	ck(not t3.has("max_hp"), "legacy max_hp ignored")
+	ck(not t3.has("sway"), "legacy sway ignored")
 	ck(not t3.has("sway"), "legacy sway ignored")
 	ck(not t3.has("condition"), "legacy condition ignored")
 	ck(abs(t3.get("regen", 0.0) - 0.05) < 0.001, "regen IS in totals")
