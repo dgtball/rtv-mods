@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0] - 2026-11-08
+
+### Added
+- Protection affixes on helmets now do something: an extra level of armor
+  protection applies for the duration of the hit check and resets afterward.
+- Perception affixes give a chance to roll an extra item when you open a
+  container.
+
+### Fixed
+- Health regeneration no longer caps at 100 when your maximum health is
+  raised by another mod.
+
 ## [0.5.0] - 2026-11-08
 
 ### Added
