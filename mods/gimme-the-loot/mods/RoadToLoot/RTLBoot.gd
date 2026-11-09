@@ -71,7 +71,8 @@ func register_mcm() -> void:
 		_cfg.read(ConfigFile.new())
 		return
 	var cfg := build_config()
-	var path := "user://MCM/road-to-loot"
+	var path := "user://MCM/gimme-the-loot"
+	_migrate_mcm_dir("user://MCM/road-to-loot", path)
 	_migrate_mcm_dir("user://MCM/lootershooter", path)
 	DirAccess.make_dir_recursive_absolute(path)
 	var cfile := path + "/config.ini"
@@ -80,7 +81,7 @@ func register_mcm() -> void:
 		if existing.load(cfile) == OK:
 			merge_user_values(cfg, existing)
 	cfg.save(cfile)
-	mcm.RegisterConfiguration("road-to-loot", "Road To Loot", path, "Per-instance loot rarity and affixes", Callable(self, "apply_config"), self)
+	mcm.RegisterConfiguration("gimme-the-loot", "Gimme The Loot", path, "Per-instance loot rarity and affixes", Callable(self, "apply_config"), self)
 	apply_config(ConfigFile.new())
 
 static func _migrate_mcm_dir(old_path: String, new_path: String) -> void:
@@ -111,9 +112,16 @@ static func build_config() -> ConfigFile:
 	cfg.set_value("Float", "freq_mult", {"name": "Rarity frequency", "default": 1.0, "value": 1.0, "minRange": 0.5, "maxRange": 2.0, "step": 0.5, "category": bal, "menu_pos": 0, "tooltip": "Scales how often higher tiers appear."})
 	cfg.set_value("Bool", "env_hint", {"name": "Container context hint", "default": true, "value": true, "category": bal, "menu_pos": 1, "tooltip": "Let military and elite containers shift the odds upward."})
 
-	# Debug tools only appear on a developer build or when user://rtl_dev exists,
-	# so retail players never see them in MCM.
-	var dev := OS.is_debug_build() or FileAccess.file_exists(OS.get_user_data_dir() + "/rtl_dev")
+	# Debug tools only appear on a developer build, with a user://rtl_dev marker,
+	# or when debug_enabled=true in the existing config, so retail players
+	# never see them unless explicitly enabled.
+	var dev := OS.is_debug_build() or FileAccess.file_exists("user://rtl_dev")
+	var cfg_path := "user://MCM/gimme-the-loot/config.ini"
+	var existing := ConfigFile.new()
+	if existing.load(cfg_path) == OK and existing.has_section_key("Bool", "debug_enabled"):
+		var v = existing.get_value("Bool", "debug_enabled", {})
+		if v is Dictionary and v.has("value") and bool(v["value"]):
+			dev = true
 	if dev:
 		var dbg := "03. Debug"
 		cfg.set_value("Bool", "debug_enabled", {"name": "Debug mode", "default": false, "value": false, "category": dbg, "menu_pos": 0, "tooltip": "Enable the debug tools below."})
@@ -146,7 +154,7 @@ static func merge_user_values(cfg: ConfigFile, existing: ConfigFile) -> void:
 
 func apply_config(cfg: ConfigFile) -> void:
 	if cfg == null or cfg.get_sections().is_empty():
-		var path := "user://MCM/road-to-loot/config.ini"
+		var path := "user://MCM/gimme-the-loot/config.ini"
 		if FileAccess.file_exists(path):
 			var c := ConfigFile.new()
 			c.load(path)

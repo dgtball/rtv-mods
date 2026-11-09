@@ -1,8 +1,8 @@
 extends RefCounted
 
 const PREFIX := "[RTL] "
-const LOG_DIR := "user://MCM/road-to-loot"
-const LOG_FILE := LOG_DIR + "/rtl.log"
+const LOG_DIR := "user://MCM/gimme-the-loot"
+const LOG_FILE := LOG_DIR + "/gtl.log"
 
 static func ensure_dir() -> void:
 	DirAccess.make_dir_recursive_absolute(LOG_DIR)
