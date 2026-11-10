@@ -14,9 +14,8 @@ $proj = Join-Path $checkRoot "project"
 $mods = @(
     @{ Slug = "vostok-toolkit"; Folder = "VTK";         Tests = "vostok-toolkit" },
     @{ Slug = "thermal-vtk";    Folder = "ThermalVTK";  Tests = "thermal-vtk" },
-    @{ Slug = "road-to-loot";   Folder = "RoadToLoot";  Tests = "road-to-loot" },
-    @{ Slug = "jcm-freeze";        Folder = "jcm-freeze";     Tests = $null },
-    @{ Slug = "kw-window-traversal"; Folder = "KWWindowTraversal"; Tests = $null }
+    @{ Slug = "gimme-the-loot"; Folder = "RoadToLoot";  Tests = "gimme-the-loot" },
+    @{ Slug = "jcm-freeze";        Folder = "jcm-freeze";     Tests = $null }
 )
 
 if (-not $Godot) {

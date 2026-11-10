@@ -122,6 +122,8 @@ static func build_config() -> ConfigFile:
 		var v = existing.get_value("Bool", "debug_enabled", {})
 		if v is Dictionary and v.has("value") and bool(v["value"]):
 			dev = true
+	Log.ensure_dir()
+	Log.line("MCM build_config dev=" + str(dev) + " path=" + cfg_path)
 	if dev:
 		var dbg := "03. Debug"
 		cfg.set_value("Bool", "debug_enabled", {"name": "Debug mode", "default": false, "value": false, "category": dbg, "menu_pos": 0, "tooltip": "Enable the debug tools below."})
