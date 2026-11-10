@@ -2,7 +2,7 @@
 
 Everything a Vostok run needs in one mod: loadout presets, dynamic seasons, fast travel, kill stats and an ironman restart.
 
-**Version:** 5.6.3 · **Loader:** Metro Mod Loader 3.4.2 · **Game:** 0.2.3.0 · **Language:** RU / EN
+**Version:** 5.6.4 · **Loader:** Metro Mod Loader 3.4.2 · **Game:** 0.2.3.0 · **Language:** RU / EN
 
 ## Features
 

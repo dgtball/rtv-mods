@@ -118,4 +118,8 @@ func _ensure_hud() -> void:
 		tree.root.add_child(_hud_canvas)
 	if _hud_node == null or not is_instance_valid(_hud_node):
 		_hud_node = Feed.new()
+		# Имя — контрактный якорь для внешних наблюдателей (RTV Mini HUD ищет
+		# ленту по пути /root/VTKKC_Canvas/VTKFeed). Без него Godot даёт
+		# сгенерированное @Control@N, которое меняется от запуска к запуску.
+		_hud_node.name = "VTKFeed"
 		_hud_canvas.add_child(_hud_node)
