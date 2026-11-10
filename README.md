@@ -5,9 +5,9 @@ separate `.vmz` archives and can be installed on their own — there is no share
 
 | Mod | What it does | Version | README |
 |---|---|---|---|
-| **Vostok Toolkit** (`vostok-toolkit`) | Loadout presets, dynamic seasons, partial task hand-in, Notes icon rows, kill stats and killfeed, fast travel | 5.4.0 | [mods/vostok-toolkit/README.md](mods/vostok-toolkit/README.md) |
+| **Vostok Toolkit** (`vostok-toolkit`) | Loadout presets, dynamic seasons, partial task hand-in, Notes icon rows, kill stats and killfeed, fast travel | 5.6.4 | [mods/vostok-toolkit/README.md](mods/vostok-toolkit/README.md) |
 | **ThermalVTK** (`thermal-vtk`) | Standalone thermal vision / NVG overlay with heat glow and ESP | 2.4.6 | [mods/thermal-vtk/README.md](mods/thermal-vtk/README.md) |
-| **Gimme the Loot** (`gimme-the-loot`) | Per-instance rarity tiers and affixes for looted weapons and clothing | 0.7.2 | [mods/gimme-the-loot/README.md](mods/gimme-the-loot/README.md) |
+| **Gimme the Loot** (`gimme-the-loot`) | Per-instance rarity tiers and affixes for looted weapons and clothing | 1.0.0 | [mods/gimme-the-loot/README.md](mods/gimme-the-loot/README.md) |
 | **Freeze for JCM** (`jcm-freeze`) | Freezes NPCs, the BTR and the helicopter on demand (JCM addon) | 1.3.0 | [mods/jcm-freeze/README.md](mods/jcm-freeze/README.md) |
 
 ## Layout
@@ -18,6 +18,7 @@ mods/<slug>/       one folder per mod
   mods/<Folder>/   the scripts that end up inside the .vmz
   README.md        player-facing description
   CHANGELOG.md     release history
+  OBSERVER_CONTRACT.md   VTK only: kill-event contract for other mods
 .check/            headless Godot stand: parse check + tests
 dist/              built archives (not in git)
 pack.ps1           builds all (or one) mod into dist/
@@ -39,7 +40,7 @@ Archives land in `dist/` and use the names below, so they drop straight into the
 |---|---|
 | Vostok Toolkit | `dist/VostokToolkit.vmz` |
 | ThermalVTK | `dist/ThermalVTK.vmz` |
-| Road To Loot | `dist/RoadToLoot.vmz` |
+| Gimme the Loot | `dist/GimmeTheLoot.vmz` |
 | Freeze for JCM | `dist/Freeze.vmz` |
 
 The build writes `version.txt` next to each mod's scripts (taken from `mod.txt`) and keeps the

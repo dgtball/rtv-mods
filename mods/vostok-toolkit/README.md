@@ -39,10 +39,15 @@ Everything a Vostok run needs in one mod: loadout presets, dynamic seasons, fast
 - `mods/vostok-toolkit/mod.txt` — name, id, version, autoload
 - `mods/vostok-toolkit/mods/VTK/*.gd` — mod source (prefix `VTK`)
 - `mods/vostok-toolkit/CHANGELOG.md` — release history
+- `mods/vostok-toolkit/OBSERVER_CONTRACT.md` — kill-event contract for other mods (not shipped in the `.vmz`)
 
 ## Compatibility
 
 Compatible with LateStart. Tested alongside ElegantHUD, JCM and other common mods. Conflicts are unlikely but not impossible.
+
+## Integrations
+
+VTK exposes its kill observation through a documented, versioned surface. A mod that wants to observe kills alongside VTK should read [OBSERVER_CONTRACT.md](OBSERVER_CONTRACT.md) instead of depending on source details: the contract version is independent of the VTK release version and only changes when observation behaviour changes.
 
 ## Credits
 
