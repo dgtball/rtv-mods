@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.4.7] - 2026-11-10
+
+### Fixed
+- The palette hotkey (F6) no longer works while the thermal picture is off:
+  with the helmet removed it used to change the palette in the background and
+  show a toast for a colour nobody could see.
+
 ## [2.4.6] - 2026-11-02
 
 ### Changed

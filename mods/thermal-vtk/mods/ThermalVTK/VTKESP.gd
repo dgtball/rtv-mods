@@ -38,7 +38,6 @@ var p_decay := 30.0
 var p_dist := 60.0
 var p_nomad_marker: bool = true
 var p_body_fill: bool = false
-var p_fill_alpha: float = 0.85
 var p_fill_grow: float = 0.004
 var p_mask_resolution: float = 1.0
 var p_mask_cadence: float = 1.0

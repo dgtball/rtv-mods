@@ -93,9 +93,10 @@ func _toggle_thermal() -> void:
 const PALETTE_NAMES: Array[String] = ["Classic", "Amber", "Forest", "Ice"]
 
 func _cycle_palette() -> void:
-	# The world palette only shows while thermal vision is on, so F6 is a
-	# no-op otherwise: no palette change and no toast.
-	if not _thermal_enabled:
+	# The world palette only shows while thermal vision is on, and thermal
+	# vision needs the helmet on top of the toggle. F6 is a no-op otherwise:
+	# no palette change and no toast naming a picture nobody can see.
+	if not _thermal_enabled or not _nvg_active():
 		return
 	if _nvg == null or not is_instance_valid(_nvg):
 		return
