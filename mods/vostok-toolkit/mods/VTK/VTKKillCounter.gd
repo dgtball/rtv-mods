@@ -1,95 +1,15 @@
-extends Control
-const Paths = preload("res://mods/VTK/VTKPaths.gd")
-const Log = preload("res://mods/VTK/VTKLog.gd")
+extends RefCounted
+# Статические хелперы агентов. Узловая логика счётчика (скан, _pending, _tick)
+# переехала в VTKFeed: один блок владеет всем счетом. Здесь остаются только
+# чистые функции, которые читает VTKHooks и тесты.
 const Hud = preload("res://mods/VTK/VTKHud.gd")
-
-var _enabled: bool = false
-var _label: Label = null
-var _panel: PanelContainer = null
-var _kills: int = 0
-var _alive_cnt: int = 0
-var _nomad_cnt: int = 0
-var _ticker := Hud.Ticker.new()
-var _was_shelter: bool = false
-
-var _iface: Node = null
-var _hooks_node: Node = null
-var _agents: Dictionary = {}
-var _pending: Array[int] = []
-var _scene_ref: Node = null
-
-func _ready() -> void:
-	name = "VTKKillCounter"
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# Подложка: без неё светлый HUD на солнце съедает надпись. Тот же приём,
-	# что у строки ленты (VTKFeed): чёрный 0.45 + узкие поля.
-	_panel = PanelContainer.new()
-	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_panel.position = Vector2(10, 10)
-	_panel.add_theme_stylebox_override("panel", Hud.plaque_style(1.0, 1.0))
-	_label = Label.new()
-	_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.7))
-	_label.add_theme_font_size_override("font_size", 13)
-	var hud := Paths.hud_font()
-	if hud != null:
-		_label.add_theme_font_override("font", hud)
-	_panel.add_child(_label)
-	_panel.visible = false
-	add_child(_panel)
-	get_tree().node_added.connect(_on_node_added)
-	# Счётчик рождается выключенным: кадры ему нужны только когда _enabled.
-	set_process(false)
-
-func set_enabled(v: bool) -> void:
-	_enabled = v
-	# Выключенный счётчик не должен ни обрабатываться каждый кадр, ни копить
-	# id узлов: в _pending раньше попадал любой узел, включая UI мода.
-	set_process(v)
-	_panel.visible = v
-	if v:
-		_reseed()
-	else:
-		_pending.clear()
-		_kills = 0
-		_alive_cnt = 0
-		_nomad_cnt = 0
-		_agents.clear()
-		_label.text = ""
-
-func _on_node_added(node: Node) -> void:
-	# Батчим: загрузчик за кадр добавляет целые поддеревья, и call_deferred на
-	# каждый узел — это отдельный instance_from_id + agent_kind lookup. Копим
-	# id, разбираем одним проходом раз за кадр в начале своего _process.
-	if not _enabled:
-		return
-	_pending.append(node.get_instance_id())
-
-func _drain_pending() -> void:
-	if _pending.is_empty():
-		return
-	for id in _pending:
-		_deferred_check(id)
-	_pending.clear()
-
-func _deferred_check(node_id: int) -> void:
-	if not _enabled:
-		return
-	var n := instance_from_id(node_id)
-	if n == null or not is_instance_valid(n) or not n.is_inside_tree():
-		return
-	var kind := agent_kind(n)
-	if kind != "":
-		_agents[node_id] = kind
-
-# Игровой агент AI.gd несёт @export identifier+var variant: AIData (AI.gd:20/60),
-# а не только Activate/dead. variant - устойчивый маркер агента и источник
-# фракции/имени, в отличие от duck-typing по методам и разбора имён узлов.
-static func _is_agent(n: Node) -> bool:
-	return n is Node3D and "variant" in n
 
 # AIData.Faction (headless probe): Nomad 0, Bandit 1, Guard 2, Military 3, Boss 4.
 const FACTION_NOMAD := 0
 const FACTION_BOSS := 4
+
+static func _is_agent(n: Node) -> bool:
+	return n is Node3D and "variant" in n
 
 static func agent_kind(n: Node) -> String:
 	if not _is_agent(n):
@@ -104,9 +24,24 @@ static func agent_kind(n: Node) -> String:
 		return ""
 	return "enemy"
 
-# Имя агента: никнейм номада побеждает имя варианта. Семантика та же, что у
-# VTKLabels.name_of в thermal-vtk, иначе лента и 2D-подписи называют одного
-# номада по-разному.
+# Гейт смертельного удара: pre-хук смерти видит состояние до ванильного
+# AI.Death, post-хук — после. Ваниль ставит dead = true первой строкой, поэтому
+# «мёртв ли он» проверяется переходом false -> true в одном событии. Оружейный
+# урон вычитает health и зовёт Death только при health <= 0; взрыв зовёт Death
+# напрямую, не трогая health, — для него одного перехода dead достаточно.
+# null/строка/NaN здоровьем не считаются: без доказательства не тикаем.
+static func death_is_lethal(dead_before, health, explosion: bool) -> bool:
+	if dead_before == null or bool(dead_before):
+		return false
+	if explosion:
+		return true
+	if health == null or not (health is int or health is float):
+		return false
+	var hp := float(health)
+	if not is_finite(hp):
+		return false
+	return hp <= 0.0
+
 static func display_name_of(variant_name: String, nickname: String) -> String:
 	var n := nickname.strip_edges()
 	if n != "":
@@ -127,117 +62,11 @@ static func agent_display_name(n: Node) -> String:
 			var raw = v.get("name")
 			if raw != null:
 				vname = str(raw)
-	# Свойства nickname нет у не-номадов: проверяем наличие, а не ловим null.
 	if "nickname" in n:
 		var raw_nick = n.get("nickname")
 		if raw_nick != null:
 			nick = str(raw_nick)
 	return display_name_of(vname, nick)
 
-func _reseed() -> void:
-	_agents.clear()
-	_scene_ref = get_tree().current_scene
-	if _scene_ref == null:
-		return
-	_scan(_scene_ref)
-
-func _scan(n: Node) -> void:
-	var kind := agent_kind(n)
-	if kind != "":
-		_agents[n.get_instance_id()] = kind
-	for c in n.get_children():
-		_scan(c)
-
-func _get_iface() -> Node:
-	if _iface != null and is_instance_valid(_iface):
-		return _iface
-	var root = get_tree().root
-	_iface = root.get_node_or_null(Paths.INTERFACE)
-	return _iface
-
-func _get_hooks() -> Node:
-	if _hooks_node != null and is_instance_valid(_hooks_node):
-		return _hooks_node
-	var parent = get_node_or_null(Paths.UI_ROOT)
-	if parent == null:
-		# Промах раньше молча останавливал счётчик: флаг оставался включённым,
-		# узел жил, но считал ноль. Один след на путь.
-		Log.warn_once(Paths.UI_ROOT, "kill counter: VTKUI autoload missing")
-		return _hooks_node
-	_hooks_node = Paths.hooks_node(parent)
-	if _hooks_node == null:
-		Log.warn_once(Paths.UI_ROOT + "/" + Paths.HOOKS, "kill counter: VTKHooks missing")
-	return _hooks_node
-
-func _reset_counters() -> void:
-	_kills = 0
-	_alive_cnt = 0
-	_nomad_cnt = 0
-	var hooks = _get_hooks()
-	if hooks != null and is_instance_valid(hooks) and hooks.has_method("reset_kills"):
-		hooks.reset_kills()
-
-func _is_shelter() -> bool:
-	return Hud.in_shelter(_get_iface())
-
-func _process(delta: float) -> void:
-	# _scene_ref обновляем до любого раннего выхода и даже когда HUD выключен:
-	# иначе map_changed держится true и сбрасывает _seen_deaths каждый кадр.
-	var current := get_tree().current_scene
-	var map_changed := current != _scene_ref
-	_scene_ref = current
-
-	_drain_pending()
-	if not _enabled:
-		return
-	# Смена сцены дешёвая и должна сбрасывать счётчик сразу; чтение
-	# gameData.shelter - только на тике (0.5 с), HUD и так обновляется там же.
-	if map_changed:
-		_reset_counters()
-	if not _ticker.step(delta):
-		return
-	var in_shelter := _is_shelter()
-	if in_shelter and not _was_shelter:
-		_reset_counters()
-		_label.text = "Shelter"
-	_was_shelter = in_shelter
-	if in_shelter:
-		return
-	# A map change wipes every bot; re-walk the fresh scene or the count
-	# would keep reading nodes that no longer exist.
-	if map_changed:
-		_reseed()
-	_tick()
-
-func _tick() -> void:
-	var hooks = _get_hooks()
-	if hooks != null and is_instance_valid(hooks) and hooks.has_method("get_kill_count"):
-		_kills = hooks.get_kill_count()
-	_alive_cnt = 0
-	_nomad_cnt = 0
-	var stale: Array = []
-	for iid in _agents.keys():
-		var a = instance_from_id(iid)
-		if a == null or not is_instance_valid(a):
-			stale.append(iid)
-			continue
-		# AI.gd keeps a pool of pre-built bots parked off-map with active=false
-		# (CreatePools calls Deactivate on each), and only flips it true in
-		# Activate(). So counting the pool membership alone reported ~15 bots on
-		# a map whose live cap is 3-5. Gate on `active` so the HUD shows bots
-		# actually roaming, and keep counting `dead` separately so a corpse that
-		# has not been cleaned up yet stops counting too.
-		if bool(a.get("dead")):
-			continue
-		if not ("active" in a) or not bool(a.get("active")):
-			continue
-		if _agents[iid] == "nomad":
-			_nomad_cnt += 1
-		else:
-			_alive_cnt += 1
-	for iid in stale:
-		_agents.erase(iid)
-	_label.text = _fmt()
-
-func _fmt() -> String:
-	return "Killed: " + str(_kills) + "   Enemies: " + str(_alive_cnt) + "   Nomads: " + str(_nomad_cnt)
+static func counter_text(kills: int, alive: int, nomads: int) -> String:
+	return "Killed: " + str(kills) + "   Enemies: " + str(alive) + "   Nomads: " + str(nomads)

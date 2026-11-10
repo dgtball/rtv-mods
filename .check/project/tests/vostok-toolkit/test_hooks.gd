@@ -606,6 +606,16 @@ func t_death_load_pressed_defers_to_vanilla() -> void:
 	loader.free()
 	h.queue_free()
 
+# Ванильный путь смерти: WeaponDamage вычитает health и зовёт Death только при
+# health <= 0; ExplosionDamage зовёт Death без правки health. Мод решает всё в
+# pre-хуке (до тела Death), поэтому dead = true ставим уже после вызова.
+func _die_native(h, lib, ai, explosion := false, damage := 50.0) -> void:
+	if not explosion:
+		ai.health -= damage
+	lib._caller = ai
+	h._on_ai_death(Vector3.ZERO, 10.0)
+	ai.dead = true
+
 func t_kill_event() -> void:
 	var evs: Array = []
 	var h = TestHooks.new()
@@ -627,8 +637,7 @@ func t_kill_event() -> void:
 	root.add_child(player)
 	lib._caller = victim
 	h._on_ai_weapon_damage("Head", 35.0, Vector3.ZERO, player)
-	lib._caller = victim
-	h._on_ai_death(Vector3.ZERO, null)
+	_die_native(h, lib, victim, false, 120.0)
 	ck(evs.size() == 1, "одно событие на смерть")
 	if evs.size() == 1:
 		var ev: Dictionary = evs[0]
@@ -638,8 +647,7 @@ func t_kill_event() -> void:
 		ck(not bool(ev["grenade"]), "обычное убийство не граната")
 
 	# Дедуп: та же жертва умирает второй раз — событие одно.
-	lib._caller = victim
-	h._on_ai_death(Vector3.ZERO, null)
+	_die_native(h, lib, victim, false, 120.0)
 	ck(evs.size() == 1, "повторная смерть не даёт второго события")
 	# Немедленно освобождаем: иначе её имя "AI_Bandit" займёт следующий
 	# узел с тем же именем (add_child авто-переименует дубль в @Node3D@N).
@@ -658,8 +666,7 @@ func t_kill_event() -> void:
 	root.add_child(bandit)
 	lib._caller = victim2
 	h._on_ai_weapon_damage("Chest", 50.0, Vector3.ZERO, bandit)
-	lib._caller = victim2
-	h._on_ai_death(Vector3.ZERO, null)
+	_die_native(h, lib, victim2, false, 120.0)
 	ck(evs.size() == 2, "AI-vs-AI событие есть")
 	if evs.size() == 2:
 		ck(str(evs[1]["killer_name"]) == "Bandit", "убийца Bandit")
@@ -680,8 +687,7 @@ func t_kill_event() -> void:
 		"t": Time.get_ticks_msec() - 60000, "hitbox": "Chest",
 		"killer_kind": "enemy", "killer_name": "Bandit", "weapon": "AKM",
 	}
-	lib._caller = victim3
-	h._on_ai_death(null, null)
+	_die_native(h, lib, victim3, false, 120.0)
 	ck(evs.size() == 3, "старая рана даёт событие")
 	if evs.size() == 3:
 		ck(bool(evs[2]["self_death"]), "старая рана помечена self_death")
@@ -699,16 +705,14 @@ func t_kill_event() -> void:
 		"t": Time.get_ticks_msec(), "hitbox": "", "killer_kind": "",
 		"killer_name": "", "weapon": "",
 	}
-	lib._caller = victim4
-	h._on_ai_death(null, null)
+	_die_native(h, lib, victim4, false, 120.0)
 	ck(evs.size() == 3, "свежая запись без убийцы не показывается")
 
-	# Записи нет вообще (мод позвал Death напрямую): строки нет.
+	# Записи нет вообще (смерть пришла мимо weapondamage): строки нет.
 	var victim5 := FakeAgent2.new()
 	victim5.name = "AI_Bandit"
 	root.add_child(victim5)
-	lib._caller = victim5
-	h._on_ai_death(null, null)
+	_die_native(h, lib, victim5, false, 120.0)
 	ck(evs.size() == 3, "смерть без записи не показывается")
 
 	victim2.queue_free()
@@ -744,8 +748,7 @@ func t_attacker_snapshot() -> void:
 	lib._caller = victim
 	h._on_ai_weapon_damage("Chest", 40.0, Vector3.ZERO, bandit)
 	bandit.free()
-	lib._caller = victim
-	h._on_ai_death(Vector3.ZERO, null)
+	_die_native(h, lib, victim, false, 120.0)
 
 	ck(evs.size() == 1, "освобождённый атакующий не теряет килл")
 	if evs.size() == 1:
@@ -831,6 +834,7 @@ class FakeVariant extends RefCounted:
 
 class FakeAgent2 extends Node3D:
 	var dead := false
+	var health := 100
 	var active := true
 	var variant = FakeVariant.new()
 	var nickname := ""
@@ -875,8 +879,7 @@ func t_marker_attacker() -> void:
 
 	lib._caller = victim
 	h._on_ai_weapon_damage("Head", 30.0, Vector3.ZERO, marker)
-	lib._caller = victim
-	h._on_ai_death(Vector3.ZERO, null)
+	_die_native(h, lib, victim, false, 120.0)
 
 	ck(evs.size() == 1, "маркер-атакующий: событие есть")
 	if evs.size() == 1:
@@ -913,8 +916,8 @@ func t_explosion_kill() -> void:
 
 	lib._caller = victim
 	h._on_ai_explosion(Vector3.ZERO, player)
-	lib._caller = victim
-	h._on_ai_death(Vector3.ZERO, null)
+	# Взрыв убивает без вычитания health: хватает перехода dead.
+	_die_native(h, lib, victim, true)
 
 	ck(evs.size() == 1, "гранатный килл: событие есть")
 	if evs.size() == 1:
@@ -925,8 +928,7 @@ func t_explosion_kill() -> void:
 	ck(h.get_kill_count() == 1, "гранатный килл посчитан счётчиком")
 
 	# Дедуп и счётчик: та же жертва умирает второй раз.
-	lib._caller = victim
-	h._on_ai_death(Vector3.ZERO, null)
+	_die_native(h, lib, victim, true)
 	ck(evs.size() == 1, "гранатный килл не задублирован")
 	ck(h.get_kill_count() == 1, "счётчик не задрался на повторе")
 
@@ -1706,27 +1708,28 @@ func t_gc_ledger_once() -> void:
 	h.queue_free()
 
 func t_kill_counter_birth_in_disabled() -> void:
-	var kc = KC.new()
-	root.add_child(kc)
-	ck(not kc.is_processing(), "rozhdyonnyy vyklyuchennyy ne krutit _process")
-	kc.set_enabled(false)
-	ck(not kc.is_processing(), "vyklyuchennyy schetchik ne krutit _process")
+	var Feed = preload("res://mods/VTK/VTKFeed.gd")
+	var block = Feed.new()
+	root.add_child(block)
+	ck(not block.is_processing(), "rozhdyonnyy vyklyuchennyy ne krutit _process")
+	block.configure(false, false, false)
+	ck(not block.is_processing(), "vyklyuchennyy blok ne krutit _process")
 
 	var probe = Node.new()
 	root.add_child(probe)
-	ck(kc._pending.is_empty(), "vyklyuchennyy schetchik ne kopit uzly")
+	ck(block._pending.is_empty(), "vyklyuchennyy blok ne kopit uzly")
 
-	kc.set_enabled(true)
-	ck(kc.is_processing(), "vklyuchennyy schetchik snova obrabatyvaetsya")
-	ck(kc._pending.is_empty(), "vklyuchenie ne ostavlyaet musora")
+	block.configure(true, true, true)
+	ck(block.is_processing(), "vklyuchennyy blok snova obrabatyvaetsya")
+	ck(block._pending.is_empty(), "vklyuchenie ne ostavlyaet musora")
 
 	var probe2 = Node.new()
 	root.add_child(probe2)
-	ck(kc._pending.size() == 1, "vklyuchennyy schetchik kopit fiktivnyy uzel")
+	ck(block._pending.size() == 1, "vklyuchennyy blok kopit fiktivnyy uzel")
 
 	probe.free()
 	probe2.free()
-	kc.free()
+	block.free()
 
 # Ник игрока живёт в записи о ране, рядом с именем AI-убийцы: лента остаётся
 # самодостаточным снимком и ничего не знает о конфиге.
@@ -1747,8 +1750,7 @@ func t_player_name() -> void:
 	h.set_player_name("Vasya")
 	h._lib._caller = v1
 	h._on_ai_weapon_damage("Chest", 10.0, Vector3.ZERO, player)
-	h._lib._caller = v1
-	h._on_ai_death(Vector3.ZERO, null)
+	_die_native(h, h._lib, v1, false, 120.0)
 
 	var v2 := FakeAgent2.new()
 	v2.name = "AI_Bandit"
@@ -1756,8 +1758,7 @@ func t_player_name() -> void:
 	root.add_child(v2)
 	h._lib._caller = v2
 	h._on_ai_explosion(Vector3.ZERO, player)
-	h._lib._caller = v2
-	h._on_ai_death(Vector3.ZERO, null)
+	_die_native(h, h._lib, v2, true)
 
 	var v3 := FakeAgent2.new()
 	v3.name = "AI_Bandit"
@@ -1766,8 +1767,7 @@ func t_player_name() -> void:
 	h.set_player_name("   ")
 	h._lib._caller = v3
 	h._on_ai_weapon_damage("Chest", 10.0, Vector3.ZERO, player)
-	h._lib._caller = v3
-	h._on_ai_death(Vector3.ZERO, null)
+	_die_native(h, h._lib, v3, false, 120.0)
 
 	ck(evs.size() == 3, "три события игрока")
 	if evs.size() == 3:

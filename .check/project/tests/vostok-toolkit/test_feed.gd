@@ -1,4 +1,4 @@
-extends SceneTree
+﻿extends SceneTree
 
 const KC = preload("res://mods/VTK/VTKKillCounter.gd")
 const Hud = preload("res://mods/VTK/VTKHud.gd")
@@ -37,12 +37,17 @@ func _run() -> void:
 	t_kc_disabled_ignores_nodes()
 	t_agent_display_name()
 	t_feed_segments()
+	t_feed_distance_segment()
 	t_feed_fade()
+	t_longest_kill_event()
 	t_feed_evict()
 	t_feed_hs_svg()
-	t_feed_skull_svg()
 	t_feed_norm_weapon()
 	t_feed_index_second_pass()
+	t_hud_anchor_layout()
+	t_hud_block_placement()
+	t_hud_font_metrics()
+	t_streak_helpers()
 	t_log_warn_once()
 	t_hud_shared()
 	print("")
@@ -74,29 +79,29 @@ func t_agent_kind() -> void:
 # узлов: в _pending раньше попадал любой узел дерева, включая UI мода, хотя
 # разбирать его было некому.
 func t_kc_disabled_ignores_nodes() -> void:
-	var kc = KC.new()
-	root.add_child(kc)
-	# Рождается выключенным: _ready сам вызывает set_process(false).
-	ck(not kc.is_processing(), "рождённый выключенным не крутит _process")
-	kc.set_enabled(false)
-	ck(not kc.is_processing(), "выключенный счётчик не крутит _process")
+	var Feed = preload("res://mods/VTK/VTKFeed.gd")
+	var block = Feed.new()
+	root.add_child(block)
+	# Рождается выключенным.
+	ck(not block.is_processing(), "рождённый выключенным не крутит _process")
+	block.configure(false, false, false)
+	ck(not block.is_processing(), "выключенный блок не крутит _process")
 
 	var probe := Node.new()
 	root.add_child(probe)
-	ck(kc._pending.is_empty(), "выключенный счётчик не копит узлы (в т.ч. UI мода)")
+	ck(block._pending.is_empty(), "выключенный блок не копит узлы (в т.ч. UI мода)")
 
-	kc.set_enabled(true)
-	ck(kc.is_processing(), "включённый счётчик снова обрабатывается")
-	ck(kc._pending.is_empty(), "включение не оставляет мусора в _pending")
+	block.configure(true, true, true)
+	ck(block.is_processing(), "включённый блок снова обрабатывается")
+	ck(block._pending.is_empty(), "включение не оставляет мусора в _pending")
 
-	# После включения узел, добавленный в дерево, копится в _pending.
 	var probe2 := Node.new()
 	root.add_child(probe2)
-	ck(kc._pending.size() == 1, "включённый счётчик копит фиктивный узел в _pending")
+	ck(block._pending.size() == 1, "включённый блок копит фиктивный узел в _pending")
 
 	probe.free()
 	probe2.free()
-	kc.free()
+	block.free()
 
 func t_agent_display_name() -> void:
 	var n := FakeAgent.new()
@@ -197,15 +202,6 @@ func t_feed_hs_svg() -> void:
 	var tex = Feed.Surface.svg_texture(Feed.HS_SVG)
 	ck(tex is Texture2D and tex.get_width() > 0, "HS-SVG рендерится в текстуру")
 
-func t_feed_skull_svg() -> void:
-	var Feed = preload("res://mods/VTK/VTKFeed.gd")
-	ck(Feed.SKULL_SVG.contains("#E6E6E6"), "череп рисуется костяным цветом")
-	var tex = Feed.Surface.svg_texture(Feed.SKULL_SVG)
-	ck(tex is Texture2D and tex.get_width() > 0, "SKULL-SVG рендерится в текстуру")
-
-# Оружие приходит из data.file рига/имени узла (AKS_74U), а в Database лежит
-# либо переименованное RGAAN имя, либо путь AKS-74U.tres — без нормализации
-# иконки этих стволов не находились.
 func t_feed_norm_weapon() -> void:
 	var Feed = preload("res://mods/VTK/VTKFeed.gd")
 	ck(Feed.norm_weapon("AKS-74U") == Feed.norm_weapon("AKS_74U"), "дефис и подчёркивание равны")
@@ -265,3 +261,83 @@ func t_hud_shared() -> void:
 	ck(not ticker.step(0.3), "тикер: 0.3 с — ещё не тик")
 	ck(ticker.step(0.3), "тикер: 0.6 с — тик")
 	ck(not ticker.step(0.3), "тикер: остаток сброшен, тик снова через 0.5 с")
+
+
+func t_hud_anchor_layout() -> void:
+	var Hud = preload("res://mods/VTK/VTKHud.gd")
+	var Feed = preload("res://mods/VTK/VTKFeed.gd")
+	ck(Hud.ANCHOR_KEYS.size() == 6, "6 presetov yakorya")
+	var l = Hud.anchor_layout("top_left")
+	ck(l["anchor"] == Vector2(0, 0), "top_left anchor")
+	ck(l["grow_h"] == Control.GROW_DIRECTION_END and l["grow_v"] == Control.GROW_DIRECTION_END, "top_left grow")
+	ck(l["sx"] == 1 and l["sy"] == 1, "top_left sign")
+	l = Hud.anchor_layout("bottom_right")
+	ck(l["anchor"] == Vector2(1, 1), "bottom_right anchor")
+	ck(l["sx"] == -1 and l["sy"] == -1, "bottom_right sign")
+	l = Hud.anchor_layout("nope")
+	ck(l["anchor"] == Vector2(0, 0), "invalid -> top_left")
+	var c = Control.new()
+	root.add_child(c)
+	Hud.place_block(c, "top_right", 10, 20)
+	ck(is_equal_approx(c.anchor_left, 1.0), "place anchor x")
+	ck(is_equal_approx(c.offset_left, -10.0), "place offset sign x")
+	c.free()
+
+func t_hud_block_placement() -> void:
+	var Feed = preload("res://mods/VTK/VTKFeed.gd")
+	var block = Feed.new()
+	root.add_child(block)
+	var cp: Control = block._counter_panel
+	var feed: Control = block._feed_root
+	ck(cp.anchor_left == 0.0 and cp.anchor_top == 0.0, "counter stays anchored top_left (absolute mode)")
+	ck(cp.position == Vector2(10.0, 10.0), "counter fixed at (10, 10)")
+	for preset in Hud.ANCHOR_KEYS:
+		block.apply_layout(preset, 10, 90, 16)
+		ck(feed.custom_minimum_size.x == 420.0, "feed fixed width 420 (%s)" % preset)
+		ck(feed.get_parent() != null, "feed has parent for %s" % preset)
+	ck(cp.position == Vector2(10.0, 10.0), "counter stays fixed across feed moves")
+	block.free()
+
+func t_hud_font_metrics() -> void:
+	var Hud = preload("res://mods/VTK/VTKHud.gd")
+	ck(is_equal_approx(Hud.row_height(17.0), 23.0), "row_height(17)=23")
+	ck(is_equal_approx(Hud.icon_size(17.0), 16.0), "icon_size(17)=16")
+	ck(Hud.hs_fallback_size(17) == 11, "hs_fallback_size(17)=11")
+
+func t_streak_helpers() -> void:
+	var Feed = preload("res://mods/VTK/VTKFeed.gd")
+	var evp = {"killer_kind": "player"}
+	var r = Feed.streak_after_event(2, 2, evp)
+	ck(int(r["current"]) == 3 and int(r["best"]) == 3, "igrok +1 i best")
+	var eve = {"killer_kind": "enemy"}
+	r = Feed.streak_after_event(3, 5, eve)
+	ck(int(r["current"]) == 3 and int(r["best"]) == 5, "vrag bez izmeneniy best sokhranyayetsya")
+	var rr = Feed.streak_reset(7)
+	ck(int(rr["current"]) == 0 and int(rr["best"]) == 7, "reset current=0 best sokhranyayetsya")
+
+func t_feed_distance_segment() -> void:
+	var Feed = preload("res://mods/VTK/VTKFeed.gd")
+	var ev := {
+		"killer_kind": "player", "killer_name": "Player",
+		"victim_kind": "enemy", "victim_name": "Bandit",
+		"weapon": "AKM", "headshot": true, "grenade": false, "t": 0,
+		"distance": 120.0,
+	}
+	ck(Feed.segments(ev, true).size() == 5, "distance segment added")
+	ck(Feed.segments(ev, false).size() == 4, "show_distance=false hides distance")
+	var selfev := {"self_death": true, "victim_kind": "enemy", "victim_name": "Bandit", "distance": 120.0, "t": 0}
+	ck(Feed.segments(selfev, true).size() == 2, "self-death ignores distance segment")
+
+func t_longest_kill_event() -> void:
+	var Feed = preload("res://mods/VTK/VTKFeed.gd")
+	var r = Feed.longest_kill_event(0.0, 120.0, 100.0, true)
+	ck(bool(r["new_best"]) and is_equal_approx(float(r["best"]), 120.0), "first kill sets best and new_best")
+	ck(str(r["message"]) == "New longest kill: 120m", "record toast")
+	r = Feed.longest_kill_event(120.0, 110.0, 100.0, true)
+	ck((not bool(r["new_best"])) and str(r["message"]) == "Long shot: 110m", "below record but far -> long shot")
+	r = Feed.longest_kill_event(120.0, 80.0, 100.0, true)
+	ck(str(r["message"]) == "", "below threshold -> no toast")
+	r = Feed.longest_kill_event(120.0, 130.0, 100.0, false)
+	ck(is_equal_approx(float(r["best"]), 130.0) and str(r["message"]) == "", "disabled: best updates, no toast")
+	r = Feed.longest_kill_event(120.0, -1.0, 100.0, true)
+	ck(is_equal_approx(float(r["best"]), 120.0) and str(r["message"]) == "", "no distance leaves best untouched")

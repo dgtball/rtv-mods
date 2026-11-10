@@ -1,5 +1,64 @@
 # Changelog
 
+## [5.6.3] - 2026-11-09
+
+### Added
+
+- Exposed a stable observation contract marker (`OBSERVER_CONTRACT`) for
+  integrators such as RTV Mini HUD, bumped only when observation semantics
+  change.
+
+### Changed
+
+- The kill feed HUD now follows the selected screen position reliably and the
+  kill counter stays pinned in the top-left corner; the default feed font size
+  is 16.
+
+## [5.6.2] - 2026-11-09
+
+### Added
+
+- Kill feed now shows the shot distance in meters (`… 120m`) for player kills,
+  controlled by the new `Show kill distance` setting.
+- New session achievement toasts: `New longest kill: Xm` when you beat your
+  current best, and `Long shot: Xm` for kills at or above the
+  `Long-shot distance` threshold (75–150 m, default 100). The record survives
+  map changes and shelter trips and resets on death or a new game.
+- `Long-shot distance` and `Show kill distance` exposed in MCM.
+
+### Changed
+
+- The kill counter and feed now use the same font styling even after the HUD
+  font size is changed on the fly.
+- `Starting season`, `Days per season`, `Dynamic seasons` and `Seasonal colours`
+  now apply in the running session when changed in MCM (previously only on a
+  new game).
+
+## [5.5.4] - 2026-11-09
+
+
+- The kill feed block starts at font size 16.
+
+### Fixed
+
+- The HUD position setting now moves the kill counter, streak and feed together
+  across all nine screen anchors; the counter no longer stays pinned in the top
+  left corner.
+
+## [5.5.3] - 2026-11-09
+
+### Fixed
+
+- Corpses no longer add kills to the counter or the feed: a kill now only counts
+  when the hit is confirmed lethal, so a second explosion on a dead body stays
+  silent.
+
+## [5.5.2] - 2026-11-07
+
+### Added
+- Kill streak and best streak in the kill feed panel.
+- Configurable HUD position, offsets and one font size for the whole kill feed block.
+
 ## [5.5.1] - 2026-11-06
 
 ### Fixed

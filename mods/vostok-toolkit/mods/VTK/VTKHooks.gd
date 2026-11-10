@@ -3,9 +3,13 @@ const Paths = preload("res://mods/VTK/VTKPaths.gd")
 const Log = preload("res://mods/VTK/VTKLog.gd")
 
 var _registered: bool = false
+# Stable contract marker for observers (RTV MiniHUD). We bump this ONLY when
+# observation semantics change (lethal gate, dedup, kill_event payload/ordering).
+# Cosmetic or perf changes never bump it; not pinned against source hashes.
+const OBSERVER_CONTRACT := 1
 var _lib = null
 var _kill_count: int = 0
-# Хэндлы всех 25 хуков: единственный источник цифры в логе регистрации.
+# Хэндлы всех 26 хуков: единственный источник цифры в логе регистрации.
 var _hook_ids: Array[int] = []
 
 const KC = preload("res://mods/VTK/VTKKillCounter.gd")
@@ -42,6 +46,8 @@ var _drag_amount: int = 0
 var _iface_cache = null
 
 signal kill_event(ev: Dictionary)
+signal player_died
+signal new_game_started
 signal travel_arrived
 
 var _last_damager: Dictionary = {}
@@ -197,6 +203,7 @@ func _on_newgame_post(difficulty, season) -> void:
 	# только включённый счётчик). В set_enabled нельзя - его зовёт
 	# apply_config на каждом применении MCM, счёт посреди забега обнулился бы.
 	reset_kills()
+	new_game_started.emit()
 	var diff := int(difficulty)
 	var gd = _resolve_gamedata()
 	if gd != null:
@@ -277,6 +284,21 @@ func _season_resume() -> void:
 	_dyn_enabled = true
 	_dyn_last_idx = -1
 	_season_apply()
+
+func apply_season_config() -> void:
+	if not _dyn_enabled:
+		return
+	var cfg := _season_config()
+	if not cfg.season_enabled:
+		_dyn_enabled = false
+		_season_restore()
+		return
+	_dyn_cycle_days = maxi(1, int(cfg.season_cycle_days))
+	_dyn_visuals = cfg.season_visuals
+	_dyn_start_offset = _season_offset_of(str(cfg.season_start))
+	_dyn_last_idx = -1
+	_season_apply()
+	Log.log("[VTK] season config applied: start=" + str(cfg.season_start) + " cycle=" + str(_dyn_cycle_days) + " visuals=" + str(_dyn_visuals))
 
 func _season_restore() -> void:
 	if _season_driver != null:
@@ -764,11 +786,21 @@ func _on_ai_death(_direction, _force) -> void:
 	if ai == null or not is_instance_valid(ai) or not (ai is Node):
 		return
 	var iid = ai.get_instance_id()
-	# Дедуп до резолва: ExplosionDamage в ванили не проверяет dead, и второй
+	# Дедуп до гейта: ExplosionDamage в ванили не проверяет dead, и второй
 	# взрыв по трупу не должен ни показать строку, ни тикнуть счётчик.
 	if _seen_deaths.has(iid):
 		return
 	_seen_deaths[iid] = Time.get_ticks_msec()
+	# Гейт целиком в pre: до ванильного тела Death видно исходное состояние.
+	# Труп (dead уже true) и живая жертва оружейного удара (health > 0)
+	# убийством не считаются; взрыв приходит без урона здоровью, поэтому для
+	# него хватает dead. Пост-хук не нужен: ваниль ставит dead первой строкой
+	# Death, значит труп отсеян ещё здесь.
+	var rec = _last_damager.get(iid, null)
+	var explosion: bool = rec != null and bool(rec.get("grenade", false))
+	if not KC.death_is_lethal(_ai_prop(ai, "dead"), _ai_prop(ai, "health"), explosion):
+		_last_damager.erase(iid)
+		return
 	var ev := _resolve_kill(ai)
 	_last_damager.erase(iid)
 	if ev.is_empty():
@@ -776,6 +808,13 @@ func _on_ai_death(_direction, _force) -> void:
 	if str(ev["killer_kind"]) == "player":
 		_kill_count += 1
 	kill_event.emit(ev)
+
+# Свойство AI читается только если оно есть: get() на отсутствующем ключе
+# печатает ошибку в лог, а нам нужен null.
+func _ai_prop(ai: Node, key: String):
+	if not (key in ai):
+		return null
+	return ai.get(key)
 
 # Одно решение на смерть: счётчик и лента читают его, поэтому разойтись не
 # могут. Запись о ране причинна всегда; свежесть решает только подробности:
@@ -798,11 +837,19 @@ func _resolve_kill(ai: Node) -> Dictionary:
 			"headshot": false,
 			"grenade": false,
 			"t": now,
+			"distance": -1.0,
 		}
 	var killer_kind := str(rec.get("killer_kind", ""))
 	if killer_kind == "":
 		return {}
 	var weapon := str(rec.get("weapon", ""))
+	var distance := -1.0
+	if killer_kind == "player" and ai is Node3D:
+		var player = get_tree().root.get_node_or_null("/root/Map/Core/Controller/Character")
+		if player == null:
+			player = get_tree().root.get_node_or_null("/root/Map/Core/Controller")
+		if player != null and player is Node3D:
+			distance = player.global_position.distance_to(ai.global_position)
 	return {
 		"self_death": false,
 		"killer_kind": killer_kind,
@@ -813,6 +860,7 @@ func _resolve_kill(ai: Node) -> Dictionary:
 		"headshot": str(rec.get("hitbox", "")).to_lower() == "head",
 		"grenade": bool(rec.get("grenade", false)) or _is_grenade(weapon),
 		"t": now,
+		"distance": distance,
 	}
 
 # Ни GameData, ни узел игрока не несут имени оружия (probe, Task 1): настоящее
@@ -1395,6 +1443,7 @@ func _on_death_ready() -> void:
 	var death = _lib._caller if _lib else null
 	if death == null:
 		return
+	player_died.emit()
 	var pd = death.get_node_or_null("Main/Permadeath")
 	if pd == null:
 		Log.log("[VTK] death: Main/Permadeath not found; leaving vanilla death screen")

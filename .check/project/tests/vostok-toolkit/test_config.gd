@@ -25,6 +25,7 @@ func _run() -> void:
 	t_defaults_cover_every_field()
 	t_cycle_days_is_clamped()
 	t_key_default_is_f3()
+	t_hud_font_default_is_16()
 	t_player_name_round_trip()
 	t_player_name_invalid_values()
 	t_player_name_is_cleaned()
@@ -147,6 +148,13 @@ func t_key_default_is_f3() -> void:
 	var c: ConfigRec = ConfigRec.new()
 	c.read(ConfigFile.new())
 	ck(c.key_ui_toggle == KEY_F3, "свежий конфиг читает ключ как KEY_F3")
+
+func t_hud_font_default_is_16() -> void:
+	ck(ConfigRec.DEFAULTS["hud_font_size"] == 16, "DEFAULTS.hud_font_size = 16")
+	var c: ConfigRec = ConfigRec.new()
+	c.read(ConfigFile.new())
+	ck(c.hud_font_size == 16, "свежий конфиг читает шрифт HUD как 16")
+	ck(c.hud_anchor == "top_left", "свежий конфиг ставит HUD в top_left")
 
 func t_zero_key_falls_back_to_default() -> void:
 	# У игрока со старой установкой в config.ini лежит value = 0 («клавиши

@@ -98,7 +98,8 @@ Write-Host "Parse check passed: $checked scripts"
 $tests = [ordered]@{
     "vostok-toolkit" = @(
         "res://tests/vostok-toolkit/test_composite.gd", "res://tests/vostok-toolkit/test_config.gd",
-        "res://tests/vostok-toolkit/test_data.gd", "res://tests/vostok-toolkit/test_deposits.gd",
+        "res://tests/vostok-toolkit/test_data.gd", "res://tests/vostok-toolkit/test_death_gate.gd",
+        "res://tests/vostok-toolkit/test_deposits.gd",
         "res://tests/vostok-toolkit/test_draft.gd", "res://tests/vostok-toolkit/test_equip.gd",
         "res://tests/vostok-toolkit/test_feed.gd", "res://tests/vostok-toolkit/test_hooks.gd",
         "res://tests/vostok-toolkit/test_items.gd", "res://tests/vostok-toolkit/test_look.gd",

@@ -5,6 +5,7 @@ extends RefCounted
 # иначе примитив, иначе дефолт.
 
 const Loc = preload("res://mods/VTK/VTKLoc.gd")
+const Hud = preload("res://mods/VTK/VTKHud.gd")
 
 # Единственный источник дефолтов: объявления полей, регистрация MCM и тест
 # читают этот словарь. "language" берётся из Loc.DEFAULT: константа чужого
@@ -19,7 +20,14 @@ const DEFAULTS := {
 	"tp_unlocked_shelters_only": false,
 	"kill_counter_enabled": true,
 	"kill_feed_enabled": true,
+	"kill_streak_enabled": true,
 	"player_name": "Player",
+	"show_kill_distance": true,
+	"longshot_distance_meters": 100,
+	"hud_anchor": "top_left",
+	"hud_offset_x": 10,
+	"hud_offset_y": 90,
+	"hud_font_size": 16,
 	"season_enabled": true,
 	"season_start": "summer",
 	"season_cycle_days": 30,
@@ -41,7 +49,14 @@ var debug_log: bool = DEFAULTS["debug_log"]
 var tp_unlocked_shelters_only: bool = DEFAULTS["tp_unlocked_shelters_only"]
 var kill_counter_enabled: bool = DEFAULTS["kill_counter_enabled"]
 var kill_feed_enabled: bool = DEFAULTS["kill_feed_enabled"]
+var kill_streak_enabled: bool = DEFAULTS["kill_streak_enabled"]
 var player_name: String = DEFAULTS["player_name"]
+var show_kill_distance: bool = DEFAULTS["show_kill_distance"]
+var longshot_distance_meters: int = DEFAULTS["longshot_distance_meters"]
+var hud_anchor: String = DEFAULTS["hud_anchor"]
+var hud_offset_x: int = DEFAULTS["hud_offset_x"]
+var hud_offset_y: int = DEFAULTS["hud_offset_y"]
+var hud_font_size: int = DEFAULTS["hud_font_size"]
 var season_enabled: bool = DEFAULTS["season_enabled"]
 var season_start: String = DEFAULTS["season_start"]
 var season_cycle_days: int = DEFAULTS["season_cycle_days"]
@@ -60,9 +75,18 @@ func read(cfg: ConfigFile) -> void:
 	tp_unlocked_shelters_only = bool(_val(cfg, "Bool", "tp_unlocked_shelters_only", tp_unlocked_shelters_only))
 	kill_counter_enabled = bool(_val(cfg, "Bool", "kill_counter_enabled", kill_counter_enabled))
 	kill_feed_enabled = bool(_val(cfg, "Bool", "kill_feed_enabled", kill_feed_enabled))
+	kill_streak_enabled = bool(_val(cfg, "Bool", "kill_streak_enabled", kill_streak_enabled))
 	# Отдельный читатель, а не _val: _val намеренно отбрасывает строки, иначе
 	# голая строка language затирала бы текущий язык.
 	player_name = clean_player_name(_text(cfg, "String", "player_name", player_name))
+	show_kill_distance = bool(_val(cfg, "Bool", "show_kill_distance", show_kill_distance))
+	longshot_distance_meters = clampi(int(_val(cfg, "Int", "longshot_distance_meters", longshot_distance_meters)), 75, 150)
+	hud_anchor = str(_val(cfg, "Dropdown", "hud_anchor", hud_anchor))
+	if not Hud.ANCHOR_KEYS.has(hud_anchor):
+		hud_anchor = "top_left"
+	hud_offset_x = clampi(int(_val(cfg, "Int", "hud_offset_x", hud_offset_x)), -1000, 1000)
+	hud_offset_y = clampi(int(_val(cfg, "Int", "hud_offset_y", hud_offset_y)), -1000, 1000)
+	hud_font_size = clampi(int(_val(cfg, "Int", "hud_font_size", hud_font_size)), 12, 32)
 	season_enabled = bool(_val(cfg, "Bool", "season_enabled", season_enabled))
 	season_start = str(_val(cfg, "Dropdown", "season_start", season_start))
 	season_cycle_days = clampi(int(_val(cfg, "Int", "season_cycle_days", season_cycle_days)), SEASON_MIN_DAYS, SEASON_MAX_DAYS)
