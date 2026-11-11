@@ -1,6 +1,7 @@
 extends SceneTree
 
 const NVG = preload("res://mods/ThermalVTK/VTKNVG.gd")
+const Daylight = preload("res://mods/ThermalVTK/VTKDaylight.gd")
 
 var fails := 0
 
@@ -19,6 +20,7 @@ class FakeSim extends Node:
 class FakeData extends Resource:
 	var indoor: bool = false
 	var shelter: bool = false
+	var NVG: bool = false
 
 # The real _ready loads GameData.tres and wires the game tree; the exposure
 # logic only needs _installed and the environment, so skip the setup.
@@ -35,6 +37,11 @@ func _run() -> void:
 	t_indoor_is_only_trimmed()
 	t_vanilla_rewrite_rebaselines()
 	t_toggle_restores_exposure()
+	t_day_floor_deepens_shadows()
+	t_day_trim_darkens_background()
+	t_day_trim_identity_default()
+	t_refresh_snaps_without_lag()
+	t_reset_returns_levers()
 	print("")
 	if fails == 0:
 		print("Daylight runtime tests passed")
@@ -148,4 +155,83 @@ func t_toggle_restores_exposure() -> void:
 	ck(is_equal_approx(env.tonemap_exposure, 3.0), "toggle off hands the exposure back")
 	ck(is_equal_approx(nvg._key_gain, 1.0), "toggle off clears the key gain")
 	ck(nvg._last_exposure < 0.0, "toggle off forgets the written value")
+	w["map"].free()
+
+func t_day_floor_deepens_shadows() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	var sim: FakeSim = w["sim"]
+	_reset(nvg, env, sim, 1200.0)
+	nvg.set_day_floor = 0.10
+	nvg._daylight_tick(1.0)
+	ck(absf(env.tonemap_exposure - 0.30) < 0.005, "floor 0.10 deepens noon to 10% exposure")
+	ck(absf(nvg._day_factor - 0.10) < 0.001, "floor 0.10 snaps the day factor")
+	ck(absf(nvg._day_mix - 1.0) < 0.001, "floor 0.10 keeps the curve at full strength")
+	w["map"].free()
+
+func t_day_trim_darkens_background() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	var sim: FakeSim = w["sim"]
+	_reset(nvg, env, sim, 1200.0, 2)
+	nvg.set_day_trim = 0.5
+	nvg._daylight_tick(1.0)
+	ck(absf(nvg._day_trim - 0.5) < 0.001, "winter noon applies the day trim")
+	ck(absf(nvg._snow_trim - Daylight.SNOW_TRIM_DAY) < 0.001, "winter noon keeps the snow trim")
+	w["map"].free()
+	var w2 := _world()
+	var nvg2 = w2["nvg"]
+	var env2: Environment = w2["env"]
+	var sim2: FakeSim = w2["sim"]
+	_reset(nvg2, env2, sim2, 0.0, 2)
+	nvg2.set_day_trim = 0.5
+	nvg2._daylight_tick(1.0)
+	ck(absf(nvg2._day_trim - 1.0) < 0.001, "winter midnight sleeps the day trim")
+	ck(absf(nvg2._snow_trim - Daylight.SNOW_TRIM_NIGHT) < 0.001, "winter midnight keeps the night snow trim")
+	w2["map"].free()
+
+func t_day_trim_identity_default() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	var sim: FakeSim = w["sim"]
+	_reset(nvg, env, sim, 1200.0)
+	nvg._daylight_tick(1.0)
+	ck(absf(nvg._day_trim - 1.0) < 0.001, "default DAY_TRIM keeps the 2.4.10 picture still")
+	ck(absf(env.tonemap_exposure - 0.66) < 0.005, "default floor keeps the noon exposure")
+	w["map"].free()
+
+func t_refresh_snaps_without_lag() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	var sim: FakeSim = w["sim"]
+	var data: FakeData = nvg._game_data
+	data.NVG = true
+	_reset(nvg, env, sim, 1200.0)
+	nvg._daylight_tick(1.0)
+	ck(absf(env.tonemap_exposure - 0.66) < 0.005, "noon settles at 22% exposure")
+	nvg.set_day_floor = 0.10
+	nvg._daylight_tick(0.016)
+	ck(absf(env.tonemap_exposure - 0.66) < 0.02, "a bare tick only creeps toward the new floor")
+	nvg.refresh_daylight_now()
+	ck(absf(env.tonemap_exposure - 0.30) < 0.005, "refresh snaps to the new floor at once")
+	w["map"].free()
+
+func t_reset_returns_levers() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	var sim: FakeSim = w["sim"]
+	_reset(nvg, env, sim, 1200.0, 2)
+	nvg.set_day_floor = 0.10
+	nvg.set_day_trim = 0.5
+	nvg._daylight_tick(1.0)
+	ck(absf(nvg._day_trim - 0.5) < 0.001, "lever trim applied before the reset")
+	nvg._reset_daylight()
+	ck(absf(nvg.set_day_floor - Daylight.MIN_FACTOR) < 0.001, "reset returns the floor lever to the constant")
+	ck(absf(nvg.set_day_trim - Daylight.DAY_TRIM) < 0.001, "reset returns the trim lever to the constant")
+	ck(absf(nvg._day_trim - 1.0) < 0.001, "reset clears the applied day trim")
 	w["map"].free()

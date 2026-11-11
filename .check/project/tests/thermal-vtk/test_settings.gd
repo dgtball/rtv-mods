@@ -195,6 +195,7 @@ func t_nvg_apply_maps_fields() -> void:
 	rec.outline_distance = 80.0
 	rec.thermal_mines = false
 	rec.daylight_compensation = false
+	rec.daylight_strength = 0.5
 	rec.color_combat = Color(0.0, 1.0, 0.0)
 	var nvg = NVG.new()
 	nvg.apply_config(rec)
@@ -205,6 +206,7 @@ func t_nvg_apply_maps_fields() -> void:
 	ck(nvg.set_glow_distance == 80.0, "NVG maps the glow distance")
 	ck(nvg.set_mines == false, "NVG maps the mines toggle")
 	ck(nvg.set_daylight == false, "NVG maps the daylight toggle")
+	ck(nvg.set_strength == 0.5, "NVG maps daylight strength")
 	ck(nvg._state_colors.get("state_combat") == Color(0.0, 1.0, 0.0), "NVG maps the state colours")
 	nvg._register_key_gain()
 	ck(nvg._key_gain_registered, "NVG registers the daylight key gain")

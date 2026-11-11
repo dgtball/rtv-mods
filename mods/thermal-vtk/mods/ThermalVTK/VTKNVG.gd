@@ -70,6 +70,11 @@ var set_world: float = 1.70
 var set_highlight_knee: float = 0.6
 var set_daylight: bool = true
 var set_strength: float = 1.0
+# Live-panel levers (the F9 instrument): probe values, never persisted. The
+# defaults ARE the shipped constants, so without the panel the picture does
+# not move.
+var set_day_floor: float = Daylight.MIN_FACTOR
+var set_day_trim: float = Daylight.DAY_TRIM
 # Brightness of the state key the ESP outlines emit; the overlay uses it to
 # scale the substituted state colour.
 var set_state_brightness: float = 0.6
@@ -132,6 +137,8 @@ var _light_seeded: bool = false
 # Winter snow trim on the background (see VTKDaylight.snow_trim). Not part of
 # the keys: substitution reads the washed pixel before the palette.
 var _snow_trim: float = 1.0
+# Daylight trim currently applied (see VTKDaylight.day_trim); 1.0 = off.
+var _day_trim: float = 1.0
 var _vanilla_exposure: float = 3.0
 var _last_exposure: float = -1.0
 # Process-wide, not per instance: the global lives in RenderingServer, so a
@@ -307,7 +314,7 @@ func _apply_uniforms() -> void:
 		return
 	nvg_mat.set_shader_parameter("noise", set_nvg_noise)
 	nvg_mat.set_shader_parameter("thermalMode", set_thermal and _nvg_active())
-	nvg_mat.set_shader_parameter("thermalDarken", set_world * _snow_trim)
+	nvg_mat.set_shader_parameter("thermalDarken", set_world * _snow_trim * _day_trim)
 	nvg_mat.set_shader_parameter("dayMix", _day_mix)
 	nvg_mat.set_shader_parameter("worldPaletteMode", set_palette)
 	nvg_mat.set_shader_parameter("highlightKnee", set_highlight_knee)
@@ -575,8 +582,17 @@ func _daylight_tick(delta: float) -> void:
 	else:
 		_light_sm = Daylight.step(_light_sm, light, delta, 2.0)
 	light = _light_sm
-	var target := Daylight.strength_factor(Daylight.day_factor(light), set_strength)
+	var target := Daylight.strength_factor(Daylight.day_factor(light, set_day_floor), set_strength)
 	_day_factor = target if _last_exposure < 0.0 else Daylight.step(_day_factor, target, delta)
+	_daylight_apply(env, cur)
+	_push_daylight_trims(light)
+
+
+# The tail of _daylight_tick: whatever factor sits in _day_factor, write the
+# exposure, the key gain and the shader mix. Shared with refresh_daylight_now
+# so the tick and the panel lever can never compute different things. `cur`
+# is the environment exposure as the caller read it before applying.
+func _daylight_apply(env: Environment, cur: float) -> void:
 	var want := _vanilla_exposure * _day_factor
 	if absf(want - cur) > 0.002:
 		env.tonemap_exposure = want
@@ -584,14 +600,44 @@ func _daylight_tick(delta: float) -> void:
 	var gain := Daylight.key_gain(_day_factor)
 	if absf(gain - _key_gain) > 0.001:
 		_set_key_gain(gain)
-	var mix := Daylight.day_mix(_day_factor)
+	var mix := Daylight.day_mix(_day_factor, set_day_floor)
 	if absf(mix - _day_mix) > 0.001:
 		_day_mix = mix
 		_push_day_mix()
-	var trim: float = Daylight.snow_trim(int(_sim_value("season", 1)), _game_flag("indoor"), _game_flag("shelter"), light)
-	if absf(trim - _snow_trim) > 0.001:
-		_snow_trim = trim
+
+
+# Snow and day trims from one place: the tick pushes them with the smoothed
+# light, the panel refresh reuses the same call. Reads the CACHED sim flags --
+# the tick refreshes them on the sim cadence before calling here, so this
+# adds no tree lookups (the old tail re-read season/indoor/shelter every
+# frame for nothing).
+func _push_daylight_trims(light: float) -> void:
+	var snow: float = Daylight.snow_trim(_sim_season, _sim_indoor, _sim_shelter, light)
+	if absf(snow - _snow_trim) > 0.001:
+		_snow_trim = snow
 		_dirty = true
+	var day: float = Daylight.day_trim(light, set_day_trim)
+	if absf(day - _day_trim) > 0.001:
+		_day_trim = day
+		_dirty = true
+
+
+# Live-panel lever: recompute the daylight state and apply it right now,
+# skipping the one-pole smoothing, so a dragged slider answers instantly.
+# Guards match the tick, plus _nvg_active(): with the helmet off the vanilla
+# Deactivate has already restored the exposure, and writing here would
+# fight it.
+func refresh_daylight_now() -> void:
+	if not set_daylight or not _installed or not _nvg_active():
+		return
+	var env := _environment()
+	if env == null:
+		return
+	_day_factor = Daylight.strength_factor(Daylight.day_factor(_light_sm, set_day_floor), set_strength)
+	_daylight_apply(env, env.tonemap_exposure)
+	_push_daylight_trims(_light_sm)
+	_dirty = true
+	_apply_uniforms()
 
 
 # Called on NVG off / map change. No environment write: vanilla Deactivate()
@@ -601,12 +647,17 @@ func _reset_daylight() -> void:
 	_day_factor = 1.0
 	_day_mix = 0.0
 	_snow_trim = 1.0
+	_day_trim = 1.0
 	_light_sm = 0.0
 	_light_seeded = false
 	_sim_cd = 0.0
 	_sim = null
 	_world = null
 	_env = null
+	# The instrument levers do not survive a helmet-off or a map change: the
+	# panel is a measurement tool, not a persisted setting.
+	set_day_floor = Daylight.MIN_FACTOR
+	set_day_trim = Daylight.DAY_TRIM
 	_set_key_gain(1.0)
 	_push_day_mix()
 	_dirty = true
@@ -833,6 +884,9 @@ func apply_config(rec) -> void:
 	set_daylight = rec.daylight_compensation
 	if was_daylight and not set_daylight:
 		_restore_exposure()
+	# The daylight strength slider used to be declared in MCM and read into
+	# the record but never mapped here, so it sat dead.
+	set_strength = rec.daylight_strength
 	set_nvg_noise = rec.nvg_noise
 	set_nvg_white = rec.nvg_white
 	set_world = rec.world
