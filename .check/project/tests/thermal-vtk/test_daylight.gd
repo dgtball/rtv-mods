@@ -114,7 +114,7 @@ func t_day_trim() -> void:
 	ck(near(D.day_trim(0.0, 0.5), 1.0), "day 0.5 leaves the night alone")
 	var half: float = D.day_trim(0.5, 0.5)
 	ck(half > 0.5 and half < 1.0, "half light lands strictly between")
-	ck(near(D.day_trim(1.0), 1.0), "default DAY_TRIM freezes the 2.4.10 picture")
+	ck(near(D.day_trim(1.0), 0.62), "default DAY_TRIM is the 2026-11-11 calibration")
 
 func t_snow_trim_params() -> void:
 	ck(near(D.snow_trim(2, false, false, 1.0, 0.5, 0.9), 0.9), "explicit winter trims at full light")

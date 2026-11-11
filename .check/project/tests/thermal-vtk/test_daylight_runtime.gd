@@ -39,7 +39,7 @@ func _run() -> void:
 	t_toggle_restores_exposure()
 	t_day_floor_deepens_shadows()
 	t_day_trim_darkens_background()
-	t_day_trim_identity_default()
+	t_day_trim_default_calibration()
 	t_refresh_snaps_without_lag()
 	t_reset_returns_levers()
 	print("")
@@ -192,14 +192,14 @@ func t_day_trim_darkens_background() -> void:
 	ck(absf(nvg2._snow_trim - Daylight.SNOW_TRIM_NIGHT) < 0.001, "winter midnight keeps the night snow trim")
 	w2["map"].free()
 
-func t_day_trim_identity_default() -> void:
+func t_day_trim_default_calibration() -> void:
 	var w := _world()
 	var nvg = w["nvg"]
 	var env: Environment = w["env"]
 	var sim: FakeSim = w["sim"]
 	_reset(nvg, env, sim, 1200.0)
 	nvg._daylight_tick(1.0)
-	ck(absf(nvg._day_trim - 1.0) < 0.001, "default DAY_TRIM keeps the 2.4.10 picture still")
+	ck(absf(nvg._day_trim - 0.62) < 0.001, "default DAY_TRIM applies the 2026-11-11 calibration")
 	ck(absf(env.tonemap_exposure - 0.66) < 0.005, "default floor keeps the noon exposure")
 	w["map"].free()
 

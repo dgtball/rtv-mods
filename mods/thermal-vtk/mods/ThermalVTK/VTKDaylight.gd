@@ -15,13 +15,19 @@ const INDOOR_FACTOR := 0.15
 # A blocked sky ray: roof, canopy or deep shadow. Softer than an interior.
 const COVER_FACTOR := 0.45
 const SNOW_BONUS := 0.15
-# Winter background trim, measured 2026-10-24 in the Minefield snow field.
-const SNOW_TRIM_DAY := 0.80
+# Winter background trim. Night is the 2026-10-24 Minefield snow-field
+# measurement; day is fitted 2026-11-11 from the owner's PANEL measurements
+# (winter noon snow field, raw p50 0.679) so the winter day palette sits
+# mid-ladder beside summer instead of pinned on the cream ceiling.
+const SNOW_TRIM_DAY := 0.48
 const SNOW_TRIM_NIGHT := 0.60
-# Daylight highlight trim, identity until calibration: 2.4.10 ships 1.0 so
-# the picture does not move. The value measured by the live panel replaces
-# the constant in 2.5.0.
-const DAY_TRIM := 1.0
+# Daylight highlight trim, calibrated 2026-11-11 from the owner's PANEL
+# measurements. 0.62 (solved 0.6217, rounded) puts the summer-noon palette
+# p50 at 0.489 with p95 0.958 under the 0.97 cream line, keeps the darkest
+# passing scene (street seen from a window) at p50 0.363 above the 0.35
+# floor, and leaves the night picture untouched -- day_trim(0) is 1.0 by
+# construction.
+const DAY_TRIM := 0.62
 
 const WEATHER_FACTORS := {
 	"Neutral": 1.0,
@@ -83,7 +89,8 @@ static func day_factor(light: float, floor_value := MIN_FACTOR) -> float:
 # no cold colors left on screen. The trim multiplies the effective
 # thermalDarken so the same range re-spreads down the ladder: at night 0.60
 # the dirt reads t 0.37 (purple) and the snow tops out near t 0.57 (amber);
-# by day 0.80 gives the pinned snow headroom off the t = 1.0 ceiling. Keys
+# by day 0.48 (2026-11-11 calibration, riding DAY_TRIM 0.62) the noon snow
+# field reads p50 0.49 mid-ladder instead of pinned on the ceiling. Keys
 # are unaffected: substitution happens before the palette. Blended by the
 # same light level that drives exposure, 1.0 everywhere else.
 static func snow_trim(season: int, indoor: bool, shelter: bool, light: float, trim_night := SNOW_TRIM_NIGHT, trim_day := SNOW_TRIM_DAY) -> float:
@@ -94,8 +101,8 @@ static func snow_trim(season: int, indoor: bool, shelter: bool, light: float, tr
 # Daylight background trim: blends toward `day` by RAW light, the same blend
 # snow_trim uses -- not by the strength/floor-aware day_mix the shader sees.
 # The ends are what matter: night stays 1.0 (palette untouched), full day
-# applies the trim in full. DAY_TRIM = 1.0 is the identity that freezes the
-# 2.4.10 picture; the calibrated value lands in 2.5.0.
+# applies the trim in full. DAY_TRIM = 0.62 is the 2026-11-11 calibration;
+# see the constant block for the scenes it was fitted against.
 static func day_trim(light: float, day := DAY_TRIM) -> float:
 	return lerpf(1.0, day, day_mix(day_factor(light)))
 

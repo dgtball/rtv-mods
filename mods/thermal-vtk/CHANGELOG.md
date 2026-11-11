@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.5.0] - 2026-11-11
+
+### Changed
+- The daylight thermal picture is calibrated from in-game measurements:
+  bright days now keep detail across the thermal range instead of washing
+  out into a white field, and sunny snow fields no longer pin the whole
+  frame to the top of the range.
+- The night thermal picture is unchanged.
+
 ## [2.4.11] - 2026-11-11
 
 ### Fixed
