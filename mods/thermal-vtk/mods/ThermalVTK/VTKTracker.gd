@@ -51,6 +51,32 @@ static func mark_dead(e: Dictionary, now: float) -> void:
 	e["dead"] = true
 	e["death_ts"] = now
 
+# A bot with no damage voices never cried in pain, so the poll stays quiet for
+# it too: vanilla PlayDamage is gated the same way.
+static func is_silent(variant: Variant) -> bool:
+	if variant == null:
+		return false
+	if variant is Dictionary:
+		return bool(variant.get("silent", false))
+	if variant is Object:
+		return bool(variant.get("silent"))
+	return false
+
+# Pain cry without a hook: AI.WeaponDamage calls PlayDamage() only on a
+# non-lethal hit, and a hook on it fires inside another mod's damage witness
+# window. The poll compares the health of the previous frame with this one.
+# A lethal drop is a death cry, a missing baseline only rebases.
+static func pain_hit(e: Dictionary, hp: Variant) -> bool:
+	if not (hp is int or hp is float):
+		e.erase("hp")
+		return false
+	var now_hp := float(hp)
+	var last: Variant = e.get("hp")
+	e["hp"] = now_hp
+	if last == null:
+		return false
+	return now_hp > 0.0 and now_hp < float(last)
+
 # ---------------------------------------------------------------------------
 # Trigger mode (the Immersive Threat Highlight idea): instead of an always-on
 # outline, a source event (gunfire, shout, steps, ...) tags the entry with a

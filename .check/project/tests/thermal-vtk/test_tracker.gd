@@ -26,6 +26,8 @@ func _run() -> void:
 	t_trig_fade()
 	t_empty_window_shared()
 	t_pick_nearest_reuses_out()
+	t_pain_hit()
+	t_is_silent()
 	print("")
 	if fails == 0:
 		print("Tracker tests passed")
@@ -143,3 +145,24 @@ func t_pick_nearest_reuses_out() -> void:
 	ck(out == [1, 2], "nearest two ids filled into it")
 	ck(cands[0]["id"] == 3, "the input array is not reordered")
 	ck(T.pick_nearest(cands, 2) == [1, 2], "the two-argument call still works")
+
+func t_pain_hit() -> void:
+	var e: Dictionary = T.new_entry(1, false, 0.0)
+	ck(T.pain_hit(e, 100.0) == false, "first sample only records the baseline")
+	ck(is_equal_approx(float(e.get("hp", -1.0)), 100.0), "baseline stored")
+	ck(T.pain_hit(e, 75.0) == true, "health drop reports pain")
+	ck(T.pain_hit(e, 75.0) == false, "equal health reports nothing")
+	ck(T.pain_hit(e, 80.0) == false, "healed health reports nothing")
+	ck(T.pain_hit(e, 0.0) == false, "a lethal drop is not a pain cry")
+	ck(T.pain_hit(e, "bad") == false, "non-numeric health reports nothing")
+	ck(not e.has("hp"), "non-numeric health clears the baseline")
+	ck(T.pain_hit(e, 50.0) == false, "sample after a cleared baseline only rebases")
+	e.erase("hp")
+	ck(T.pain_hit(e, 20.0) == false, "erased baseline rebases instead of firing")
+	ck(T.pain_hit(e, 19.0) == true, "drop after a rebase fires")
+
+func t_is_silent() -> void:
+	ck(T.is_silent(null) == false, "null variant is not silent")
+	ck(T.is_silent({"silent": true}) == true, "dictionary silent flag")
+	ck(T.is_silent({"silent": false}) == false, "dictionary loud flag")
+	ck(T.is_silent({}) == false, "dictionary without the key is not silent")
