@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.5.2] - 2026-11-11
+
+### Fixed
+- The kill counter of RTV Mini HUD no longer turns into N/A after an NPC is
+  wounded without dying. The pain-cry highlight still works.
+
 ## [2.5.1] - 2026-11-11
 
 ### Fixed

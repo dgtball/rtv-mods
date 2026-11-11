@@ -96,6 +96,8 @@ var _hook_ids: Array = []
 # instead of relying on the meta being present in _ready(). One attempt per
 # half second until the hooks go through.
 var _hook_wait_cd: float = 0.0
+# True while the pain poll is running; parked frames drop the health baseline.
+var _hp_live := false
 var _overlay_layer: CanvasLayer = null
 var _overlay: Control = null
 var _gd_cache: Resource = null
@@ -287,7 +289,6 @@ func _register_hooks() -> void:
 	_hook_ids.append(_lib.hook("ai-playidle-post", _on_ai_playidle, 100))
 	_hook_ids.append(_lib.hook("ai-playfootstep-post", _on_ai_playfootstep, 100))
 	_hook_ids.append(_lib.hook("ai-playreload-post", _on_ai_playreload, 100))
-	_hook_ids.append(_lib.hook("ai-playdamage-post", _on_ai_playdamage, 100))
 	_hook_ids.append(_lib.hook("ai-grenade-post", _on_ai_grenade, 100))
 	var bad: Array[int] = []
 	for h in _hook_ids:
@@ -364,9 +365,6 @@ func _on_ai_playfootstep() -> void:
 func _on_ai_playreload() -> void:
 	_trig_event("reload", p_reload_s, p_reload_d)
 
-func _on_ai_playdamage() -> void:
-	_trig_event("pain", p_pain_s, p_pain_d)
-
 func _on_ai_grenade(phase: int) -> void:
 	Dbg.log("HOOK", "grenade phase=%d" % phase)
 	if phase != 2:
@@ -376,34 +374,48 @@ func _on_ai_grenade(phase: int) -> void:
 # Telemetry around the trigger reveal: the tag itself and the registered id
 # go to the diagnostic log, so a crash during load leaves the last statement.
 func _trig_event(source: String, span: float, dist: float) -> void:
+	_trig_node(_caller(), source, span, dist)
+
+func _trig_node(node: Node, source: String, span: float, dist: float) -> void:
 	if span <= 0.0:
 		return
 	# A zero reveal radius turns the source off (matches the outline's own
 	# 0 = hidden semantics): the sound never reaches the player.
 	if dist <= 0.0:
 		return
+	if not is_instance_valid(node):
+		return
 	# Parked (thermal or both layers off): do not grow the registry from a
 	# sound event. Known entries keep their tags, so debug labels still read a
 	# window that was opened before the layer went off.
 	if not _any_layer():
-		var known := _caller()
-		if known == null or not is_instance_valid(known):
-			return
-		var kid: int = known.get_instance_id()
+		var kid: int = node.get_instance_id()
 		if not _entries.has(kid):
 			return
 		Tracker.tag_trig(_entries[kid], source, dist, _now() + span, span)
 		return
-	var n := _caller()
-	if not is_instance_valid(n):
-		return
-	var id := n.get_instance_id()
+	var id := node.get_instance_id()
 	if not _entries.has(id):
-		_register(n)
+		_register(node)
 	if _entries.has(id):
 		Tracker.tag_trig(_entries[id], source, dist, _now() + span, span)
 		if Dbg.enabled:
 			Dbg.log("ESP", "trig id=%d source=%s span=%.1f dist=%.0f" % [id, source, span, dist])
+
+# Pain cry without a hook on PlayDamage: a hook there lands inside another
+# mod's damage witness window and disables its counter. Poll instead.
+func _poll_pain() -> void:
+	for id in _entries:
+		var e: Dictionary = _entries[id]
+		var node = e.get("node")
+		if node == null or not is_instance_valid(node):
+			e.erase("hp")
+			continue
+		if Tracker.is_silent(node.get("variant")):
+			e.erase("hp")
+			continue
+		if Tracker.pain_hit(e, node.get("health")):
+			_trig_node(node, "pain", p_pain_s, p_pain_d)
 
 func _exit_tree() -> void:
 	_overlay.clear()
@@ -438,6 +450,10 @@ func _process(delta: float) -> void:
 		_overlay.clear()
 		if _overlay != null:
 			_overlay.clear()
+		if _hp_live:
+			_hp_live = false
+			for id in _entries:
+				_entries[id].erase("hp")
 		return
 	_weapon.tick()
 	var scoped := _scoped_now()
@@ -452,6 +468,8 @@ func _process(delta: float) -> void:
 			if n != null and is_instance_valid(n) and n.is_inside_tree() and _is_bot(n):
 				_register(n)
 		_pending.clear()
+	_hp_live = true
+	_poll_pain()
 	# Collection before the consumers: labels and markers read the flags and
 	# the window this pass stores on the record.
 	var ppos_v = _player_pos()
