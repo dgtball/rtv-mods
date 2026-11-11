@@ -114,7 +114,8 @@ $tests = [ordered]@{
         "res://tests/thermal-vtk/test_outline.gd", "res://tests/thermal-vtk/test_preset.gd",
         "res://tests/thermal-vtk/test_probe.gd", "res://tests/thermal-vtk/test_profile.gd",
         "res://tests/thermal-vtk/test_settings.gd", "res://tests/thermal-vtk/test_shaders.gd",
-        "res://tests/thermal-vtk/test_states.gd", "res://tests/thermal-vtk/test_tracker.gd",
+        "res://tests/thermal-vtk/test_states.gd", "res://tests/thermal-vtk/test_stats.gd",
+        "res://tests/thermal-vtk/test_tracker.gd",
         "res://tests/thermal-vtk/test_weapon.gd")
     "gimme-the-loot" = @(
         "res://tests/gimme-the-loot/test_rtl_applicator.gd",
