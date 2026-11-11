@@ -18,6 +18,10 @@ const SNOW_BONUS := 0.15
 # Winter background trim, measured 2026-10-24 in the Minefield snow field.
 const SNOW_TRIM_DAY := 0.80
 const SNOW_TRIM_NIGHT := 0.60
+# Daylight highlight trim, identity until calibration: 2.4.10 ships 1.0 so
+# the picture does not move. The value measured by the live panel replaces
+# the constant in 2.5.0.
+const DAY_TRIM := 1.0
 
 const WEATHER_FACTORS := {
 	"Neutral": 1.0,
@@ -67,8 +71,10 @@ static func light_level(time: float, weather: String, season: int, indoor: bool,
 	return clampf(light, 0.0, 1.0)
 
 # 1.0 at night (vanilla exposure untouched), MIN_FACTOR at full daylight.
-static func day_factor(light: float) -> float:
-	return lerpf(1.0, MIN_FACTOR, clampf(light, 0.0, 1.0))
+# The floor rides as a tail argument so the live panel can probe it without
+# touching the shipped default.
+static func day_factor(light: float, floor_value := MIN_FACTOR) -> float:
+	return lerpf(1.0, floor_value, clampf(light, 0.0, 1.0))
 
 # Winter-only background trim for the thermal palette. Snow bounces far more
 # amplified light than any summer surface, so the whole winter frame lands in
@@ -80,15 +86,25 @@ static func day_factor(light: float) -> float:
 # by day 0.80 gives the pinned snow headroom off the t = 1.0 ceiling. Keys
 # are unaffected: substitution happens before the palette. Blended by the
 # same light level that drives exposure, 1.0 everywhere else.
-static func snow_trim(season: int, indoor: bool, shelter: bool, light: float) -> float:
+static func snow_trim(season: int, indoor: bool, shelter: bool, light: float, trim_night := SNOW_TRIM_NIGHT, trim_day := SNOW_TRIM_DAY) -> float:
 	if season != SEASON_WINTER or indoor or shelter:
 		return 1.0
-	return lerpf(SNOW_TRIM_NIGHT, SNOW_TRIM_DAY, clampf(light, 0.0, 1.0))
+	return lerpf(trim_night, trim_day, clampf(light, 0.0, 1.0))
+
+# Daylight background trim: blends toward `day` by RAW light, the same blend
+# snow_trim uses -- not by the strength/floor-aware day_mix the shader sees.
+# The ends are what matter: night stays 1.0 (palette untouched), full day
+# applies the trim in full. DAY_TRIM = 1.0 is the identity that freezes the
+# 2.4.10 picture; the calibrated value lands in 2.5.0.
+static func day_trim(light: float, day := DAY_TRIM) -> float:
+	return lerpf(1.0, day, day_mix(day_factor(light)))
 
 # 0 at night, 1 at full daylight: how hard the shader tone curve should lift
-# the background before the thermal palette.
-static func day_mix(factor: float) -> float:
-	return clampf((1.0 - factor) / (1.0 - MIN_FACTOR), 0.0, 1.0)
+# the background before the thermal palette. The denominator is guarded: a
+# floor of 1.0 must yield 0.0, not NaN.
+static func day_mix(factor: float, floor_value := MIN_FACTOR) -> float:
+	var d := maxf(1.0 - floor_value, 0.05)
+	return clampf((1.0 - factor) / d, 0.0, 1.0)
 
 # Daylight strength: 0 leaves the vanilla exposure untouched, 1 applies the
 # model in full. Everything downstream (exposure, key gain, day mix) must use
@@ -108,3 +124,26 @@ static func step(current: float, target: float, delta: float, response: float = 
 		return target
 	var k := 1.0 - exp(-maxf(delta, 0.0) / response)
 	return lerpf(current, target, clampf(k, 0.0, 1.0))
+
+# Mirror of the thermal branch in VTKNVG.gdshader: hiShoulder over the
+# unclamped raw luminance, the clamp, then the soft lift. The shader is the
+# SOURCE OF TRUTH -- copy it verbatim, no extra clamps of our own, because
+# the instrument must agree with the shader even in its sharp corners. When
+# the shader changes, this mirror and its control-point tests move in the
+# same commit.
+static func palette_input(raw_l: float, darken: float, knee: float, mix_value: float) -> float:
+	var k := lerpf(1.0, knee, mix_value)
+	var x := raw_l * darken
+	if k < 0.999 and x > k:
+		var slope := 0.75
+		var top := k + slope * (1.0 - k)
+		var cap := minf(0.98, top + 0.18)
+		if x <= 1.0:
+			x = k + (x - k) * slope
+		else:
+			x = top + (cap - top) * (1.0 - exp(-(x - 1.0) * slope / (cap - top)))
+	var lum := clampf(x, 0.0, 1.0)
+	if mix_value > 0.0:
+		var lifted := 1.0 - pow(1.0 - lum, 1.6)
+		lum = lerpf(lum, lifted, mix_value)
+	return lum

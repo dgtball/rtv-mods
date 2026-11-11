@@ -24,9 +24,14 @@ func _run() -> void:
 	t_light_winter()
 	t_day_factor()
 	t_day_mix()
+	t_day_factor_floor()
+	t_day_mix_floor()
+	t_day_trim()
+	t_snow_trim_params()
 	t_key_gain()
 	t_smoothing()
 	t_clamps()
+	t_palette_input()
 	print("")
 	if fails == 0:
 		print("Daylight tests passed")
@@ -88,6 +93,48 @@ func t_day_mix() -> void:
 	ck(near(D.day_mix(0.22), 1.0), "full daylight runs the curve at full strength")
 	ck(near(D.day_mix(0.61), 0.5), "half compensation is a half curve")
 	ck(near(D.day_mix(0.1), 1.0), "a factor below the floor clamps the curve")
+
+func t_day_factor_floor() -> void:
+	ck(near(D.day_factor(1.0, 0.10), 0.10), "explicit floor 0.10 at full daylight")
+	ck(near(D.day_factor(1.0), D.MIN_FACTOR), "default floor stays MIN_FACTOR")
+	ck(near(D.day_factor(0.0, 0.10), 1.0), "night ignores the floor")
+	ck(near(D.day_factor(1.0, 1.0), 1.0), "floor 1.0 is the vanilla exposure")
+
+func t_day_mix_floor() -> void:
+	ck(near(D.day_mix(0.10, 0.10), 1.0), "factor at the floor gives a full curve")
+	ck(near(D.day_mix(1.0, 0.10), 0.0), "night factor gives no curve")
+	ck(near(D.day_mix(D.day_factor(1.0)), 1.0), "old path: default floor, default factor")
+	ck(near(D.day_mix(1.0, 1.0), 0.0), "floor 1.0 does not divide by zero")
+	ck(not is_nan(D.day_mix(1.0, 1.0)), "floor 1.0 keeps the mix finite")
+
+func t_day_trim() -> void:
+	ck(near(D.day_trim(0.0), 1.0), "night leaves the palette alone")
+	ck(near(D.day_trim(1.0), D.DAY_TRIM), "full day applies DAY_TRIM")
+	ck(near(D.day_trim(1.0, 0.5), 0.5), "day 0.5 at full daylight")
+	ck(near(D.day_trim(0.0, 0.5), 1.0), "day 0.5 leaves the night alone")
+	var half: float = D.day_trim(0.5, 0.5)
+	ck(half > 0.5 and half < 1.0, "half light lands strictly between")
+	ck(near(D.day_trim(1.0), 1.0), "default DAY_TRIM freezes the 2.4.10 picture")
+
+func t_snow_trim_params() -> void:
+	ck(near(D.snow_trim(2, false, false, 1.0, 0.5, 0.9), 0.9), "explicit winter trims at full light")
+	ck(near(D.snow_trim(2, false, false, 1.0), D.SNOW_TRIM_DAY), "default snow trim unchanged")
+
+func t_palette_input() -> void:
+	ck(near(D.palette_input(0.5, 1.7, 0.6, 0.0), 0.85), "mix 0: shoulder and lift off, raw darken only")
+	ck(near(D.palette_input(0.2, 1.0, 0.6, 1.0), 1.0 - pow(0.8, 1.6)), "below the knee: full lift")
+	ck(near(D.palette_input(0.8, 1.0, 0.6, 1.0), 1.0 - pow(0.25, 1.6)), "above the knee: shoulder then lift")
+	ck(near(D.palette_input(1.0, 1.0, 0.6, 1.0), 1.0 - pow(0.1, 1.6)), "the x = 1.0 boundary takes the linear shoulder")
+	var prev := -1.0
+	var mono := true
+	var raw := 0.0
+	while raw <= 1.2 + 0.0001:
+		var out: float = D.palette_input(raw, 1.2, 0.6, 0.5)
+		if out < prev - 0.0001:
+			mono = false
+		prev = out
+		raw += 0.05
+	ck(mono, "output never decreases across the 0..1.2 sweep")
 
 func t_key_gain() -> void:
 	ck(near(D.key_gain(1.0), 1.0), "night key gain is 1")
