@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.5.1] - 2026-11-11
+
+### Fixed
+- The kill counter of RTV Mini HUD no longer turns into N/A while ThermalVTK
+  is installed. Corpse cooling still starts as soon as the game marks an NPC
+  dead.
+
 ## [2.5.0] - 2026-11-11
 
 ### Changed

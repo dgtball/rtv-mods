@@ -276,7 +276,10 @@ func _register_hooks() -> void:
 	_hook_ids.append(_lib.hook("ai-activate-pre", _on_ai_activate, 100))
 	_hook_ids.append(_lib.hook("ai-deactivate-post", _on_ai_deactivate, 100))
 	_hook_ids.append(_lib.hook("ai-changestate-post", _on_ai_changestate, 100))
-	_hook_ids.append(_lib.hook("ai-death-post", _on_ai_death, 100))
+	# AI.Death is deliberately not hooked. RTV Mini HUD fails closed on any
+	# ai-death-post callback it cannot identify and turns its kill counter into
+	# N/A for the rest of the launch; the ESP does not need the hook either,
+	# because _draw marks the entry dead from the node's own `dead` flag.
 	# Trigger sources: every callback below is a cheap no-op unless the trigger
 	# mode draws from it. Declarated in mod.txt's [hooks] section.
 	_hook_ids.append(_lib.hook("ai-playfire-post", _on_ai_playfire, 100))
@@ -331,16 +334,6 @@ func _on_ai_changestate(_state: String) -> void:
 		var state := _read_state(n)
 		Tracker.apply_state(_entries[id], state)
 		Dbg.log("ESP", "changestate id=%d state=%d" % [id, state])
-
-func _on_ai_death(_direction: Vector3 = Vector3.ZERO, _force: float = 0.0) -> void:
-	Dbg.log("HOOK", "death")
-	var n := _caller()
-	if not is_instance_valid(n):
-		return
-	var id := n.get_instance_id()
-	if _entries.has(id):
-		Tracker.mark_dead(_entries[id], _now())
-		Dbg.log("ESP", "death id=%d" % id)
 
 # ---------------------------------------------------------------------------
 # Trigger sources (Immersive Threat Highlight idea): a shot, a shout, idle
