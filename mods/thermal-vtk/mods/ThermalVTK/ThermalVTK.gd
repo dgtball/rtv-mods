@@ -5,6 +5,7 @@ const Settings = preload("res://mods/ThermalVTK/VTKSettings.gd")
 const VTKDebug = preload("res://mods/ThermalVTK/VTKDebug.gd")
 const Probe = preload("res://mods/ThermalVTK/VTKProbe.gd")
 const Calibration = preload("res://mods/ThermalVTK/VTKCalibration.gd")
+const LivePanel = preload("res://mods/ThermalVTK/VTKLivePanel.gd")
 
 const MOD_ID := "thermal-vtk"
 const MOD_NAME := "ThermalVTK"
@@ -23,6 +24,7 @@ var _key_thermal_toggle: int = 0
 var _key_palette_cycle: int = KEY_F6
 var _key_debug_probe: int = KEY_F7
 var _key_cal_cycle: int = KEY_F8
+var _key_live_panel: int = KEY_F9
 var _thermal_enabled: bool = false
 var _mines_enabled: bool = true
 var _outline_enabled: bool = true
@@ -30,6 +32,11 @@ var _xray_enabled: bool = true
 var _nvg_worn: bool = false
 var _cal_active: bool = false
 var _cal_index: int = 0
+# The live panel node and the cached settings snapshot its Reset needs. The
+# snapshot is filled on every apply (MCM or defaults), so Reset works even in
+# an install without MCM.
+var _live_panel: Node = null
+var _rec = null
 
 func _ready() -> void:
 	VTKDebug.log("LIFE", "autoload ready begin")
@@ -73,6 +80,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		# stays free for the game, so nothing is consumed.
 		if VTKDebug.enabled:
 			_cal_step(k.shift_pressed)
+			get_viewport().set_input_as_handled()
+		return
+	if _key_live_panel != 0 and (k.keycode == _key_live_panel or k.physical_keycode == _key_live_panel):
+		# The live panel is a debug tool: without the debug log the key stays
+		# free for the game, so nothing is consumed.
+		if VTKDebug.enabled:
+			_toggle_live_panel()
 			get_viewport().set_input_as_handled()
 		return
 	if _key_thermal_toggle == 0:
@@ -154,6 +168,38 @@ func _probe_center() -> void:
 	if _nvg_active():
 		hint = "raw-thermal" if _thermal_enabled else "raw-nvg"
 	VTKDebug.log("PROBE", Probe.format(rgb, hint))
+
+# The live panel exists only while the debug log is on: the autoload owns it,
+# so the gate lives here, not inside the panel. The panel itself is a pure
+# instrument -- it holds NVG/owner references and checks is_instance_valid
+# everywhere, and it never touches the config files.
+func _ensure_live_panel() -> void:
+	if _live_panel != null and is_instance_valid(_live_panel):
+		return
+	_ensure_nvg()
+	if _nvg == null or not is_instance_valid(_nvg):
+		return
+	_live_panel = LivePanel.new()
+	add_child(_live_panel)
+	_live_panel.setup(_nvg, self)
+
+func _toggle_live_panel() -> void:
+	_ensure_live_panel()
+	if _live_panel == null or not is_instance_valid(_live_panel):
+		return
+	if _live_panel.is_open():
+		_live_panel.close()
+	else:
+		_live_panel.open()
+
+func _free_live_panel() -> void:
+	if _live_panel == null or not is_instance_valid(_live_panel):
+		return
+	# close() FIRST: while open the panel owns the pause and the process
+	# modes, and queue_free alone would leak them into the session.
+	_live_panel.close()
+	_live_panel.queue_free()
+	_live_panel = null
 
 func _apply_mode() -> void:
 	if _esp != null and is_instance_valid(_esp):
@@ -334,7 +380,15 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 	# One typed snapshot from the descriptor table; the modules consume it
 	# wholesale, so a renamed key is a parse error, not a silent stale value.
 	var rec = Settings.read(cfg)
+	_rec = rec
 	VTKDebug.set_enabled(rec.debug_log)
+	# The panel is a debug-log tool: it lives only while the log is on. A
+	# re-apply with the log still on only closes it -- apply_config has just
+	# rewritten the NVG fields, and the sliders resync on the next open.
+	if not rec.debug_log:
+		_free_live_panel()
+	elif _live_panel != null and is_instance_valid(_live_panel) and _live_panel.is_open():
+		_live_panel.close()
 	_ensure_nvg()
 	if _nvg == null or not is_instance_valid(_nvg):
 		return
@@ -342,6 +396,7 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 	_key_palette_cycle = rec.key_palette_cycle
 	_key_debug_probe = rec.key_debug_probe
 	_key_cal_cycle = rec.key_cal_cycle
+	_key_live_panel = rec.key_live_panel
 	# The thermal toggle and the world palette live in our own state file, not
 	# in the MCM config: the hotkey writes them, and a second source of truth
 	# would fight the hotkey on every menu round-trip.
@@ -364,6 +419,7 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 func _apply_defaults() -> void:
 	# No MCM in this install: the runtime choices still come from our state
 	# file, so the hotkeys keep working.
+	_rec = Settings.read(ConfigFile.new())
 	_thermal_enabled = bool(_read_state("thermal_enabled", false))
 	var pal = _read_state("world_palette", null)
 	if _nvg != null and is_instance_valid(_nvg):

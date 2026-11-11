@@ -16,6 +16,7 @@ class Rec:
 	var key_palette_cycle: int = KEY_F6
 	var key_debug_probe: int = KEY_F7
 	var key_cal_cycle: int = KEY_F8
+	var key_live_panel: int = KEY_F9
 	# Toggles.
 	var debug_log: bool = false
 	var npc_labels: bool = true
@@ -114,6 +115,7 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Bool", "key": "npc_labels", "name": "NPC labels (debug)", "def": true, "cat": "04. Diagnostics", "pos": 1, "tip": "Draw NPC nametags, health bars and trigger timers while the debug log is on. Works without thermal vision or the NVG helmet, so states can be checked in plain daylight."},
 	{"sect": "Keycode", "key": "key_debug_probe", "name": "Hotkey: Debug key probe", "def": KEY_F7, "cat": "04. Diagnostics", "pos": 20, "tip": "Writes the colour under the crosshair to the debug log. Turn the debug log on first, then press it while aiming at an outlined NPC or the nomad marker. The view blinks for one frame."},
 	{"sect": "Keycode", "key": "key_cal_cycle", "name": "Hotkey: Calibration cycle", "def": KEY_F8, "cat": "04. Diagnostics", "pos": 21, "tip": "Debug tool: cycles a test colour for the outline and the nomad marker, so its colour under the night-vision helmet can be measured with the debug probe. Turn the debug log on first, then aim at an outlined NPC and press the probe key. Shift turns the calibration off."},
+	{"sect": "Keycode", "key": "key_live_panel", "name": "Hotkey: Live panel", "def": KEY_F9, "cat": "04. Diagnostics", "pos": 22, "tip": "Debug tool: opens the live daylight tuning panel; the game pauses while it is open. Turn the debug log on first -- without it the key stays free for the game. The panel saves nothing: slider values live until the helmet comes off."},
 ]
 
 # The seed MCM copies a fresh profile from: every entry the mod declares, with
@@ -154,6 +156,7 @@ static func read(cfg: ConfigFile) -> Rec:
 	rec.key_palette_cycle = int(_val(cfg, "Keycode", "key_palette_cycle", rec.key_palette_cycle))
 	rec.key_debug_probe = int(_val(cfg, "Keycode", "key_debug_probe", rec.key_debug_probe))
 	rec.key_cal_cycle = int(_val(cfg, "Keycode", "key_cal_cycle", rec.key_cal_cycle))
+	rec.key_live_panel = int(_val(cfg, "Keycode", "key_live_panel", rec.key_live_panel))
 	rec.debug_log = bool(_val(cfg, "Bool", "debug_log", rec.debug_log))
 	rec.npc_labels = bool(_val(cfg, "Bool", "npc_labels", rec.npc_labels))
 	rec.outline_enabled = bool(_val(cfg, "Bool", "outline_enabled", rec.outline_enabled))

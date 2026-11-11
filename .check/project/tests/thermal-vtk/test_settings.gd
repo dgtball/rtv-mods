@@ -46,6 +46,7 @@ func t_read_reads_values() -> void:
 	cfg.set_value("Bool", "outline_xray", {"name": "X-ray Triggers", "value": false})
 	cfg.set_value("Bool", "daylight_compensation", {"name": "Daylight compensation", "value": false})
 	cfg.set_value("Keycode", "key_thermal_toggle", {"name": "Hotkey", "value": 4194436})
+	cfg.set_value("Keycode", "key_live_panel", {"name": "Live panel", "value": KEY_F5})
 	cfg.set_value("Color", "state_combat", {"name": "In combat", "value": Color(0.0, 1.0, 0.0)})
 	var rec = Settings.read(cfg)
 	ck(rec.outline_rim == 3.5, "read takes the value payload from the profile")
@@ -53,6 +54,7 @@ func t_read_reads_values() -> void:
 	ck(rec.outline_xray == false, "read takes the x-ray toggle from the profile")
 	ck(rec.daylight_compensation == false, "read takes the daylight toggle from the profile")
 	ck(rec.key_thermal_toggle == 4194436, "read takes the hotkey from the profile")
+	ck(rec.key_live_panel == KEY_F5, "read takes the live panel key from the profile")
 	ck(rec.color_combat == Color(0.0, 1.0, 0.0), "read takes the state colour from the profile")
 
 func t_read_defaults() -> void:
@@ -87,6 +89,7 @@ func t_read_defaults() -> void:
 	ck(rec.debug_log == false, "debug log defaults off")
 	ck(rec.key_thermal_toggle == 0, "thermal hotkey defaults unbound")
 	ck(rec.key_palette_cycle == KEY_F6 and rec.key_debug_probe == KEY_F7 and rec.key_cal_cycle == KEY_F8, "diagnostic hotkeys default to the F keys")
+	ck(rec.key_live_panel == KEY_F9, "live panel key defaults to F9")
 	ck(rec.color_normal == Color(0.98, 0.96, 0, 1), "normal colour default")
 	ck(rec.color_defend == Color(0.11, 0.6, 0.96, 1), "defend colour default")
 
