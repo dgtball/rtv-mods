@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.4.10] - 2026-11-11
+
+### Added
+- A live tuning panel for the daylight compensation (default F9). It is a
+  diagnostics tool: it only works with the debug log enabled, pauses the
+  game while open and saves nothing -- slider values live until the helmet
+  comes off.
+
+### Fixed
+- The "Daylight strength" setting now actually applies to the picture; it
+  used to be accepted in the menu and then ignored.
+
+### Changed
+- Minor performance improvements.
+
 ## [2.4.7] - 2026-11-10
 
 ### Fixed
