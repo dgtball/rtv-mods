@@ -1,6 +1,8 @@
 extends SceneTree
 
 const Stats = preload("res://mods/ThermalVTK/VTKStats.gd")
+const SceneProbe = preload("res://mods/ThermalVTK/VTKSceneProbe.gd")
+const EspMask = preload("res://mods/ThermalVTK/VTKEspMask.gd")
 
 var fails := 0
 
@@ -21,6 +23,8 @@ func _run() -> void:
 	t_image_uniform()
 	t_image_half_black_half_cream()
 	t_image_empty()
+	t_probe_rests_dark()
+	t_probe_excludes_shells()
 	print("")
 	if fails == 0:
 		print("Stats tests passed")
@@ -78,3 +82,29 @@ func t_image_half_black_half_cream() -> void:
 func t_image_empty() -> void:
 	ck(Stats.from_image(Image.new()).is_empty(), "blank image (w = 0) -> empty dictionary")
 	ck(Stats.from_image(null).is_empty(), "null image -> empty dictionary")
+
+# The probe's rest state is what makes it free when the panel is closed: no
+# updates, no 3D, but the shared world and the camera-less private
+# environment stay wired so the first measure() is valid.
+func t_probe_rests_dark() -> void:
+	var probe = SceneProbe.new()
+	root.add_child(probe)
+	ck(probe._vp.size == Vector2i(64, 36), "probe viewport rests at 64x36")
+	ck(probe._vp.disable_3d == true, "probe viewport rests with 3D off")
+	ck(probe._vp.render_target_update_mode == SubViewport.UPDATE_DISABLED, "probe viewport rests without updates")
+	ck(probe._vp.own_world_3d == false, "probe viewport inherits the game world")
+	ck(probe._cam.environment == null, "probe camera carries no private environment")
+	probe.free()
+
+func t_probe_excludes_shells() -> void:
+	var probe = SceneProbe.new()
+	root.add_child(probe)
+	var cam := Camera3D.new()
+	root.add_child(cam)
+	cam.cull_mask = 0xFFFFFFFF
+	probe._sync_camera(cam)
+	var want: int = 0xFFFFFFFF & ~EspMask.LAYER_MASK
+	ck(probe._cam.cull_mask == want, "probe camera drops the ESP shell layer")
+	ck(cam.cull_mask == 0xFFFFFFFF, "the game camera's mask is untouched")
+	probe.free()
+	cam.free()
