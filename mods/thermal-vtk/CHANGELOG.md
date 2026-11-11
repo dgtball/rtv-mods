@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.4.11] - 2026-11-11
+
+### Fixed
+- The Measure button of the live tuning panel works: on 2.4.10 every
+  measurement failed.
+- The daylight debug line now shows the mix value of the step it
+  describes, not the previous one.
+
 ## [2.4.10] - 2026-11-11
 
 ### Added

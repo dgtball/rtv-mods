@@ -58,9 +58,9 @@ func _ready() -> void:
 # pose and return Stats.from_image() of it. Async by necessity: the render
 # lands after the current frame's draw, and the readback needs the finished
 # pixels. Returns {} when there is nothing to measure (no tree, no camera,
-# no viewport). Pause-safe: process_frame and frame_post_draw are tree
-# signals and rendering runs while paused, so the panel works from the
-# pause menu too.
+# no viewport, unreadable frame). Pause-safe: process_frame and
+# frame_post_draw are tree signals and rendering runs while paused, so the
+# panel works from the pause menu too.
 func measure(main: Viewport) -> Dictionary:
 	if _vp == null or _cam == null:
 		return {}
@@ -75,11 +75,22 @@ func measure(main: Viewport) -> Dictionary:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	await RenderingServer.frame_post_draw
-	var img: Image = _vp.get_image()
+	var img: Image = readback(_vp.get_texture())
 	var out: Dictionary = Stats.from_image(img)
 	_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	_vp.disable_3d = true
 	return out
+
+# Read a texture back into an Image. A viewport's frame lives in its
+# texture: SubViewport has no get_image() in 4.6, and calling that ghost
+# API aborts measure() mid-flight -- the panel then reports nothing while
+# the viewport stays hot. Static and texture-in, so it runs headless on a
+# live ImageTexture (test_stats.gd); a null texture reads back as null,
+# which Stats.from_image treats as nothing to measure.
+static func readback(tex: Texture2D) -> Image:
+	if tex == null:
+		return null
+	return tex.get_image()
 
 # Copy the picture camera's pose and optics wholesale -- the same list
 # VTKEspMask.sync mirrors, with two probe-specific differences: `far` comes

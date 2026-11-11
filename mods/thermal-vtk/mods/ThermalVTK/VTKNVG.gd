@@ -589,21 +589,23 @@ func _daylight_tick(delta: float) -> void:
 
 
 # The tail of _daylight_tick: whatever factor sits in _day_factor, write the
-# exposure, the key gain and the shader mix. Shared with refresh_daylight_now
+# exposure, the shader mix and the key gain. Shared with refresh_daylight_now
 # so the tick and the panel lever can never compute different things. `cur`
-# is the environment exposure as the caller read it before applying.
+# is the environment exposure as the caller read it before applying. The mix
+# lands before the gain so the [DAY] debug line prints the mix the factor
+# produced, not the previous step's.
 func _daylight_apply(env: Environment, cur: float) -> void:
 	var want := _vanilla_exposure * _day_factor
 	if absf(want - cur) > 0.002:
 		env.tonemap_exposure = want
 	_last_exposure = want
-	var gain := Daylight.key_gain(_day_factor)
-	if absf(gain - _key_gain) > 0.001:
-		_set_key_gain(gain)
 	var mix := Daylight.day_mix(_day_factor, set_day_floor)
 	if absf(mix - _day_mix) > 0.001:
 		_day_mix = mix
 		_push_day_mix()
+	var gain := Daylight.key_gain(_day_factor)
+	if absf(gain - _key_gain) > 0.001:
+		_set_key_gain(gain)
 
 
 # Snow and day trims from one place: the tick pushes them with the smoothed

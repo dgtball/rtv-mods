@@ -25,6 +25,8 @@ func _run() -> void:
 	t_image_empty()
 	t_probe_rests_dark()
 	t_probe_excludes_shells()
+	t_probe_readback()
+	t_probe_readback_source()
 	print("")
 	if fails == 0:
 		print("Stats tests passed")
@@ -108,3 +110,24 @@ func t_probe_excludes_shells() -> void:
 	ck(cam.cull_mask == 0xFFFFFFFF, "the game camera's mask is untouched")
 	probe.free()
 	cam.free()
+
+# The frame readback goes through the viewport's texture: SubViewport has no
+# get_image() in 4.6, and calling that ghost API aborts measure() silently --
+# the panel then reports nothing to measure while the viewport stays hot. A
+# live ImageTexture roundtrips headless, so the helper is exercised for real.
+func t_probe_readback() -> void:
+	var img := Image.create_empty(8, 8, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.5, 0.5, 0.5))
+	var tex := ImageTexture.create_from_image(img)
+	var back: Image = SceneProbe.readback(tex)
+	ck(back != null, "readback returns an image for a live texture")
+	ck(back != null and back.get_size() == Vector2i(8, 8), "readback keeps the texture size")
+	ck(back != null and abs(back.get_pixel(0, 0).r - 0.5) < 0.01, "readback keeps the pixel data")
+	ck(SceneProbe.readback(null) == null, "readback of a null texture is null")
+
+# A never-rendered viewport texture reads back as null headless, so the ghost
+# API cannot be caught by running measure() there. The regression guard is on
+# the source instead: the probe must read frames through its texture.
+func t_probe_readback_source() -> void:
+	var src := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKSceneProbe.gd")
+	ck(not src.contains("_vp.get_image("), "probe never calls the ghost SubViewport.get_image()")

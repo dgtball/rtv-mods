@@ -240,7 +240,7 @@ func _on_measure() -> void:
 		return
 	var stats: Dictionary = await _probe.measure(get_viewport())
 	if stats.is_empty():
-		var fail := "measure failed (no camera/world)"
+		var fail := "measure failed (no camera or blank frame)"
 		_measure_label.text = fail
 		Dbg.log("PANEL", fail)
 		return
