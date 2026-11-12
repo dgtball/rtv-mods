@@ -123,7 +123,8 @@ $tests = [ordered]@{
         "res://tests/gimme-the-loot/test_rtl_pool.gd", "res://tests/gimme-the-loot/test_rtl_roll.gd",
         "res://tests/gimme-the-loot/test_rtl_rows.gd", "res://tests/gimme-the-loot/test_rtl_stats.gd",
         "res://tests/gimme-the-loot/test_rtl_text.gd", "res://tests/gimme-the-loot/test_sidecar.gd",
-        "res://tests/gimme-the-loot/test_store.gd", "res://tests/gimme-the-loot/test_rtl_world.gd")
+        "res://tests/gimme-the-loot/test_store.gd", "res://tests/gimme-the-loot/test_rtl_world.gd",
+        "res://tests/gimme-the-loot/test_rtl_config.gd")
 }
 $tests = @($tests.Values | ForEach-Object { $_ })
 

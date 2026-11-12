@@ -1,8 +1,11 @@
 extends RefCounted
 
+# Дефолт частоты: единственный источник для себя и для объявления MCM.
+const FREQ_DEFAULT := 0.5
+
 var paint_cells: bool = true
 var show_affix_block: bool = true
-var freq_mult: float = 1.0
+var freq_mult: float = FREQ_DEFAULT
 var tier_palette: int = 0
 var debug_enabled: bool = false
 var debug_force_tier: int = 0
