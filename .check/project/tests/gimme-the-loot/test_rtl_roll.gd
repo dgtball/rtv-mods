@@ -118,6 +118,59 @@ func _init() -> void:
 				rifle_seen = true
 	ck(rifle_seen, "firearm can roll ammo_save")
 
+	# --- количество аффиксов: диапазоны по тирам ---
+	ck(Roll.COUNT_RANGES[0] == [0, 0], "vanilla tier: 0 affixes")
+	ck(Roll.COUNT_RANGES[1] == [1, 2], "common: 1-2 affixes")
+	ck(Roll.COUNT_RANGES[2] == [2, 3], "rare: 2-3 affixes")
+	ck(Roll.COUNT_RANGES[3] == [3, 5], "legendary: 3-5 affixes")
+	var rng0 := RandomNumberGenerator.new()
+	ck(Roll.affix_count(0, rng0) == 0, "affix_count(0) = 0")
+	ck(Roll.affix_count(9, rng0) == 0, "affix_count(unknown) = 0")
+	for tier in [1, 2, 3]:
+		var lo: int = Roll.COUNT_RANGES[tier][0]
+		var hi: int = Roll.COUNT_RANGES[tier][1]
+		var rgc := RandomNumberGenerator.new()
+		rgc.seed = 1000 + tier
+		var mn := 99
+		var mx := -1
+		for i in 500:
+			var n: int = Roll.affix_count(tier, rgc)
+			mn = mini(mn, n)
+			mx = maxi(mx, n)
+		ck(mn == lo and mx == hi, "tier %d count spans %d..%d (got %d..%d)" % [tier, lo, hi, mn, mx])
+
+	# --- обрезка по пулу ---
+	var knife_ok := true
+	for s in range(50):
+		var rgk2 := RandomNumberGenerator.new()
+		rgk2.seed = s
+		if Roll.build_affixes("weapon", 3, knife, [], rgk2).size() != 2:
+			knife_ok = false
+	ck(knife_ok, "knife tier 3 truncates to its 2 stats")
+
+	# `rifle` объявлен выше в этом же тесте (блок Task 2) — переиспользуем его:
+	# повторный `var rifle` в той же функции не скомпилируется.
+	var rmin := 99
+	var rmax := -1
+	for s in range(200):
+		var rgr := RandomNumberGenerator.new()
+		rgr.seed = s
+		var rn: int = Roll.build_affixes("weapon", 3, rifle, [], rgr).size()
+		rmin = mini(rmin, rn)
+		rmax = maxi(rmax, rn)
+	ck(rmin == 3 and rmax == 5, "firearm tier 3 rolls 3..5 affixes (got %d..%d)" % [rmin, rmax])
+
+	var shirt := {"type": "Clothing", "slots": ["Torso"], "insulation": 10.0}
+	var cmin := 99
+	var cmax := -1
+	for s in range(200):
+		var rgq := RandomNumberGenerator.new()
+		rgq.seed = s
+		var cn: int = Roll.build_affixes("clothing", 3, shirt, [], rgq).size()
+		cmin = mini(cmin, cn)
+		cmax = maxi(cmax, cn)
+	ck(cmin == 3 and cmax == 5, "clothing tier 3 rolls 3..5 affixes (got %d..%d)" % [cmin, cmax])
+
 	print("")
 	if fails > 0:
 		print("FAILED: %d" % fails)

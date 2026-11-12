@@ -45,8 +45,15 @@ static func pick_tier(weights: Array, r: float) -> int:
 			return tier
 	return weights.size() - 1
 
-static func affix_count(tier: int) -> int:
-	return clampi(tier, 0, 3)
+# Сколько аффиксов просит тир. Верхняя граница может быть недостижима:
+# build_affixes обрезает её по числу доступных статов.
+const COUNT_RANGES := {0: [0, 0], 1: [1, 2], 2: [2, 3], 3: [3, 5]}
+
+static func affix_count(tier: int, rng: RandomNumberGenerator) -> int:
+	if not COUNT_RANGES.has(tier):
+		return 0
+	var r: Array = COUNT_RANGES[tier]
+	return rng.randi_range(int(r[0]), int(r[1]))
 
 static func _needs_ok(need: String, item_data) -> bool:
 	if need == "":
@@ -67,7 +74,7 @@ static func _needs_ok(need: String, item_data) -> bool:
 
 static func build_affixes(category: String, tier: int, item_data, blocked: Array, rng: RandomNumberGenerator) -> Array:
 	var out: Array = []
-	var n: int = affix_count(tier)
+	var n: int = affix_count(tier, rng)
 	if n <= 0:
 		return out
 	# candidates filtered by release (Pool.entries already filters by ACTIVE_RELEASE)
@@ -101,6 +108,9 @@ static func build_affixes(category: String, tier: int, item_data, blocked: Array
 		candidates = filtered
 
 	# Pick n without replacement
+	n = mini(n, candidates.size())
+	if n <= 0:
+		return out
 	var pool: Array = candidates.duplicate()
 	for i in range(n):
 		if pool.is_empty():
