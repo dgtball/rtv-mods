@@ -16,6 +16,14 @@ extends RefCounted
 
 const TARGET := 0.22
 const FLOOR := 0.12
+# Uncompensated frame level the ceiling releases the factor to. Below the
+# measured day reference 0.151 (so the ceiling is guaranteed silent by day)
+# and above the measured cave frame 0.031 (so it is guaranteed to speak in a
+# cave).
+const DAY_LEVEL := 0.10
+# Division guard for `u` and the ceiling. Not a "no measurement" guard: that
+# one lives in VTKNVG, which never computes a ceiling without a frame.
+const EPS := 0.0001
 # Winter background trim. Night is the 2026-10-24 Minefield snow-field
 # measurement; day is fitted 2026-11-11 from the owner's PANEL measurements
 # (winter noon snow field, raw p50 0.679) so the winter day palette sits
@@ -73,10 +81,18 @@ static func factor_for_light(e: float, target := TARGET, floor_value := FLOOR) -
 # Fold the game's light state into one level scalar. The snapshot keys and
 # their defaults are the contract with VTKNVG._snapshot. Shelter and intro
 # short-circuit to zero: World.Static() blacks the ambient out but makes the
-# sky WHITE, so a naive sum would read a bright sky through a roof.
+# sky WHITE, so a naive sum would read a bright sky through a roof. The terms
+# come unweighted from estimate_terms() -- the W_* weights are applied here,
+# so the panel can show each term's raw contribution.
 static func estimate_light(snap: Dictionary) -> float:
+	var t := estimate_terms(snap)
+	return W_SKY * float(t["sky"]) + W_AMB * float(t["amb"]) + W_SUN * float(t["sun"]) + W_MOON * float(t["moon"]) + W_FOG * float(t["fog"])
+
+# The same sum split into its five terms {sky, amb, sun, moon, fog}. The
+# shelter/intro short circuit lives here so estimate_light stays a plain sum.
+static func estimate_terms(snap: Dictionary) -> Dictionary:
 	if bool(snap.get("shelter", false)) or bool(snap.get("intro", false)):
-		return 0.0
+		return {"sky": 0.0, "amb": 0.0, "sun": 0.0, "moon": 0.0, "fog": 0.0}
 	var sky := lum(snap.get("sky_color", Color.BLACK)) * float(snap.get("background_energy", 1.0))
 	var amb := lum(snap.get("ambient_color", Color.BLACK)) * float(snap.get("ambient_energy", 1.0))
 	var sun := lum(snap.get("sun_color", Color.BLACK)) * float(snap.get("sun_energy", 0.0))
@@ -86,7 +102,22 @@ static func estimate_light(snap: Dictionary) -> float:
 	if int(snap.get("moon_mask", 0)) == 0:
 		moon = 0.0
 	var fog := lum(snap.get("fog_emission", Color.BLACK)) * float(snap.get("fog_density", 0.0))
-	return W_SKY * sky + W_AMB * amb + W_SUN * sun + W_MOON * moon + W_FOG * fog
+	return {"sky": sky, "amb": amb, "sun": sun, "moon": moon, "fog": fog}
+
+# Uncompensated frame level: the probe sees the frame through the game's
+# Environment, our applied exposure included, so the measurement must be
+# divided by `applied` (the current smoothed _day_factor) -- otherwise the
+# loop catches itself. The division is guarded by EPS: a zero measurement
+# gives u -> 0 and the ceiling pins at 1.0, which is why the "no measurement"
+# guard lives in VTKNVG, not here.
+static func frame_ceiling(measured: float, applied: float, level := DAY_LEVEL, floor_value := FLOOR) -> float:
+	var u := measured / maxf(applied, EPS)
+	return clampf(level / maxf(u, EPS), floor_value, 1.0)
+
+# Night gate: the sun is culled -> vanilla exposure. One line, but it is the
+# single place "night = vanilla" lives (and the one its test targets).
+static func night_gate(factor: float, sun_down: bool) -> float:
+	return 1.0 if sun_down else factor
 
 # Source B: one step of the measured-frame loop. A frame on target holds the
 # factor; a brighter frame lowers it; a darker one raises it, but never above

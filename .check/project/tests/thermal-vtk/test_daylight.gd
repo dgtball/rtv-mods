@@ -20,6 +20,9 @@ func _init() -> void:
 func _run() -> void:
 	t_factor_for_light()
 	t_estimate_light()
+	t_estimate_terms()
+	t_frame_ceiling()
+	t_night_gate()
 	t_feedback_factor()
 	t_day_mix_target()
 	t_day_trim_mix()
@@ -61,6 +64,35 @@ func t_estimate_light() -> void:
 	ck(near(D.estimate_light({"moon_color": Color(1, 1, 1), "moon_energy": 1.0, "moon_mask": 1}), 1.0), "an active moon adds its energy")
 	ck(near(D.estimate_light({"fog_emission": Color(1, 1, 1), "fog_density": 0.5}), 0.5), "fog emission scales by density")
 	ck(near(D.estimate_light({"ambient_color": Color(1, 1, 1), "ambient_energy": 1.0, "sky_color": Color(1, 1, 1), "background_energy": 1.0}), 2.0), "the terms sum with unit weights")
+
+func t_frame_ceiling() -> void:
+	# u = measured / applied -- несжатый уровень кадра. Потолок отпускает ровно
+	# до DAY_LEVEL и никогда выше ванили.
+	ck(near(D.frame_ceiling(0.03, 0.12), 0.40, 0.01), "a cave frame lifts the ceiling to DAY_LEVEL / u")
+	ck(near(D.frame_ceiling(0.03, 1.0), 1.0), "an uncompensated dark frame hits the vanilla ceiling")
+	ck(near(D.frame_ceiling(0.20, 0.12), D.FLOOR), "a bright frame hits the floor")
+	ck(near(D.frame_ceiling(0.10, 0.12), D.FLOOR, 0.005), "a frame on DAY_LEVEL lands on the floor")
+	ck(near(D.frame_ceiling(0.03, 0.12, 0.20), 0.80, 0.01), "an explicit level moves the ceiling")
+	ck(near(D.frame_ceiling(0.03, 0.12, 0.10, 1.0), 1.0), "floor 1.0 disables the release")
+	ck(D.frame_ceiling(0.151, 0.22) < 0.22, "a day-level frame keeps the ceiling under source A")
+	ck(not is_nan(D.frame_ceiling(0.03, 0.0)), "zero applied never divides by zero")
+	ck(D.frame_ceiling(0.03, 0.0) >= D.FLOOR, "a degenerate division stops at the floor")
+
+func t_night_gate() -> void:
+	ck(near(D.night_gate(0.12, true), 1.0), "a sunless sky restores the vanilla exposure")
+	ck(near(D.night_gate(0.12, false), 0.12), "a live sun keeps the compensation factor")
+	ck(near(D.night_gate(1.0, true), 1.0), "the gate never lifts above vanilla")
+
+func t_estimate_terms() -> void:
+	var t: Dictionary = D.estimate_terms({})
+	ck(near(float(t["sky"]) + float(t["amb"]) + float(t["sun"]) + float(t["moon"]) + float(t["fog"]), 0.0), "an empty snapshot has zero terms")
+	var s: Dictionary = D.estimate_terms({"ambient_color": Color(1, 1, 1), "ambient_energy": 1.0, "sun_color": Color(1, 1, 1), "sun_energy": 0.5, "sun_mask": 1})
+	ck(near(float(s["amb"]), 1.0), "the ambient term is read")
+	ck(near(float(s["sun"]), 0.5), "the sun term is read")
+	ck(near(D.estimate_light({"ambient_color": Color(1, 1, 1), "ambient_energy": 1.0, "sun_color": Color(1, 1, 1), "sun_energy": 0.5, "sun_mask": 1}), 1.5), "estimate_light is the sum of the terms")
+	var sh: Dictionary = D.estimate_terms({"shelter": true, "ambient_color": Color(1, 1, 1), "ambient_energy": 1.0})
+	ck(near(float(sh["amb"]), 0.0), "shelter zeroes every term")
+	ck(near(float(sh["sun"]), 0.0), "shelter zeroes the sun term too")
 
 func t_feedback_factor() -> void:
 	ck(near(D.feedback_factor(0.5, 0.5, 0.5), 0.5), "a frame on target holds the factor")
