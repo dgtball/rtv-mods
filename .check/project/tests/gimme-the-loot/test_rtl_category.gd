@@ -56,6 +56,17 @@ func _init() -> void:
 	ck(Cat.stat_allowed({"type": "Weapon", "slots": ["Primary"]}, "recoil"), "rifle: recoil allowed")
 	ck(Cat.stat_allowed(null, "recoil"), "null item: no mask")
 
+	# огнестрел: категория weapon, но не нож
+	ck(Cat.is_firearm({"type": "Weapon", "slots": ["Primary"]}), "rifle is firearm")
+	ck(Cat.is_firearm({"type": "Weapon", "slots": ["Secondary"]}), "pistol is firearm")
+	ck(not Cat.is_firearm({"type": "Knife", "slots": ["Knife"]}), "knife is not firearm")
+	ck(not Cat.is_firearm({"type": "Fishing", "slots": ["Primary", "Secondary"]}), "fishing rod is not firearm")
+	ck(not Cat.is_firearm({"type": "Instrument", "slots": ["Primary", "Secondary"]}), "guitar is not firearm")
+	ck(not Cat.is_firearm({"type": "Clothing", "slots": ["Torso"]}), "clothing is not firearm")
+	ck(not Cat.is_firearm({"type": "Armor", "slots": []}), "armor plate is not firearm")
+	ck(not Cat.is_firearm(null), "null is not firearm")
+	ck(not Cat.is_firearm({}), "empty dict is not firearm")
+
 	print("")
 	if fails > 0:
 		print("FAILED: %d" % fails)

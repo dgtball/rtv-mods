@@ -50,6 +50,11 @@ static func of_item(itemData) -> String:
 static func rollable(itemData) -> bool:
 	return of_item(itemData) != OTHER
 
+static func is_firearm(itemData) -> bool:
+	if of_item(itemData) != WEAPON:
+		return false
+	return _field_str(itemData, "type") != KNIFE_TYPE
+
 static func stat_allowed(itemData, stat: String) -> bool:
 	if itemData == null:
 		return true
