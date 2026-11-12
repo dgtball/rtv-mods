@@ -1,6 +1,6 @@
 # **Gimme the Loot**
 
-**Version:** 1.0.0  
+**Version:** 1.1.0  
 **Mod ID:** `gimme-the-loot`  
 **Author:** CaptiveAI
 
@@ -12,9 +12,9 @@ you find in Road to Vostok (containers, corpses, ground-spawned loot).
 
 ## What it does
 
-- **Common** — blue border, 1 affix
-- **Rare** — purple border, 2 affixes
-- **Legendary** — gold border, 3 affixes
+- **Common** — blue border, 1-2 affixes
+- **Rare** — purple border, 2-3 affixes
+- **Legendary** — gold border, 3-5 affixes
 
 Affixes are **real** (not cosmetic), e.g. carry capacity, insulation, sprint
 speed, stamina/hunger/thirst/sanity drains, regen, damage, recoil, fire rate.
@@ -33,7 +33,7 @@ speed, stamina/hunger/thirst/sanity drains, regen, damage, recoil, fire rate.
 
 ## Table: maximum affix values (T3)
 
-<|constrain|> Stat | Max |
+Stat | Max |
 |---|---|
 | Capacity | +6 kg |
 | Insulation | +12–16% |
@@ -51,6 +51,7 @@ speed, stamina/hunger/thirst/sanity drains, regen, damage, recoil, fire rate.
 | Fire rate | +8% |
 | Low-HP damage | +20% |
 | Wear | +12% extra |
+| Ammo save | +50% |
 
 Notes:
 - Drains are floored at ~20% so they cannot fully stop.

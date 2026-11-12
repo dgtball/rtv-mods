@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.1.0] - 2026-11-12
+
+### Added
+- `ammo_save` affix for firearms: a chance that a shot does not spend a round
+  (5-10% / 10-15% / 15-50% by tier).
+
+### Changed
+- Rarity frequency now defaults to 0.5, so roughly half as many items are
+  enchanted.
+- Tier affix counts are ranges: Common 1-2, Rare 2-3, Legendary 3-5. Items with
+  fewer distinct stats get as many as they have.
+- Legendary firearms can now carry five affixes.
+
+### Fixed
+- The `wear` affix now works on weapons that have no damage or recoil affix.
+
 ## [1.0.0] - 2026-11-08
 
 ### Added
