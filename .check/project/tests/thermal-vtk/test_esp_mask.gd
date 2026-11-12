@@ -17,6 +17,7 @@ func _init() -> void:
 func _run() -> void:
 	await t_layer()
 	await t_lifecycle()
+	await t_backdrop()
 	await t_camera_sync()
 	await t_reach()
 	print("")
@@ -68,6 +69,37 @@ func t_lifecycle() -> void:
 	ck(m.texture() != null, "mask exposes a viewport texture")
 	m.set_enabled(false)
 	ck(m._vp.render_target_update_mode == SubViewport.UPDATE_DISABLED, "mask stops rendering when disabled")
+	m.queue_free()
+	await process_frame
+
+# The mask needs the world's depth and nothing else from it: every bit of
+# colour the world contributes is a bit the overlay has to subtract again
+# (gap = coverage * (1 - world)), and ambient/reflection sampling is paid per
+# world pixel. So the backdrop is a dial: off swaps in a flat black Environment
+# with ambient and reflections disabled, and the contour's own coverage is what
+# the overlay reads. The plain Environment is kept, not rebuilt, so turning the
+# dial back on restores exactly the previous look.
+func t_backdrop() -> void:
+	var m = EspMask.new()
+	root.add_child(m)
+	await process_frame
+	ck(m.backdrop(), "mask keeps the world backdrop by default")
+	var plain: Environment = m._cam.environment
+	ck(plain != null, "mask camera owns its Environment")
+	ck(plain.background_mode == Environment.BG_CLEAR_COLOR, "default backdrop clears to the project colour")
+	ck(plain.ambient_light_source == Environment.AMBIENT_SOURCE_BG, "default backdrop takes ambient from the background")
+	m.set_backdrop(false)
+	ck(not m.backdrop(), "backdrop dial turns off")
+	var dark: Environment = m._cam.environment
+	ck(dark != plain, "backdrop off swaps in a flat Environment")
+	ck(dark.background_mode == Environment.BG_COLOR, "flat backdrop clears to one colour")
+	ck(dark.background_color.is_equal_approx(Color(0, 0, 0)), "flat backdrop is black")
+	ck(dark.ambient_light_source == Environment.AMBIENT_SOURCE_DISABLED, "flat backdrop kills ambient")
+	ck(dark.reflected_light_source == Environment.REFLECTION_SOURCE_DISABLED, "flat backdrop kills reflections")
+	m.set_backdrop(true)
+	ck(m._cam.environment == plain, "backdrop dial restores the plain Environment")
+	m.set_backdrop(false)
+	ck(m._cam.environment == dark, "backdrop dial reuses the flat Environment")
 	m.queue_free()
 	await process_frame
 

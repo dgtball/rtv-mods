@@ -63,12 +63,19 @@ const MIN_REACH := 30.0
 var _vp: SubViewport = null
 var _cam: Camera3D = null
 var _env: Environment = null
+var _env_dark: Environment = null
 var _texture: Texture2D = null
 var _enabled: bool = false
 var _size: Vector2i = Vector2i.ZERO
 var _synced: bool = false
 # 0 = copy the picture camera's far plane; >0 = cap it at reach + FAR_MARGIN.
 var _reach: float = 0.0
+# The mask needs the world's depth, not its colour: every bit the world
+# contributes is a bit the overlay subtracts again (gap = coverage * (1 - world))
+# and ambient/reflection sampling is paid per world pixel. So the backdrop is a
+# dial. Off = flat black clear colour, no ambient, no reflections, and the
+# contour's own coverage is what the overlay reads.
+var _backdrop: bool = true
 
 func _ready() -> void:
 	name = "VTKEspMask"
@@ -107,6 +114,7 @@ func _ready() -> void:
 	# `current` only takes effect once the camera is inside the viewport: set it
 	# after add_child, or the mask viewport renders with no camera at all.
 	_cam.current = true
+	_apply_backdrop()
 	_apply_enabled_state()
 
 # The mask costs a second world pass, so it only renders while a ring is on
@@ -178,6 +186,27 @@ func set_lod(threshold: float) -> void:
 
 func lod() -> float:
 	return _lod
+
+# World backdrop dial, same contract as set_msaa: stored before the viewport
+# exists. The dark Environment is built once and reused, and the plain one is
+# kept, so toggling never rebuilds the look.
+func set_backdrop(on: bool) -> void:
+	_backdrop = on
+	_apply_backdrop()
+
+func backdrop() -> bool:
+	return _backdrop
+
+func _apply_backdrop() -> void:
+	if _cam == null:
+		return
+	if _env_dark == null:
+		_env_dark = Environment.new()
+		_env_dark.background_mode = Environment.BG_COLOR
+		_env_dark.background_color = Color(0, 0, 0)
+		_env_dark.ambient_light_source = Environment.AMBIENT_SOURCE_DISABLED
+		_env_dark.reflected_light_source = Environment.REFLECTION_SOURCE_DISABLED
+	_cam.environment = _env if _backdrop else _env_dark
 
 # The texture the NVG material binds to `esp_mask`. Stable across frames.
 func texture() -> Texture2D:

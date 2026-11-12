@@ -250,21 +250,20 @@ var _perf_t: float = 0.0
 
 # TEMP: F10 walks the candidate mask settings (Shift+F10 backwards) so the price
 # and the look can be compared inside one session. The PERF line carries the
-# active set as mres/mmaa/mlod/meg/mef, which is all the log needs to bucket the
-# windows.
+# active set as mres/mmaa/mlod/meg/mef/mbk, which is all the log needs to bucket
+# the windows.
 #
-# After the resolution run the verdict was "1.00 AA4x looks good, still not
-# crisp", and 1.00 AA4x measured ~5.5 ms -- over the 4 ms target. So this round
-# holds the grid and the LOD at the reference (1.00, 4x, 0.2 = the pre-refactor
-# silhouette) and moves only the edge profile: the gap at which the contour
-# starts and the gap that makes it opaque. A low full gap is what turns the
-# graded band into an opaque core with a thin faint halo; the gate stays low so
-# a bright background behind the shell cannot punch holes in the line.
+# After the profile run the verdict was "1.00 hard is the crispest, 0.75 at
+# distance still not pleasant", and `hard` at 1.00 with MSAA 4x measured ~5.5 ms
+# -- over the 4 ms target. This round holds the profile at `hard`/lod 0.2 and
+# walks the three remaining levers one at a time: sample coverage on the full
+# target (+2.0 ms by the last run), the world backdrop the mask does not need
+# (approach A: black clear colour, no ambient, no reflections), and resolution.
 const MASK_CANDIDATES := [
-	{"name": "1.00 soft", "scale": 1.0, "msaa": Viewport.MSAA_4X, "lod": 0.2, "gate": 0.06, "full": 0.55},
-	{"name": "1.00 mid", "scale": 1.0, "msaa": Viewport.MSAA_4X, "lod": 0.2, "gate": 0.10, "full": 0.30},
-	{"name": "1.00 hard", "scale": 1.0, "msaa": Viewport.MSAA_4X, "lod": 0.2, "gate": 0.12, "full": 0.20},
-	{"name": "0.75 hard", "scale": 0.75, "msaa": Viewport.MSAA_4X, "lod": 0.2, "gate": 0.12, "full": 0.20},
+	{"name": "1.00 hard AA4x", "scale": 1.0, "msaa": Viewport.MSAA_4X, "lod": 0.2, "gate": 0.12, "full": 0.20, "backdrop": true},
+	{"name": "1.00 hard AA0", "scale": 1.0, "msaa": Viewport.MSAA_DISABLED, "lod": 0.2, "gate": 0.12, "full": 0.20, "backdrop": true},
+	{"name": "1.00 hard AA0 dark", "scale": 1.0, "msaa": Viewport.MSAA_DISABLED, "lod": 0.2, "gate": 0.12, "full": 0.20, "backdrop": false},
+	{"name": "0.75 hard AA0 dark", "scale": 0.75, "msaa": Viewport.MSAA_DISABLED, "lod": 0.2, "gate": 0.12, "full": 0.20, "backdrop": false},
 ]
 var _key_mask_cand: int = KEY_F10
 # -1 so the first press lands on candidate 0: the reference look should be the
@@ -283,6 +282,7 @@ func _cycle_mask_cand(back: bool) -> void:
 	mask.set_scale(float(c["scale"]))
 	mask.set_msaa(int(c["msaa"]))
 	mask.set_lod(float(c["lod"]))
+	mask.set_backdrop(bool(c["backdrop"]))
 	if _nvg != null and is_instance_valid(_nvg):
 		_nvg.set_esp_edge(float(c["gate"]), float(c["full"]))
 	VTKDebug.log("MASK", "candidate %d/%d: %s" % [_mask_cand, MASK_CANDIDATES.size(), str(c["name"])])
@@ -325,22 +325,24 @@ func _perf_tick(delta: float) -> void:
 	var mlod := 0.0
 	var meg := 0.0
 	var mef := 0.0
+	var mbk := 1
 	if _nvg != null and is_instance_valid(_nvg) and _nvg._mask != null and is_instance_valid(_nvg._mask):
 		mask_on = bool(_nvg._mask.is_enabled())
 		mres = float(_nvg._mask.scale())
 		mmaa = int(_nvg._mask.msaa())
 		mlod = float(_nvg._mask.lod())
+		mbk = 1 if bool(_nvg._mask.backdrop()) else 0
 	if _nvg != null and is_instance_valid(_nvg):
 		var edge: Vector2 = _nvg.esp_edge()
 		meg = edge.x
 		mef = edge.y
-	VTKDebug.log("PERF", "fps=%.1f ms=%.2f p50=%.2f p95=%.2f max=%.2f draws=%d prims=%d thermal=%d nvg=%d mask=%d mres=%.2f mmaa=%d mlod=%.2f meg=%.2f mef=%.2f bots=%d want=%d shells=%d recols=%d esp=%.2f" % [
+	VTKDebug.log("PERF", "fps=%.1f ms=%.2f p50=%.2f p95=%.2f max=%.2f draws=%d prims=%d thermal=%d nvg=%d mask=%d mres=%.2f mmaa=%d mlod=%.2f meg=%.2f mef=%.2f mbk=%d bots=%d want=%d shells=%d recols=%d esp=%.2f" % [
 		Engine.get_frames_per_second(), total / float(n),
 		s[n / 2], s[mini(n - 1, int(float(n) * 0.95))], s[n - 1],
 		int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
 		int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)),
 		1 if _thermal_enabled else 0, 1 if _nvg_active() else 0,
-		1 if mask_on else 0, mres, mmaa, mlod, meg, mef, bots, want, shells, recols, esp_ms])
+		1 if mask_on else 0, mres, mmaa, mlod, meg, mef, mbk, bots, want, shells, recols, esp_ms])
 
 # The mask renders the world a second time, so it is only enabled while a ring
 # is actually on screen (VTKESP.wants_mask), not for every frame the layers are
