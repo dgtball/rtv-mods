@@ -287,7 +287,8 @@ func _on_measure() -> void:
 
 # light/factor/mix/trims/exp are the daylight state the levers produced;
 # `u` is the uncompensated frame level and `ceiling` the factor it asks for
-# (its input is `measured`); sunDown/indoor/shelter are the gate state; raw p*
+# (its input is `measured`); sunDown is the night-gate input, indoor/shelter are
+# state readouts that no longer feed the trims; raw p*
 # are the probe frame percentiles BEFORE the thermal curve; pal p* push the
 # same percentiles through the palette-input mirror at the current levers,
 # i.e. where the palette would put them.

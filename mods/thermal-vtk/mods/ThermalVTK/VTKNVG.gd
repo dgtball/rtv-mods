@@ -535,7 +535,6 @@ func _snapshot() -> Dictionary:
 		"fog_emission": env.volumetric_fog_emission,
 		"shelter": bool(_world.get("shelter")),
 		"intro": bool(_world.get("intro")),
-		"indoor": _game_flag("indoor"),
 		"sun_present": _world.get("sunLight") != null,
 	}
 	# Sky colour: the World keeps its own ShaderMaterial, but a scene without
