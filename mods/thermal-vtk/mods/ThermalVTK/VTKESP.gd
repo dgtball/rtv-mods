@@ -54,8 +54,6 @@ var p_dist := 60.0
 var p_nomad_marker: bool = true
 var p_body_fill: bool = false
 var p_fill_grow: float = 0.004
-var p_mask_resolution: float = 1.0
-var p_mask_cadence: float = 1.0
 # NPC nametags: their own switch under Diagnostics, so the diagnostic overlay
 # can stay on without the log and without the NVG helmet.
 var p_npc_labels: bool = true

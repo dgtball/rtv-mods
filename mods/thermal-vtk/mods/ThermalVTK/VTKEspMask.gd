@@ -31,16 +31,18 @@ const LAYER_MASK := 1 << 20
 # first sync (the mask is disabled until then anyway).
 const FALLBACK_NEAR := 0.05
 const FALLBACK_FAR := 4000.0
+# The mask is upscaled into the NVG overlay, so its edge is soft by nature: a
+# full-resolution pass with the picture's MSAA paid for sharpness the upscale
+# throws away. Measured on a GTX 1060: the pass cost 9.5 ms of a 27 ms frame
+# with 6-7 rings on screen; half scale and no MSAA is the bulk of the saving.
+const SCALE := 0.5
+# Raised from Godot's 1.0 default: the mask only needs silhouette and depth, so
+# a coarser LOD saves vertices. (The old 0.2 meant "almost no automatic LOD" --
+# the opposite of the "raise LOD bias" its comment promised.)
+const LOD_BIAS := 4.0
 const START_SIZE := Vector2i(320, 180)
 
-# 1.0 full, 0.75, 0.5. At 1:1 linear is equivalent to nearest in practice,
-# and at a reduced scale it keeps the upscale soft instead of blocky.
-var _scaling: float = 1.0
-# The mask runs at the picture's own resolution and with the same MSAA. The
-# ring edge is a hard `discard` silhouette, so anything less turns it blurry
-# or jagged: this is the picture, not a coverage buffer. Saving cost here is
-# the wrong trade -- the demand gate is what makes the pass affordable.
-#
+var _scaling: float = SCALE
 # Only rings inside the ESP reach matter, so the mask camera does not need the
 # game's far plane. Clipping the world at reach + margin skips every distant
 # mesh the mask can never show.
@@ -65,17 +67,17 @@ func _ready() -> void:
 	_vp.own_world_3d = false
 	_vp.transparent_bg = false
 	_vp.size = START_SIZE
-	# MSAA 4x on purpose: the shells are hard silhouettes, and the sample
-	# coverage is what antialiases the ring. Lowering it visibly steps the
-	# contour edge.
-	_vp.msaa_3d = Viewport.MSAA_4X
+	# No MSAA: the half-scale texture is upscaled into the NVG overlay, so
+	# sample coverage would only cost fill rate.
+	_vp.msaa_3d = Viewport.MSAA_DISABLED
 	_vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
 	# The mask only needs coarse depth: its own lights' shadow maps are pure
 	# overhead (the shells are unshaded), so suppress the positional shadow
-	# atlas and raise LOD bias. Occlusion culling is free if occluders exist.
+	# atlas and let the LOD bias drop distant detail. Occlusion culling is free
+	# if occluders exist.
 	_vp.positional_shadow_atlas_size = 0
 	_vp.use_occlusion_culling = true
-	_vp.mesh_lod_threshold = 0.2
+	_vp.mesh_lod_threshold = LOD_BIAS
 	_vp.use_taa = false
 	_vp.use_debanding = false
 	_vp.disable_3d = true
@@ -142,6 +144,10 @@ func set_scale(scale: float) -> void:
 		return
 	_scaling = scale
 	_size = Vector2i.ZERO
+
+# Read-only view of the resolution dial for the perf probe.
+func scale() -> float:
+	return _scaling
 
 # The texture the NVG material binds to `esp_mask`. Stable across frames.
 func texture() -> Texture2D:

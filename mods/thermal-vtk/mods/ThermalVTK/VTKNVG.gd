@@ -103,10 +103,6 @@ var _mask: Node = null
 var _esp_on: bool = false
 var _esp_demand: bool = false
 var _esp_reach: float = 0.0
-var _mask_scale: float = 1.0
-var _mask_cadence_int: int = 1
-var _mask_counter: int = 0
-var _esp_demand_prev: bool = false
 
 var _mines: Dictionary = {}
 var _mine_watch: Dictionary = {}
@@ -371,27 +367,6 @@ func set_esp_reach(distance: float) -> void:
 	if _mask != null and is_instance_valid(_mask):
 		_mask.set_reach(_esp_reach)
 
-func set_mask_scale(scale: float) -> void:
-	if scale < 0.5:
-		scale = 0.5
-	if scale > 1.0:
-		scale = 1.0
-	if is_equal_approx(scale, _mask_scale):
-		return
-	_mask_scale = scale
-	if _mask != null and is_instance_valid(_mask):
-		_mask.set_scale(scale)
-	_dirty = true
-
-func set_mask_cadence(n: int) -> void:
-	if n < 1:
-		n = 1
-	if n > 4:
-		n = 4
-	if n == _mask_cadence_int:
-		return
-	_mask_cadence_int = n
-
 # chord keeping espOn uniform in sync even before the 0.1 s tick.
 func _push_esp_on() -> void:
 	if _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
@@ -401,15 +376,9 @@ func _push_esp_on() -> void:
 		(mat as ShaderMaterial).set_shader_parameter("espOn", _esp_render_on())
 
 func _sync_mask() -> void:
-	var force_first := _esp_demand and not _esp_demand_prev
-	_esp_demand_prev = _esp_demand
-	var render: bool = _esp_render_on()
-	if render and not force_first:
-		render = (_mask_counter % max(_mask_cadence_int, 1) == 0)
 	if _mask != null and is_instance_valid(_mask):
 		_mask.set_reach(_esp_reach)
-		_mask.set_scale(_mask_scale)
-		_mask.set_enabled(render)
+		_mask.set_enabled(_esp_render_on())
 	_push_esp_on()
 	_dirty = true
 
@@ -441,7 +410,6 @@ func nvg_active() -> bool:
 
 
 func _process(delta: float) -> void:
-	_mask_counter += 1
 	# The mask camera mirrors the picture camera every frame: fov, offsets and
 	# transform are what the scope animates, so this is the only place that has
 	# to know about the optic. Only while demand says a ring is visible.

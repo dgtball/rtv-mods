@@ -216,9 +216,6 @@ func _apply_mode() -> void:
 		# actually render.
 		if _nvg != null and is_instance_valid(_nvg) and _nvg.has_method("set_esp_mask"):
 			_nvg.set_esp_mask(contour or xray)
-			if _esp != null and is_instance_valid(_esp):
-				_nvg.set_mask_scale(_esp.p_mask_resolution)
-				_nvg.set_mask_cadence(int(_esp.p_mask_cadence))
 			_push_mask_gate()
 
 func _nvg_active() -> bool:
@@ -235,6 +232,59 @@ func _process(_delta: float) -> void:
 		_nvg_worn = worn
 		_apply_mode()
 	_push_mask_gate()
+	_perf_tick(_delta)
+
+# --- TEMP perf probe: remove after the baseline run -------------------------
+# One line per window into the normal debug log, so a frame-time reading can be
+# tied to the state that produced it (thermal on/off, mask armed, bots tracked).
+# Gated by the MCM "Debug log" toggle, so it costs nothing for players.
+const PERF_WINDOW := 2.0
+var _perf_ms: Array[float] = []
+var _perf_t: float = 0.0
+
+func _perf_tick(delta: float) -> void:
+	if not VTKDebug.enabled:
+		return
+	if _perf_ms.size() >= 4096:
+		_perf_ms.clear()
+	_perf_ms.append(delta * 1000.0)
+	_perf_t += delta
+	if _perf_t < PERF_WINDOW:
+		return
+	_perf_t = 0.0
+	var s: Array[float] = _perf_ms.duplicate()
+	_perf_ms.clear()
+	if s.is_empty():
+		return
+	s.sort()
+	var n := s.size()
+	var total := 0.0
+	for v in s:
+		total += v
+	var bots := 0
+	var want := 0
+	var shells := 0
+	var recols := 0
+	var esp_ms := 0.0
+	if _esp != null and is_instance_valid(_esp):
+		bots = _esp._entries.size()
+		want = _esp._want_ids.size()
+		esp_ms = float(_esp._dbg_draw_ms)
+		if _esp._outline != null:
+			shells = int(_esp._outline.shell_count())
+			recols = int(_esp._outline.take_recols())
+	var mask_on := false
+	var mres := 1.0
+	if _nvg != null and is_instance_valid(_nvg) and _nvg._mask != null and is_instance_valid(_nvg._mask):
+		mask_on = bool(_nvg._mask.is_enabled())
+		mres = float(_nvg._mask.scale())
+	VTKDebug.log("PERF", "fps=%.1f ms=%.2f p50=%.2f p95=%.2f max=%.2f draws=%d prims=%d thermal=%d nvg=%d mask=%d mres=%.2f bots=%d want=%d shells=%d recols=%d esp=%.2f" % [
+		Engine.get_frames_per_second(), total / float(n),
+		s[n / 2], s[mini(n - 1, int(float(n) * 0.95))], s[n - 1],
+		int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
+		int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)),
+		1 if _thermal_enabled else 0, 1 if _nvg_active() else 0,
+		1 if mask_on else 0, mres, bots, want, shells, recols, esp_ms])
 
 # The mask renders the world a second time, so it is only enabled while a ring
 # is actually on screen (VTKESP.wants_mask), not for every frame the layers are

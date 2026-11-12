@@ -46,7 +46,9 @@ func t_lifecycle() -> void:
 	ck(not m.is_enabled(), "mask starts disabled")
 	ck(m._vp.render_target_update_mode == SubViewport.UPDATE_DISABLED, "disabled mask does not render")
 	ck(m._vp.disable_3d, "disabled mask skips 3D")
-	ck(m._vp.msaa_3d == Viewport.MSAA_4X, "mask keeps the picture's MSAA for a smooth ring edge")
+	ck(m._vp.msaa_3d == Viewport.MSAA_DISABLED, "mask renders at half scale, so sample coverage buys nothing")
+	ck(is_equal_approx(m.scale(), 0.5), "mask renders at half resolution")
+	ck(is_equal_approx(m._vp.mesh_lod_threshold, 4.0), "mask asks for coarse LOD")
 	ck(m._vp.own_world_3d == false, "mask inherits the game world")
 	ck(m._vp.find_world_3d() == root.find_world_3d(), "mask renders the same World3D as the game")
 	m.set_enabled(true)
@@ -92,9 +94,9 @@ func t_camera_sync() -> void:
 	ck((cam.cull_mask & EspMask.LAYER_MASK) == 0, "picture camera drops the shell layer")
 	ck((mc.cull_mask & 1) != 0 and (mc.cull_mask & 2) != 0, "mask camera renders everything the picture camera does")
 	ck((mc.cull_mask & EspMask.LAYER_MASK) != 0, "mask camera also renders the shell layer")
-	# The mask is the picture, not a coverage buffer: full resolution, or the
-	# ring edge goes soft.
-	ck(m._vp.size == Vector2i(640, 360), "mask viewport matches the picture size")
+	# The mask is upscaled into the NVG overlay, so half resolution softens the
+	# ring edge instead of costing a full-size pass.
+	ck(m._vp.size == Vector2i(320, 180), "mask viewport is half the picture size")
 	ck(m.has_camera(), "sync reports a live camera")
 	ck(m._cam.far == 512.0, "reach unset copies the picture camera far plane")
 	m.set_reach(60.0)
