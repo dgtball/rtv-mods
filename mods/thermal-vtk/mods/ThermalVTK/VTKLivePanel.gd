@@ -189,16 +189,13 @@ func _process(delta: float) -> void:
 func _refresh_readout() -> void:
 	if _nvg == null or not is_instance_valid(_nvg):
 		return
-	var t := fmod(maxf(float(_nvg.get("_sim_time")), 0.0), 2400.0)
 	var e := _exposure()
 	var e_txt := "-" if e < 0.0 else "%.2f" % e
-	_readout.text = "time %02d:%02d weather %s season %d in=%d sh=%d cover=%d\nlight %.2f factor %.2f mix %.2f bgTrim %.2f exp %s\nworld %.2f knee %.2f strength %.2f helmet %d thermal %d" % [
-		int(t / 100.0), int(t) % 100,
-		str(_nvg.get("_sim_weather")), int(_nvg.get("_sim_season")),
+	_readout.text = "season %d in=%d sh=%d\nE %.3f factor %.2f mix %.2f bgTrim %.2f exp %s\nworld %.2f knee %.2f strength %.2f helmet %d thermal %d" % [
+		int(_nvg.get("_sim_season")),
 		1 if bool(_nvg.get("_sim_indoor")) else 0,
 		1 if bool(_nvg.get("_sim_shelter")) else 0,
-		1 if bool(_nvg.get("_covered")) else 0,
-		float(_nvg.get("_light_sm")), float(_nvg.get("_day_factor")), float(_nvg.get("_day_mix")),
+		float(_nvg.get("_light_est")), float(_nvg.get("_day_factor")), float(_nvg.get("_day_mix")),
 		float(_nvg.get("_snow_trim")) * float(_nvg.get("_day_trim")), e_txt,
 		float(_nvg.get("set_world")), float(_nvg.get("set_highlight_knee")), float(_nvg.get("set_strength")),
 		1 if _nvg.nvg_active() else 0,
@@ -258,8 +255,8 @@ func _panel_line(stats: Dictionary) -> String:
 	var mix: float = float(_nvg.get("_day_mix"))
 	var darken: float = float(_nvg.get("set_world")) * snow * day
 	var knee: float = float(_nvg.get("set_highlight_knee"))
-	return "light=%.2f factor=%.2f mix=%.2f snowTrim=%.2f dayTrim=%.2f exp=%.2f helmet=%d thermal=%d | raw p05=%.3f p25=%.3f p50=%.3f p75=%.3f p95=%.3f mean=%.3f black=%.3f cream=%.3f n=%d | pal p05=%.3f p50=%.3f p95=%.3f" % [
-		float(_nvg.get("_light_sm")), float(_nvg.get("_day_factor")), mix, snow, day, _exposure(),
+	return "E=%.3f factor=%.2f mix=%.2f snowTrim=%.2f dayTrim=%.2f exp=%.2f helmet=%d thermal=%d | raw p05=%.3f p25=%.3f p50=%.3f p75=%.3f p95=%.3f mean=%.3f black=%.3f cream=%.3f n=%d | pal p05=%.3f p50=%.3f p95=%.3f" % [
+		float(_nvg.get("_light_est")), float(_nvg.get("_day_factor")), mix, snow, day, _exposure(),
 		1 if _nvg.nvg_active() else 0,
 		1 if bool(_nvg.get("set_thermal")) else 0,
 		float(stats.p05), float(stats.p25), float(stats.p50), float(stats.p75), float(stats.p95),
@@ -277,7 +274,7 @@ func _on_reset() -> void:
 		return
 	if _owner != null and is_instance_valid(_owner) and _owner.get("_rec") != null:
 		_nvg.apply_config(_owner.get("_rec"))
-	_nvg.set("set_day_floor", Daylight.MIN_FACTOR)
+	_nvg.set("set_day_floor", Daylight.FLOOR)
 	_nvg.set("set_day_trim", Daylight.DAY_TRIM)
 	_nvg.refresh_daylight_now()
 	_nvg.set("_dirty", true)

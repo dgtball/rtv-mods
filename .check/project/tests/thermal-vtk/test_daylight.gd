@@ -18,20 +18,16 @@ func _init() -> void:
 	process_frame.connect(_run)
 
 func _run() -> void:
-	t_sun_curve()
-	t_weather()
-	t_light_indoor()
-	t_light_winter()
-	t_day_factor()
-	t_day_mix()
-	t_day_factor_floor()
-	t_day_mix_floor()
-	t_day_trim()
-	t_snow_trim_params()
+	t_factor_for_light()
+	t_estimate_light()
+	t_feedback_factor()
+	t_day_mix_target()
+	t_day_trim_mix()
+	t_snow_trim_mix()
 	t_key_gain()
 	t_smoothing()
-	t_clamps()
 	t_palette_input()
+	t_clamps()
 	print("")
 	if fails == 0:
 		print("Daylight tests passed")
@@ -40,85 +36,65 @@ func _run() -> void:
 		print("Daylight tests failed: ", fails)
 		quit(1)
 
-func t_sun_curve() -> void:
-	ck(near(D.sun_level(0.0), 0.0), "midnight is dark")
-	ck(near(D.sun_level(500.0), 0.0), "before sunrise is dark")
-	ck(near(D.sun_level(1200.0), 1.0), "noon is full daylight")
-	ck(near(D.sun_level(2200.0), 0.0), "after sunset is dark")
-	ck(near(D.sun_level(600.0), 0.2593), "summer 06:00 is a partial sunrise")
-	ck(near(D.sun_level(700.0), 0.7407), "summer 07:00 is mostly risen")
-	ck(near(D.sun_level(2100.0), 0.2593), "summer 21:00 is mostly set")
-	ck(near(D.sun_level(800.0, 2), 0.5), "winter 08:00 is halfway through sunrise")
-	ck(near(D.sun_level(1200.0, 2), 1.0), "winter noon is full daylight")
-	ck(near(D.sun_level(1800.0, 2), 0.2593), "winter 18:00 is mostly set")
-	ck(near(D.sun_level(3000.0), 0.2593), "time wraps past 2400 (3000 -> 06:00)")
-	ck(near(D.sun_level(-100.0), 0.0), "negative time is still night")
+func t_factor_for_light() -> void:
+	ck(near(D.factor_for_light(1.0), 0.22), "clear noon lands on TARGET")
+	ck(near(D.factor_for_light(0.5), 0.44), "half the light doubles the factor")
+	ck(near(D.factor_for_light(0.25), 0.88), "a quarter of the light is 0.88")
+	ck(near(D.factor_for_light(0.2), 1.0), "below TARGET the vanilla exposure stays")
+	ck(near(D.factor_for_light(0.0), 1.0), "zero light never divides by zero")
+	ck(near(D.factor_for_light(-5.0), 1.0), "negative light clamps to vanilla")
+	ck(near(D.factor_for_light(2.0), D.FLOOR), "a blinding frame hits the floor")
+	ck(near(D.factor_for_light(1.0, 0.40), 0.40), "an explicit target is the noon factor")
+	ck(near(D.factor_for_light(1.0, 0.22, 1.0), 1.0), "floor 1.0 is the vanilla exposure")
+	ck(not is_nan(D.factor_for_light(0.0)), "zero light stays finite")
 
-func t_weather() -> void:
-	ck(near(D.weather_factor("Neutral"), 1.0), "Neutral is full light")
-	ck(near(D.weather_factor("Overcast"), 0.65), "Overcast dims")
-	ck(near(D.weather_factor("Rain"), 0.55), "Rain dims more")
-	ck(near(D.weather_factor("Storm"), 0.45), "Storm dims most")
-	ck(near(D.weather_factor("Unknown"), 1.0), "unknown weather is neutral")
+func t_estimate_light() -> void:
+	ck(near(D.estimate_light({}), 0.0), "an empty snapshot estimates nothing")
+	ck(near(D.estimate_light({"shelter": true, "ambient_color": Color(1, 1, 1), "ambient_energy": 1.0}), 0.0), "shelter short-circuits to zero")
+	ck(near(D.estimate_light({"intro": true, "ambient_color": Color(1, 1, 1), "ambient_energy": 1.0}), 0.0), "intro short-circuits to zero")
+	ck(near(D.estimate_light({"ambient_color": Color(1, 1, 1), "ambient_energy": 1.0}), 1.0), "ambient light is read")
+	ck(near(D.estimate_light({"ambient_color": Color(1, 0, 0), "ambient_energy": 1.0}), 0.299), "luminance uses the shader weights")
+	ck(near(D.estimate_light({"ambient_color": null, "ambient_energy": 1.0}), 0.0), "a missing colour contributes nothing")
+	ck(near(D.estimate_light({"sky_color": Color(1, 1, 1), "background_energy": 0.5}), 0.5), "sky colour scales by the background energy")
+	ck(near(D.estimate_light({"sun_color": Color(1, 1, 1), "sun_energy": 1.0, "sun_mask": 0}), 0.0), "a culled sun adds nothing")
+	ck(near(D.estimate_light({"sun_color": Color(1, 1, 1), "sun_energy": 1.0, "sun_mask": 1}), 1.0), "an active sun adds its energy")
+	ck(near(D.estimate_light({"moon_color": Color(1, 1, 1), "moon_energy": 1.0, "moon_mask": 1}), 1.0), "an active moon adds its energy")
+	ck(near(D.estimate_light({"fog_emission": Color(1, 1, 1), "fog_density": 0.5}), 0.5), "fog emission scales by density")
+	ck(near(D.estimate_light({"ambient_color": Color(1, 1, 1), "ambient_energy": 1.0, "sky_color": Color(1, 1, 1), "background_energy": 1.0}), 2.0), "the terms sum with unit weights")
 
-func t_light_indoor() -> void:
-	ck(near(D.light_level(1200.0, "Neutral", 1, false, false), 1.0), "outdoor noon is full light")
-	ck(near(D.light_level(1200.0, "Neutral", 1, true, false), 0.15), "indoor noon keeps only 15%")
-	ck(near(D.light_level(1200.0, "Neutral", 1, false, true), 0.15), "shelter noon keeps only 15%")
-	ck(near(D.light_level(0.0, "Neutral", 1, true, false), 0.0), "indoor night stays dark")
-	ck(near(D.light_level(1200.0, "Neutral", 1, false, false, true), 0.45), "covered noon keeps 45%")
-	ck(near(D.light_level(0.0, "Neutral", 1, false, false, true), 0.0), "covered night stays dark")
-	ck(near(D.light_level(1200.0, "Neutral", 1, true, false, true), 0.15), "indoor wins over covered")
-	ck(near(D.light_level(1800.0, "Neutral", 2, false, false, true), 0.2593 * 0.45), "covered winter skips the snow bounce")
+func t_feedback_factor() -> void:
+	ck(near(D.feedback_factor(0.5, 0.5, 0.5), 0.5), "a frame on target holds the factor")
+	ck(near(D.feedback_factor(1.0, 0.03, 0.47), 1.0), "a night frame stays at the vanilla exposure")
+	ck(near(D.feedback_factor(1.0, 0.0, 0.47), 1.0), "a blank frame leaves the factor alone")
+	ck(near(D.feedback_factor(1.0, NAN, 0.47), 1.0), "a non-finite frame leaves the factor alone")
+	ck(near(D.feedback_factor(0.3, 0.9, 0.47), 0.2032, 0.002), "a too-bright frame lowers the factor")
+	ck(D.feedback_factor(0.3, 0.1, 0.47) > 0.3, "a too-dark frame raises the factor")
+	ck(D.feedback_factor(0.3, 0.1, 0.47) <= 1.0, "the loop never exceeds the vanilla exposure")
+	ck(near(D.feedback_factor(0.15, 0.99, 0.47), D.FLOOR), "the loop stops at the floor")
 
-func t_light_winter() -> void:
-	ck(near(D.light_level(1200.0, "Neutral", 2, false, false), 1.0), "winter noon is full light")
-	ck(near(D.light_level(1800.0, "Neutral", 2, false, false), 0.2982), "winter snow adds bounce at dusk")
-	ck(near(D.light_level(1800.0, "Neutral", 2, true, false), 0.0389), "indoor winter gets no snow bounce")
-	ck(near(D.light_level(0.0, "Neutral", 2, false, false), 0.0), "winter midnight gets no snow bounce")
-	ck(near(D.light_level(2100.0, "Neutral", 1, false, false), 0.2593), "summer dusk has no snow bounce")
-
-func t_day_factor() -> void:
-	ck(near(D.day_factor(0.0), 1.0), "night leaves vanilla exposure alone")
-	ck(near(D.day_factor(1.0), 0.22), "full daylight lowers exposure to 22%")
-	ck(near(D.day_factor(0.5), 0.61), "half light is halfway")
-	ck(near(D.day_factor(-1.0), 1.0), "negative light clamps to night")
-	ck(near(D.day_factor(2.0), 0.22), "overbright clamps to full daylight")
-
-func t_day_mix() -> void:
-	ck(near(D.strength_factor(D.day_factor(1.0), 0.0), 1.0), "strength 0 keeps the vanilla exposure")
-	ck(near(D.strength_factor(D.day_factor(1.0), 1.0), 0.22), "strength 1 applies the model")
-	ck(near(D.strength_factor(D.day_factor(1.0), 0.5), 0.61), "strength 0.5 lands in between")
+func t_day_mix_target() -> void:
 	ck(near(D.day_mix(1.0), 0.0), "night has no curve")
-	ck(near(D.day_mix(0.22), 1.0), "full daylight runs the curve at full strength")
+	ck(near(D.day_mix(0.22), 1.0), "TARGET runs the curve at full strength")
 	ck(near(D.day_mix(0.61), 0.5), "half compensation is a half curve")
-	ck(near(D.day_mix(0.1), 1.0), "a factor below the floor clamps the curve")
+	ck(near(D.day_mix(0.1), 1.0), "a factor below TARGET clamps the curve")
+	ck(near(D.day_mix(1.0, 1.0), 0.0), "target 1.0 does not divide by zero")
+	ck(not is_nan(D.day_mix(1.0, 1.0)), "target 1.0 keeps the mix finite")
 
-func t_day_factor_floor() -> void:
-	ck(near(D.day_factor(1.0, 0.10), 0.10), "explicit floor 0.10 at full daylight")
-	ck(near(D.day_factor(1.0), D.MIN_FACTOR), "default floor stays MIN_FACTOR")
-	ck(near(D.day_factor(0.0, 0.10), 1.0), "night ignores the floor")
-	ck(near(D.day_factor(1.0, 1.0), 1.0), "floor 1.0 is the vanilla exposure")
-
-func t_day_mix_floor() -> void:
-	ck(near(D.day_mix(0.10, 0.10), 1.0), "factor at the floor gives a full curve")
-	ck(near(D.day_mix(1.0, 0.10), 0.0), "night factor gives no curve")
-	ck(near(D.day_mix(D.day_factor(1.0)), 1.0), "old path: default floor, default factor")
-	ck(near(D.day_mix(1.0, 1.0), 0.0), "floor 1.0 does not divide by zero")
-	ck(not is_nan(D.day_mix(1.0, 1.0)), "floor 1.0 keeps the mix finite")
-
-func t_day_trim() -> void:
+func t_day_trim_mix() -> void:
 	ck(near(D.day_trim(0.0), 1.0), "night leaves the palette alone")
-	ck(near(D.day_trim(1.0), D.DAY_TRIM), "full day applies DAY_TRIM")
-	ck(near(D.day_trim(1.0, 0.5), 0.5), "day 0.5 at full daylight")
-	ck(near(D.day_trim(0.0, 0.5), 1.0), "day 0.5 leaves the night alone")
-	var half: float = D.day_trim(0.5, 0.5)
-	ck(half > 0.5 and half < 1.0, "half light lands strictly between")
-	ck(near(D.day_trim(1.0), 0.62), "default DAY_TRIM is the 2026-11-11 calibration")
+	ck(near(D.day_trim(1.0), 0.62), "full mix applies the 2026-11-11 DAY_TRIM")
+	ck(near(D.day_trim(1.0, 0.5), 0.5), "an explicit trim is applied at full mix")
+	ck(near(D.day_trim(0.0, 0.5), 1.0), "an explicit trim sleeps at zero mix")
+	ck(near(D.day_trim(0.5, 0.5), 0.75), "half mix lands halfway")
 
-func t_snow_trim_params() -> void:
-	ck(near(D.snow_trim(2, false, false, 1.0, 0.5, 0.9), 0.9), "explicit winter trims at full light")
-	ck(near(D.snow_trim(2, false, false, 1.0), D.SNOW_TRIM_DAY), "default snow trim unchanged")
+func t_snow_trim_mix() -> void:
+	ck(near(D.snow_trim(2, false, false, 0.0), D.SNOW_TRIM_NIGHT), "winter night keeps the night trim")
+	ck(near(D.snow_trim(2, false, false, 1.0), D.SNOW_TRIM_DAY), "winter day keeps the day trim")
+	ck(near(D.snow_trim(2, false, false, 0.5), 0.54), "the winter trim blends by mix")
+	ck(near(D.snow_trim(1, false, false, 1.0), 1.0), "summer has no snow trim")
+	ck(near(D.snow_trim(2, true, false, 1.0), 1.0), "an indoor winter scene has no snow trim")
+	ck(near(D.snow_trim(2, false, true, 1.0), 1.0), "a shelter has no snow trim")
+	ck(near(D.snow_trim(2, false, false, 1.0, 0.5, 0.9), 0.9), "explicit winter trims are honoured")
 
 func t_palette_input() -> void:
 	ck(near(D.palette_input(0.5, 1.7, 0.6, 0.0), 0.85), "mix 0: shoulder and lift off, raw darken only")
@@ -152,6 +128,5 @@ func t_smoothing() -> void:
 	ck(near(D.step(0.5, 1.0, 100.0), 1.0, 0.001), "a long delta converges")
 
 func t_clamps() -> void:
-	ck(D.light_level(1200.0, "Neutral", 1, false, false) <= 1.0, "light never exceeds 1")
-	ck(D.light_level(0.0, "Neutral", 1, false, false) >= 0.0, "light never goes below 0")
-	ck(D.day_factor(D.light_level(1200.0, "Storm", 2, false, false)) >= D.MIN_FACTOR, "factor never drops below the floor")
+	ck(D.factor_for_light(1.0) >= D.FLOOR, "the factor never drops below the floor")
+	ck(D.factor_for_light(0.05) <= 1.0, "the factor never exceeds the vanilla exposure")

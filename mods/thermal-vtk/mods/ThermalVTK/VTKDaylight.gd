@@ -4,17 +4,18 @@ extends RefCounted
 #
 # The vanilla NVG raises Environment.tonemap_exposure to 2.0/2.5/3.0 whenever
 # the helmet is worn. That is tuned for darkness: in daylight the frame hits
-# the top of the tonemap curve and snow/sky turn into a white field. The model
-# turns the world's light level into a multiplier for that exposure and a
-# matching key gain, so the detector keys keep their night-time on-screen
-# colour while the background stops clipping.
+# the top of the tonemap curve and snow/sky turn into a white field.
+#
+# The model normalises the LEVEL of the frame, not a guessed time-of-day: the
+# game's own light state is folded into one scalar E (roughly the median
+# luminance the scene would have), and the exposure is scaled by
+# `factor = clamp(TARGET / E, FLOOR, 1.0)`. Every daytime scene -- clear noon,
+# overcast, fog, snow, dusk -- then lands on the same palette position, and
+# the compensation is one-sided: it only ever LOWERS the exposure, so night
+# (E <= TARGET) is exactly vanilla.
 
-const MIN_FACTOR := 0.22
-const RESPONSE := 1.5
-const INDOOR_FACTOR := 0.15
-# A blocked sky ray: roof, canopy or deep shadow. Softer than an interior.
-const COVER_FACTOR := 0.45
-const SNOW_BONUS := 0.15
+const TARGET := 0.22
+const FLOOR := 0.12
 # Winter background trim. Night is the 2026-10-24 Minefield snow-field
 # measurement; day is fitted 2026-11-11 from the owner's PANEL measurements
 # (winter noon snow field, raw p50 0.679) so the winter day palette sits
@@ -29,12 +30,21 @@ const SNOW_TRIM_NIGHT := 0.60
 # construction.
 const DAY_TRIM := 0.62
 
-const WEATHER_FACTORS := {
-	"Neutral": 1.0,
-	"Overcast": 0.65,
-	"Rain": 0.55,
-	"Storm": 0.45,
-}
+const RESPONSE := 1.5
+# Feedback loop (source B): how hard a measured frame pulls the factor.
+const FEEDBACK_GAIN := 0.6
+# Target raw p50 of the frame for the measured-frame source, and its cadence.
+const FRAME_TARGET := 0.47
+const FRAME_CADENCE := 1.0
+
+# Weights of the source-A light terms. Unit for now: the fit against the
+# owner's PANEL measurements is a follow-up commit, so the instrument starts
+# from an unweighted sum.
+const W_SKY := 1.0
+const W_AMB := 1.0
+const W_SUN := 1.0
+const W_MOON := 1.0
+const W_FOG := 1.0
 
 # The game ships two seasons and the sim field is binary: 1 summer, 2 winter.
 # Vostok Toolkit maps its four seasons onto the same field (VTKSeasonDriver.gd:56
@@ -43,44 +53,49 @@ const WEATHER_FACTORS := {
 const SEASON_SUMMER := 1
 const SEASON_WINTER := 2
 
-# 0..1 daylight, with sunrise/sunset moved for the winter season.
-static func sun_level(time: float, season: int = SEASON_SUMMER) -> float:
-	var dawn_a := 5.0
-	var dawn_b := 8.0
-	var dusk_a := 19.0
-	var dusk_b := 22.0
-	if season == SEASON_WINTER:
-		dawn_a = 7.0
-		dawn_b = 9.0
-		dusk_a = 16.0
-		dusk_b = 19.0
-	var hours := fmod(maxf(time, 0.0), 2400.0) / 100.0
-	var rise := smoothstep(dawn_a, dawn_b, hours)
-	var fall := 1.0 - smoothstep(dusk_a, dusk_b, hours)
-	return clampf(rise * fall, 0.0, 1.0)
+# Luminance weights, copied from VTKNVG.gdshader's rawLuminance dot product.
+# The shader is the source of truth for what the player sees, so the model
+# folds the same quantity the instrument measures.
+static func lum(c: Variant) -> float:
+	if not (c is Color):
+		return 0.0
+	var col: Color = c
+	return 0.299 * col.r + 0.587 * col.g + 0.114 * col.b
 
-static func weather_factor(weather: String) -> float:
-	return float(WEATHER_FACTORS.get(weather, 1.0))
+# The compensation factor for a scene whose level is `e`. One-sided: at or
+# below TARGET the vanilla exposure stays (1.0), above it the factor drops
+# toward FLOOR. A non-positive `e` is night, never a division by zero.
+static func factor_for_light(e: float, target := TARGET, floor_value := FLOOR) -> float:
+	if e <= 0.0:
+		return 1.0
+	return clampf(target / e, floor_value, 1.0)
 
-static func light_level(time: float, weather: String, season: int, indoor: bool, shelter: bool, covered: bool = false) -> float:
-	var light := sun_level(time, season) * weather_factor(weather)
-	if indoor or shelter:
-		light *= INDOOR_FACTOR
-	elif covered:
-		# Under a roof or in deep shade there is no open sky to bounce snow
-		# light, so the winter bonus stays out of this branch.
-		light *= COVER_FACTOR
-	elif season == SEASON_WINTER:
-		# Snow bounces daylight, it does not create any: scale the current
-		# light so winter midnight stays exactly as dark as summer midnight.
-		light = minf(1.0, light * (1.0 + SNOW_BONUS))
-	return clampf(light, 0.0, 1.0)
+# Fold the game's light state into one level scalar. The snapshot keys and
+# their defaults are the contract with VTKNVG._snapshot. Shelter and intro
+# short-circuit to zero: World.Static() blacks the ambient out but makes the
+# sky WHITE, so a naive sum would read a bright sky through a roof.
+static func estimate_light(snap: Dictionary) -> float:
+	if bool(snap.get("shelter", false)) or bool(snap.get("intro", false)):
+		return 0.0
+	var sky := lum(snap.get("sky_color", Color.BLACK)) * float(snap.get("background_energy", 1.0))
+	var amb := lum(snap.get("ambient_color", Color.BLACK)) * float(snap.get("ambient_energy", 1.0))
+	var sun := lum(snap.get("sun_color", Color.BLACK)) * float(snap.get("sun_energy", 0.0))
+	if int(snap.get("sun_mask", 0)) == 0:
+		sun = 0.0
+	var moon := lum(snap.get("moon_color", Color.BLACK)) * float(snap.get("moon_energy", 0.0))
+	if int(snap.get("moon_mask", 0)) == 0:
+		moon = 0.0
+	var fog := lum(snap.get("fog_emission", Color.BLACK)) * float(snap.get("fog_density", 0.0))
+	return W_SKY * sky + W_AMB * amb + W_SUN * sun + W_MOON * moon + W_FOG * fog
 
-# 1.0 at night (vanilla exposure untouched), MIN_FACTOR at full daylight.
-# The floor rides as a tail argument so the live panel can probe it without
-# touching the shipped default.
-static func day_factor(light: float, floor_value := MIN_FACTOR) -> float:
-	return lerpf(1.0, floor_value, clampf(light, 0.0, 1.0))
+# Source B: one step of the measured-frame loop. A frame on target holds the
+# factor; a brighter frame lowers it; a darker one raises it, but never above
+# 1.0 (the clamp, not the step direction, is what keeps it one-sided). A
+# blank or non-finite measurement leaves the factor alone.
+static func feedback_factor(factor: float, measured: float, target_l: float, gain := FEEDBACK_GAIN) -> float:
+	if measured <= 0.0 or not is_finite(measured):
+		return 1.0
+	return clampf(factor * pow(target_l / measured, gain), FLOOR, 1.0)
 
 # Winter-only background trim for the thermal palette. Snow bounces far more
 # amplified light than any summer surface, so the whole winter frame lands in
@@ -92,25 +107,25 @@ static func day_factor(light: float, floor_value := MIN_FACTOR) -> float:
 # by day 0.48 (2026-11-11 calibration, riding DAY_TRIM 0.62) the noon snow
 # field reads p50 0.49 mid-ladder instead of pinned on the ceiling. Keys
 # are unaffected: substitution happens before the palette. Blended by the
-# same light level that drives exposure, 1.0 everywhere else.
-static func snow_trim(season: int, indoor: bool, shelter: bool, light: float, trim_night := SNOW_TRIM_NIGHT, trim_day := SNOW_TRIM_DAY) -> float:
+# same day mix that drives the palette, 1.0 everywhere else.
+static func snow_trim(season: int, indoor: bool, shelter: bool, mix: float, trim_night := SNOW_TRIM_NIGHT, trim_day := SNOW_TRIM_DAY) -> float:
 	if season != SEASON_WINTER or indoor or shelter:
 		return 1.0
-	return lerpf(trim_night, trim_day, clampf(light, 0.0, 1.0))
+	return lerpf(trim_night, trim_day, clampf(mix, 0.0, 1.0))
 
-# Daylight background trim: blends toward `day` by RAW light, the same blend
-# snow_trim uses -- not by the strength/floor-aware day_mix the shader sees.
-# The ends are what matter: night stays 1.0 (palette untouched), full day
-# applies the trim in full. DAY_TRIM = 0.62 is the 2026-11-11 calibration;
-# see the constant block for the scenes it was fitted against.
-static func day_trim(light: float, day := DAY_TRIM) -> float:
-	return lerpf(1.0, day, day_mix(day_factor(light)))
+# Daylight background trim: blends toward `day` by the day mix, the same mix
+# the shader sees. The ends are what matter: night stays 1.0 (palette
+# untouched), full day applies the trim in full. DAY_TRIM = 0.62 is the
+# 2026-11-11 calibration; see the constant block for the scenes it was fitted
+# against.
+static func day_trim(mix: float, day := DAY_TRIM) -> float:
+	return lerpf(1.0, day, clampf(mix, 0.0, 1.0))
 
 # 0 at night, 1 at full daylight: how hard the shader tone curve should lift
 # the background before the thermal palette. The denominator is guarded: a
-# floor of 1.0 must yield 0.0, not NaN.
-static func day_mix(factor: float, floor_value := MIN_FACTOR) -> float:
-	var d := maxf(1.0 - floor_value, 0.05)
+# target of 1.0 must yield 0.0, not NaN.
+static func day_mix(factor: float, target := TARGET) -> float:
+	var d := maxf(1.0 - target, 0.05)
 	return clampf((1.0 - factor) / d, 0.0, 1.0)
 
 # Daylight strength: 0 leaves the vanilla exposure untouched, 1 applies the

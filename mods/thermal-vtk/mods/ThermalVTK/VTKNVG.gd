@@ -31,9 +31,6 @@ const GAME_DATA_RES := Paths.GAME_DATA
 const NVG_SCRIPT_SUFFIX := "NVG.gd"
 const SHADER_RES := "res://mods/ThermalVTK/VTKNVG.gdshader"
 const KEY_GAIN_PARAM := &"vtk_key_gain"
-# Sky probe cadence and reach.
-const COVER_EVERY := 0.5
-const COVER_UP := 60.0
 
 # Сколько кадров подряд пробовать поставить шейдер, если NVG-узел уже найден,
 # но его Overlay ещё не готов (ванильный _ready ждёт ~0.1 c). ~60 кадров.
@@ -73,7 +70,8 @@ var set_strength: float = 1.0
 # Live-panel levers (the F9 instrument): probe values, never persisted. The
 # defaults ARE the shipped constants, so without the panel the picture does
 # not move.
-var set_day_floor: float = Daylight.MIN_FACTOR
+var set_day_target: float = Daylight.TARGET
+var set_day_floor: float = Daylight.FLOOR
 var set_day_trim: float = Daylight.DAY_TRIM
 # Brightness of the state key the ESP outlines emit; the overlay uses it to
 # scale the substituted state colour.
@@ -122,18 +120,15 @@ var _scope_rotate: bool = false
 var _day_factor: float = 1.0
 var _day_mix: float = 0.0
 var _key_gain: float = 1.0
-var _cover_cd: float = 0.0
-var _covered: bool = false
-# Smoothed light level: weather steps and dawn are one-pole filtered before they
-# reach the exposure, so a passing storm does not pop the frame.
+# Source A: the scene level folded from the game's light state (see _snapshot)
+# and the factor it produced with strength applied. _factor_a is kept current
+# even under source B so the panel can show both.
+var _light_est: float = 0.0
+var _factor_a: float = 1.0
 var _sim_cd: float = 0.0
-var _sim_time: float = 1200.0
-var _sim_weather: String = "Neutral"
 var _sim_season: int = 1
 var _sim_indoor: bool = false
 var _sim_shelter: bool = false
-var _light_sm: float = 0.0
-var _light_seeded: bool = false
 # Winter snow trim on the background (see VTKDaylight.snow_trim). Not part of
 # the keys: substitution reads the washed pixel before the palette.
 var _snow_trim: float = 1.0
@@ -502,50 +497,61 @@ func _process(delta: float) -> void:
 	_retry_mines()
 
 
+# Fold the game's own light state into one scalar (see VTKDaylight.estimate_light).
+# The only place in the daylight path that reads the tree and the environment:
+# everything downstream works on the number. Reads the World node through
+# _environment(), which resolves _world; a missing world returns {} and the
+# estimate is 0, i.e. vanilla exposure. Object.get() takes exactly one argument,
+# so every read is a plain get() with the default spelled out here.
+func _snapshot() -> Dictionary:
+	var env := _environment()
+	if env == null or _world == null:
+		return {}
+	var snap := {
+		"ambient_color": env.ambient_light_color,
+		"ambient_energy": env.ambient_light_energy,
+		"background_energy": env.background_energy_multiplier,
+		"fog_density": env.volumetric_fog_density,
+		"fog_emission": env.volumetric_fog_emission,
+		"shelter": bool(_world.get("shelter")),
+		"intro": bool(_world.get("intro")),
+	}
+	# Sky colour: the World keeps its own ShaderMaterial, but a scene without
+	# one falls back to the environment sky. env.sky is null on maps that set
+	# no Sky at all -- guard it, or the readback crashes at runtime.
+	var sky_col: Variant = null
+	var mat = _world.get("skyMaterial")
+	if mat is ShaderMaterial:
+		sky_col = (mat as ShaderMaterial).get_shader_parameter("skyColor")
+	elif env.sky != null and env.sky.sky_material is ShaderMaterial:
+		sky_col = (env.sky.sky_material as ShaderMaterial).get_shader_parameter("skyColor")
+	if sky_col is Color:
+		snap["sky_color"] = sky_col
+	_snapshot_light(snap, "sun", _world.get("sunLight"))
+	_snapshot_light(snap, "moon", _world.get("moonLight"))
+	return snap
+
+
+# sun/moon share one shape: colour, energy and cull mask. A culled light has
+# mask 0 and is dropped by estimate_light; a missing light contributes nothing.
+func _snapshot_light(snap: Dictionary, prefix: String, light) -> void:
+	if light == null:
+		return
+	snap[prefix + "_color"] = light.get("light_color")
+	snap[prefix + "_energy"] = light.get("light_energy")
+	snap[prefix + "_mask"] = light.get("light_cull_mask")
+
+
+# The factor the active source wants, with strength applied. Source A always
+# computes, so the panel can show what the other source would give.
+func _target_factor() -> float:
+	_factor_a = Daylight.strength_factor(Daylight.factor_for_light(_light_est, set_day_target, set_day_floor), set_strength)
+	return _factor_a
+
+
 # Write the compensated exposure every frame. The vanilla ResetCheck runs in
 # _physics_process and re-applies the device power on its own cadence; _process
 # runs after physics, so this value is the one the frame is rendered with.
-# Sky probe: the clock model cannot see a roof, a canopy or deep shade, so a
-# single ray straight up decides whether the frame is under cover. One ray per
-# half second is plenty: the factor it feeds is smoothed anyway.
-func _sky_covered(delta: float) -> bool:
-	_cover_cd -= delta
-	if _cover_cd > 0.0:
-		return _covered
-	_cover_cd = COVER_EVERY
-	_covered = false
-	if not is_inside_tree():
-		return false
-	var vp := get_viewport()
-	if vp == null:
-		return false
-	var cam := vp.get_camera_3d()
-	var world := vp.find_world_3d()
-	if cam == null or world == null:
-		return false
-	var space := world.direct_space_state
-	if space == null:
-		return false
-	var q := PhysicsRayQueryParameters3D.new()
-	q.from = cam.global_position
-	q.to = cam.global_position + Vector3.UP * COVER_UP
-	q.collide_with_areas = false
-	q.collide_with_bodies = true
-	var excl: Array[RID] = []
-	for p in get_tree().get_nodes_in_group("Player"):
-		_collect_rids(p, excl)
-	q.exclude = excl
-	_covered = not space.intersect_ray(q).is_empty()
-	return _covered
-
-func _collect_rids(root: Node, out: Array[RID]) -> void:
-	if root == null or not is_instance_valid(root):
-		return
-	if root is CollisionObject3D:
-		out.append((root as CollisionObject3D).get_rid())
-	for c in root.get_children():
-		_collect_rids(c, out)
-
 func _daylight_tick(delta: float) -> void:
 	if not set_daylight or not _installed:
 		return
@@ -561,31 +567,18 @@ func _daylight_tick(delta: float) -> void:
 			_vanilla_exposure = cur
 	_sim_cd -= delta
 	if _sim_cd <= 0.0:
-		# Five lookups a frame added up for nothing: the clock, the weather and
-		# the indoor flags do not change between physics ticks.
+		# The season, the indoor flag and the light state do not change between
+		# physics ticks: one tree read per 0.25 s is plenty for all of them.
 		_sim_cd = 0.25
-		_sim_time = float(_sim_value("time", 1200.0))
-		_sim_weather = String(_sim_value("weather", "Neutral"))
 		_sim_season = int(_sim_value("season", 1))
 		_sim_indoor = _game_flag("indoor")
-		_sim_shelter = _game_flag("shelter")
-	var light := Daylight.light_level(
-		_sim_time,
-		_sim_weather,
-		_sim_season,
-		_sim_indoor,
-		_sim_shelter,
-		_sky_covered(delta))
-	if not _light_seeded:
-		_light_sm = light
-		_light_seeded = true
-	else:
-		_light_sm = Daylight.step(_light_sm, light, delta, 2.0)
-	light = _light_sm
-	var target := Daylight.strength_factor(Daylight.day_factor(light, set_day_floor), set_strength)
+		var snap := _snapshot()
+		_sim_shelter = bool(snap.get("shelter", false))
+		_light_est = Daylight.estimate_light(snap)
+	var target := _target_factor()
 	_day_factor = target if _last_exposure < 0.0 else Daylight.step(_day_factor, target, delta)
 	_daylight_apply(env, cur)
-	_push_daylight_trims(light)
+	_push_daylight_trims(_day_mix)
 
 
 # The tail of _daylight_tick: whatever factor sits in _day_factor, write the
@@ -599,7 +592,7 @@ func _daylight_apply(env: Environment, cur: float) -> void:
 	if absf(want - cur) > 0.002:
 		env.tonemap_exposure = want
 	_last_exposure = want
-	var mix := Daylight.day_mix(_day_factor, set_day_floor)
+	var mix := Daylight.day_mix(_day_factor)
 	if absf(mix - _day_mix) > 0.001:
 		_day_mix = mix
 		_push_day_mix()
@@ -608,17 +601,16 @@ func _daylight_apply(env: Environment, cur: float) -> void:
 		_set_key_gain(gain)
 
 
-# Snow and day trims from one place: the tick pushes them with the smoothed
-# light, the panel refresh reuses the same call. Reads the CACHED sim flags --
+# Snow and day trims from one place: the tick pushes them with the fresh day
+# mix, the panel refresh reuses the same call. Reads the CACHED sim flags --
 # the tick refreshes them on the sim cadence before calling here, so this
-# adds no tree lookups (the old tail re-read season/indoor/shelter every
-# frame for nothing).
-func _push_daylight_trims(light: float) -> void:
-	var snow: float = Daylight.snow_trim(_sim_season, _sim_indoor, _sim_shelter, light)
+# adds no tree lookups.
+func _push_daylight_trims(mix: float) -> void:
+	var snow: float = Daylight.snow_trim(_sim_season, _sim_indoor, _sim_shelter, mix)
 	if absf(snow - _snow_trim) > 0.001:
 		_snow_trim = snow
 		_dirty = true
-	var day: float = Daylight.day_trim(light, set_day_trim)
+	var day: float = Daylight.day_trim(mix, set_day_trim)
 	if absf(day - _day_trim) > 0.001:
 		_day_trim = day
 		_dirty = true
@@ -635,9 +627,9 @@ func refresh_daylight_now() -> void:
 	var env := _environment()
 	if env == null:
 		return
-	_day_factor = Daylight.strength_factor(Daylight.day_factor(_light_sm, set_day_floor), set_strength)
+	_day_factor = _target_factor()
 	_daylight_apply(env, env.tonemap_exposure)
-	_push_daylight_trims(_light_sm)
+	_push_daylight_trims(_day_mix)
 	_dirty = true
 	_apply_uniforms()
 
@@ -650,15 +642,16 @@ func _reset_daylight() -> void:
 	_day_mix = 0.0
 	_snow_trim = 1.0
 	_day_trim = 1.0
-	_light_sm = 0.0
-	_light_seeded = false
+	_light_est = 0.0
+	_factor_a = 1.0
 	_sim_cd = 0.0
 	_sim = null
 	_world = null
 	_env = null
 	# The instrument levers do not survive a helmet-off or a map change: the
 	# panel is a measurement tool, not a persisted setting.
-	set_day_floor = Daylight.MIN_FACTOR
+	set_day_target = Daylight.TARGET
+	set_day_floor = Daylight.FLOOR
 	set_day_trim = Daylight.DAY_TRIM
 	_set_key_gain(1.0)
 	_push_day_mix()
