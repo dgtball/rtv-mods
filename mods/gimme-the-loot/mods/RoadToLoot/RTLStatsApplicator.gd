@@ -20,6 +20,7 @@ const META_MENTAL := "rtl_tick_mental"
 const META_SPRINT := "rtl_sprint_applied"
 const META_FIRE_RATE := "rtl_fire_rate_applied"
 const META_WEAPON_BASE := "rtl_weapon_base"
+const META_AMMO_PRE := "rtl_ammo_pre"
 
 const RECOIL_FIELDS := ["horizontalRecoil", "verticalRecoil", "kick"]
 
@@ -289,6 +290,12 @@ func on_fireevent_pre() -> void:
 	if data == null or slot_data == null:
 		return
 	var totals := Stats.weapon_totals({"loot_affixes": Store.affixes(slot_data)})
+	var ammo_chance := Stats.ammo_save_chance(totals)
+	if ammo_chance > 0.0:
+		var amt = slot_data.get("amount")
+		var cham = slot_data.get("chamber")
+		if amt != null and cham != null:
+			rig.set_meta(META_AMMO_PRE, {"amount": int(amt), "chamber": bool(cham), "chance": ammo_chance})
 	var base: Dictionary = {}
 	var damage_factor := Stats.damage_factor(totals, Stats.is_low_hp(_health(rig)))
 	if absf(damage_factor - 1.0) > 0.00001 and "damage" in data:
@@ -305,26 +312,47 @@ func on_fireevent_pre() -> void:
 		return
 	rig.set_meta(META_WEAPON_BASE, base)
 
-# data is shared by every rig of the same weapon scene, so it is restored right
-# after the shot instead of being left scaled.
+# data is shared by every rig of the same weapon scene, so it is restored
+# right after the shot instead of being left scaled.
 func on_fireevent_post() -> void:
 	var rig = _caller()
-	if rig == null or not rig.has_meta(META_WEAPON_BASE):
+	if rig == null:
 		return
-	var base: Dictionary = rig.get_meta(META_WEAPON_BASE)
-	rig.remove_meta(META_WEAPON_BASE)
-	var data = rig.get("data")
-	if data == null:
+	# The restore is optional: a weapon with only wear/ammo_save never sets this meta.
+	if rig.has_meta(META_WEAPON_BASE):
+		var base: Dictionary = rig.get_meta(META_WEAPON_BASE)
+		rig.remove_meta(META_WEAPON_BASE)
+		var data = rig.get("data")
+		if data != null:
+			for field in base.keys():
+				data.set(field, base[field])
+	var slot_data = rig.get("slotData")
+	if slot_data == null:
 		return
-	for field in base.keys():
-		data.set(field, base[field])
+	var wtot := Stats.weapon_totals({"loot_affixes": Store.affixes(slot_data)})
+	var chance := clampf(float(wtot.get("wear", 0.0)), 0.0, 0.9)
+	if chance > 0.0 and randf() < chance and "condition" in slot_data and int(slot_data.condition) > 0:
+		slot_data.condition -= 1
+	_ammo_save(rig, slot_data)
 
-	var slot_data = rig.get("slotData") if (rig is Object) and rig.has_method("get") else null
-	if slot_data != null:
-		var wtot := Stats.weapon_totals(Store.affixes(slot_data))
-		var chance := clampf(float(wtot.get("wear", 0.0)), 0.0, 0.9)
-		if chance > 0.0 and randf() < chance and "condition" in slot_data and int(slot_data.condition) > 0:
-			slot_data.condition -= 1
+func _ammo_save(rig, slot_data) -> void:
+	if not rig.has_meta(META_AMMO_PRE):
+		return
+	var pre: Dictionary = rig.get_meta(META_AMMO_PRE)
+	rig.remove_meta(META_AMMO_PRE)
+	var amt = slot_data.get("amount")
+	var cham = slot_data.get("chamber")
+	if amt == null or cham == null:
+		return
+	if not Stats.shot_spent_round(int(pre.get("amount", 0)), int(amt), bool(pre.get("chamber", false)), bool(cham)):
+		return
+	if randf() >= float(pre.get("chance", 0.0)):
+		return
+	slot_data.amount = int(amt) + 1
+	if rig.has_method("UpdateBullets"):
+		rig.UpdateBullets()
+	if rig.has_method("UpdateHUD"):
+		rig.UpdateHUD()
 
 # fireRate is a cooldown, so a fire-rate bonus divides it. Vanilla writes a fresh
 # base only on the frames it fires, which is exactly what the stored pair detects.

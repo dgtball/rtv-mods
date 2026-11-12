@@ -9,6 +9,29 @@ class FakeItem extends Node:
 class FakeSlotData extends Resource:
 	var itemData = null
 
+class FakeRig extends Node:
+	var data = null
+	var slotData = null
+	var bullets := 0
+	var hud := 0
+	func UpdateBullets() -> void:
+		bullets += 1
+	func UpdateHUD() -> void:
+		hud += 1
+
+class FakeSlot extends Resource:
+	var loot_affixes: Array = []
+	var amount := 0
+	var chamber := false
+	var condition := 100
+
+class FakeLib extends RefCounted:
+	var _caller = null
+
+# аффикс есть, счётчика патронов нет: pre обязан не сохранить снимок, post — не упасть
+class FakeSlotNoCounter extends Resource:
+	var loot_affixes: Array = [{"stat": "ammo_save", "value": 0.9, "unit": "pct"}]
+
 var fails := 0
 
 func ck(cond: bool, msg: String) -> void:
@@ -24,6 +47,14 @@ func _make_slot(slot_data) -> Node:
 	item.slotData = slot_data
 	slot.add_child(item)
 	return slot
+
+func _fire(appl, rig, amount_before: int, amount_after: int, chamber_before: bool, chamber_after: bool) -> void:
+	rig.slotData.amount = amount_before
+	rig.slotData.chamber = chamber_before
+	appl.on_fireevent_pre()
+	rig.slotData.amount = amount_after
+	rig.slotData.chamber = chamber_after
+	appl.on_fireevent_post()
 
 func _init() -> void:
 	# пустое или неподходящее снаряжение
@@ -81,6 +112,66 @@ func _init() -> void:
 	equipment.free()
 	meta_equipment.free()
 	pair.free()
+
+	# --- ammo_save: возврат патрона в on_fireevent_post ---
+	var appl := Appl.new()
+	var lib := FakeLib.new()
+	appl._lib = lib
+	var rig := FakeRig.new()
+	var slot := FakeSlot.new()
+	rig.slotData = slot
+	rig.data = {"damage": 10.0}
+	lib._caller = rig
+
+	# выстрел не потратил патрон (кулдаун/осечка) -> возврата нет
+	slot.loot_affixes = [{"stat": "ammo_save", "value": 0.9, "unit": "pct"}]
+	for i in 200:
+		_fire(appl, rig, 100, 100, true, true)
+	ck(slot.amount == 100, "no refund when the shot did not spend a round")
+
+	# потратил -> возврат примерно в 90% случаев
+	var refunds := 0
+	for i in 400:
+		_fire(appl, rig, 100, 99, true, true)
+		if slot.amount == 100:
+			refunds += 1
+	ck(refunds >= 300, "ammo_save refunds ~90%% of 400 spent shots: " + str(refunds))
+	ck(rig.bullets > 0, "UpdateBullets called on refund")
+	ck(rig.hud > 0, "UpdateHUD called on refund")
+
+	# болт: amount не меняется, патронник пустеет -> возврат в amount.
+	# Считаем проки за серию, а не состояние после последнего выстрела:
+	# одиночный промах в конце сделал бы проверку случайной.
+	var bolt_refunds := 0
+	for i in 50:
+		_fire(appl, rig, 5, 5, true, false)
+		if slot.amount == 6:
+			bolt_refunds += 1
+	ck(bolt_refunds >= 35, "manual bolt: chambered round refunded into amount: " + str(bolt_refunds))
+
+	# без аффикса возврата нет
+	slot.loot_affixes = []
+	_fire(appl, rig, 30, 29, true, true)
+	ck(slot.amount == 29, "no ammo_save: no refund")
+
+	# слот без полей счётчика не должен падать и не должен копить мету
+	var bare := FakeSlotNoCounter.new()
+	rig.slotData = bare
+	appl.on_fireevent_pre()
+	ck(not rig.has_meta("rtl_ammo_pre"), "slot without amount/chamber: no snapshot stored")
+	appl.on_fireevent_post()
+	ck(not rig.has_meta("rtl_ammo_pre"), "slot without amount/chamber does not crash the post hook")
+	rig.slotData = slot
+
+	# --- wear: роллится и без меты damage/recoil (регрессия 1.0.0) ---
+	slot.loot_affixes = [{"stat": "wear", "value": 1.0, "unit": "pct"}]
+	slot.condition = 100
+	for i in 200:
+		appl.on_fireevent_post()
+	ck(slot.condition < 100, "wear rolls without damage/recoil meta: " + str(slot.condition))
+
+	rig.free()
+	appl.free()
 
 	print("")
 	if fails > 0:
