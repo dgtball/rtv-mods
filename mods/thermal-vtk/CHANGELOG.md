@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.7.0] - 2026-11-12
+
+### Changed
+- Night vision now looks the same as without daylight compensation: at night the
+  mod no longer darkens the picture, so it stays readable instead of turning black.
+- Dark places seen during the day, such as caves and tunnels, are no longer
+  crushed. The picture lifts just enough to stay readable.
+- The daylight picture is unchanged.
+
 ## [2.6.0] - 2026-11-11
 
 ### Changed
