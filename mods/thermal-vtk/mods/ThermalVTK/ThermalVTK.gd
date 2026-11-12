@@ -253,10 +253,10 @@ var _perf_t: float = 0.0
 # active pair as mres/mmaa, which is all the log needs to bucket the windows.
 const MASK_CANDIDATES := [
 	{"name": "0.50 no AA", "scale": 0.5, "msaa": Viewport.MSAA_DISABLED},
+	{"name": "0.75 MSAA 4x", "scale": 0.75, "msaa": Viewport.MSAA_4X},
 	{"name": "0.75 no AA", "scale": 0.75, "msaa": Viewport.MSAA_DISABLED},
 	{"name": "1.00 no AA", "scale": 1.0, "msaa": Viewport.MSAA_DISABLED},
-	{"name": "0.50 MSAA 2x", "scale": 0.5, "msaa": Viewport.MSAA_2X},
-	{"name": "0.50 MSAA 4x", "scale": 0.5, "msaa": Viewport.MSAA_4X},
+	{"name": "1.00 MSAA 4x", "scale": 1.0, "msaa": Viewport.MSAA_4X},
 ]
 var _key_mask_cand: int = KEY_F10
 var _mask_cand: int = 0
