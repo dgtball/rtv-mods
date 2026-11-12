@@ -109,13 +109,14 @@ func t_day_trim_mix() -> void:
 	ck(near(D.day_trim(0.5, 0.5), 0.75), "half mix lands halfway")
 
 func t_snow_trim_mix() -> void:
-	ck(near(D.snow_trim(2, false, false, 0.0), D.SNOW_TRIM_NIGHT), "winter night keeps the night trim")
-	ck(near(D.snow_trim(2, false, false, 1.0), D.SNOW_TRIM_DAY), "winter day keeps the day trim")
-	ck(near(D.snow_trim(2, false, false, 0.5), 0.54), "the winter trim blends by mix")
-	ck(near(D.snow_trim(1, false, false, 1.0), 1.0), "summer has no snow trim")
-	ck(near(D.snow_trim(2, true, false, 1.0), 1.0), "an indoor winter scene has no snow trim")
-	ck(near(D.snow_trim(2, false, true, 1.0), 1.0), "a shelter has no snow trim")
-	ck(near(D.snow_trim(2, false, false, 1.0, 0.5, 0.9), 0.9), "explicit winter trims are honoured")
+	ck(near(D.snow_trim(2, 0.0), D.SNOW_TRIM_NIGHT), "winter night keeps the night trim")
+	ck(near(D.snow_trim(2, 1.0), D.SNOW_TRIM_DAY), "winter day keeps the day trim")
+	ck(near(D.snow_trim(2, 0.5), 0.54), "the winter trim blends by mix")
+	ck(near(D.snow_trim(1, 1.0), 1.0), "summer has no snow trim")
+	ck(near(D.snow_trim(1, 0.0), 1.0), "summer night has no snow trim either")
+	ck(near(D.snow_trim(2, 1.0, 0.5, 0.9), 0.9), "explicit winter trims are honoured")
+	ck(near(D.snow_trim(2, -1.0), D.SNOW_TRIM_NIGHT), "a mix below zero clamps to night")
+	ck(near(D.snow_trim(2, 2.0), D.SNOW_TRIM_DAY), "a mix above one clamps to day")
 
 func t_palette_input() -> void:
 	ck(near(D.palette_input(0.5, 1.7, 0.6, 0.0), 0.85), "mix 0: shoulder and lift off, raw darken only")

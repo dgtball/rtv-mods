@@ -705,9 +705,10 @@ func _daylight_apply(env: Environment, cur: float) -> void:
 # Snow and day trims from one place: the tick pushes them with the fresh day
 # mix, the panel refresh reuses the same call. Reads the CACHED sim flags --
 # the tick refreshes them on the sim cadence before calling here, so this
-# adds no tree lookups.
+# adds no tree lookups. `_sim_indoor`/`_sim_shelter` stay cached for the panel
+# and the [DAY] line only: the snow trim deliberately ignores them.
 func _push_daylight_trims(mix: float) -> void:
-	var snow: float = Daylight.snow_trim(_sim_season, _sim_indoor, _sim_shelter, mix)
+	var snow: float = Daylight.snow_trim(_sim_season, mix)
 	if absf(snow - _snow_trim) > 0.001:
 		_snow_trim = snow
 		_dirty = true

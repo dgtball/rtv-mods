@@ -127,9 +127,17 @@ static func night_gate(factor: float, sun_down: bool) -> float:
 # by day 0.48 (2026-11-11 calibration, riding DAY_TRIM 0.62) the noon snow
 # field reads p50 0.49 mid-ladder instead of pinned on the ceiling. Keys
 # are unaffected: substitution happens before the palette. Blended by the
-# same day mix that drives the palette, 1.0 everywhere else.
-static func snow_trim(season: int, indoor: bool, shelter: bool, mix: float, trim_night := SNOW_TRIM_NIGHT, trim_day := SNOW_TRIM_DAY) -> float:
-	if season != SEASON_WINTER or indoor or shelter:
+# same day mix that drives the palette.
+#
+# The trim runs for the whole winter season, interiors and shelters included.
+# It used to duck out under a roof, and since the value is pushed straight into
+# the shader an `indoor` flip stepped the background by 40-50% on a doorway --
+# a visible pop, not a trim. With no `indoor`/`shelter` input the step cannot
+# come back. The cost is accepted: winter interiors and shelters are darker
+# than they were, by the same factor the outdoors already was. The constants
+# themselves were not recalibrated here.
+static func snow_trim(season: int, mix: float, trim_night := SNOW_TRIM_NIGHT, trim_day := SNOW_TRIM_DAY) -> float:
+	if season != SEASON_WINTER:
 		return 1.0
 	return lerpf(trim_night, trim_day, clampf(mix, 0.0, 1.0))
 

@@ -53,6 +53,7 @@ func _run() -> void:
 	t_vanilla_rewrite_rebaselines()
 	t_toggle_restores_exposure()
 	t_day_trim_from_mix()
+	t_snow_trim_ignores_indoor()
 	t_refresh_snaps_without_lag()
 	t_day_frame_keeps_source_a()
 	t_ceiling_releases_the_cave()
@@ -488,3 +489,32 @@ func t_sync_probe_rests_at_night() -> void:
 	nvg._sync_probe()
 	ck(nvg._probe == null, "the probe stays off while the sun is down")
 	w["map"].free()
+
+func t_snow_trim_ignores_indoor() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	var sim: FakeSim = w["sim"]
+	_reset(nvg, env, sim, 1.0, 2)
+	nvg._daylight_tick(1.0)
+	ck(absf(nvg._snow_trim - Daylight.SNOW_TRIM_DAY) < 0.001, "a winter day keeps the day snow trim")
+	nvg._sim_indoor = true
+	nvg._daylight_tick(0.016)
+	ck(absf(nvg._snow_trim - Daylight.SNOW_TRIM_DAY) < 0.001, "walking under a roof does not move the trim")
+	nvg._sim_shelter = true
+	nvg._daylight_tick(0.016)
+	ck(absf(nvg._snow_trim - Daylight.SNOW_TRIM_DAY) < 0.001, "a shelter does not move the trim either")
+	nvg._sim_shelter = false
+	nvg._sim_season = 1
+	nvg._daylight_tick(0.016)
+	ck(absf(nvg._snow_trim - 1.0) < 0.001, "summer stays untrimmed even under a roof")
+	w["map"].free()
+	var w2 := _world()
+	var nvg2 = w2["nvg"]
+	var env2: Environment = w2["env"]
+	var sim2: FakeSim = w2["sim"]
+	_reset(nvg2, env2, sim2, 0.03, 2)
+	nvg2._sim_indoor = true
+	nvg2._daylight_tick(1.0)
+	ck(absf(nvg2._snow_trim - Daylight.SNOW_TRIM_NIGHT) < 0.001, "a winter night indoors takes the night trim")
+	w2["map"].free()
