@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.6.0] - 2026-11-11
+
+### Changed
+- Daylight compensation is now driven by the game's own light level instead of a
+  time-and-weather guess. The thermal picture looks the same in clear weather,
+  overcast, fog and snow, so one setting fits every scene.
+- Dusk is now as readable as midday, and interiors are no longer dimmed by the
+  compensation.
+- The night picture is unchanged.
+
 ## [2.5.2] - 2026-11-11
 
 ### Fixed
