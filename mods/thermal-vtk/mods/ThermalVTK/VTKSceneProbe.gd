@@ -14,6 +14,14 @@ extends Node
 # ESP shells live on EspMask.LAYER_MASK and are excluded from the probe's
 # cull mask: the instrument measures the world, not the overlay. The game
 # camera's own mask belongs to VTKEspMask; this module only reads it.
+#
+# Auto mode exists for daylight source B in a normal game, so the owner is
+# VTKNVG: it arms set_auto(cadence) while the measured-frame source is live
+# and disarms it otherwise. The F9 panel only calls measure() on a button
+# press. One measurement runs at a time: the auto tick fires without awaiting,
+# and _busy turns a second request away.
+
+signal measured(stats: Dictionary)
 
 const EspMask = preload("res://mods/ThermalVTK/VTKEspMask.gd")
 const Stats = preload("res://mods/ThermalVTK/VTKStats.gd")
@@ -24,6 +32,37 @@ const SIZE := Vector2i(64, 36)
 
 var _vp: SubViewport = null
 var _cam: Camera3D = null
+# Auto mode: <= 0.0 is off (the rest state). While armed the probe measures on
+# its own cadence and emits `measured`; the first tick waits one interval.
+var _auto_interval: float = 0.0
+var _auto_cd: float = 0.0
+# One measurement at a time (see the header).
+var _busy: bool = false
+
+func set_auto(interval: float) -> void:
+	_auto_interval = interval
+	if interval <= 0.0:
+		_auto_cd = 0.0
+
+func is_busy() -> bool:
+	return _busy
+
+func _process(delta: float) -> void:
+	if _auto_interval <= 0.0 or _busy:
+		return
+	_auto_cd -= delta
+	if _auto_cd > 0.0:
+		return
+	_auto_cd = _auto_interval
+	_auto_tick()
+
+# The auto tick is a coroutine that owns itself: _process cannot await, and
+# _busy keeps a slow readback from stacking up. get_tree().root is the main
+# Viewport (not the probe's own SubViewport), so the automatic measurement
+# mirrors the same picture camera the panel measures.
+func _auto_tick() -> void:
+	var stats: Dictionary = await measure(get_tree().root)
+	measured.emit(stats)
 
 func _ready() -> void:
 	name = "VTKSceneProbe"
@@ -62,6 +101,8 @@ func _ready() -> void:
 # frame_post_draw are tree signals and rendering runs while paused, so the
 # panel works from the pause menu too.
 func measure(main: Viewport) -> Dictionary:
+	if _busy:
+		return {}
 	if _vp == null or _cam == null:
 		return {}
 	if main == null or not is_inside_tree():
@@ -69,6 +110,7 @@ func measure(main: Viewport) -> Dictionary:
 	var cam := main.get_camera_3d()
 	if cam == null:
 		return {}
+	_busy = true
 	_sync_camera(cam)
 	_vp.disable_3d = false
 	_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
@@ -79,6 +121,7 @@ func measure(main: Viewport) -> Dictionary:
 	var out: Dictionary = Stats.from_image(img)
 	_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	_vp.disable_3d = true
+	_busy = false
 	return out
 
 # Read a texture back into an Image. A viewport's frame lives in its

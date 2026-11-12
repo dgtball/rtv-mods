@@ -17,7 +17,6 @@ extends CanvasLayer
 # hardcoded mode; that mistake is the reason this file is careful.
 
 const Daylight = preload("res://mods/ThermalVTK/VTKDaylight.gd")
-const SceneProbe = preload("res://mods/ThermalVTK/VTKSceneProbe.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 
 # Readout cadence: 4 Hz is readable, and the values it shows are smoothed
@@ -26,7 +25,6 @@ const READOUT_EVERY := 0.25
 
 var _nvg: Node = null
 var _owner: Node = null
-var _probe: Node = null
 var _readout: Label = null
 var _measure_label: Label = null
 # Lever rows, keyed by the NVG field name: {"slider", "label", "name"}.
@@ -80,10 +78,8 @@ func setup(nvg: Node, owner: Node) -> void:
 	_measure_label = Label.new()
 	_measure_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_measure_label)
-	# The probe rides under the panel: while the panel is closed it rests
-	# dark (no updates, 3D off), and it dies together with the panel.
-	_probe = SceneProbe.new()
-	add_child(_probe)
+	# The probe belongs to VTKNVG now (source B rides on it in a normal game);
+	# the panel just asks for a measurement through measure_frame().
 	visible = false
 
 # The ThermalKey _add_slider pattern: a caption label that live-updates with
@@ -233,9 +229,9 @@ func _on_close() -> void:
 # the whole calibration instrument in one button press. The line format is
 # fixed -- the fitting session parses it by whitespace.
 func _on_measure() -> void:
-	if _probe == null or not is_instance_valid(_probe) or _nvg == null or not is_instance_valid(_nvg):
+	if _nvg == null or not is_instance_valid(_nvg):
 		return
-	var stats: Dictionary = await _probe.measure(get_viewport())
+	var stats: Dictionary = await _nvg.measure_frame()
 	if stats.is_empty():
 		var fail := "measure failed (no camera or blank frame)"
 		_measure_label.text = fail

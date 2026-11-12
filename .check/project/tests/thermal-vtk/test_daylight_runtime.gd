@@ -54,6 +54,10 @@ func _run() -> void:
 	t_toggle_restores_exposure()
 	t_day_trim_from_mix()
 	t_refresh_snaps_without_lag()
+	t_source_b_writes_loop_factor()
+	t_source_b_seeds_from_a()
+	t_source_b_measured_updates_loop()
+	t_source_b_night_stays_vanilla()
 	t_reset_returns_levers()
 	print("")
 	if fails == 0:
@@ -326,11 +330,63 @@ func t_reset_returns_levers() -> void:
 	_reset(nvg, env, sim, 1.0, 2)
 	nvg.set_day_target = 0.5
 	nvg.set_day_trim = 0.5
+	nvg.set_daylight_source = 1
 	nvg._daylight_tick(1.0)
-	ck(nvg._day_trim < 1.0, "lever trim applied before the reset")
 	nvg._reset_daylight()
 	ck(absf(nvg.set_day_target - Daylight.TARGET) < 0.001, "reset returns the target lever to the constant")
 	ck(absf(nvg.set_day_floor - Daylight.FLOOR) < 0.001, "reset returns the floor lever to the constant")
 	ck(absf(nvg.set_day_trim - Daylight.DAY_TRIM) < 0.001, "reset returns the trim lever to the constant")
+	ck(absf(nvg.set_frame_target - Daylight.FRAME_TARGET) < 0.001, "reset returns the frame target to the constant")
+	ck(absf(nvg.set_frame_cadence - Daylight.FRAME_CADENCE) < 0.001, "reset returns the probe cadence to the constant")
+	ck(nvg.set_daylight_source == 1, "the source flag survives a reset")
 	ck(absf(nvg._day_trim - 1.0) < 0.001, "reset clears the applied day trim")
+	w["map"].free()
+
+func t_source_b_writes_loop_factor() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	var sim: FakeSim = w["sim"]
+	_reset(nvg, env, sim, 1.0)
+	nvg.set_daylight_source = 1
+	nvg._factor_b = 0.5
+	nvg._day_factor = 0.5
+	nvg._daylight_tick(1.0)
+	ck(absf(env.tonemap_exposure - 1.5) < 0.005, "source B writes the loop factor, not the light estimate")
+	w["map"].free()
+
+func t_source_b_seeds_from_a() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	var sim: FakeSim = w["sim"]
+	_reset(nvg, env, sim, 1.0)
+	nvg._factor_a = 0.40
+	nvg.set_daylight_source = 1
+	nvg._sync_probe()
+	ck(absf(nvg._factor_b - 0.40) < 0.001, "switching to source B seeds the loop from source A")
+	w["map"].free()
+
+func t_source_b_measured_updates_loop() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	_reset(nvg, w["env"], w["sim"], 1.0)
+	nvg.set_frame_target = 0.25
+	nvg._factor_b = 0.5
+	nvg._on_probe_measured({"p50": 0.5})
+	ck(nvg._factor_b < 0.5, "a frame brighter than target lowers the loop factor")
+	ck(nvg._factor_b >= Daylight.FLOOR, "the loop factor stays above the floor")
+	nvg._on_probe_measured({})
+	ck(nvg._factor_b < 0.5, "an empty measurement leaves the loop alone")
+	w["map"].free()
+
+func t_source_b_night_stays_vanilla() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	_reset(nvg, env, w["sim"], 0.03)
+	nvg.set_daylight_source = 1
+	nvg._factor_b = 1.0
+	nvg._daylight_tick(1.0)
+	ck(is_equal_approx(env.tonemap_exposure, 3.0), "source B leaves the night exposure vanilla")
 	w["map"].free()

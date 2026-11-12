@@ -27,6 +27,8 @@ func _run() -> void:
 	t_probe_excludes_shells()
 	t_probe_readback()
 	t_probe_readback_source()
+	t_probe_auto_gate()
+	t_probe_busy_guard()
 	print("")
 	if fails == 0:
 		print("Stats tests passed")
@@ -131,3 +133,30 @@ func t_probe_readback() -> void:
 func t_probe_readback_source() -> void:
 	var src := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKSceneProbe.gd")
 	ck(not src.contains("_vp.get_image("), "probe never calls the ghost SubViewport.get_image()")
+
+# Auto mode is what source B rides on in a normal game: the probe measures the
+# frame on its own cadence and emits the stats. At rest the interval is zero,
+# so the daylight panel and a plain game both pay nothing until it is armed.
+func t_probe_auto_gate() -> void:
+	var probe = SceneProbe.new()
+	root.add_child(probe)
+	ck(probe._auto_interval == 0.0, "the probe rests with auto mode off")
+	probe.set_auto(1.0)
+	ck(probe._auto_interval == 1.0, "set_auto arms the interval")
+	probe.set_auto(0.0)
+	ck(probe._auto_interval == 0.0, "set_auto(0) disarms auto mode")
+	probe.free()
+
+# One measurement at a time: the auto tick fires without awaiting, so _busy is
+# the only thing stopping a second readback from racing the first.
+func t_probe_busy_guard() -> void:
+	var probe = SceneProbe.new()
+	root.add_child(probe)
+	ck(not probe.is_busy(), "a fresh probe is idle")
+	probe._busy = true
+	ck(probe.is_busy(), "an in-flight measurement reads as busy")
+	probe._busy = false
+	ck(not probe.is_busy(), "the flag clears when the measurement ends")
+	ck(FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKSceneProbe.gd").contains("if _busy:"),
+		"measure() refuses a second request while busy")
+	probe.free()

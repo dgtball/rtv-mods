@@ -5,6 +5,7 @@ const Daylight = preload("res://mods/ThermalVTK/VTKDaylight.gd")
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 const EspMask = preload("res://mods/ThermalVTK/VTKEspMask.gd")
+const SceneProbe = preload("res://mods/ThermalVTK/VTKSceneProbe.gd")
 
 # Owns the NVG overlay shader, plus the thermal/mines layer that rides on it.
 #
@@ -73,6 +74,12 @@ var set_strength: float = 1.0
 var set_day_target: float = Daylight.TARGET
 var set_day_floor: float = Daylight.FLOOR
 var set_day_trim: float = Daylight.DAY_TRIM
+# Daylight source: 0 folds the game's light state (source A), 1 runs the
+# measured-frame feedback loop (source B). The flag is a panel choice, not a
+# persisted setting, so a reset leaves it alone.
+var set_daylight_source: int = 0
+var set_frame_target: float = Daylight.FRAME_TARGET
+var set_frame_cadence: float = Daylight.FRAME_CADENCE
 # Brightness of the state key the ESP outlines emit; the overlay uses it to
 # scale the substituted state colour.
 var set_state_brightness: float = 0.6
@@ -125,6 +132,13 @@ var _key_gain: float = 1.0
 # even under source B so the panel can show both.
 var _light_est: float = 0.0
 var _factor_a: float = 1.0
+# Source B: the last measured frame level and the factor the feedback loop
+# settled on. Both are kept current under either source so the panel can show
+# what the inactive source would give.
+var _frame_l: float = 0.0
+var _factor_b: float = 1.0
+var _source_prev: int = 0
+var _probe: Node = null
 var _sim_cd: float = 0.0
 var _sim_season: int = 1
 var _sim_indoor: bool = false
@@ -472,6 +486,7 @@ func _process(delta: float) -> void:
 			_reset_daylight()
 	if worn:
 		_daylight_tick(delta)
+	_sync_probe()
 	# Player position, fetched once per frame.
 	var ppos := _player_pos()
 
@@ -546,7 +561,56 @@ func _snapshot_light(snap: Dictionary, prefix: String, light) -> void:
 # computes, so the panel can show what the other source would give.
 func _target_factor() -> float:
 	_factor_a = Daylight.strength_factor(Daylight.factor_for_light(_light_est, set_day_target, set_day_floor), set_strength)
+	if set_daylight_source == 1:
+		return Daylight.strength_factor(_factor_b, set_strength)
 	return _factor_a
+
+
+# Lazily create the frame probe and wire its signal. The probe is a child of
+# this node (which the ThermalVTK autoload parents under its own tree), so it
+# survives a map change along with the rest of the mod.
+func _ensure_probe() -> Node:
+	if _probe != null and is_instance_valid(_probe):
+		return _probe
+	_probe = SceneProbe.new()
+	_probe.measured.connect(_on_probe_measured)
+	add_child(_probe)
+	return _probe
+
+
+# One auto measurement landed: fold it into the source-B loop. An empty
+# dictionary means there was nothing to measure (no camera, no frame), so the
+# factor is left where it is.
+func _on_probe_measured(stats: Dictionary) -> void:
+	if stats.is_empty():
+		return
+	_frame_l = float(stats.get("p50", 0.0))
+	_factor_b = Daylight.feedback_factor(_factor_b, _frame_l, set_frame_target)
+
+
+# Arm the probe only while source B is the live picture, and seed the loop
+# from source A the moment the flag flips to B (otherwise the first frames
+# would start from the vanilla exposure).
+func _sync_probe() -> void:
+	if set_daylight_source != _source_prev:
+		_source_prev = set_daylight_source
+		if set_daylight_source == 1:
+			_factor_b = _factor_a
+	var want := set_daylight and set_daylight_source == 1 and _nvg_active()
+	if not want:
+		if _probe != null and is_instance_valid(_probe):
+			_probe.set_auto(0.0)
+		return
+	_ensure_probe().set_auto(set_frame_cadence)
+
+
+# The F9 panel's Measure button: one synchronous-request measurement of the
+# picture camera's frame. Ownership of the probe lives here (see _ensure_probe).
+func measure_frame() -> Dictionary:
+	var probe := _ensure_probe()
+	if probe == null:
+		return {}
+	return await probe.measure(get_viewport())
 
 
 # Write the compensated exposure every frame. The vanilla ResetCheck runs in
@@ -644,15 +708,20 @@ func _reset_daylight() -> void:
 	_day_trim = 1.0
 	_light_est = 0.0
 	_factor_a = 1.0
+	_frame_l = 0.0
+	_factor_b = 1.0
 	_sim_cd = 0.0
 	_sim = null
 	_world = null
 	_env = null
 	# The instrument levers do not survive a helmet-off or a map change: the
-	# panel is a measurement tool, not a persisted setting.
+	# panel is a measurement tool, not a persisted setting. The source flag is
+	# the exception -- it is a deliberate comparison choice, not a probe value.
 	set_day_target = Daylight.TARGET
 	set_day_floor = Daylight.FLOOR
 	set_day_trim = Daylight.DAY_TRIM
+	set_frame_target = Daylight.FRAME_TARGET
+	set_frame_cadence = Daylight.FRAME_CADENCE
 	_set_key_gain(1.0)
 	_push_day_mix()
 	_dirty = true
