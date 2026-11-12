@@ -48,6 +48,12 @@ var _scaling: float = SCALE
 # the upscale would otherwise magnify, but it multiplies fill rate -- a price
 # the resolution dial above already pays more cheaply. Off by default.
 var _msaa: int = Viewport.MSAA_DISABLED
+# Mesh LOD threshold for the mask pass. The mask picks its LOD from the shell's
+# projected size, so a smaller mask silently picks coarser meshes than the
+# picture does and the contour then traces a different silhouette than the body
+# on screen. That mismatch reads as "wrong at distance" far more than the pixel
+# grid does, which is why this is a dial and not a constant.
+var _lod: float = LOD_BIAS
 # Only rings inside the ESP reach matter, so the mask camera does not need the
 # game's far plane. Clipping the world at reach + margin skips every distant
 # mesh the mask can never show.
@@ -82,7 +88,7 @@ func _ready() -> void:
 	# if occluders exist.
 	_vp.positional_shadow_atlas_size = 0
 	_vp.use_occlusion_culling = true
-	_vp.mesh_lod_threshold = LOD_BIAS
+	_vp.mesh_lod_threshold = _lod
 	_vp.use_taa = false
 	_vp.use_debanding = false
 	_vp.disable_3d = true
@@ -163,6 +169,15 @@ func set_msaa(level: int) -> void:
 
 func msaa() -> int:
 	return _msaa
+
+# Mesh LOD dial, same contract as set_msaa: stored before the viewport exists.
+func set_lod(threshold: float) -> void:
+	_lod = maxf(threshold, 0.0)
+	if _vp != null:
+		_vp.mesh_lod_threshold = _lod
+
+func lod() -> float:
+	return _lod
 
 # The texture the NVG material binds to `esp_mask`. Stable across frames.
 func texture() -> Texture2D:
