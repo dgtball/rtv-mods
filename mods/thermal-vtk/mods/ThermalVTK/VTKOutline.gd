@@ -1,7 +1,7 @@
 ﻿extends RefCounted
 # Owns one mask material per NPC and renders it on dedicated ghost shells
 # (sibling MeshInstance3D copies, the approach reference outline mods use):
-# same mesh/skin/skeleton, transform mirrored every frame, material_override,
+# same mesh/skin/skeleton, transform mirrored when the shell is (re)built, material_override,
 # shadow casting off.
 #
 # Since 2.4.0 the shells write into the ESP mask viewport (VTKEspMask) instead
@@ -30,6 +30,9 @@ const SHELL_NAME := "VTK_Ring"
 #        "xray_mat": ShaderMaterial, "fill_body": ShaderMaterial,
 #        "fill_ring": ShaderMaterial, "node": Node, "child_count": int}
 var _items: Dictionary = {}
+# Recollects that actually rebuilt something since the last read. The PERF probe
+# reports it so a recollect storm is visible in the log instead of guessed at.
+var _recols: int = 0
 # While the scope view is active the band thins (SCOPE_RIM), so the magnified
 # view keeps a fine frame. The ring is clipped by the sight glass itself: the
 # glass is an opaque mesh in the main camera's view, so it wins the depth test
@@ -43,15 +46,30 @@ var _fill_log: Dictionary = {}
 func has(id: int) -> bool:
 	return _items.has(id)
 
-# Collect the NPC's paintable geometry. GeometryInstance3D (not just
-# MeshInstance3D) so MultiMesh/CSG parts are covered, and NO layer/visible
-# filter: bot geometry sits on render layer 1, and hidden LODs must still carry
-# a shell so the LOD that becomes visible already has it. This mirrors
-# VTKNVG._collect_meshes, the same sweep the mine path uses.
+# Diagnostics for the PERF probe: live shells across every tracked bot, and how
+# many recollects actually rebuilt something since the last read.
+func shell_count() -> int:
+	var n := 0
+	for id in _items:
+		for pair in _items[id].get("pairs", []):
+			var shell = pair.get("shell")
+			if shell != null and is_instance_valid(shell) and not shell.is_queued_for_deletion():
+				n += 1
+	return n
+
+func take_recols() -> int:
+	var n := _recols
+	_recols = 0
+	return n
+
+# Collect the NPC's paintable geometry: MeshInstance3D only, because a shell is
+# a sibling copy of a mesh and a MultiMesh/CSG/Decal has nothing to mirror. No
+# layer/visible filter: bot geometry sits on render layer 1, and hidden LODs
+# must still carry a shell so the LOD that becomes visible already has it.
 func _collect(node: Node, out: Array) -> void:
 	if node.has_meta(NO_CONTOUR_META):
 		return
-	if node is GeometryInstance3D:
+	if node is MeshInstance3D:
 		out.append(node)
 	for c in node.get_children():
 		_collect(c, out)
@@ -141,7 +159,7 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 	_items[id] = {
 		"meshes": meshes, "pairs": pairs, "ring": ring_mat, "xray_mat": xray_mat,
 		"fill_body": fill_body, "fill_ring": fill_ring, "fill_mode": false,
-		"node": node, "child_count": node.get_child_count(),
+		"node": node, "child_count": _child_count(node),
 		"xray": false,
 	}
 	refresh(id, opts)
@@ -149,14 +167,8 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 # Ghost shell beside each mesh. It carries only the mask layer, so no picture
 # camera draws it; the mask camera (cull mask | LAYER_MASK) does, and its depth
 # buffer already holds the world, which is what clips the ring.
-func _make_shell(src: GeometryInstance3D, ring_mat: ShaderMaterial) -> Dictionary:
-	var pair := {"src": src, "shell": null}
-	if not (src is MeshInstance3D):
-		# A non-mesh instance has no sibling to copy: it would have to piggyback
-		# on material_overlay, which would then draw in the main camera too.
-		# NPC rigs are MeshInstance3D; log once per entry and move on.
-		return pair
-	var mi := src as MeshInstance3D
+func _make_shell(mi: MeshInstance3D, ring_mat: ShaderMaterial) -> Dictionary:
+	var pair := {"src": mi, "shell": null}
 	var shell := MeshInstance3D.new()
 	shell.name = SHELL_NAME
 	shell.mesh = mi.mesh
@@ -207,27 +219,115 @@ func _free_pairs(id: int) -> void:
 # The rig is assembled/rewired at runtime (AI.Initialize, LOD/gear swaps), and
 # pooled bots are reused with a rebuilt subtree, so a one-shot snapshot goes
 # stale. Mirror VTKNVG: re-sweep when the child count moves and re-apply.
+#
+# The sweep is incremental, not a rebuild. The vanilla AI adds and removes a
+# direct child on most steps and lines (audio players, identifier), and a full
+# free-and-recreate of every shell on each of those put 10-23 MeshInstance3D
+# back into the tree several times per second per bot -- and, because
+# queue_free is deferred, the mask drew both the old and the new set for one
+# frame. A child-count change with an unchanged mesh set now costs a sweep and
+# a range compare; only meshes that actually appeared get a new shell.
 func _recollect(id: int, entry: Dictionary) -> void:
 	var node = entry.get("node")
 	if node == null or not is_instance_valid(node):
 		return
 	var before := int(entry.get("child_count", -1))
-	_free_pairs(id)
 	var fresh: Array = []
 	_collect(node, fresh)
-	Dbg.log("OUTLINE", "recollect id=%d child_count=%d->%d meshes=%d" % [id, before, node.get_child_count(), fresh.size()])
+	# Sample the count the same way refresh compares it: our own shells carry
+	# NO_CONTOUR_META and are excluded, so a queued-but-still-alive shell cannot
+	# skew the invariant. The old raw get_child_count() skewed it on every
+	# recollect that landed while the previous shells were still pending free,
+	# which rebuilt the whole set again next frame and kept oscillating.
+	entry["child_count"] = _child_count(node)
 	if fresh.is_empty():
 		return
+	var old: Array = entry.get("meshes", [])
+	if _same_meshes(old, fresh):
+		# The rig only gained or lost a non-geometry child (audio, identifier):
+		# keep the shells, but pick up a late LOD range the game assigned since.
+		_sync_pairs(entry.get("pairs", []))
+		return
 	var ring_mat: ShaderMaterial = entry["ring"]
+	var by_src: Dictionary = {}
+	for pair in entry.get("pairs", []):
+		var src = pair.get("src")
+		if src != null and is_instance_valid(src):
+			by_src[src.get_instance_id()] = pair
 	var pairs: Array = []
+	var kept := 0
+	var freed := 0
 	for m in fresh:
-		pairs.append(_make_shell(m, ring_mat))
+		var key: int = m.get_instance_id()
+		var pair = by_src.get(key)
+		if pair == null:
+			pairs.append(_make_shell(m, ring_mat))
+			continue
+		by_src.erase(key)
+		if pair.get("src") != m:
+			# The instance id was recycled: the stale shell belongs to a node
+			# that no longer exists, so build a fresh one instead of reusing it.
+			pairs.append(_make_shell(m, ring_mat))
+			continue
+		var shell = pair.get("shell")
+		if shell != null and is_instance_valid(shell) and not shell.is_queued_for_deletion():
+			_sync_shell(shell, m as MeshInstance3D)
+			kept += 1
+		else:
+			pair = _make_shell(m, ring_mat)
+		pairs.append(pair)
+	for key in by_src:
+		var stale = by_src[key].get("shell")
+		if stale != null and is_instance_valid(stale):
+			stale.queue_free()
+			freed += 1
 	entry["pairs"] = pairs
 	entry["meshes"] = fresh
-	entry["child_count"] = node.get_child_count()
+	_recols += 1
+	Dbg.log("OUTLINE", "recollect id=%d child_count=%d->%d meshes=%d->%d kept=%d freed=%d" % [
+		id, before, int(entry["child_count"]), old.size(), fresh.size(), kept, freed])
 	# Rebuilt shells start plain: re-apply a live reveal or fill to the new ones.
 	if bool(entry.get("xray", false)) or bool(entry.get("fill_mode", false)):
 		_apply_material(entry)
+
+# Direct children that are ours do not count: the sweep skips them, and a
+# deferred queue_free must not look like the game removed something.
+func _child_count(node: Node) -> int:
+	var n := 0
+	for c in node.get_children():
+		if not c.has_meta(NO_CONTOUR_META):
+			n += 1
+	return n
+
+func _same_meshes(old: Array, fresh: Array) -> bool:
+	if old.size() != fresh.size():
+		return false
+	for i in old.size():
+		if old[i] != fresh[i]:
+			return false
+	return true
+
+# A reused shell keeps its material; only the mirrored source fields are
+# refreshed. This runs on a recollect, not per frame.
+func _sync_shell(shell: MeshInstance3D, mi: MeshInstance3D) -> void:
+	if shell.mesh != mi.mesh:
+		shell.mesh = mi.mesh
+	if shell.skin != mi.skin:
+		shell.skin = mi.skin
+	if shell.skeleton != mi.skeleton:
+		shell.skeleton = mi.skeleton
+	if shell.transform != mi.transform:
+		shell.transform = mi.transform
+	if shell.visible != mi.visible:
+		shell.visible = mi.visible
+	_mirror_range(mi, shell)
+
+func _sync_pairs(pairs: Array) -> void:
+	for pair in pairs:
+		var shell = pair.get("shell")
+		var src = pair.get("src")
+		if shell != null and is_instance_valid(shell) and src is MeshInstance3D:
+			_sync_shell(shell, src as MeshInstance3D)
 
 func refresh(id: int, opts: Dictionary) -> void:
 	var entry = _items.get(id)
@@ -236,7 +336,7 @@ func refresh(id: int, opts: Dictionary) -> void:
 	set_entry_xray(id, bool(opts.get("xray", false)))
 	set_entry_fill(id, bool(opts.get("fill", false)))
 	var node = entry.get("node")
-	if node != null and is_instance_valid(node) and node.get_child_count() != int(entry.get("child_count", -1)):
+	if node != null and is_instance_valid(node) and _child_count(node) != int(entry.get("child_count", -1)):
 		_recollect(id, entry)
 	var color: Color = States.mask_key(int(opts.get("cat", States.NORMAL)))
 	var grow := float(opts.get("grow", 0.006))

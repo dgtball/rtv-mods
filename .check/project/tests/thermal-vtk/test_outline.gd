@@ -56,6 +56,9 @@ func t_collect_all_geometry() -> void:
 	mesh.mesh = BoxMesh.new()
 	mesh.visible = false
 	root.add_child(mesh)
+	# A shell is a sibling copy of a mesh, so a MultiMesh/CSG/Decal has nothing
+	# to mirror: collecting them only grew empty pairs and triggered recollects
+	# (a bullet decal on a body did it on every hit).
 	var mm := MultiMeshInstance3D.new()
 	root.add_child(mm)
 	var plain := Node3D.new()
@@ -63,8 +66,9 @@ func t_collect_all_geometry() -> void:
 	var o = Outline.new()
 	var out: Array = []
 	o._collect(root, out)
-	ck(out.size() == 2, "geometry collected (multi-mesh too): %d" % out.size())
+	ck(out.size() == 1, "geometry collected (mesh instances only): %d" % out.size())
 	ck(out.has(mesh), "an invisible LOD still carries a shell")
+	ck(not out.has(mm), "a MultiMesh has no sibling shell")
 	root.free()
 
 # The nomad marker and the debug label live under the bot; painting them too
@@ -179,7 +183,7 @@ func t_shells() -> void:
 	var o = Outline.new()
 	o.apply(3, root, {"cat": S.NORMAL, "grow": 0.01, "cool": 0.0})
 	var pairs: Array = o._items[3]["pairs"]
-	ck(pairs.size() == 2, "one pair per collected geometry")
+	ck(pairs.size() == 1, "one pair per collected mesh")
 	var shell: MeshInstance3D = pairs[0]["shell"]
 	ck(shell != null and is_instance_valid(shell), "mesh got a shell")
 	ck(shell.mesh == mesh.mesh, "shell shares the source mesh")
@@ -190,15 +194,16 @@ func t_shells() -> void:
 	ck(shell.has_meta("vtk_no_contour"), "shell opts out of the sweep")
 	ck(shell.get_parent() == root, "shell neighbours the source")
 	ck(mesh.material_overlay == null, "source mesh keeps its material")
-	var mmp: Dictionary = pairs[1]
-	ck(mmp["shell"] == null, "non-mesh geometry has no shell")
-	ck(mm.material_overlay == null, "non-mesh geometry keeps its own material")
+	ck(mm.material_overlay == null, "non-mesh geometry is not collected and keeps its own material")
 	o.clear(3)
 	ck(not is_instance_valid(shell) or shell.is_queued_for_deletion(), "clear frees the shell")
 	root.free()
 
-# Recollect on child-count growth frees the stale shells and builds fresh
-# ones, and the shells never double up.
+# Recollect on child-count growth re-sweeps the rig, but it is incremental: a
+# shell whose source is still there is reused, only a newly appeared mesh gets
+# a new one. The vanilla AI adds and removes a direct child on most steps and
+# lines (audio players, identifier), so free-and-recreate here churned 10-23
+# MeshInstance3D per event, several times per second per bot.
 func t_shell_recollect() -> void:
 	var root := Node3D.new()
 	var mesh := MeshInstance3D.new()
@@ -207,6 +212,13 @@ func t_shell_recollect() -> void:
 	var o = Outline.new()
 	o.apply(5, root, {"cat": S.NORMAL, "grow": 0.01, "cool": 0.0})
 	var old_shell: MeshInstance3D = o._items[5]["pairs"][0]["shell"]
+	ck(o.take_recols() == 0, "apply is not a recollect")
+	# A non-geometry direct child only moves the count: keep every shell.
+	root.add_child(Node3D.new())
+	o.refresh(5, {"cat": S.NORMAL, "grow": 0.01, "cool": 0.0})
+	ck(is_instance_valid(old_shell) and not old_shell.is_queued_for_deletion(), "a non-geometry child keeps the shell")
+	ck(o.take_recols() == 0, "a non-geometry child rebuilds nothing")
+	ck(o._items[5]["pairs"].size() == 1, "the pair list is unchanged")
 	var extra := MeshInstance3D.new()
 	extra.mesh = QuadMesh.new()
 	root.add_child(extra)
@@ -217,8 +229,13 @@ func t_shell_recollect() -> void:
 			continue
 		if c is MeshInstance3D and c.has_meta("vtk_no_contour"):
 			shells.append(c)
-	ck(shells.size() == 2, "recollect rebuilt exactly one shell per mesh")
-	ck(not is_instance_valid(old_shell) or old_shell.is_queued_for_deletion(), "stale shell freed on recollect")
+	ck(shells.size() == 2, "recollect added exactly one shell for the new mesh")
+	ck(is_instance_valid(old_shell) and not old_shell.is_queued_for_deletion(), "the known mesh keeps its shell")
+	ck(o._items[5]["pairs"][0]["shell"] == old_shell, "the reused pair still points at the old shell")
+	ck(o._items[5]["pairs"][1]["src"] == extra, "the new mesh got the new pair")
+	ck(o.take_recols() == 1, "one real rebuild was counted")
+	# Our own shells must never look like a game-side child count change.
+	ck(o._child_count(root) == 3, "mod shells are excluded from the child count")
 	o.clear(5)
 	root.free()
 
