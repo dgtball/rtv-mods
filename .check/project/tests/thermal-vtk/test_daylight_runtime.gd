@@ -57,6 +57,7 @@ func _run() -> void:
 	t_source_b_writes_loop_factor()
 	t_source_b_seeds_from_a()
 	t_source_b_measured_updates_loop()
+	t_source_b_reseeds_after_reset()
 	t_source_b_night_stays_vanilla()
 	t_reset_returns_levers()
 	print("")
@@ -349,6 +350,8 @@ func t_source_b_writes_loop_factor() -> void:
 	var sim: FakeSim = w["sim"]
 	_reset(nvg, env, sim, 1.0)
 	nvg.set_daylight_source = 1
+	# An already-running loop: the write must use its factor, not re-seed.
+	nvg._factor_b_live = true
 	nvg._factor_b = 0.5
 	nvg._day_factor = 0.5
 	nvg._daylight_tick(1.0)
@@ -360,11 +363,11 @@ func t_source_b_seeds_from_a() -> void:
 	var nvg = w["nvg"]
 	var env: Environment = w["env"]
 	var sim: FakeSim = w["sim"]
-	_reset(nvg, env, sim, 1.0)
-	nvg._factor_a = 0.40
+	_reset(nvg, env, sim, 0.55)
 	nvg.set_daylight_source = 1
-	nvg._sync_probe()
-	ck(absf(nvg._factor_b - 0.40) < 0.001, "switching to source B seeds the loop from source A")
+	nvg._target_factor()
+	ck(absf(nvg._factor_a - 0.40) < 0.001, "the fresh light estimate gives factor 0.40")
+	ck(absf(nvg._factor_b - 0.40) < 0.001, "the first read of source B seeds the loop from source A")
 	w["map"].free()
 
 func t_source_b_measured_updates_loop() -> void:
@@ -378,6 +381,26 @@ func t_source_b_measured_updates_loop() -> void:
 	ck(nvg._factor_b >= Daylight.FLOOR, "the loop factor stays above the floor")
 	nvg._on_probe_measured({})
 	ck(nvg._factor_b < 0.5, "an empty measurement leaves the loop alone")
+	w["map"].free()
+
+func t_source_b_reseeds_after_reset() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	var sim: FakeSim = w["sim"]
+	_reset(nvg, env, sim, 1.0)
+	nvg.set_daylight_source = 1
+	nvg._daylight_tick(1.0)
+	# A settled loop, then a map change: _reset_daylight drops the loop back to
+	# vanilla while the source flag stays on B. Without a re-seed the picture
+	# would sit bright for a full probe cadence and then ramp for seconds.
+	nvg._factor_b = 0.40
+	nvg._reset_daylight()
+	nvg._sim_cd = 999.0
+	nvg._light_est = 1.0
+	nvg._daylight_tick(1.0)
+	ck(absf(nvg._factor_b - 0.22) < 0.005, "the loop re-seeds from the light estimate after a reset")
+	ck(absf(env.tonemap_exposure - 0.66) < 0.005, "the re-seed reaches the exposure on the same frame")
 	w["map"].free()
 
 func t_source_b_night_stays_vanilla() -> void:

@@ -137,7 +137,10 @@ var _factor_a: float = 1.0
 # what the inactive source would give.
 var _frame_l: float = 0.0
 var _factor_b: float = 1.0
-var _source_prev: int = 0
+# Whether the loop has been seeded since it last (re)started. The first read of
+# source B copies the light estimate into the loop; a reset or a disarm clears
+# this, so the next run seeds again instead of running the vanilla exposure.
+var _factor_b_live: bool = false
 var _probe: Node = null
 var _sim_cd: float = 0.0
 var _sim_season: int = 1
@@ -558,10 +561,16 @@ func _snapshot_light(snap: Dictionary, prefix: String, light) -> void:
 
 
 # The factor the active source wants, with strength applied. Source A always
-# computes, so the panel can show what the other source would give.
+# computes, so the panel can show what the other source would give. The first
+# read of source B after it (re)starts -- a flag flip, a helmet re-wear, a map
+# change -- seeds the loop from that fresh estimate; otherwise the first
+# frames would run the vanilla exposure and then ramp toward it for seconds.
 func _target_factor() -> float:
 	_factor_a = Daylight.strength_factor(Daylight.factor_for_light(_light_est, set_day_target, set_day_floor), set_strength)
 	if set_daylight_source == 1:
+		if not _factor_b_live:
+			_factor_b_live = true
+			_factor_b = _factor_a
 		return Daylight.strength_factor(_factor_b, set_strength)
 	return _factor_a
 
@@ -588,16 +597,13 @@ func _on_probe_measured(stats: Dictionary) -> void:
 	_factor_b = Daylight.feedback_factor(_factor_b, _frame_l, set_frame_target)
 
 
-# Arm the probe only while source B is the live picture, and seed the loop
-# from source A the moment the flag flips to B (otherwise the first frames
-# would start from the vanilla exposure).
+# Arm the probe only while source B is the live picture. Disarming also marks
+# the loop unseeded, so the next run re-seeds from the light estimate instead
+# of starting on the factor the previous run happened to leave behind.
 func _sync_probe() -> void:
-	if set_daylight_source != _source_prev:
-		_source_prev = set_daylight_source
-		if set_daylight_source == 1:
-			_factor_b = _factor_a
-	var want := set_daylight and set_daylight_source == 1 and _nvg_active()
+	var want := set_daylight and set_daylight_source == 1 and _installed and _nvg_active()
 	if not want:
+		_factor_b_live = false
 		if _probe != null and is_instance_valid(_probe):
 			_probe.set_auto(0.0)
 		return
@@ -710,6 +716,9 @@ func _reset_daylight() -> void:
 	_factor_a = 1.0
 	_frame_l = 0.0
 	_factor_b = 1.0
+	# The loop is unseeded again: the next read of source B seeds it from the
+	# fresh light estimate.
+	_factor_b_live = false
 	_sim_cd = 0.0
 	_sim = null
 	_world = null
