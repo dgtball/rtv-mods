@@ -28,6 +28,21 @@ const CAT_HOLD := 0.35
 # distance instead of the walking one (the ITH walk/run/sprint idea).
 const RUN_SPEED := 2.0
 const SPRINT_SPEED := 4.0
+# Trigger diagnostics: at most one line per entry per source per second. A
+# walking bot re-tags its window twice a second and a bot under sustained fire
+# re-tags on every hit, so unthrottled logging cost a file write (and a flush)
+# per event: 38k lines and a 24.6k-event pain storm in one 70-minute session.
+const TRIG_LOG_GAP := 1.0
+# Pain cries: sustained damage (a burst, a shotgun, several pellets landing) is
+# one cry, not one per frame. The reveal stays up for p_pain_s anyway, so the
+# player sees the same window; only the re-tagging is debounced.
+const PAIN_MIN_GAP := 0.4
+# The mask is a second world pass, so it is only armed while a ring could be on
+# screen. `MASK_MARGIN` is the body radius plus the ring grow (a ring on the
+# screen edge must not blink with the gate); `MASK_HOLD` keeps the pass alive
+# for a moment after the last visible ring leaves the frame.
+const MASK_MARGIN := 2.0
+const MASK_HOLD := 0.2
 
 # Two independent layers share one collection pass. `enabled` is gone: the
 # contour layer gates rings and the marker, the x-ray layer gates reveals.
@@ -78,6 +93,9 @@ var _cand_refs: Array = []
 var _keep_pool: Array = []
 var _want: Dictionary = {}
 var _want_ids: Array = []
+# Until this timestamp (seconds) the mask stays armed after the last ring that
+# was inside the camera frustum. -1000 = never armed yet.
+var _mask_hold_until: float = -1000.0
 var _stale: Array = []
 var _dbg_draw_ms: float = 0.0
 # Test seam: when valid, it answers "is the diamond visible" and the camera
@@ -111,6 +129,8 @@ var p_cal_index: int = 0
 var marker_visible: bool = false
 var _dbg_cd: float = 0.0
 var _dbg_sig: String = ""
+# Last trigger log time per entry per source, diagnostics only.
+var _trig_log: Dictionary = {}
 var _dbg_cand: int = 0
 var _dbg_keep: int = 0
 var _dbg_applied: int = 0
@@ -151,9 +171,32 @@ func _any_layer() -> bool:
 # Mask demand. The second world pass is only worth its cost while a shell is
 # actually wanted: `_want` is rebuilt by _draw and holds exactly the ids the
 # outline keeps for this frame. The NVG coordinator polls this each frame
-# (ThermalVTK._push_mask_gate).
+# (ThermalVTK._push_mask_gate). `_mask_hold_until` narrows it to rings that are
+# near the frame: a bot behind the player kept the pass armed for 83% of the
+# measured session.
 func wants_mask() -> bool:
-	return _any_layer() and not _want.is_empty()
+	return _any_layer() and not _want.is_empty() and _mask_hold_until >= _now()
+
+# Re-arm the gate if any wanted ring falls inside the camera frustum. Called
+# from _draw once `_want` is complete. The gate never touches `_want` or the
+# shells: only clear_not_in frees a shell, so a closed gate must not read as
+# "nothing wanted" or the outline would rebuild every frame.
+func _refresh_mask_gate(now: float) -> void:
+	var cam := _camera()
+	if cam == null:
+		# Menu, load screen, headless: there is no frame to test against.
+		_mask_hold_until = now + MASK_HOLD
+		return
+	var planes: Array = cam.get_frustum()
+	for id in _want_ids:
+		if not _entries.has(id):
+			continue
+		var node = _entries[id].get("node")
+		if node == null or not is_instance_valid(node) or not (node is Node3D):
+			continue
+		if Tracker.in_frustum(planes, (node as Node3D).global_position, MASK_MARGIN):
+			_mask_hold_until = now + MASK_HOLD
+			return
 
 # Farthest ring on screen right now; the mask camera clips the world there
 # instead of at the picture camera's far plane. `_want` is rebuilt by _draw and
@@ -321,6 +364,7 @@ func _on_ai_deactivate() -> void:
 	if is_instance_valid(n):
 		var id := n.get_instance_id()
 		_entries.erase(id)
+		_trig_log.erase(id)
 		Dbg.log("ESP", "deactivate id=%d" % id)
 
 func _on_ai_changestate(_state: String) -> void:
@@ -400,11 +444,23 @@ func _trig_node(node: Node, source: String, span: float, dist: float) -> void:
 	if _entries.has(id):
 		Tracker.tag_trig(_entries[id], source, dist, _now() + span, span)
 		if Dbg.enabled:
-			Dbg.log("ESP", "trig id=%d source=%s span=%.1f dist=%.0f" % [id, source, span, dist])
+			var now := _now()
+			if _log_ok(id, source, now):
+				Dbg.log("ESP", "trig id=%d source=%s span=%.1f dist=%.0f" % [id, source, span, dist])
+
+# One diagnostic line per entry per source per TRIG_LOG_GAP seconds.
+func _log_ok(id: int, source: String, now: float) -> bool:
+	var row: Dictionary = _trig_log.get(id, {})
+	if now - float(row.get(source, -1000.0)) < TRIG_LOG_GAP:
+		return false
+	row[source] = now
+	_trig_log[id] = row
+	return true
 
 # Pain cry without a hook on PlayDamage: a hook there lands inside another
 # mod's damage witness window and disables its counter. Poll instead.
 func _poll_pain() -> void:
+	var now := _now()
 	for id in _entries:
 		var e: Dictionary = _entries[id]
 		var node = e.get("node")
@@ -415,6 +471,9 @@ func _poll_pain() -> void:
 			e.erase("hp")
 			continue
 		if Tracker.pain_hit(e, node.get("health")):
+			if now - float(e.get("pain_at", -1000.0)) < PAIN_MIN_GAP:
+				continue
+			e["pain_at"] = now
 			_trig_node(node, "pain", p_pain_s, p_pain_d)
 
 func _exit_tree() -> void:
@@ -622,12 +681,14 @@ func _draw(ppos: Vector3) -> void:
 			_want_add(id)
 	for id in _stale:
 		_entries.erase(id)
+		_trig_log.erase(id)
 	_cand_refs.resize(used)
 	for i in used:
 		_cand_refs[i] = _cand_pool[i]
 	var keep: Array = Tracker.pick_nearest(_cand_refs, CAP, _keep_pool)
 	for id in keep:
 		_want_add(id)
+	_refresh_mask_gate(now)
 	var applied := 0
 	for id in _want_ids:
 		if not _entries.has(id):

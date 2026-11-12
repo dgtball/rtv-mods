@@ -583,6 +583,27 @@ func t_mask_demand() -> void:
 	esp._draw(Vector3.ZERO)
 	ck(esp.wants_mask(), "a live reveal demands the mask")
 	ck(esp.mask_reach() == 50.0, "reach follows the revealed NPC")
+	# The mask is a second world pass, so a ring behind the player must not arm
+	# it. The shells stay built (only clear_not_in frees them), and a missing
+	# camera keeps the gate open: a wasted pass beats rings that vanish.
+	var cam := Camera3D.new()
+	scene.add_child(cam)
+	cam.current = true
+	cam.global_position = Vector3.ZERO
+	esp._mask_hold_until = -1000.0
+	bot.global_position = Vector3(0.0, 0.0, 30.0)
+	esp._draw(Vector3.ZERO)
+	ck(not esp.wants_mask(), "a ring behind the camera does not demand the mask")
+	ck(esp._outline.has(bot.get_instance_id()), "the shells stay built while the mask gate is closed")
+	bot.global_position = Vector3(0.0, 0.0, 1.0)
+	esp._draw(Vector3.ZERO)
+	ck(esp.wants_mask(), "the body margin keeps a ring just behind the camera")
+	bot.global_position = Vector3(0.0, 0.0, 30.0)
+	cam.current = false
+	esp._draw(Vector3.ZERO)
+	ck(esp.wants_mask(), "no camera keeps the mask gate open")
+	bot.global_position = Vector3(0.0, 0.0, -50.0)
+	esp._draw(Vector3.ZERO)
 	esp.set_layers(false, false)
 	ck(not esp.wants_mask(), "layers off demands no mask")
 	ck(esp.mask_reach() == 0.0, "layers off clears the reach")

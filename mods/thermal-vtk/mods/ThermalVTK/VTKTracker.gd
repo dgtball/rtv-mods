@@ -63,14 +63,15 @@ static func is_silent(variant: Variant) -> bool:
 	return false
 
 # Is a ring near the frame? The mask is a second world pass, so it is only
-# worth arming while something it paints is actually visible. Godot's
-# `Plane.distance_to` is positive on the inner side; `margin` is the body
-# radius plus the ring grow, so a ring on the screen edge does not blink in and
-# out of the gate. An empty plane list means "no camera" (menu, load, headless)
-# and fails open: a wasted pass beats rings that disappear.
+# worth arming while something it paints is actually visible. `planes` come
+# from `Camera3D.get_frustum()`, where the normals face OUTWARD: a point is
+# inside when `distance_to` is <= 0 on every plane. `margin` is the body radius
+# plus the ring grow, so a ring on the screen edge does not blink in and out of
+# the gate. An empty plane list means "no camera" (menu, load, headless) and
+# fails open: a wasted pass beats rings that disappear.
 static func in_frustum(planes: Array, point: Vector3, margin: float) -> bool:
 	for p in planes:
-		if (p as Plane).distance_to(point) < -margin:
+		if (p as Plane).distance_to(point) > margin:
 			return false
 	return true
 

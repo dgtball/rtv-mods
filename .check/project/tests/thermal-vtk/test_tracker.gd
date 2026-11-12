@@ -168,13 +168,14 @@ func t_is_silent() -> void:
 	ck(T.is_silent({"silent": false}) == false, "dictionary loud flag")
 	ck(T.is_silent({}) == false, "dictionary without the key is not silent")
 
-# Godot's Plane.distance_to is positive on the inner side, so a wall of the box
-# x/y/z = +-5 with an inward normal is `Plane(axis, -5.0)`.
+# `Camera3D.get_frustum()` returns planes with OUTWARD normals: a point is
+# inside while every `distance_to` is <= 0. A wall of the box x/y/z = +-5 with
+# an outward normal is `Plane(axis, 5.0)`.
 func _box_planes() -> Array:
 	var planes: Array = []
 	for axis in [Vector3.RIGHT, Vector3.UP, Vector3.BACK]:
-		planes.append(Plane(axis, -5.0))
-		planes.append(Plane(-axis, -5.0))
+		planes.append(Plane(axis, 5.0))
+		planes.append(Plane(-axis, 5.0))
 	return planes
 
 # The mask gate asks "is this ring anywhere near the frame" with a body-sized
