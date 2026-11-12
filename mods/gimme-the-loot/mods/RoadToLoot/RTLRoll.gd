@@ -58,6 +58,8 @@ static func _needs_ok(need: String, item_data) -> bool:
 			if raw != null:
 				t = str(raw).strip_edges()
 		return t == "Armor" or t == "Helmet"
+	if need == "firearm":
+		return Category.is_firearm(item_data)
 	if item_data == null:
 		return false
 	var v = item_data.get(need)

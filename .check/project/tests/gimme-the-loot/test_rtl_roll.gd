@@ -20,10 +20,10 @@ func _init() -> void:
 	ck(not Pool.affix_ids("clothing").has("condition"), "clothing: condition removed")
 	ck(Pool.entry("weapon", "condition").is_empty(), "weapon: no condition entry")
 	ck(Pool.entry("clothing", "condition").is_empty(), "clothing: no condition entry")
-	ck(Pool.POOL.size() == 17, "POOL: 17 entries")
+	ck(Pool.POOL.size() == 18, "POOL: 18 entries")
 
-	# --- релизный гейт: 4 оружейных, 11 одежды ---
-	ck(Pool.entries("weapon").size() == 4, "weapon pool: 4 entries")
+	# --- релизный гейт: 5 оружейных, 13 одежды ---
+	ck(Pool.entries("weapon").size() == 5, "weapon pool: 5 entries")
 	ck(Pool.entries("clothing").size() == 13, "clothing pool: 13 entries")
 
 	# --- статы, снятые в 0.3.0 ---
@@ -80,6 +80,43 @@ func _init() -> void:
 	ck(not kn_stats.has("recoil"), "knife: no recoil: " + str(kn_stats))
 	ck(not kn_stats.has("fire_rate"), "knife: no fire_rate: " + str(kn_stats))
 	ck(kn.size() == 2, "knife tier=3: damage + low_hp_damage: " + str(kn_stats))
+
+	# ammo_save: огнестрел, проценты, три тира
+	var ammo: Dictionary = Pool.entry("weapon", "ammo_save")
+	ck(not ammo.is_empty(), "ammo_save in weapon pool")
+	ck(str(ammo.get("unit", "")) == "pct", "ammo_save unit pct")
+	ck(str(ammo.get("needs", "")) == "firearm", "ammo_save needs firearm")
+	ck(float(ammo.get("weight", 0.0)) == 0.6, "ammo_save weight 0.6")
+	var ar: Dictionary = ammo.get("ranges", {})
+	ck(ar.has(1) and ar.has(2) and ar.has(3), "ammo_save ranges cover all tiers")
+	if ar.has(1) and ar.has(2) and ar.has(3):
+		ck(float(ar[1][0]) == 5.0 and float(ar[1][1]) == 10.0, "ammo_save T1 5-10")
+		ck(float(ar[2][0]) == 10.0 and float(ar[2][1]) == 15.0, "ammo_save T2 10-15")
+		ck(float(ar[3][0]) == 15.0 and float(ar[3][1]) == 50.0, "ammo_save T3 15-50")
+	ck(Pool.ROW_ORDER.has("ammo_save"), "ROW_ORDER has ammo_save")
+	ck(Pool.ROW_ORDER.find("ammo_save") == Pool.ROW_ORDER.find("wear") + 1, "ammo_save follows wear")
+
+	# нож не получает ammo_save ни на одном тире
+	var knife_no_ammo := true
+	for tier in [1, 2, 3]:
+		for s in range(60):
+			var rgk := RandomNumberGenerator.new()
+			rgk.seed = s
+			for a in Roll.build_affixes("weapon", tier, knife, [], rgk):
+				if str(a["stat"]) == "ammo_save":
+					knife_no_ammo = false
+	ck(knife_no_ammo, "knife never rolls ammo_save")
+
+	# огнестрел его получает
+	var rifle := {"type": "Weapon", "slots": ["Primary"], "damage": 30.0, "recoil": 4.0}
+	var rifle_seen := false
+	for s in range(200):
+		var rgr := RandomNumberGenerator.new()
+		rgr.seed = s
+		for a in Roll.build_affixes("weapon", 3, rifle, [], rgr):
+			if str(a["stat"]) == "ammo_save":
+				rifle_seen = true
+	ck(rifle_seen, "firearm can roll ammo_save")
 
 	print("")
 	if fails > 0:
