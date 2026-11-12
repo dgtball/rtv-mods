@@ -114,6 +114,25 @@ func _init() -> void:
 	ck(abs(t6.get("sprint", 0.0) - 0.08) < 0.001, "sprint is summed")
 	ck(abs(t6.get("noise", 0.0) - 0.20) < 0.001, "noise is summed")
 
+	# --- ammo_save: известный стат и сумма ---
+	ck(Stats.KNOWN_STATS.has("ammo_save"), "ammo_save is a known stat")
+	var wa: Dictionary = Stats.weapon_totals({"loot_affixes": [
+		{"stat": "ammo_save", "value": 0.12, "unit": "pct"},
+		{"stat": "ammo_save", "value": 0.03, "unit": "pct"},
+	]})
+	ck(abs(float(wa.get("ammo_save", 0.0)) - 0.15) < 0.001, "weapon_totals sums ammo_save")
+	ck(abs(Stats.ammo_save_chance(wa) - 0.15) < 0.001, "ammo_save_chance = 0.15")
+	ck(abs(Stats.ammo_save_chance({"ammo_save": 5.0}) - 0.9) < 0.001, "ammo_save_chance caps at 0.9")
+	ck(abs(Stats.ammo_save_chance({}) - 0.0) < 0.001, "ammo_save_chance empty totals = 0")
+
+	# --- shot_spent_round: таблица истинности ---
+	ck(Stats.shot_spent_round(30, 29, true, true), "auto: amount dropped -> spent")
+	ck(Stats.shot_spent_round(1, 0, true, false), "single: amount dropped -> spent")
+	ck(Stats.shot_spent_round(0, 0, true, false), "manual last round: chamber emptied -> spent")
+	ck(not Stats.shot_spent_round(30, 30, true, true), "cooldown or malfunction: nothing changed")
+	ck(not Stats.shot_spent_round(0, 0, false, false), "empty auto: nothing changed")
+	ck(not Stats.shot_spent_round(5, 5, false, false), "idle: nothing changed")
+
 	print("")
 	if fails > 0:
 		print("FAILED: %d" % fails)

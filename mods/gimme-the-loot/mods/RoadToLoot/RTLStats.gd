@@ -3,7 +3,7 @@ extends RefCounted
 const KNOWN_STATS := ["regen", "low_hp_regen", "capacity", "stamina_drain",
 	"insulation", "thirst_drain", "hunger_drain", "sanity_drain",
 	"damage", "recoil", "fire_rate", "low_hp_damage", "sprint", "noise",
-	"protection", "extra_loot", "wear", "max_hp"]
+	"protection", "extra_loot", "wear", "max_hp", "ammo_save"]
 
 # Ниже этого порога срабатывают low_hp_damage и low_hp_regen.
 const LOW_HP_FRACTION := 0.3
@@ -77,3 +77,13 @@ static func weapon_totals(slot_data) -> Dictionary:
 		var affix_val: float = float(affix.get("value", 0.0))
 		result[stat] = result.get(stat, 0.0) + affix_val
 	return result
+
+# Шанс, что выстрел не потратит патрон. Верхний предел общий с wear: 0.9.
+static func ammo_save_chance(totals: Dictionary) -> float:
+	return clampf(float(totals.get("ammo_save", 0.0)), 0.0, 0.9)
+
+# Ваниль списывает патрон по-разному: авто и Single уменьшают amount, Manual
+# (болт) только опустошает патронник и тратит патрон позже, в Reload().
+# Поэтому «выстрел состоялся» — это либо падение amount, либо chamber true -> false.
+static func shot_spent_round(amount_before: int, amount_after: int, chamber_before: bool, chamber_after: bool) -> bool:
+	return amount_after < amount_before or (chamber_before and not chamber_after)
