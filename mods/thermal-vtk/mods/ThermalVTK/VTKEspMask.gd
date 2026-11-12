@@ -31,10 +31,11 @@ const LAYER_MASK := 1 << 20
 # first sync (the mask is disabled until then anyway).
 const FALLBACK_NEAR := 0.05
 const FALLBACK_FAR := 4000.0
-# The mask is upscaled into the NVG overlay, so its edge is soft by nature: a
-# full-resolution pass with the picture's MSAA paid for sharpness the upscale
-# throws away. Measured on a GTX 1060: the pass cost 9.5 ms of a 27 ms frame
-# with 6-7 rings on screen; half scale and no MSAA is the bulk of the saving.
+# Fraction of the picture resolution the mask renders at. Measured on a GTX
+# 1060 (2.7.2): the pass cost 9.5 ms of a 27 ms frame with 6-7 rings on screen,
+# and that cost tracked covered pixels rather than geometry -- half scale and no
+# MSAA brought it to ~2 ms. The price of a sharper contour is therefore fill
+# rate, so the dial lives here and nowhere else.
 const SCALE := 0.5
 # Raised from Godot's 1.0 default: the mask only needs silhouette and depth, so
 # a coarser LOD saves vertices. (The old 0.2 meant "almost no automatic LOD" --
@@ -43,6 +44,10 @@ const LOD_BIAS := 4.0
 const START_SIZE := Vector2i(320, 180)
 
 var _scaling: float = SCALE
+# Sample coverage for the mask pass. MSAA smooths the contour's own edge, which
+# the upscale would otherwise magnify, but it multiplies fill rate -- a price
+# the resolution dial above already pays more cheaply. Off by default.
+var _msaa: int = Viewport.MSAA_DISABLED
 # Only rings inside the ESP reach matter, so the mask camera does not need the
 # game's far plane. Clipping the world at reach + margin skips every distant
 # mesh the mask can never show.
@@ -67,9 +72,9 @@ func _ready() -> void:
 	_vp.own_world_3d = false
 	_vp.transparent_bg = false
 	_vp.size = START_SIZE
-	# No MSAA: the half-scale texture is upscaled into the NVG overlay, so
-	# sample coverage would only cost fill rate.
-	_vp.msaa_3d = Viewport.MSAA_DISABLED
+	# Sample coverage is off by default: the half-scale texture is upscaled into
+	# the NVG overlay, so coverage would only cost fill rate.
+	_vp.msaa_3d = _msaa
 	_vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
 	# The mask only needs coarse depth: its own lights' shadow maps are pure
 	# overhead (the shells are unshaded), so suppress the positional shadow
@@ -148,6 +153,16 @@ func set_scale(scale: float) -> void:
 # Read-only view of the resolution dial for the perf probe.
 func scale() -> float:
 	return _scaling
+
+# Sample-coverage dial for the same probe. Stored before the viewport exists so
+# a caller may configure the mask right after new().
+func set_msaa(level: int) -> void:
+	_msaa = level
+	if _vp != null:
+		_vp.msaa_3d = level
+
+func msaa() -> int:
+	return _msaa
 
 # The texture the NVG material binds to `esp_mask`. Stable across frames.
 func texture() -> Texture2D:

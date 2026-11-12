@@ -89,6 +89,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			_toggle_live_panel()
 			get_viewport().set_input_as_handled()
 		return
+	if _key_mask_cand != 0 and (k.keycode == _key_mask_cand or k.physical_keycode == _key_mask_cand):
+		# TEMP: mask quality cycle, debug-only like the keys above.
+		if VTKDebug.enabled:
+			_cycle_mask_cand(k.shift_pressed)
+			get_viewport().set_input_as_handled()
+		return
 	if _key_thermal_toggle == 0:
 		return
 	if k.keycode == _key_thermal_toggle or k.physical_keycode == _key_thermal_toggle:
@@ -242,6 +248,33 @@ const PERF_WINDOW := 2.0
 var _perf_ms: Array[float] = []
 var _perf_t: float = 0.0
 
+# TEMP: F10 walks the candidate mask settings (Shift+F10 backwards) so the price
+# and the look can be compared inside one session. The PERF line carries the
+# active pair as mres/mmaa, which is all the log needs to bucket the windows.
+const MASK_CANDIDATES := [
+	{"name": "0.50 no AA", "scale": 0.5, "msaa": Viewport.MSAA_DISABLED},
+	{"name": "0.75 no AA", "scale": 0.75, "msaa": Viewport.MSAA_DISABLED},
+	{"name": "1.00 no AA", "scale": 1.0, "msaa": Viewport.MSAA_DISABLED},
+	{"name": "0.50 MSAA 2x", "scale": 0.5, "msaa": Viewport.MSAA_2X},
+	{"name": "0.50 MSAA 4x", "scale": 0.5, "msaa": Viewport.MSAA_4X},
+]
+var _key_mask_cand: int = KEY_F10
+var _mask_cand: int = 0
+
+func _cycle_mask_cand(back: bool) -> void:
+	var mask: Node = null
+	if _nvg != null and is_instance_valid(_nvg):
+		mask = _nvg._mask
+	if mask == null or not is_instance_valid(mask):
+		return
+	var step := -1 if back else 1
+	_mask_cand = (_mask_cand + step + MASK_CANDIDATES.size()) % MASK_CANDIDATES.size()
+	var c: Dictionary = MASK_CANDIDATES[_mask_cand]
+	mask.set_scale(float(c["scale"]))
+	mask.set_msaa(int(c["msaa"]))
+	VTKDebug.log("MASK", "candidate %d/%d: %s" % [_mask_cand, MASK_CANDIDATES.size(), str(c["name"])])
+	_notify("Mask " + str(c["name"]), Color(0.55, 0.85, 1.0))
+
 func _perf_tick(delta: float) -> void:
 	if not VTKDebug.enabled:
 		return
@@ -275,16 +308,18 @@ func _perf_tick(delta: float) -> void:
 			recols = int(_esp._outline.take_recols())
 	var mask_on := false
 	var mres := 1.0
+	var mmaa := 0
 	if _nvg != null and is_instance_valid(_nvg) and _nvg._mask != null and is_instance_valid(_nvg._mask):
 		mask_on = bool(_nvg._mask.is_enabled())
 		mres = float(_nvg._mask.scale())
-	VTKDebug.log("PERF", "fps=%.1f ms=%.2f p50=%.2f p95=%.2f max=%.2f draws=%d prims=%d thermal=%d nvg=%d mask=%d mres=%.2f bots=%d want=%d shells=%d recols=%d esp=%.2f" % [
+		mmaa = int(_nvg._mask.msaa())
+	VTKDebug.log("PERF", "fps=%.1f ms=%.2f p50=%.2f p95=%.2f max=%.2f draws=%d prims=%d thermal=%d nvg=%d mask=%d mres=%.2f mmaa=%d bots=%d want=%d shells=%d recols=%d esp=%.2f" % [
 		Engine.get_frames_per_second(), total / float(n),
 		s[n / 2], s[mini(n - 1, int(float(n) * 0.95))], s[n - 1],
 		int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
 		int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)),
 		1 if _thermal_enabled else 0, 1 if _nvg_active() else 0,
-		1 if mask_on else 0, mres, bots, want, shells, recols, esp_ms])
+		1 if mask_on else 0, mres, mmaa, bots, want, shells, recols, esp_ms])
 
 # The mask renders the world a second time, so it is only enabled while a ring
 # is actually on screen (VTKESP.wants_mask), not for every frame the layers are
