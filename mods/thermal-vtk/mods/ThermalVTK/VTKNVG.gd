@@ -84,6 +84,11 @@ var set_frame_cadence: float = Daylight.FRAME_CADENCE
 # Brightness of the state key the ESP outlines emit; the overlay uses it to
 # scale the substituted state colour.
 var set_state_brightness: float = 0.6
+# Contour edge profile: the mask gap below which nothing is drawn, and the gap
+# that paints the contour fully opaque. The defaults are the shipped pair (low
+# gate, wide ramp = soft rim); a gate above it and a narrow ramp = a crisp line.
+var _esp_gate: float = 0.06
+var _esp_full: float = 0.55
 
 var _state_colors: Dictionary = {}
 var _game_data: Resource = null
@@ -337,9 +342,27 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("stCombatColor", _state_colors.get("state_combat", States.DEFAULT_COMBAT))
 	nvg_mat.set_shader_parameter("stDefendColor", _state_colors.get("state_defend", States.DEFAULT_DEFEND))
 	nvg_mat.set_shader_parameter("stateBright", set_state_brightness)
+	nvg_mat.set_shader_parameter("espGate", _esp_gate)
+	nvg_mat.set_shader_parameter("espFull", _esp_full)
 
 	nvg_mat.set_shader_parameter("scopeRotate", _scope_rotate)
 
+
+# Contour edge profile. Stored even before the overlay material is installed:
+# _apply_uniforms pushes it on every install, so a value set here survives a
+# map change that rebuilds the overlay.
+func set_esp_edge(gate: float, full: float) -> void:
+	_esp_gate = clampf(gate, 0.0, 1.0)
+	_esp_full = maxf(full, _esp_gate + 0.01)
+	if _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
+		return
+	var mat = _nvg_mat_node.get("material")
+	if mat is ShaderMaterial:
+		(mat as ShaderMaterial).set_shader_parameter("espGate", _esp_gate)
+		(mat as ShaderMaterial).set_shader_parameter("espFull", _esp_full)
+
+func esp_edge() -> Vector2:
+	return Vector2(_esp_gate, _esp_full)
 
 # The contour asks for the mask through ThermalVTK._apply_mode: this arms the
 # layer switch. The per-frame demand below decides whether the pass runs.

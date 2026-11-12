@@ -97,7 +97,8 @@ func t_nvg_mask_branch() -> void:
 	ck(code.contains("uniform bool espOn"), "overlay declares the mask switch")
 	ck(code.contains("texture(esp_mask, uv)"), "overlay samples the mask")
 	ck(code.contains("EspColor(SCREEN_UV)"), "overlay substitutes by screen UV")
-	ck(code.contains("float ESP_GATE"), "overlay declares the mask gate")
+	ck(code.contains("uniform float espGate"), "overlay declares the mask gate as a dial")
+	ck(code.contains("uniform float espFull"), "overlay declares the opaque-gap dial")
 	for u in ["stNormalColor", "stCombatColor", "stDefendColor"]:
 		ck(code.contains(u), "overlay keeps %s" % u)
 	for u in ["stNormalKey", "stCombatKey", "stDefendKey"]:
@@ -129,7 +130,7 @@ func t_nvg_shader_compiles() -> void:
 		return
 	var names := _uniform_names(sh)
 	ck(names.size() > 0, "NVG shader compiled (uniform list not empty)")
-	for u in ["mineColor", "scopeRotate", "dayMix", "esp_mask", "espOn", "stNormalColor"]:
+	for u in ["mineColor", "scopeRotate", "dayMix", "esp_mask", "espOn", "stNormalColor", "espGate", "espFull"]:
 		ck(names.has(u), "compiled shader exposes %s" % u)
 	for u in ["stNormalKey", "stCombatKey", "stDefendKey"]:
 		ck(not names.has(u), "compiled shader dropped %s" % u)

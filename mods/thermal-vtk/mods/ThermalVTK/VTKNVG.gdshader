@@ -166,12 +166,19 @@ const float DET_TOL_CORE = 0.34;
 
 // Contour ESP mask. The shell writes a pure primary onto the mask's world
 // pixel, so the category is the channel that stands out from the other two:
-// gap = channel - max(other two). Coverage lands in the same gap, which is what
-// keeps the soft rim: a 30% shell over any background still leaves ~0.3.
-// ESP_GATE rejects pixels where no shell dominates; ESP_FULL is the gap of a
-// fully opaque shell.
-const float ESP_GATE = 0.06;
-const float ESP_FULL = 0.55;
+// gap = channel - max(other two). Shell coverage lands in the same gap: a 30%
+// ring over any background still leaves ~0.3.
+//
+// These two are the contour's edge profile, and they are the whole difference
+// between a line and a haze. The ring is a graded band (see the ring shader),
+// so the gap falls off over the band; how that falloff is mapped decides the
+// look. A low gate with a wide full gap paints the whole band at partial
+// opacity -- soft, the thermal picture showing through the contour. A gate
+// near the band's own floor cuts the dim outer part and a full gap just above
+// it makes the remaining band opaque -- a crisp line with a sub-pixel edge,
+// because MSAA is what resolves the fraction left at the boundary.
+uniform float espGate = 0.06;
+uniform float espFull = 0.55;
 
 float EspGap(vec3 m, int channel)
 {
@@ -193,7 +200,7 @@ vec4 EspColor(vec2 uv)
 	float dC = EspGap(m, 1);
 	float dD = EspGap(m, 2);
 	float d = max(dN, max(dC, dD));
-	if (d <= ESP_GATE) {
+	if (d <= espGate) {
 		return vec4(0.0);
 	}
 	vec3 c = stNormalColor;
@@ -202,7 +209,7 @@ vec4 EspColor(vec2 uv)
 	} else if (dD >= dN && dD >= dC) {
 		c = stDefendColor;
 	}
-	float a = clamp(d / ESP_FULL, 0.0, 1.0);
+	float a = clamp(d / espFull, 0.0, 1.0);
 	return vec4(c * stateBright, a);
 }
 

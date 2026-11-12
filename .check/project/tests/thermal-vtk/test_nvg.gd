@@ -19,6 +19,7 @@ func _run() -> void:
 	t_mine_retry_is_bounded()
 	t_off_upkeep_clears_dead_mines()
 	t_mask_demand_gate()
+	t_edge_profile_reaches_material()
 	t_script_kind_cache()
 	print("")
 	if fails == 0:
@@ -87,6 +88,31 @@ func t_mask_demand_gate() -> void:
 	nvg.set_esp_demand(false)
 	ck(not nvg._mask.is_enabled(), "demand off stops the second pass")
 	nvg.set_esp_mask(false)
+	nvg.free()
+
+# The edge profile lives on the overlay material, and the overlay is rebuilt on
+# every map load: a value set once must survive that rebuild, which is why the
+# setter stores it and _apply_uniforms re-pushes it. Both halves are checked
+# against a real ShaderMaterial so a renamed uniform cannot pass silently.
+func t_edge_profile_reaches_material() -> void:
+	var nvg = NVG.new()
+	root.add_child(nvg)
+	nvg.set_esp_edge(0.12, 0.20)
+	var edge: Vector2 = nvg.esp_edge()
+	ck(is_equal_approx(edge.x, 0.12) and is_equal_approx(edge.y, 0.20), "edge profile is stored without a material")
+	nvg.set_esp_edge(0.55, 0.10)
+	var clamped: Vector2 = nvg.esp_edge()
+	ck(clamped.x <= 1.0 and clamped.y > clamped.x, "a full gap below the gate is pushed above it")
+	var rect := ColorRect.new()
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://mods/ThermalVTK/VTKNVG.gdshader")
+	rect.material = mat
+	nvg._nvg_mat_node = rect
+	nvg.set_esp_edge(0.30, 0.45)
+	ck(is_equal_approx(float(mat.get_shader_parameter("espGate")), 0.30), "gate reaches the overlay material")
+	ck(is_equal_approx(float(mat.get_shader_parameter("espFull")), 0.45), "full gap reaches the overlay material")
+	nvg._nvg_mat_node = null
+	rect.free()
 	nvg.free()
 
 # The script verdict is cached per script, not per node: the map load queues
