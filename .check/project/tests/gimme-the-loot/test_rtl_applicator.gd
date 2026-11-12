@@ -154,21 +154,57 @@ func _init() -> void:
 	_fire(appl, rig, 30, 29, true, true)
 	ck(slot.amount == 29, "no ammo_save: no refund")
 
+	# повторный post без pre не возвращает второй патрон
+	slot.loot_affixes = [{"stat": "ammo_save", "value": 0.9, "unit": "pct"}]
+	var doubles := 0
+	for i in 200:
+		rig.slotData.amount = 100
+		rig.slotData.chamber = true
+		appl.on_fireevent_pre()
+		rig.slotData.amount = 99
+		appl.on_fireevent_post()
+		var after_first: int = slot.amount
+		appl.on_fireevent_post()
+		if slot.amount != after_first:
+			doubles += 1
+	ck(doubles == 0, "repeated post without pre never refunds twice: " + str(doubles))
+
 	# слот без полей счётчика не должен падать и не должен копить мету
 	var bare := FakeSlotNoCounter.new()
 	rig.slotData = bare
 	appl.on_fireevent_pre()
-	ck(not rig.has_meta("rtl_ammo_pre"), "slot without amount/chamber: no snapshot stored")
+	ck(not rig.has_meta("rtl_shot_pre"), "slot without amount/chamber: no snapshot stored")
 	appl.on_fireevent_post()
-	ck(not rig.has_meta("rtl_ammo_pre"), "slot without amount/chamber does not crash the post hook")
+	ck(not rig.has_meta("rtl_shot_pre"), "slot without amount/chamber does not crash the post hook")
 	rig.slotData = slot
 
-	# --- wear: роллится и без меты damage/recoil (регрессия 1.0.0) ---
+	# --- wear: снимок снимается и на оружии без ammo_save ---
+	slot.loot_affixes = [{"stat": "wear", "value": 0.12, "unit": "pct"}]
+	slot.amount = 30
+	slot.chamber = true
+	appl.on_fireevent_pre()
+	ck(rig.has_meta("rtl_shot_pre"), "wear-only weapon snapshots the shot in pre")
+	appl.on_fireevent_post()
+
+	# --- wear: ролл только на реально потраченном патроне ---
 	slot.loot_affixes = [{"stat": "wear", "value": 1.0, "unit": "pct"}]
 	slot.condition = 100
 	for i in 200:
-		appl.on_fireevent_post()
-	ck(slot.condition < 100, "wear rolls without damage/recoil meta: " + str(slot.condition))
+		_fire(appl, rig, 30, 30, true, true)
+	ck(slot.condition == 100, "wear does not roll when the dispatch spent no round: " + str(slot.condition))
+	for i in 200:
+		_fire(appl, rig, 30, 29, true, true)
+	ck(slot.condition < 100, "wear rolls once per real shot: " + str(slot.condition))
+
+	# снимок не переживает post, вышедший по slotData == null
+	slot.amount = 30
+	slot.chamber = true
+	appl.on_fireevent_pre()
+	ck(rig.has_meta("rtl_shot_pre"), "pre stores the snapshot before a bailing post")
+	rig.slotData = null
+	appl.on_fireevent_post()
+	rig.slotData = slot
+	ck(not rig.has_meta("rtl_shot_pre"), "post clears the snapshot even when slotData is null")
 
 	rig.free()
 	appl.free()

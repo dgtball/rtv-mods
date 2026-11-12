@@ -20,7 +20,7 @@ const META_MENTAL := "rtl_tick_mental"
 const META_SPRINT := "rtl_sprint_applied"
 const META_FIRE_RATE := "rtl_fire_rate_applied"
 const META_WEAPON_BASE := "rtl_weapon_base"
-const META_AMMO_PRE := "rtl_ammo_pre"
+const META_SHOT_PRE := "rtl_shot_pre"
 
 const RECOIL_FIELDS := ["horizontalRecoil", "verticalRecoil", "kick"]
 
@@ -291,11 +291,12 @@ func on_fireevent_pre() -> void:
 		return
 	var totals := Stats.weapon_totals({"loot_affixes": Store.affixes(slot_data)})
 	var ammo_chance := Stats.ammo_save_chance(totals)
-	if ammo_chance > 0.0:
+	var wear_chance := clampf(float(totals.get("wear", 0.0)), 0.0, 0.9)
+	if ammo_chance > 0.0 or wear_chance > 0.0:
 		var amt = slot_data.get("amount")
 		var cham = slot_data.get("chamber")
 		if amt != null and cham != null:
-			rig.set_meta(META_AMMO_PRE, {"amount": int(amt), "chamber": bool(cham), "chance": ammo_chance})
+			rig.set_meta(META_SHOT_PRE, {"amount": int(amt), "chamber": bool(cham), "chance": ammo_chance})
 	var base: Dictionary = {}
 	var damage_factor := Stats.damage_factor(totals, Stats.is_low_hp(_health(rig)))
 	if absf(damage_factor - 1.0) > 0.00001 and "damage" in data:
@@ -327,19 +328,28 @@ func on_fireevent_post() -> void:
 			for field in base.keys():
 				data.set(field, base[field])
 	var slot_data = rig.get("slotData")
-	if slot_data == null:
+	var pre = null
+	if rig.has_meta(META_SHOT_PRE):
+		pre = rig.get_meta(META_SHOT_PRE)
+	rig.remove_meta(META_SHOT_PRE)
+	if slot_data == null or not (pre is Dictionary):
 		return
 	var wtot := Stats.weapon_totals({"loot_affixes": Store.affixes(slot_data)})
 	var chance := clampf(float(wtot.get("wear", 0.0)), 0.0, 0.9)
-	if chance > 0.0 and randf() < chance and "condition" in slot_data and int(slot_data.condition) > 0:
+	var amt = slot_data.get("amount")
+	var cham = slot_data.get("chamber")
+	var spent := false
+	if amt != null and cham != null:
+		spent = Stats.shot_spent_round(int(pre.get("amount", 0)), int(amt), bool(pre.get("chamber", false)), bool(cham))
+	if spent and chance > 0.0 and randf() < chance and "condition" in slot_data and int(slot_data.condition) > 0:
 		slot_data.condition -= 1
-	_ammo_save(rig, slot_data)
+	_ammo_save(rig, slot_data, pre)
 
-func _ammo_save(rig, slot_data) -> void:
-	if not rig.has_meta(META_AMMO_PRE):
+func _ammo_save(rig, slot_data, pre) -> void:
+	if not (pre is Dictionary):
 		return
-	var pre: Dictionary = rig.get_meta(META_AMMO_PRE)
-	rig.remove_meta(META_AMMO_PRE)
+	if float(pre.get("chance", 0.0)) <= 0.0:
+		return
 	var amt = slot_data.get("amount")
 	var cham = slot_data.get("chamber")
 	if amt == null or cham == null:

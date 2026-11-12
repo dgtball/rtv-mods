@@ -37,6 +37,7 @@
 - Recoil
 - Low-HP damage
 - Wear (ускоренный износ)
+- Ammo Save (шанс не потратить патрон)
 
 ## Настройки MCM
 
