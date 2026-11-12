@@ -16,6 +16,9 @@ func _init() -> void:
 	t_resolve_index()
 	t_resolve_bounds()
 	t_start_offset_for()
+	t_choice_key()
+	t_rebind_needed()
+	t_seed_choice()
 	t_vanilla_season()
 	t_is_winter()
 	t_uses_tint()
@@ -62,6 +65,27 @@ func t_start_offset_for() -> void:
 		if v < 0 or v >= S.SEASONS.size():
 			rnd_ok = false
 	ck(rnd_ok, "random всегда даёт валидный offset")
+
+func t_choice_key() -> void:
+	ck(S.choice_key(" Summer ") == "summer", "выбор нормализуется: регистр и пробелы")
+	ck(S.choice_key("RANDOM") == "random", "random нормализуется")
+	ck(S.choice_key("winter") == "winter", "зима остаётся собой")
+	ck(S.choice_key("banana") == "", "неизвестный выбор - пустой ключ")
+	ck(S.choice_key("") == "", "пустая строка - пустой ключ")
+
+func t_rebind_needed() -> void:
+	ck(not S.rebind_needed("summer", "summer"), "тот же выбор не переигрывает забег")
+	ck(not S.rebind_needed("random", "random"), "random не перекатывается на каждом применении MCM")
+	ck(S.rebind_needed("random", "summer"), "явная смена random -> summer переигрывает")
+	ck(S.rebind_needed("summer", "winter"), "явная смена лето -> зима переигрывает")
+	ck(not S.rebind_needed("summer", "banana"), "неизвестное значение не переигрывает")
+	ck(not S.rebind_needed("summer", ""), "пустое значение не переигрывает")
+
+func t_seed_choice() -> void:
+	ck(S.seed_choice("random", 3) == "random", "легаси random фиксируется как random, без переката")
+	ck(S.seed_choice("summer", 1) == "summer", "легаси summer и offset 1 - совпадают")
+	ck(S.seed_choice("summer", 3) == "winter", "легаси summer против зимнего offset - конфиг переиграет")
+	ck(S.seed_choice("banana", 2) == "autumn", "неизвестный выбор - по offset")
 
 func t_vanilla_season() -> void:
 	ck(S.vanilla_season(3) == 2, "зима - ванильный сезон 2")

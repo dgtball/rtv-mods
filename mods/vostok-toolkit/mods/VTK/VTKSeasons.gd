@@ -35,6 +35,31 @@ static func start_offset_for(choice: String) -> int:
 	var i := SEASONS.find(key)
 	return i if i >= 0 else DEFAULT_START_OFFSET
 
+# Ключ выбора "Starting season": ровно то, что лежит в MCM ("random"/"spring"/
+# "summer"/"autumn"/"winter"). Неизвестное значение - пустой ключ: такой выбор
+# не должен переигрывать забег.
+static func choice_key(choice: String) -> String:
+	var key := choice.strip_edges().to_lower()
+	if key == "random" or SEASONS.has(key):
+		return key
+	return ""
+
+# Настройка меняет текущий забег только при явной смене значения. MCM зовёт
+# apply() на каждом закрытии и на каждом изменении настройки, и тот же выбор -
+# не повод переигрывать цикл (а "random" - тем более перекатывать заново).
+static func rebind_needed(saved_choice: String, choice: String) -> bool:
+	var key := choice_key(choice)
+	return key != "" and key != saved_choice
+
+# Мета старых версий хранила только offset, без выбора. Сравнивать нечем,
+# поэтому выбор восстанавливается из offset: фикс-сезон совпадёт сам с собой,
+# а "random" фиксируется как "random" - переката на первом применении не будет.
+static func seed_choice(cfg_choice: String, saved_offset: int) -> String:
+	var key := choice_key(cfg_choice)
+	if key == "random":
+		return "random"
+	return _name_of(saved_offset)
+
 static func resolve_index(day: int, cycle_days: int, start_offset: int) -> int:
 	var cycle := cycle_days
 	if cycle < 1:

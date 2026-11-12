@@ -1,5 +1,14 @@
 # Changelog
 
+## [5.6.5] - 2026-11-11
+
+### Fixed
+
+- Dynamic seasons no longer jump when the settings menu is opened or closed: a
+  new starting season is applied only when you actually pick one, and `Random`
+  keeps the season it rolled for the run.
+- Turning dynamic seasons off no longer turns itself back on after a map change.
+
 ## [5.6.4] - 2026-11-10
 
 ### Changed

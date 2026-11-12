@@ -62,6 +62,9 @@ var _gd_node = null
 var _season_driver: Variant = null
 var _dyn_enabled := false
 var _dyn_start_offset := 1
+# Выбор из MCM ("random"/"spring"/...), с которым начат забег. Нужен, чтобы
+# отличать явную смену настройки от её повторного применения на каждом MCM.
+var _dyn_start_choice := ""
 var _dyn_cycle_days := 30
 var _dyn_last_idx := -1
 var _season_poll: float = 0.0
@@ -254,12 +257,15 @@ func _season_new_run(season: int) -> void:
 	if not cfg.season_enabled:
 		Log.log("[VTK] dynamic seasons: disabled by config")
 		return
-	_dyn_start_offset = _season_offset_of(str(cfg.season_start))
+	# "random" перекатывается здесь - один раз за забег; выбор фиксируется в мете.
+	_dyn_start_choice = SEASONS.choice_key(str(cfg.season_start))
+	_dyn_start_offset = _season_offset_of(_dyn_start_choice)
 	_dyn_cycle_days = cfg.season_cycle_days
 	_dyn_visuals = cfg.season_visuals
 	_dyn_enabled = true
 	_season_meta_write({
 		"dynamic": true,
+		"start_choice": _dyn_start_choice,
 		"start_offset": _dyn_start_offset,
 		"cycle_days": _dyn_cycle_days,
 	})
@@ -278,27 +284,59 @@ func _season_resume() -> void:
 		_dyn_enabled = false
 		_dyn_last_idx = -1
 		return
+	var cfg := _season_config()
+	# Тумблер выключен - динамика не должна включаться обратно на загрузке карты.
+	if not cfg.season_enabled:
+		_dyn_enabled = false
+		_dyn_last_idx = -1
+		_season_restore()
+		return
 	_dyn_start_offset = clampi(int(m.get("start_offset", _dyn_start_offset)), 0, SEASONS.SEASONS.size() - 1)
 	_dyn_cycle_days = maxi(1, int(m.get("cycle_days", _dyn_cycle_days)))
-	_dyn_visuals = _season_config().season_visuals
+	_dyn_visuals = cfg.season_visuals
+	# Мета старых версий не знала выбора - восстанавливаем его из offset,
+	# иначе первый же apply() в MCM переиграл бы забег.
+	var saved := str(m.get("start_choice", ""))
+	_dyn_start_choice = saved if saved != "" else SEASONS.seed_choice(str(cfg.season_start), _dyn_start_offset)
 	_dyn_enabled = true
 	_dyn_last_idx = -1
 	_season_apply()
 
+# MCM зовёт это на каждом закрытии меню и на каждом изменении настройки, поэтому
+# стартовый сезон забега меняется только при явной смене выбора: иначе каждое
+# открытие MCM переигрывало бы цикл, а "random" перекатывался бы заново.
 func apply_season_config() -> void:
-	if not _dyn_enabled:
-		return
 	var cfg := _season_config()
 	if not cfg.season_enabled:
-		_dyn_enabled = false
-		_season_restore()
+		if _dyn_enabled:
+			_dyn_enabled = false
+			_dyn_last_idx = -1
+			_season_restore()
 		return
-	_dyn_cycle_days = maxi(1, int(cfg.season_cycle_days))
+	if not _dyn_enabled:
+		# Тумблер включили посреди Dynamic-забега: параметры берём из меты.
+		_season_resume()
+		return
+	var choice := SEASONS.choice_key(str(cfg.season_start))
+	var cycle := maxi(1, int(cfg.season_cycle_days))
+	var rebind := SEASONS.rebind_needed(_dyn_start_choice, choice)
+	var cycle_changed := cycle != _dyn_cycle_days
+	_dyn_cycle_days = cycle
 	_dyn_visuals = cfg.season_visuals
-	_dyn_start_offset = _season_offset_of(str(cfg.season_start))
+	if rebind:
+		# Явная смена "Starting season" переигрывает забег с выбранного сезона.
+		_dyn_start_choice = choice
+		_dyn_start_offset = _season_offset_of(choice)
 	_dyn_last_idx = -1
 	_season_apply()
-	Log.log("[VTK] season config applied: start=" + str(cfg.season_start) + " cycle=" + str(_dyn_cycle_days) + " visuals=" + str(_dyn_visuals))
+	if rebind or cycle_changed:
+		_season_meta_write({
+			"dynamic": true,
+			"start_choice": _dyn_start_choice,
+			"start_offset": _dyn_start_offset,
+			"cycle_days": _dyn_cycle_days,
+		})
+	Log.log("[VTK] season config applied: start=" + str(_dyn_start_choice) + " cycle=" + str(_dyn_cycle_days) + " visuals=" + str(_dyn_visuals) + " rebind=" + str(rebind))
 
 func _season_restore() -> void:
 	if _season_driver != null:
