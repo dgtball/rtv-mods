@@ -39,10 +39,8 @@ const SNOW_TRIM_NIGHT := 0.60
 const DAY_TRIM := 0.62
 
 const RESPONSE := 1.5
-# Feedback loop (source B): how hard a measured frame pulls the factor.
-const FEEDBACK_GAIN := 0.6
-# Target raw p50 of the frame for the measured-frame source, and its cadence.
-const FRAME_TARGET := 0.47
+# Cadence of the frame probe that feeds the ceiling (the panel's `Probe
+# cadence` lever).
 const FRAME_CADENCE := 1.0
 
 # Weights of the source-A light terms. Unit for now: the fit against the
@@ -118,15 +116,6 @@ static func frame_ceiling(measured: float, applied: float, level := DAY_LEVEL, f
 # single place "night = vanilla" lives (and the one its test targets).
 static func night_gate(factor: float, sun_down: bool) -> float:
 	return 1.0 if sun_down else factor
-
-# Source B: one step of the measured-frame loop. A frame on target holds the
-# factor; a brighter frame lowers it; a darker one raises it, but never above
-# 1.0 (the clamp, not the step direction, is what keeps it one-sided). A
-# blank or non-finite measurement leaves the factor alone.
-static func feedback_factor(factor: float, measured: float, target_l: float, gain := FEEDBACK_GAIN) -> float:
-	if measured <= 0.0 or not is_finite(measured):
-		return 1.0
-	return clampf(factor * pow(target_l / measured, gain), FLOOR, 1.0)
 
 # Winter-only background trim for the thermal palette. Snow bounces far more
 # amplified light than any summer surface, so the whole winter frame lands in

@@ -74,11 +74,12 @@ var set_strength: float = 1.0
 var set_day_target: float = Daylight.TARGET
 var set_day_floor: float = Daylight.FLOOR
 var set_day_trim: float = Daylight.DAY_TRIM
-# Daylight source: 0 folds the game's light state (source A), 1 runs the
-# measured-frame feedback loop (source B). The flag is a panel choice, not a
-# persisted setting, so a reset leaves it alone.
+# Daylight source: 0 folds the game's light state and the measured-frame
+# ceiling (hybrid, default), 1 keeps the game's light state only, 2 keeps the
+# measured frame only. The flag is a panel choice, not a persisted setting, so
+# a reset leaves it alone.
 var set_daylight_source: int = 0
-var set_frame_target: float = Daylight.FRAME_TARGET
+var set_frame_level: float = Daylight.DAY_LEVEL
 var set_frame_cadence: float = Daylight.FRAME_CADENCE
 # Brightness of the state key the ESP outlines emit; the overlay uses it to
 # scale the substituted state colour.
@@ -128,19 +129,20 @@ var _day_factor: float = 1.0
 var _day_mix: float = 0.0
 var _key_gain: float = 1.0
 # Source A: the scene level folded from the game's light state (see _snapshot)
-# and the factor it produced with strength applied. _factor_a is kept current
-# even under source B so the panel can show both.
+# and the RAW factor it produced -- no strength here, strength is applied once
+# in _target_factor. _factor_a is kept current under every source so the panel
+# can show what source A would give.
 var _light_est: float = 0.0
 var _factor_a: float = 1.0
-# Source B: the last measured frame level and the factor the feedback loop
-# settled on. Both are kept current under either source so the panel can show
-# what the inactive source would give.
+# The last measured frame level (raw p50, our compensation included). Kept
+# current under every source so the panel can show what the ceiling would give.
 var _frame_l: float = 0.0
-var _factor_b: float = 1.0
-# Whether the loop has been seeded since it last (re)started. The first read of
-# source B copies the light estimate into the loop; a reset or a disarm clears
-# this, so the next run seeds again instead of running the vanilla exposure.
-var _factor_b_live: bool = false
+# Hybrid layer: the night gate (the game culls the sun) and the frame ceiling
+# (releases the factor so the uncompensated frame level never drops below
+# DAY_LEVEL). `_u` is the uncompensated frame level the panel reads.
+var _sun_down: bool = false
+var _ceiling: float = 1.0
+var _u: float = 0.0
 var _probe: Node = null
 var _sim_cd: float = 0.0
 var _sim_season: int = 1
@@ -533,6 +535,8 @@ func _snapshot() -> Dictionary:
 		"fog_emission": env.volumetric_fog_emission,
 		"shelter": bool(_world.get("shelter")),
 		"intro": bool(_world.get("intro")),
+		"indoor": _game_flag("indoor"),
+		"sun_present": _world.get("sunLight") != null,
 	}
 	# Sky colour: the World keeps its own ShaderMaterial, but a scene without
 	# one falls back to the environment sky. env.sky is null on maps that set
@@ -560,19 +564,42 @@ func _snapshot_light(snap: Dictionary, prefix: String, light) -> void:
 	snap[prefix + "_mask"] = light.get("light_cull_mask")
 
 
-# The factor the active source wants, with strength applied. Source A always
-# computes, so the panel can show what the other source would give. The first
-# read of source B after it (re)starts -- a flag flip, a helmet re-wear, a map
-# change -- seeds the loop from that fresh estimate; otherwise the first
-# frames would run the vanilla exposure and then ramp toward it for seconds.
+# Night gate input: the game itself culls the sun (World.TOD sets
+# sunLight.light_cull_mask = 0 outside 06:00-18:00 and lights the moon), so the
+# mask is exact at dusk and dawn where the TOD bands lag. Maps without a sun
+# fall back to "the moon is lit"; with neither light the gate stays silent and
+# source A alone decides.
+func _compute_sun_down(snap: Dictionary) -> bool:
+	if bool(snap.get("sun_present", false)):
+		return int(snap.get("sun_mask", 0)) == 0
+	return int(snap.get("moon_mask", 0)) != 0
+
+
+# Recompute source A and the frame ceiling from the cached snapshot and the
+# CURRENT smoothed factor. The ceiling is inert without a measurement (probe
+# off or nothing read): then it mirrors source A so the readout shows the
+# value the picture actually uses.
+func _refresh_daylight_state() -> void:
+	_factor_a = Daylight.factor_for_light(_light_est, set_day_target, set_day_floor)
+	if _frame_l > 0.0:
+		_u = _frame_l / maxf(_day_factor, Daylight.EPS)
+		_ceiling = Daylight.frame_ceiling(_frame_l, _day_factor, set_frame_level, set_day_floor)
+	else:
+		_u = 0.0
+		_ceiling = _factor_a
+
+
+# The factor the active source wants, with the night gate and strength applied.
+# 0 Hybrid = the looser of source A and the frame ceiling; 1 Game light = A
+# only; 2 Measured frame = the ceiling only. At night the gate returns 1.0
+# before strength, so all three modes show vanilla.
 func _target_factor() -> float:
-	_factor_a = Daylight.strength_factor(Daylight.factor_for_light(_light_est, set_day_target, set_day_floor), set_strength)
-	if set_daylight_source == 1:
-		if not _factor_b_live:
-			_factor_b_live = true
-			_factor_b = _factor_a
-		return Daylight.strength_factor(_factor_b, set_strength)
-	return _factor_a
+	var raw := _factor_a
+	if set_daylight_source == 2:
+		raw = _ceiling
+	elif set_daylight_source == 0:
+		raw = maxf(_factor_a, _ceiling)
+	return Daylight.strength_factor(Daylight.night_gate(raw, _sun_down), set_strength)
 
 
 # Lazily create the frame probe and wire its signal. The probe is a child of
@@ -587,23 +614,22 @@ func _ensure_probe() -> Node:
 	return _probe
 
 
-# One auto measurement landed: fold it into the source-B loop. An empty
+# One auto measurement landed: it is the input of the frame ceiling. An empty
 # dictionary means there was nothing to measure (no camera, no frame), so the
-# factor is left where it is.
+# last frame is kept.
 func _on_probe_measured(stats: Dictionary) -> void:
 	if stats.is_empty():
 		return
 	_frame_l = float(stats.get("p50", 0.0))
-	_factor_b = Daylight.feedback_factor(_factor_b, _frame_l, set_frame_target)
 
 
-# Arm the probe only while source B is the live picture. Disarming also marks
-# the loop unseeded, so the next run re-seeds from the light estimate instead
-# of starting on the factor the previous run happened to leave behind.
+# Arm the probe only while the ceiling can matter. Game light does not use it,
+# and at night the gate throws the ceiling away, so measuring then is a pure
+# waste of the GPU sync. The first morning measurement arrives after Probe
+# cadence; until then the ceiling is inert and source A runs.
 func _sync_probe() -> void:
-	var want := set_daylight and set_daylight_source == 1 and _installed and _nvg_active()
+	var want := set_daylight and set_daylight_source != 1 and not _sun_down and _installed and _nvg_active()
 	if not want:
-		_factor_b_live = false
 		if _probe != null and is_instance_valid(_probe):
 			_probe.set_auto(0.0)
 		return
@@ -645,6 +671,11 @@ func _daylight_tick(delta: float) -> void:
 		var snap := _snapshot()
 		_sim_shelter = bool(snap.get("shelter", false))
 		_light_est = Daylight.estimate_light(snap)
+		var was_down := _sun_down
+		_sun_down = _compute_sun_down(snap)
+		if _sun_down != was_down:
+			Dbg.log("DAY", "sunDown=%d E=%.3f indoor=%d" % [1 if _sun_down else 0, _light_est, 1 if _sim_indoor else 0])
+	_refresh_daylight_state()
 	var target := _target_factor()
 	_day_factor = target if _last_exposure < 0.0 else Daylight.step(_day_factor, target, delta)
 	_daylight_apply(env, cur)
@@ -697,6 +728,7 @@ func refresh_daylight_now() -> void:
 	var env := _environment()
 	if env == null:
 		return
+	_refresh_daylight_state()
 	_day_factor = _target_factor()
 	_daylight_apply(env, env.tonemap_exposure)
 	_push_daylight_trims(_day_mix)
@@ -715,10 +747,9 @@ func _reset_daylight() -> void:
 	_light_est = 0.0
 	_factor_a = 1.0
 	_frame_l = 0.0
-	_factor_b = 1.0
-	# The loop is unseeded again: the next read of source B seeds it from the
-	# fresh light estimate.
-	_factor_b_live = false
+	_sun_down = false
+	_ceiling = 1.0
+	_u = 0.0
 	_sim_cd = 0.0
 	_sim = null
 	_world = null
@@ -729,7 +760,7 @@ func _reset_daylight() -> void:
 	set_day_target = Daylight.TARGET
 	set_day_floor = Daylight.FLOOR
 	set_day_trim = Daylight.DAY_TRIM
-	set_frame_target = Daylight.FRAME_TARGET
+	set_frame_level = Daylight.DAY_LEVEL
 	set_frame_cadence = Daylight.FRAME_CADENCE
 	_set_key_gain(1.0)
 	_push_day_mix()

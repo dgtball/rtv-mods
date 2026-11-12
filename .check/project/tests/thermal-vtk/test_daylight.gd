@@ -23,7 +23,6 @@ func _run() -> void:
 	t_estimate_terms()
 	t_frame_ceiling()
 	t_night_gate()
-	t_feedback_factor()
 	t_day_mix_target()
 	t_day_trim_mix()
 	t_snow_trim_mix()
@@ -93,16 +92,6 @@ func t_estimate_terms() -> void:
 	var sh: Dictionary = D.estimate_terms({"shelter": true, "ambient_color": Color(1, 1, 1), "ambient_energy": 1.0})
 	ck(near(float(sh["amb"]), 0.0), "shelter zeroes every term")
 	ck(near(float(sh["sun"]), 0.0), "shelter zeroes the sun term too")
-
-func t_feedback_factor() -> void:
-	ck(near(D.feedback_factor(0.5, 0.5, 0.5), 0.5), "a frame on target holds the factor")
-	ck(near(D.feedback_factor(1.0, 0.03, 0.47), 1.0), "a night frame stays at the vanilla exposure")
-	ck(near(D.feedback_factor(1.0, 0.0, 0.47), 1.0), "a blank frame leaves the factor alone")
-	ck(near(D.feedback_factor(1.0, NAN, 0.47), 1.0), "a non-finite frame leaves the factor alone")
-	ck(near(D.feedback_factor(0.3, 0.9, 0.47), 0.2032, 0.002), "a too-bright frame lowers the factor")
-	ck(D.feedback_factor(0.3, 0.1, 0.47) > 0.3, "a too-dark frame raises the factor")
-	ck(D.feedback_factor(0.3, 0.1, 0.47) <= 1.0, "the loop never exceeds the vanilla exposure")
-	ck(near(D.feedback_factor(0.15, 0.99, 0.47), D.FLOOR), "the loop stops at the floor")
 
 func t_day_mix_target() -> void:
 	ck(near(D.day_mix(1.0), 0.0), "night has no curve")

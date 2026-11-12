@@ -76,7 +76,7 @@ func setup(nvg: Node, owner: Node) -> void:
 	_add_slider(box, "Day target", 0.05, 1.0, 0.01, "set_day_target")
 	_add_slider(box, "Day floor", 0.01, 1.0, 0.01, "set_day_floor")
 	_add_slider(box, "Day trim", 0.40, 1.0, 0.01, "set_day_trim")
-	_add_slider(box, "Frame target", 0.05, 0.90, 0.01, "set_frame_target")
+	_add_slider(box, "Frame level", 0.02, 0.30, 0.01, "set_frame_level")
 	_add_slider(box, "Probe cadence", 0.25, 5.0, 0.25, "set_frame_cadence")
 	_add_slider(box, "Highlight knee", 0.30, 1.0, 0.05, "set_highlight_knee")
 	_add_slider(box, "World brightness", 1.0, 4.0, 0.05, "set_world")
@@ -211,9 +211,9 @@ func _refresh_readout() -> void:
 	var e := _exposure()
 	var e_txt := "-" if e < 0.0 else "%.2f" % e
 	var src := "frame" if int(_nvg.get("set_daylight_source")) == 1 else "light"
-	_readout.text = "src %s | E %.3f frame %.3f\nfactor %.3f (A %.3f B %.3f) mix %.2f bgTrim %.2f exp %s\nworld %.2f knee %.2f strength %.2f helmet %d thermal %d" % [
+	_readout.text = "src %s | E %.3f frame %.3f\nfactor %.3f (A %.3f ceil %.3f) mix %.2f bgTrim %.2f exp %s\nworld %.2f knee %.2f strength %.2f helmet %d thermal %d" % [
 		src, float(_nvg.get("_light_est")), float(_nvg.get("_frame_l")),
-		float(_nvg.get("_day_factor")), float(_nvg.get("_factor_a")), float(_nvg.get("_factor_b")),
+		float(_nvg.get("_day_factor")), float(_nvg.get("_factor_a")), float(_nvg.get("_ceiling")),
 		float(_nvg.get("_day_mix")),
 		float(_nvg.get("_snow_trim")) * float(_nvg.get("_day_trim")), e_txt,
 		float(_nvg.get("set_world")), float(_nvg.get("set_highlight_knee")), float(_nvg.get("set_strength")),
@@ -301,7 +301,7 @@ func _on_reset() -> void:
 	_nvg.set("set_day_target", Daylight.TARGET)
 	_nvg.set("set_day_floor", Daylight.FLOOR)
 	_nvg.set("set_day_trim", Daylight.DAY_TRIM)
-	_nvg.set("set_frame_target", Daylight.FRAME_TARGET)
+	_nvg.set("set_frame_level", Daylight.DAY_LEVEL)
 	_nvg.set("set_frame_cadence", Daylight.FRAME_CADENCE)
 	_nvg.refresh_daylight_now()
 	_nvg.set("_dirty", true)
