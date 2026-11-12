@@ -18,8 +18,9 @@ feature of Vostok Toolkit, packaged on its own.
   body cools after death, dimming and fading out.
 - Mines light up while thermal vision is on.
 - World palettes (Classic, Amber, Forest, Ice) and daylight compensation: in
-  bright sun or snow the picture keeps detail instead of washing out, with no
-  effect at night or in interiors. An extra *Highlight rolloff*
+  bright sun or snow the picture keeps detail instead of washing out. At night
+  the picture matches the unmodified night vision, and dark places seen in
+  daylight stay readable. An extra *Highlight rolloff*
   slider bends the brightest snow and sky down so they keep texture.
 - A hotkey to turn the thermal layer on and off, and a hotkey to cycle the
   world palette, each with an on-screen notification.
