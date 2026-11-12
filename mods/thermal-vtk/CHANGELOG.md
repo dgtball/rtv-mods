@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.1] - 2026-11-12
+
+### Fixed
+- Winter interiors no longer change brightness when you step under a roof: the
+  snow compensation now applies everywhere, so crossing a doorway no longer
+  pops the picture.
+
 ## [2.7.0] - 2026-11-12
 
 ### Changed
