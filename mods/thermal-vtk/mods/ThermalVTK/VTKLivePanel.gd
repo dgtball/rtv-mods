@@ -1,9 +1,17 @@
 extends CanvasLayer
 # The F9 live tuning panel: a daylight calibration instrument, not a settings
-# surface. Nine levers over the VTKNVG runtime fields, a source picker
-# (Game light vs Measured frame), a readout of both sources at once, and a
-# Measure button that renders one probe frame and logs the frame percentiles
-# as a PANEL line for the fitting session.
+# surface. Nine levers over the VTKNVG runtime fields, a three-way source
+# picker (Hybrid, Game light, Measured frame), a readout of the live state,
+# and a Measure button that renders one probe frame and logs the frame
+# percentiles as a PANEL line for the fitting session.
+#
+# The hybrid picture is two layers. The night gate hands the vanilla exposure
+# back whenever the game culls the sun, so night is never compensated at all.
+# The frame ceiling raises the factor until the uncompensated frame level
+# reaches DAY_LEVEL, which is what makes a dark scene under a live sun (a cave
+# at 9:00) readable again -- and it is silent by day, where source A already
+# sits lower. Both are runtime state, not settings: the panel shows them, the
+# MCM never learns about them.
 #
 # The panel persists nothing. The slider values live in the NVG fields until
 # the helmet comes off or the map changes (VTKNVG._reset_daylight returns the
@@ -64,6 +72,7 @@ func setup(nvg: Node, owner: Node) -> void:
 	box.add_child(title)
 	_source_btn = OptionButton.new()
 	_source_btn.name = "Source"
+	_source_btn.add_item("Hybrid")
 	_source_btn.add_item("Game light")
 	_source_btn.add_item("Measured frame")
 	_source_btn.selected = int(_nvg.get("set_daylight_source"))
@@ -138,9 +147,10 @@ func _on_lever(_value: float, field: String) -> void:
 	_nvg.set("_dirty", true)
 	_nvg._apply_uniforms()
 
-# The source picker: switching to the measured frame seeds the feedback loop
-# from the light estimate inside VTKNVG (see _sync_probe), so the picture does
-# not jump. refresh_daylight_now applies the newly active source at once.
+# The source picker: switching the source applies it at once
+# (refresh_daylight_now), so the picture answers the choice immediately. The
+# measured-frame source needs no seeding -- its ceiling is inert until the
+# first probe lands, and until then source A runs.
 func _on_source_selected(idx: int) -> void:
 	if _nvg == null or not is_instance_valid(_nvg):
 		return
@@ -210,10 +220,18 @@ func _refresh_readout() -> void:
 		return
 	var e := _exposure()
 	var e_txt := "-" if e < 0.0 else "%.2f" % e
-	var src := "frame" if int(_nvg.get("set_daylight_source")) == 1 else "light"
-	_readout.text = "src %s | E %.3f frame %.3f\nfactor %.3f (A %.3f ceil %.3f) mix %.2f bgTrim %.2f exp %s\nworld %.2f knee %.2f strength %.2f helmet %d thermal %d" % [
-		src, float(_nvg.get("_light_est")), float(_nvg.get("_frame_l")),
+	var src := int(_nvg.get("set_daylight_source"))
+	var src_name := "hybrid" if src == 0 else ("light" if src == 1 else "frame")
+	var snap: Dictionary = _nvg._snapshot()
+	var terms: Dictionary = Daylight.estimate_terms(snap)
+	_readout.text = "src %s | E %.3f (sky %.2f amb %.2f sun %.2f moon %.2f fog %.2f)\nsunDown %d indoor %d shelter %d | factor %.3f (A %.3f ceil %.3f) u %.3f frame %.3f\nmix %.2f bgTrim %.2f exp %s | world %.2f knee %.2f strength %.2f helmet %d thermal %d" % [
+		src_name, float(_nvg.get("_light_est")),
+		float(terms["sky"]), float(terms["amb"]), float(terms["sun"]), float(terms["moon"]), float(terms["fog"]),
+		1 if bool(_nvg.get("_sun_down")) else 0,
+		1 if bool(_nvg.get("_sim_indoor")) else 0,
+		1 if bool(_nvg.get("_sim_shelter")) else 0,
 		float(_nvg.get("_day_factor")), float(_nvg.get("_factor_a")), float(_nvg.get("_ceiling")),
+		float(_nvg.get("_u")), float(_nvg.get("_frame_l")),
 		float(_nvg.get("_day_mix")),
 		float(_nvg.get("_snow_trim")) * float(_nvg.get("_day_trim")), e_txt,
 		float(_nvg.get("set_world")), float(_nvg.get("set_highlight_knee")), float(_nvg.get("set_strength")),
@@ -268,20 +286,29 @@ func _on_measure() -> void:
 	Dbg.log("PANEL", line)
 
 # light/factor/mix/trims/exp are the daylight state the levers produced;
-# measured is the last frame the probe read (source B's input); raw p* are the
-# probe frame percentiles BEFORE the thermal curve; pal p* push the same
-# percentiles through the palette-input mirror at the current levers, i.e.
-# where the palette would put them.
+# `u` is the uncompensated frame level and `ceiling` the factor it asks for
+# (its input is `measured`); sunDown/indoor/shelter are the gate state; raw p*
+# are the probe frame percentiles BEFORE the thermal curve; pal p* push the
+# same percentiles through the palette-input mirror at the current levers,
+# i.e. where the palette would put them.
 func _panel_line(stats: Dictionary) -> String:
 	var snow: float = float(_nvg.get("_snow_trim"))
 	var day: float = float(_nvg.get("_day_trim"))
 	var mix: float = float(_nvg.get("_day_mix"))
 	var darken: float = float(_nvg.get("set_world")) * snow * day
 	var knee: float = float(_nvg.get("set_highlight_knee"))
-	return "E=%.3f factor=%.2f measured=%.3f mix=%.2f snowTrim=%.2f dayTrim=%.2f exp=%.2f helmet=%d thermal=%d | raw p05=%.3f p25=%.3f p50=%.3f p75=%.3f p95=%.3f mean=%.3f black=%.3f cream=%.3f n=%d | pal p05=%.3f p50=%.3f p95=%.3f" % [
-		float(_nvg.get("_light_est")), float(_nvg.get("_day_factor")), float(_nvg.get("_frame_l")), mix, snow, day, _exposure(),
+	var snap: Dictionary = _nvg._snapshot()
+	var terms: Dictionary = Daylight.estimate_terms(snap)
+	return "E=%.3f sunDown=%d indoor=%d shelter=%d u=%.3f ceiling=%.2f factor=%.2f measured=%.3f mix=%.2f snowTrim=%.2f dayTrim=%.2f exp=%.2f helmet=%d thermal=%d | Esky=%.3f Eamb=%.3f Esun=%.3f Emoon=%.3f Efog=%.3f | raw p05=%.3f p25=%.3f p50=%.3f p75=%.3f p95=%.3f mean=%.3f black=%.3f cream=%.3f n=%d | pal p05=%.3f p50=%.3f p95=%.3f" % [
+		float(_nvg.get("_light_est")),
+		1 if bool(_nvg.get("_sun_down")) else 0,
+		1 if bool(_nvg.get("_sim_indoor")) else 0,
+		1 if bool(_nvg.get("_sim_shelter")) else 0,
+		float(_nvg.get("_u")), float(_nvg.get("_ceiling")),
+		float(_nvg.get("_day_factor")), float(_nvg.get("_frame_l")), mix, snow, day, _exposure(),
 		1 if _nvg.nvg_active() else 0,
 		1 if bool(_nvg.get("set_thermal")) else 0,
+		float(terms["sky"]), float(terms["amb"]), float(terms["sun"]), float(terms["moon"]), float(terms["fog"]),
 		float(stats.p05), float(stats.p25), float(stats.p50), float(stats.p75), float(stats.p95),
 		float(stats.mean), float(stats.black_share), float(stats.cream_share), int(stats.count),
 		Daylight.palette_input(float(stats.p05), darken, knee, mix),
