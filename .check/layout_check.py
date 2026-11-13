@@ -47,14 +47,14 @@ HOOK_RE = re.compile(r'_lib\.hook\("([^"]+)"')
 # Если VTKHooks.gd переименуют, hook_requirements вернёт пусто, и проход молча
 # отчитается "HOOKS: 0" вместо провала - ровно тот тихий отказ, ради которого
 # он заведён. Счётчик - единственная страховка от этого.
-HOOK_COUNT = 27
+HOOK_COUNT = 26
 # Префикс имени хука -> файл ванильного скрипта. Единственная ручная часть:
 # неизвестный префикс - провал, иначе новый хук выпал бы из проверки молча.
 HOOK_CLASS = {
     "controller": "Controller", "ai": "AI", "trader": "Trader",
     "interface": "Interface", "task": "Task", "loader": "Loader",
     "compiler": "Compiler", "death": "Death", "context": "Context",
-    "pickup": "Pickup", "mine": "Mine",
+    "pickup": "Pickup", "weaponrig": "WeaponRig",
 }
 
 GONE = [
@@ -211,6 +211,11 @@ GONE = [
     "WEAPON_SLOTS",
     "NO_SUB_FOLDERS",
     "Picker.category_label",
+    # 5.7.1: Mine.gd в runtime-sensitive skip-list модлоадера, хуки не встают.
+    # Взвод от NPC пишет VTKMines, выстрел игрока ловит weaponrig-raycast-post.
+    "_on_mine_detonate",
+    "_on_mine_instantdetonate",
+    "_mine_caller",
 ]
 
 GONE_RE = [
@@ -249,6 +254,7 @@ PRESENT = [
     "MINE_SVG",
     "VTK_NPC_Detector",
     "func set_mines(",
+    "arm_mine_blast",
     "_set_gear_facet",
     "_refresh_gear_catalog",
     "_gear_facets_box",

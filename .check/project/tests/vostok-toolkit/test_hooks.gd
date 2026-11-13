@@ -102,9 +102,8 @@ func t_post_callback_arity() -> void:
 		"_on_ai_weapon_damage": 4,
 		"_on_ai_explosion": 2,
 		"_on_ai_death": 2,
-		# Mine.Detonate()/InstantDetonate() — ванильные void без аргументов.
-		"_on_mine_detonate": 0,
-		"_on_mine_instantdetonate": 0,
+		# WeaponRig.Raycast(spread) — ванильный void с одним аргументом.
+		"_on_weapon_raycast": 1,
 		"_on_task_complete_pressed": 0,
 		"_on_context_take_replace": 0,
 		"_on_context_split_replace": 0,
@@ -356,6 +355,7 @@ func _run() -> void:
 	t_marker_attacker()
 	t_explosion_kill()
 	t_mine_kill()
+	t_mine_raycast_ignores_non_mine()
 	t_kill_distance_from_player_body()
 	t_player_rig_weapon()
 	t_context_destroy_shown_in_grid()
@@ -837,9 +837,30 @@ class FakeVariant extends RefCounted:
 	var faction := 0
 	var name := "Bandit"
 
-# Мина: колбэки взвода читают её как _lib._caller и берут global_position.
+# Мина: post-хук выстрела читает её позицию; находка идёт через owner хитбокса.
 class FakeMine extends Node3D:
 	var isDetonated := false
+
+	func InstantDetonate() -> void:
+		isDetonated = true
+
+# Ванильная граната: Detonate есть, InstantDetonate и isDetonated нет.
+class FakeGrenade2 extends Node3D:
+	func Detonate() -> void:
+		pass
+
+# Ваниль бьёт по StaticBody3D со скриптом Surface, а корень мины берёт из owner.
+class FakeHitbox extends Node3D:
+	pass
+
+class FakeRay extends RefCounted:
+	var collider = null
+
+	func is_colliding() -> bool:
+		return collider != null
+
+	func get_collider():
+		return collider
 
 class FakeAgent2 extends Node3D:
 	var dead := false
@@ -945,9 +966,9 @@ func t_explosion_kill() -> void:
 	player.free()
 	h.queue_free()
 
-# Мина приходит в хуки без id бросившего: Mine.Detonate (сама) и
-# Mine.InstantDetonate (выстрел по мине) пишут взвод в кольцо, а
-# ai-explosiondamage с id == null ищет покрывающую запись.
+# Мина приходит в ленту без id бросившего: выстрел игрока ловит post-хук
+# WeaponRig.Raycast, взвод от NPC зовёт VTKMines.arm_mine_blast, а
+# ai-explosiondamage с id == null ищет покрывающую запись в кольце.
 func t_mine_kill() -> void:
 	var Blasts = preload("res://mods/VTK/VTKBlasts.gd")
 	var evs: Array = []
@@ -962,11 +983,20 @@ func t_mine_kill() -> void:
 	mine.name = "Mine"
 	root.add_child(mine)
 	mine.global_position = Vector3.ZERO
+	var hitbox := FakeHitbox.new()
+	hitbox.name = "StaticBody3D"
+	mine.add_child(hitbox)
+	hitbox.owner = mine
+	var rig := FakeRig.new()
+	rig.name = "WeaponRig"
+	root.add_child(rig)
+	rig.raycast.collider = hitbox
 	h._blasts.clear()
-	lib._caller = mine
-	h._on_mine_instantdetonate()
+	lib._caller = rig
+	h._on_weapon_raycast(0.35)
 	ck(h._blasts.size() == 1, "выстрел по мине: одна запись")
 	ck(bool(h._blasts[0]["player"]), "выстрел по мине: player=true")
+	ck(is_equal_approx(float(h._blasts[0]["h"]), 0.5), "выстрел по мине: взрыв с 0.5 м")
 
 	var victim := FakeAgent2.new()
 	victim.name = "AI_Bandit"
@@ -1003,21 +1033,18 @@ func t_mine_kill() -> void:
 			"вторая жертва того же взрыва -> player + mine")
 	ck(h.get_kill_count() == 2, "обе жертвы посчитаны игроку")
 
-	# 3. Мина сработала сама: Detonate взводит, повтор игнорируется.
+	# 3. Мина сработала сама: NPC наступил, VTKMines._mines_trigger зовёт
+	# arm_mine_blast до Detonate (дедуп по meta живёт в VTKMines).
 	var mine2 := FakeMine.new()
 	mine2.name = "Mine2"
 	root.add_child(mine2)
 	mine2.global_position = Vector3(100, 0, 0)
 	h._blasts.clear()
-	lib._caller = mine2
-	h._on_mine_detonate()
+	h.arm_mine_blast(mine2.global_position, 2.0, false)
 	var armed: int = h._blasts.size()
-	ck(armed == 1, "Detonate пишет одну запись")
-	ck(not bool(h._blasts[0]["player"]), "Detonate: player=false")
-	mine2.isDetonated = true
-	lib._caller = mine2
-	h._on_mine_detonate()
-	ck(h._blasts.size() == armed, "повторный Detonate не пишет вторую запись")
+	ck(armed == 1, "взвод от NPC пишет одну запись")
+	ck(not bool(h._blasts[0]["player"]), "взвод от NPC: player=false")
+	ck(is_equal_approx(float(h._blasts[0]["h"]), 2.0), "взвод от NPC: взрыв с 2 м")
 
 	var victim3 := FakeAgent2.new()
 	victim3.name = "AI_Bandit3"
@@ -1066,8 +1093,49 @@ func t_mine_kill() -> void:
 		ck(not bool(evs[3]["mine"]), "граната ИИ: mine=false")
 	ck(h.get_kill_count() == 2, "граната ИИ не засчитана игроку")
 
-	mine.free(); mine2.free(); thrower.free()
+	mine.free(); mine2.free(); thrower.free(); rig.free()
 	victim.free(); victim2.free(); victim3.free(); victim4.free(); victim5.free()
+	h.queue_free()
+
+# Post-хук стреляет на каждом выстреле, поэтому всё, что не мина, обязано
+# выйти молча: пустой рейкаст, коллайдер без owner, граната вместо мины.
+func t_mine_raycast_ignores_non_mine() -> void:
+	var h = TestHooks.new()
+	root.add_child(h)
+	var lib := FakeLib2.new()
+	h._lib = lib
+	h._blasts.clear()
+
+	# 1. Промах: is_colliding() == false.
+	var rig := FakeRig.new()
+	root.add_child(rig)
+	lib._caller = rig
+	h._on_weapon_raycast(0.0)
+	ck(h._blasts.is_empty(), "промах не пишет запись")
+
+	# 2. Попадание в гранату: Detonate есть, InstantDetonate нет.
+	var grenade := FakeGrenade2.new()
+	root.add_child(grenade)
+	var ghit := FakeHitbox.new()
+	grenade.add_child(ghit)
+	ghit.owner = grenade
+	rig.raycast.collider = ghit
+	h._on_weapon_raycast(0.0)
+	ck(h._blasts.is_empty(), "граната не считается миной")
+
+	# 3. Попадание в обычную статику без owner-мины.
+	var wall := FakeHitbox.new()
+	root.add_child(wall)
+	rig.raycast.collider = wall
+	h._on_weapon_raycast(0.0)
+	ck(h._blasts.is_empty(), "статика без мины не пишет запись")
+
+	# 4. Хук вызван без _caller: тихий выход, а не падение.
+	lib._caller = null
+	h._on_weapon_raycast(0.0)
+	ck(h._blasts.is_empty(), "нет caller -> записи нет")
+
+	grenade.free(); wall.free(); rig.free()
 	h.queue_free()
 
 # Ни GameData, ни узел игрока не несут имени оружия: настоящее — WeaponRig
@@ -1148,8 +1216,10 @@ func t_player_rig_weapon() -> void:
 	map.free()
 	h.queue_free()
 
+# WeaponRig: data.file читает имя оружия, raycast — post-хук Raycast.
 class FakeRig extends Node3D:
 	var data: Dictionary = {}
+	var raycast = FakeRay.new()
 
 class FakeWeaponHolder extends Node:
 	var weaponData = null
@@ -1731,7 +1801,7 @@ func t_hook_handles_are_counted() -> void:
 	root.add_child(lib)
 	h._lib = lib
 	h._do_register()
-	ck(lib.names.size() == 27, "регистрируются все 27 хуков")
+	ck(lib.names.size() == 26, "регистрируются все 26 хуков")
 	ck(h._hook_ids.size() == lib.names.size(), "каждый hook() кладёт хэндл в _hook_ids")
 	var seen := {}
 	for id in h._hook_ids:
@@ -1742,7 +1812,7 @@ func t_hook_handles_are_counted() -> void:
 		uniq[n] = true
 	ck(uniq.size() == lib.names.size(), "имена хуков не повторяются")
 	h._do_register()
-	ck(lib.names.size() == 27, "повторный _do_register не регистрирует хуки заново")
+	ck(lib.names.size() == 26, "повторный _do_register не регистрирует хуки заново")
 	h.queue_free()
 	lib.queue_free()
 

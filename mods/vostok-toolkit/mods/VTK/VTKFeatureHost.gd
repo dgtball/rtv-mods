@@ -99,6 +99,7 @@ func set_mines(enabled: bool, radius: int, smoke: bool) -> void:
 	_ensure_mines()
 	if _mines == null or not is_instance_valid(_mines):
 		return
+	_wire_mines()
 	_mines.set_radius(radius)
 	_mines.set_enabled(enabled)
 	_mines.set_smoke(smoke)
@@ -113,11 +114,16 @@ func _ensure_mines() -> void:
 
 # Подписка через строки: _hooks типизирован Node, типизированного свойства
 # сигнала у него нет, а connect/is_connected по имени работают и идемпотентны.
+# bind_hooks нужен VTKMines, чтобы записать взвод в кольцо _blasts: хука на
+# Mine.gd нет (skip-list модлоадера), поэтому срабатывание от NPC сообщает сам
+# детектор.
 func _wire_mines() -> void:
 	if _hooks == null or not is_instance_valid(_hooks):
 		return
 	if _mines == null or not is_instance_valid(_mines):
 		return
+	if _mines.has_method("bind_hooks"):
+		_mines.call("bind_hooks", _hooks)
 	if not _hooks.has_signal("mine_detonated"):
 		return
 	var cb := Callable(_mines, "on_detonated")

@@ -10,7 +10,16 @@ const KC = preload("res://mods/VTK/VTKKillCounter.gd")
 const DETECTOR_NAME := "VTK_NPC_Detector"
 const DETECTOR_GROUP := "VTKMineDetector"
 const DETECTION_HEIGHT := 1.5
-# Godot поднимает body_entered для тел, которые уже пересекаются в момент
+# Слой Area3D `ID` у агента (AI_Bandit.tscn: Identifier/ID), а не слой тела
+# (2). Тело NPC — StaticBody3D, и Area3D его не видит, когда AI телепортирует
+# узел кадр за кадром: перекрытие считается только в момент регистрации тела
+# в пространстве. Area3D-о-Area3D же пересчитывается каждый шаг, и на этом же
+# стоит ванильный Explosion.CheckID.
+const DETECTOR_MASK := 4096
+# Высота взрыва при взводе наступившим NPC: ванильный Detonate поднимает
+# мину на detonationHeight (2.0) и рвёт уже сверху.
+const TRIP_BLAST_HEIGHT := 2.0
+# Godot поднимает area_entered для зон, которые уже пересекаются в момент
 # подключения, поэтому ретрофит зоны на карте подорвал бы мину под стоящим NPC.
 const TRIGGER_GRACE_FRAMES := 2
 const SMOKE_SCENE := "res://Effects/Grenade_Smoke.tscn"
@@ -23,12 +32,25 @@ var _radius := 6
 var _smoke_on := false
 var _smoke_pool: Array = []
 var _smoke_idx := 0
+# VTKHooks: запись взвода в кольцо и сигнал дыма. Пустой узел — мины всё равно
+# рвутся, просто взрыв не попадёт в ленту (атрибуция живёт в хуках).
+var _hooks: Node = null
 
 # Мина опознаётся по паре «метод Detonate + свойство isDetonated», а не по
 # `is Mine` или resource_path: класса Mine в стенде нет, а путь ломается на
 # апдейте игры. Одного Detonate мало — Grenade.gd тоже его объявляет.
 static func _is_mine(node: Node) -> bool:
 	return node != null and node.has_method("Detonate") and "isDetonated" in node
+
+# Подходит ли агент под взвод: ID-зона есть и у игрока, и у трупа, поэтому
+# своего отсеиваем по отсутствию variant, мёртвого — по dead.
+static func _fires_on_agent(ai: Node) -> bool:
+	if not KC._is_agent(ai):
+		return false
+	return not ("dead" in ai and bool(ai.get("dead")))
+
+func bind_hooks(hooks: Node) -> void:
+	_hooks = hooks
 
 func set_enabled(v: bool) -> void:
 	if v == _enabled:
@@ -108,9 +130,9 @@ func _mines_attach(mine: Node) -> void:
 	var area := Area3D.new()
 	area.name = DETECTOR_NAME
 	# Слой 0: зону не должны видеть ванильный Explosion.CheckID/CheckAlert и
-	# чужие детекторы. Маска 2 — слой тела AI (AI_*/Collision).
+	# чужие детекторы. Маска 4096 — слой Area3D `ID` живого агента.
 	area.collision_layer = 0
-	area.collision_mask = 2
+	area.collision_mask = DETECTOR_MASK
 	area.monitoring = true
 	var cs := CollisionShape3D.new()
 	var shape := CylinderShape3D.new()
@@ -124,21 +146,29 @@ func _mines_attach(mine: Node) -> void:
 	# убирает зону вместе с миной, не оставляя сирот.
 	mine.add_child(area)
 	area.set_meta("vtk_born", Engine.get_physics_frames())
-	area.body_entered.connect(_mines_on_body.bind(area, mine))
+	area.area_entered.connect(_mines_on_area.bind(area, mine))
 
-func _mines_on_body(body: Node3D, area: Area3D, mine: Node) -> void:
-	if area == null or not is_instance_valid(area):
+func _mines_on_area(agent_area: Node3D, detector: Area3D, mine: Node) -> void:
+	if detector == null or not is_instance_valid(detector):
 		return
-	if Engine.get_physics_frames() - int(area.get_meta("vtk_born", 0)) < TRIGGER_GRACE_FRAMES:
+	if Engine.get_physics_frames() - int(detector.get_meta("vtk_born", 0)) < TRIGGER_GRACE_FRAMES:
 		return
 	if mine == null or not is_instance_valid(mine):
 		return
-	var ai: Node = KC.agent_root(body)
-	if not KC._is_agent(ai):
+	if not _fires_on_agent(KC.agent_root(agent_area)):
 		return
-	# Зона рядом с трупом иначе сожгла бы мину на первом же кадре.
-	if "dead" in ai and bool(ai.get("dead")):
+	_mines_trigger(mine)
+
+# Взвод фиксируется здесь, а не хуком Mine.gd: этот скрипт в skip-list
+# модлоадера (queue_free после взрыва), и хуки на него не встают вовсе.
+# Запись в кольцо нужна до ExplosionDamage — иначе взрыв с id == null
+# останется без убийцы и килл не попадёт ни в ленту, ни в счётчик.
+func _mines_trigger(mine: Node) -> void:
+	if mine.has_meta("vtk_mine_armed"):
 		return
+	mine.set_meta("vtk_mine_armed", true)
+	if _hooks != null and is_instance_valid(_hooks) and _hooks.has_method("arm_mine_blast"):
+		_hooks.call("arm_mine_blast", mine.global_position, TRIP_BLAST_HEIGHT, false)
 	if mine.has_method("Detonate"):
 		mine.call("Detonate")
 

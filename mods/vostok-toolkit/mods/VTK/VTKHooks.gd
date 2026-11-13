@@ -186,9 +186,8 @@ func _do_register() -> void:
 	_hook_ids.append(_lib.hook("interface-contexttransfer-post", _on_contexttransfer_post))
 	_hook_ids.append(_lib.hook("interface-grab-pre", _on_grab_pre))
 	_hook_ids.append(_lib.hook("interface-release-post", _on_release_post))
-	# Мина: оба метода ванильные void без аргументов, мина — _lib._caller.
-	_hook_ids.append(_lib.hook("mine-detonate-pre", _on_mine_detonate))
-	_hook_ids.append(_lib.hook("mine-instantdetonate-pre", _on_mine_instantdetonate))
+	# Выстрел по мине: WeaponRig.Raycast — единственный вызов InstantDetonate.
+	_hook_ids.append(_lib.hook("weaponrig-raycast-post", _on_weapon_raycast))
 	_registered = true
 	Log.log("[VTK] Per-frame hooks registered (" + str(_hook_ids.size()) + " hooks)")
 
@@ -801,37 +800,42 @@ func _on_ai_weapon_damage(_hitbox, _damage, _vector, id) -> void:
 			rec["weapon"] = _weapon_name_of(atk)
 	_last_damager[victim_ai.get_instance_id()] = rec
 
-# Взвод мины. Detonate — мина сработала сама (наступили), InstantDetonate —
-# выстрел по мине. Оба ванильных метода void без аргументов, мина лежит в
-# _lib._caller. Пишем в pre, чтобы запись в кольце была до ExplosionDamage.
-func _on_mine_detonate() -> void:
-	var mine := _mine_caller()
-	if mine == null:
-		return
-	# Ваниль уже защищена isDetonated, но вторая запись испортила бы окно.
-	if bool(_ai_prop(mine, "isDetonated")):
-		return
-	_arm_mine(mine, 2.0, false)
-
-func _on_mine_instantdetonate() -> void:
-	var mine := _mine_caller()
-	if mine == null:
-		return
-	_arm_mine(mine, 0.5, true)
-
-func _mine_caller() -> Node3D:
-	if _lib == null:
-		return null
-	var mine = _lib._caller
-	if mine == null or not is_instance_valid(mine) or not (mine is Node3D):
-		return null
-	return mine
-
-# Высота взрыва разная: InstantDetonate бьёт почти по земле, Detonate — выше.
-func _arm_mine(mine: Node3D, h: float, player: bool) -> void:
-	var pos := mine.global_position
+# Взвод мины фиксируется здесь, а не хуком Mine.gd: этот скрипт в
+# runtime-sensitive skip-list модлоадера (queue_free после взрыва), и хуки на
+# него не встают вовсе. Срабатывание от NPC зовёт VTKMines сам, выстрел игрока
+# ловит post-хук WeaponRig.Raycast. Запись нужна до ExplosionDamage: взрыв
+# приходит с id == null и без неё останется без убийцы.
+# Высота — та, на которой рвётся мина: Detonate (NPC) поднимает её на 2 м,
+# InstantDetonate (выстрел) бьёт сразу с 0.5 м.
+func arm_mine_blast(pos: Vector3, h: float, player: bool) -> void:
 	_blasts = Blasts.record(_blasts, pos, Time.get_ticks_msec(), h, player)
 	mine_detonated.emit(pos)
+
+# Post-хук WeaponRig.Raycast: ваниль рвёт мину сама
+# (`elif hitCollider.owner is Mine: ... InstantDetonate()`), до нас доходит только
+# результат рейкаста. Проверки duck-typed: Mine в стенде нет, как и RayCast3D.
+func _on_weapon_raycast(_spread: float) -> void:
+	if _lib == null:
+		return
+	var rig = _lib._caller
+	if rig == null or not is_instance_valid(rig):
+		return
+	var ray = rig.get("raycast")
+	if ray == null or not is_instance_valid(ray) or not ray.has_method("is_colliding"):
+		return
+	if not bool(ray.call("is_colliding")):
+		return
+	var col = ray.call("get_collider")
+	if col == null or not is_instance_valid(col):
+		return
+	var mine = col.get("owner")
+	if mine == null or not is_instance_valid(mine):
+		return
+	# Мина — пара «InstantDetonate + isDetonated»; у гранаты Detonate есть,
+	# InstantDetonate нет.
+	if not mine.has_method("InstantDetonate") or not ("isDetonated" in mine):
+		return
+	arm_mine_blast(mine.global_position, 0.5, true)
 
 # Гранаты и взрывы идут мимо ai-weapondamage (probe Task 1, п.4):
 # ai-explosiondamage(_direction, id), caller=жертва, id=Area бросившего

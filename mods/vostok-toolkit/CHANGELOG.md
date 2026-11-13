@@ -1,5 +1,20 @@
 # Changelog
 
+## [5.7.1] - 2026-11-13
+
+### Fixed
+
+- NPCs no longer walk through mines without detonating them. Mine detection now
+  uses the AI's ID area (layer 4096) instead of its collision body (layer 2),
+  which Godot's physics engine does not track during teleportation-based movement.
+- Mine-related kills (both from NPCs and from you shooting a mine) are now
+  correctly attributed in the kill feed and kill counter.
+- Smoke after detonation works again: a bug in the modloader caused mine hooks
+  to never register, so detonation events never reached the smoke subsystem.
+  This is now handled directly by the mine detector, without depending on hooks.
+- Shooting a mine no longer goes unnoticed: a post-hook on `WeaponRig.Raycast`
+  catches hits on mines and records them as your kills.
+
 ## [5.7.0] - 2026-11-13
 
 ### Added
