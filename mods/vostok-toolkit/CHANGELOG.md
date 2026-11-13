@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.6.6] - 2026-11-13
+
+### Fixed
+
+- Kill feed distance is now measured from your character, so it matches the
+  distance shown by the ESP instead of reading about 20 m too far.
+
 ## [5.6.5] - 2026-11-11
 
 ### Fixed

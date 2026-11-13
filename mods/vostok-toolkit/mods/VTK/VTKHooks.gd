@@ -883,9 +883,10 @@ func _resolve_kill(ai: Node) -> Dictionary:
 	var weapon := str(rec.get("weapon", ""))
 	var distance := -1.0
 	if killer_kind == "player" and ai is Node3D:
-		var player = get_tree().root.get_node_or_null("/root/Map/Core/Controller/Character")
-		if player == null:
-			player = get_tree().root.get_node_or_null("/root/Map/Core/Controller")
+		# Тело игрока — Controller: в Core.tscn у Controller/Character локальный
+		# сдвиг (-5, 0, 20), его трансформ ваниль не использует, и дистанция от
+		# него завышалась на ~20 м (ESP показывал 50 м, лента — 70 м).
+		var player = get_tree().root.get_node_or_null(Paths.CONTROLLER)
 		if player != null and player is Node3D:
 			distance = player.global_position.distance_to(ai.global_position)
 	return {

@@ -352,6 +352,7 @@ func _run() -> void:
 	t_kill_counter_birth_in_disabled()
 	t_marker_attacker()
 	t_explosion_kill()
+	t_kill_distance_from_player_body()
 	t_player_rig_weapon()
 	t_context_destroy_shown_in_grid()
 	t_deposit_button_font_matches_sibling()
@@ -938,6 +939,42 @@ func t_explosion_kill() -> void:
 
 # Ни GameData, ни узел игрока не несут имени оружия: настоящее — WeaponRig
 # под Camera/Manager, у него data.file (probe: AKM, M4A1, Jaeger_140).
+# Дистанция килла — от тела игрока (Controller), а не от Controller/Character:
+# в Core.tscn у Character локальный сдвиг (-5, 0, 20), поэтому прежняя привязка
+# завышала дистанцию на ~20 м (ESP показывал 50 м, лента — 70 м).
+func t_kill_distance_from_player_body() -> void:
+	var h = TestHooks.new()
+	root.add_child(h)
+
+	var map := Node3D.new(); map.name = "Map"; root.add_child(map)
+	var core := Node3D.new(); core.name = "Core"; map.add_child(core)
+	var controller := Node3D.new(); controller.name = "Controller"; core.add_child(controller)
+	controller.global_position = Vector3.ZERO
+	var character := Node3D.new(); character.name = "Character"; controller.add_child(character)
+	character.position = Vector3(-5.0, 0.0, 20.0)
+
+	var victim := FakeAgent2.new()
+	victim.name = "AI_Bandit"
+	victim.variant.faction = 1
+	victim.variant.name = "Bandit"
+	root.add_child(victim)
+	victim.global_position = Vector3(0.0, 0.0, -50.0)
+
+	h._last_damager[victim.get_instance_id()] = {
+		"t": Time.get_ticks_msec(),
+		"hitbox": "Head",
+		"killer_kind": "player",
+		"killer_name": "Player",
+		"weapon": "AKM",
+	}
+	var ev: Dictionary = h._resolve_kill(victim)
+	ck(is_equal_approx(float(ev.get("distance", -1.0)), 50.0),
+		"дистанция килла считается от Controller, а не от сдвинутого Character")
+
+	map.free()
+	victim.free()
+	h.queue_free()
+
 func t_player_rig_weapon() -> void:
 	var h = TestHooks.new()
 	root.add_child(h)
