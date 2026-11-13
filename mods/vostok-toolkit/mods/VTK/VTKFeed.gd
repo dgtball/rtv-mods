@@ -22,15 +22,22 @@ static func segments(ev: Dictionary, show_distance: bool = true) -> Array:
 	if bool(ev.get("self_death", false)):
 		return [victim, {"icon": "skull"}]
 	var out: Array = []
-	out.append({"text": str(ev.get("killer_name", "")), "color": kind_color(str(ev.get("killer_kind", "")))})
-	if bool(ev.get("grenade", false)):
-		out.append({"icon": "grenade"})
+	# Мина сработала сама: имени убийцы нет, поэтому строка — жертва и иконка.
+	if str(ev.get("killer_kind", "")) == "mine":
+		out.append(victim)
+		out.append({"icon": "mine"})
 	else:
-		if str(ev.get("weapon", "")) != "":
-			out.append({"icon": "weapon"})
-		if bool(ev.get("headshot", false)):
-			out.append({"icon": "hs"})
-	out.append(victim)
+		out.append({"text": str(ev.get("killer_name", "")), "color": kind_color(str(ev.get("killer_kind", "")))})
+		if bool(ev.get("mine", false)):
+			out.append({"icon": "mine"})
+		elif bool(ev.get("grenade", false)):
+			out.append({"icon": "grenade"})
+		else:
+			if str(ev.get("weapon", "")) != "":
+				out.append({"icon": "weapon"})
+			if bool(ev.get("headshot", false)):
+				out.append({"icon": "hs"})
+		out.append(victim)
 	if show_distance:
 		var d := float(ev.get("distance", -1.0))
 		if d >= 0.0:
@@ -75,6 +82,8 @@ static func streak_reset(best: int) -> Dictionary:
 	return {"current": 0, "best": best}
 const GRENADE_SVG := "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\"><ellipse cx=\"16\" cy=\"20\" rx=\"9\" ry=\"10\" fill=\"#6f7a5a\" stroke=\"#3d4433\" stroke-width=\"2\"/><rect x=\"13\" y=\"6\" width=\"6\" height=\"5\" rx=\"1\" fill=\"#8a8f7a\" stroke=\"#3d4433\" stroke-width=\"1.5\"/><path d=\"M19 8 q7 1 7 7\" fill=\"none\" stroke=\"#c9c2b2\" stroke-width=\"2\"/><path d=\"M26 15 l0 4\" fill=\"none\" stroke=\"#c9c2b2\" stroke-width=\"2\"/></svg>"
 const HS_SVG := "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\"><circle cx=\"16\" cy=\"16\" r=\"11\" fill=\"none\" stroke=\"#FFD669\" stroke-width=\"2.5\"/><circle cx=\"16\" cy=\"16\" r=\"3.5\" fill=\"#FFD669\"/><path d=\"M16 1v7M16 24v7M1 16h7M24 16h7\" fill=\"none\" stroke=\"#FFD669\" stroke-width=\"2.5\"/></svg>"
+# Мина: приземистый корпус в палитре гранаты и взрыватель с усиками сверху.
+const MINE_SVG := "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\"><ellipse cx=\"16\" cy=\"20\" rx=\"11\" ry=\"7\" fill=\"#6f7a5a\" stroke=\"#3d4433\" stroke-width=\"2\"/><rect x=\"13\" y=\"10\" width=\"6\" height=\"6\" rx=\"1\" fill=\"#8a8f7a\" stroke=\"#3d4433\" stroke-width=\"1.5\"/><path d=\"M16 10 v-4 M10 12 l-3 -3 M22 12 l3 -3\" fill=\"none\" stroke=\"#c9c2b2\" stroke-width=\"2\"/><path d=\"M9 20 h14\" fill=\"none\" stroke=\"#3d4433\" stroke-width=\"1.5\"/></svg>"
 var _counter_enabled: bool = false
 var _feed_enabled: bool = false
 var _streak_enabled: bool = false
@@ -442,6 +451,9 @@ func _add_icon(row: HBoxContainer, icon: String, ev: Dictionary) -> void:
 		if skull_font != null:
 			skull_lbl.add_theme_font_override("font", skull_font)
 		row.add_child(skull_lbl)
+		return
+	if icon == "mine":
+		_add_tex(row, Surface.svg_texture(MINE_SVG))
 		return
 	if icon == "grenade":
 		_add_tex(row, Surface.svg_texture(GRENADE_SVG))

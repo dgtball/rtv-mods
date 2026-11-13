@@ -246,6 +246,7 @@ PRESENT = [
     "_make_facet_row",
     "_on_facet_input",
     "mine_detonated",
+    "MINE_SVG",
     "_set_gear_facet",
     "_refresh_gear_catalog",
     "_gear_facets_box",

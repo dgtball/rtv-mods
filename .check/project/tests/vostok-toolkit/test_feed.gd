@@ -42,6 +42,7 @@ func _run() -> void:
 	t_longest_kill_event()
 	t_feed_evict()
 	t_feed_hs_svg()
+	t_feed_mine_svg()
 	t_feed_norm_weapon()
 	t_feed_index_second_pass()
 	t_hud_anchor_layout()
@@ -172,6 +173,30 @@ func t_feed_segments() -> void:
 	ck(str(segs[1]["icon"]) == "skull", "self_death: череп после имени")
 	ck(Feed.kind_color("nomad") == Feed.GREEN, "номад зелёный")
 	ck(Feed.kind_color("") == Feed.RED, "неизвестный kind красный (hostile fallback)")
+	# Мина сработала сама: имя убийцы не рисуется, иконка после жертвы.
+	var mine_kill := {
+		"killer_kind": "mine", "killer_name": "",
+		"victim_kind": "enemy", "victim_name": "Bandit",
+		"weapon": "", "headshot": false, "grenade": true, "mine": true, "t": 0,
+	}
+	segs = Feed.segments(mine_kill)
+	ck(segs.size() == 2, "мина: ровно жертва и иконка (пустой строки убийцы нет)")
+	ck(str(segs[0]["text"]) == "Bandit", "мина: жертва первой")
+	ck(str(segs[1]["icon"]) == "mine", "мина: иконка после жертвы")
+	# Выстрел по мине: обычный порядок, иконка мины перебивает гранату/оружие/HS.
+	var mine_shot := {
+		"killer_kind": "player", "killer_name": "Player",
+		"victim_kind": "enemy", "victim_name": "Bandit",
+		"weapon": "AKM", "headshot": true, "grenade": true, "mine": true, "t": 0,
+	}
+	segs = Feed.segments(mine_shot)
+	ck(segs.size() == 3, "выстрел по мине: 3 сегмента")
+	ck(str(segs[1]["icon"]) == "mine", "mine перебивает grenade, weapon и hs")
+	ck(str(segs[2]["text"]) == "Bandit", "жертва последней")
+	ck(Feed.segments(mine_shot, false).size() == 3, "show_distance=false ничего не добавляет")
+	mine_shot["distance"] = 30.0
+	segs = Feed.segments(mine_shot, true)
+	ck(segs.size() == 4 and str(segs[3]["text"]) == "  30m", "дистанция идёт последней")
 
 func t_feed_fade() -> void:
 	var Feed = preload("res://mods/VTK/VTKFeed.gd")
@@ -201,6 +226,14 @@ func t_feed_hs_svg() -> void:
 	ck(Feed.HS_SVG.contains("#FFD669"), "цвет HS-SVG совпадает с HS_GOLD")
 	var tex = Feed.Surface.svg_texture(Feed.HS_SVG)
 	ck(tex is Texture2D and tex.get_width() > 0, "HS-SVG рендерится в текстуру")
+
+# Мина в ленте — своя SVG-иконка в палитре гранаты: файлов игры не трогаем,
+# иначе после апдейта иконка молча ушла бы в текстовый фолбэк.
+func t_feed_mine_svg() -> void:
+	var Feed = preload("res://mods/VTK/VTKFeed.gd")
+	ck(Feed.MINE_SVG.contains("#6f7a5a"), "цвет корпуса мины совпадает с палитрой гранаты")
+	var tex = Feed.Surface.svg_texture(Feed.MINE_SVG)
+	ck(tex is Texture2D and tex.get_width() > 0, "MINE_SVG рендерится в текстуру")
 
 func t_feed_norm_weapon() -> void:
 	var Feed = preload("res://mods/VTK/VTKFeed.gd")
