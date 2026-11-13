@@ -24,6 +24,7 @@ func _run() -> void:
 	t_float_int_coercion()
 	t_defaults_cover_every_field()
 	t_cycle_days_is_clamped()
+	t_mine_settings_defaults_and_clamp()
 	t_key_default_is_f3()
 	t_hud_font_default_is_16()
 	t_player_name_round_trip()
@@ -219,3 +220,20 @@ func t_player_name_is_cleaned() -> void:
 	ck(ConfigRec.clean_player_name("   ") == "Player", "пробелы -> Player")
 	ck(ConfigRec.clean_player_name("") == "Player", "пусто -> Player")
 	ck(ConfigRec.clean_player_name('A "B" \\ C') == 'A "B" \\ C', "кавычки и слэш остаются текстом")
+
+# Мины: дефолты и кламп радиуса. Числа границ живут в константах, потому что те
+# же числа стоят в minRange/maxRange регистрации MCM, а config.ini правится руками.
+func t_mine_settings_defaults_and_clamp() -> void:
+	var c: ConfigRec = ConfigRec.new()
+	c.read(ConfigFile.new())
+	ck(c.npc_mines_enabled and c.mine_smoke_enabled, "NPC-мины и дым включены по умолчанию")
+	ck(c.npc_mine_radius == 6, "радиус по умолчанию 6 м")
+	var cfg := ConfigFile.new()
+	cfg.set_value("Int", "npc_mine_radius", {"value": 100})
+	cfg.set_value("Bool", "npc_mines_enabled", {"value": false})
+	c.read(cfg)
+	ck(c.npc_mine_radius == ConfigRec.MINE_MAX_RADIUS, "верхняя граница радиуса")
+	ck(not c.npc_mines_enabled, "тумблер NPC-мин читается")
+	cfg.set_value("Int", "npc_mine_radius", {"value": 0})
+	c.read(cfg)
+	ck(c.npc_mine_radius == ConfigRec.MINE_MIN_RADIUS, "нижняя граница радиуса")

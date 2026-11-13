@@ -1,5 +1,5 @@
 extends RefCounted
-# Типизированный срез MCM-конфига: 12 ключей. Дефолты живут в DEFAULTS, и его
+# Типизированный срез MCM-конфига: 22 ключа. Дефолты живут в DEFAULTS, и его
 # читают объявления полей, регистрация VTKMCMBridge и тест. Разбор - read(), он
 # держит прежнюю семантику _mcm_key_val: приоритет d["value"] внутри словаря,
 # иначе примитив, иначе дефолт.
@@ -28,6 +28,9 @@ const DEFAULTS := {
 	"hud_offset_x": 10,
 	"hud_offset_y": 90,
 	"hud_font_size": 16,
+	"npc_mines_enabled": true,
+	"npc_mine_radius": 6,
+	"mine_smoke_enabled": true,
 	"season_enabled": true,
 	"season_start": "summer",
 	"season_cycle_days": 30,
@@ -38,6 +41,10 @@ const DEFAULTS := {
 # в UI: config.ini правится руками, а MCM можно обойти.
 const SEASON_MIN_DAYS := 1
 const SEASON_MAX_DAYS := 120
+# Те же числа, что в minRange/maxRange регистрации MCM: 3 м ещё задевает
+# стоящего рядом NPC, 10 м уже срабатывает от пробегающего.
+const MINE_MIN_RADIUS := 3
+const MINE_MAX_RADIUS := 10
 # Имя игрока в ленте: 15 символов хватает на видимую строку HUD, а больше
 # плашка не тянет. Печатный ASCII - по правилу репозитория мод не локализуется.
 const PLAYER_NAME_MAX := 15
@@ -57,6 +64,9 @@ var hud_anchor: String = DEFAULTS["hud_anchor"]
 var hud_offset_x: int = DEFAULTS["hud_offset_x"]
 var hud_offset_y: int = DEFAULTS["hud_offset_y"]
 var hud_font_size: int = DEFAULTS["hud_font_size"]
+var npc_mines_enabled: bool = DEFAULTS["npc_mines_enabled"]
+var npc_mine_radius: int = DEFAULTS["npc_mine_radius"]
+var mine_smoke_enabled: bool = DEFAULTS["mine_smoke_enabled"]
 var season_enabled: bool = DEFAULTS["season_enabled"]
 var season_start: String = DEFAULTS["season_start"]
 var season_cycle_days: int = DEFAULTS["season_cycle_days"]
@@ -87,6 +97,9 @@ func read(cfg: ConfigFile) -> void:
 	hud_offset_x = clampi(int(_val(cfg, "Int", "hud_offset_x", hud_offset_x)), -1000, 1000)
 	hud_offset_y = clampi(int(_val(cfg, "Int", "hud_offset_y", hud_offset_y)), -1000, 1000)
 	hud_font_size = clampi(int(_val(cfg, "Int", "hud_font_size", hud_font_size)), 12, 32)
+	npc_mines_enabled = bool(_val(cfg, "Bool", "npc_mines_enabled", npc_mines_enabled))
+	npc_mine_radius = clampi(int(_val(cfg, "Int", "npc_mine_radius", npc_mine_radius)), MINE_MIN_RADIUS, MINE_MAX_RADIUS)
+	mine_smoke_enabled = bool(_val(cfg, "Bool", "mine_smoke_enabled", mine_smoke_enabled))
 	season_enabled = bool(_val(cfg, "Bool", "season_enabled", season_enabled))
 	season_start = str(_val(cfg, "Dropdown", "season_start", season_start))
 	season_cycle_days = clampi(int(_val(cfg, "Int", "season_cycle_days", season_cycle_days)), SEASON_MIN_DAYS, SEASON_MAX_DAYS)
