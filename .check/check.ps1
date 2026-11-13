@@ -96,6 +96,7 @@ Write-Host "Parse check passed: $checked scripts"
 # _init() only takes down that one script and the run keeps going.
 $tests = [ordered]@{
     "vostok-toolkit" = @(
+        "res://tests/vostok-toolkit/test_blasts.gd",
         "res://tests/vostok-toolkit/test_composite.gd", "res://tests/vostok-toolkit/test_config.gd",
         "res://tests/vostok-toolkit/test_data.gd", "res://tests/vostok-toolkit/test_death_gate.gd",
         "res://tests/vostok-toolkit/test_deposits.gd",
