@@ -986,15 +986,7 @@ func _rig_weapon_name() -> String:
 # на нём нет ни Activate/dead, ни weapon, ни script-имени модели. Поднимаемся
 # по родителям к ближайшему агенту; если агента нет — исходный узел.
 func _agent_root(n: Node) -> Node:
-	var cur := n
-	for _i in 12:
-		if KC._is_agent(cur):
-			return cur
-		var p := cur.get_parent()
-		if p == null:
-			break
-		cur = p
-	return n
+	return KC.agent_root(n)
 
 func _weapon_name_of(n: Node) -> String:
 	if n != null and is_instance_valid(n) and "weaponData" in n:

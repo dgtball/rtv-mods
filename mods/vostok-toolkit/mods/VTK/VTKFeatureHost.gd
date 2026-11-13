@@ -5,6 +5,7 @@ extends RefCounted
 const Hooks := preload("res://mods/VTK/VTKHooks.gd")
 const Travel := preload("res://mods/VTK/VTKTravel.gd")
 const Feed := preload("res://mods/VTK/VTKFeed.gd")
+const Mines := preload("res://mods/VTK/VTKMines.gd")
 const ConfigRec := preload("res://mods/VTK/VTKConfig.gd")
 
 var _root: Node = null
@@ -13,6 +14,7 @@ var _hooks: Node = null
 var _travel: Node = null
 var _hud_node = null
 var _hud_canvas = null
+var _mines: Node = null
 
 var _counter_enabled: bool = true
 var _feed_enabled: bool = true
@@ -24,6 +26,9 @@ var _hud_font_size: int = ConfigRec.DEFAULTS["hud_font_size"]
 var _show_kill_distance: bool = ConfigRec.DEFAULTS["show_kill_distance"]
 var _longshot_distance_meters: int = ConfigRec.DEFAULTS["longshot_distance_meters"]
 var _player_name: String = "Player"
+var _npc_mines_enabled: bool = ConfigRec.DEFAULTS["npc_mines_enabled"]
+var _npc_mine_radius: int = ConfigRec.DEFAULTS["npc_mine_radius"]
+var _mine_smoke_enabled: bool = ConfigRec.DEFAULTS["mine_smoke_enabled"]
 
 func _init(root: Node) -> void:
 	_root = root
@@ -34,6 +39,7 @@ func _ensure_hooks() -> void:
 	_hooks = Hooks.new()
 	_root.add_child(_hooks)
 	_hooks.set_player_name(_player_name)
+	_wire_mines()
 
 func travel() -> Node:
 	_ensure_travel()
@@ -84,6 +90,39 @@ func apply_config(c: ConfigRec) -> void:
 	set_equip(c.auto_equip)
 	set_travel_unlocked(c.tp_unlocked_shelters_only)
 	_apply_hud()
+	set_mines(c.npc_mines_enabled, c.npc_mine_radius, c.mine_smoke_enabled)
+
+func set_mines(enabled: bool, radius: int, smoke: bool) -> void:
+	_npc_mines_enabled = enabled
+	_npc_mine_radius = radius
+	_mine_smoke_enabled = smoke
+	_ensure_mines()
+	if _mines == null or not is_instance_valid(_mines):
+		return
+	_mines.set_radius(radius)
+	_mines.set_enabled(enabled)
+	_mines.set_smoke(smoke)
+
+func _ensure_mines() -> void:
+	if _mines != null and is_instance_valid(_mines):
+		return
+	_mines = Mines.new()
+	_mines.name = "VTKMines"
+	_root.add_child(_mines)
+	_wire_mines()
+
+# Подписка через строки: _hooks типизирован Node, типизированного свойства
+# сигнала у него нет, а connect/is_connected по имени работают и идемпотентны.
+func _wire_mines() -> void:
+	if _hooks == null or not is_instance_valid(_hooks):
+		return
+	if _mines == null or not is_instance_valid(_mines):
+		return
+	if not _hooks.has_signal("mine_detonated"):
+		return
+	var cb := Callable(_mines, "on_detonated")
+	if not _hooks.is_connected("mine_detonated", cb):
+		_hooks.connect("mine_detonated", cb)
 
 func _ensure_travel() -> void:
 	if _travel != null and is_instance_valid(_travel):

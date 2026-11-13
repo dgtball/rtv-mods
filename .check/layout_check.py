@@ -247,6 +247,8 @@ PRESENT = [
     "_on_facet_input",
     "mine_detonated",
     "MINE_SVG",
+    "VTK_NPC_Detector",
+    "func set_mines(",
     "_set_gear_facet",
     "_refresh_gear_catalog",
     "_gear_facets_box",

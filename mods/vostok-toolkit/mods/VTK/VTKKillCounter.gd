@@ -11,6 +11,21 @@ const FACTION_BOSS := 4
 static func _is_agent(n: Node) -> bool:
 	return n is Node3D and "variant" in n
 
+# Атакующий приходит как ID-маркер (/root/Map/Core/Camera/ID, .../Identifier/ID):
+# на нём нет ни Activate/dead, ни weapon, ни script-имени модели. Поднимаемся
+# по родителям к ближайшему агенту; если агента нет — исходный узел. Читают
+# VTKHooks и VTKMines, поэтому тело живёт здесь (двух копий не держим).
+static func agent_root(n: Node) -> Node:
+	var cur := n
+	for _i in 12:
+		if _is_agent(cur):
+			return cur
+		var p := cur.get_parent()
+		if p == null:
+			break
+		cur = p
+	return n
+
 static func agent_kind(n: Node) -> String:
 	if not _is_agent(n):
 		return ""
