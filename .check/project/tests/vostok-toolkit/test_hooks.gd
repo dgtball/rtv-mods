@@ -102,6 +102,9 @@ func t_post_callback_arity() -> void:
 		"_on_ai_weapon_damage": 4,
 		"_on_ai_explosion": 2,
 		"_on_ai_death": 2,
+		# Mine.Detonate()/InstantDetonate() — ванильные void без аргументов.
+		"_on_mine_detonate": 0,
+		"_on_mine_instantdetonate": 0,
 		"_on_task_complete_pressed": 0,
 		"_on_context_take_replace": 0,
 		"_on_context_split_replace": 0,
@@ -352,6 +355,7 @@ func _run() -> void:
 	t_kill_counter_birth_in_disabled()
 	t_marker_attacker()
 	t_explosion_kill()
+	t_mine_kill()
 	t_kill_distance_from_player_body()
 	t_player_rig_weapon()
 	t_context_destroy_shown_in_grid()
@@ -833,6 +837,10 @@ class FakeVariant extends RefCounted:
 	var faction := 0
 	var name := "Bandit"
 
+# Мина: колбэки взвода читают её как _lib._caller и берут global_position.
+class FakeMine extends Node3D:
+	var isDetonated := false
+
 class FakeAgent2 extends Node3D:
 	var dead := false
 	var health := 100
@@ -935,6 +943,131 @@ func t_explosion_kill() -> void:
 
 	victim.free()
 	player.free()
+	h.queue_free()
+
+# Мина приходит в хуки без id бросившего: Mine.Detonate (сама) и
+# Mine.InstantDetonate (выстрел по мине) пишут взвод в кольцо, а
+# ai-explosiondamage с id == null ищет покрывающую запись.
+func t_mine_kill() -> void:
+	var Blasts = preload("res://mods/VTK/VTKBlasts.gd")
+	var evs: Array = []
+	var h = TestHooks.new()
+	root.add_child(h)
+	h.connect("kill_event", func(ev: Dictionary) -> void: evs.append(ev))
+	var lib := FakeLib2.new()
+	h._lib = lib
+
+	# 1. Выстрел игрока по мине: мина в (0,0,0), жертва в 10 м.
+	var mine := FakeMine.new()
+	mine.name = "Mine"
+	root.add_child(mine)
+	mine.global_position = Vector3.ZERO
+	h._blasts.clear()
+	lib._caller = mine
+	h._on_mine_instantdetonate()
+	ck(h._blasts.size() == 1, "выстрел по мине: одна запись")
+	ck(bool(h._blasts[0]["player"]), "выстрел по мине: player=true")
+
+	var victim := FakeAgent2.new()
+	victim.name = "AI_Bandit"
+	victim.variant.faction = 1
+	victim.variant.name = "Bandit"
+	root.add_child(victim)
+	victim.global_position = Vector3(0, 0, 10)
+	lib._caller = victim
+	h._on_ai_explosion(Vector3.ZERO, null)
+	_die_native(h, lib, victim, true)
+	ck(evs.size() == 1, "выстрел по мине: одно событие")
+	if evs.size() == 1:
+		var ev: Dictionary = evs[0]
+		ck(str(ev["killer_kind"]) == "player", "выстрел по мине -> player")
+		ck(str(ev["killer_name"]) == "Player", "выстрел по мине подписан игроком")
+		ck(bool(ev["mine"]), "выстрел по мине: mine=true")
+		ck(bool(ev["grenade"]), "grenade остаётся флагом гейта")
+	ck(h.get_kill_count() == 1, "выстрел по мине посчитан игроку")
+	ck(h._blasts.size() == 1, "match не съедает запись кольца")
+
+	# 2. Вторая жертва того же взрыва: та же мина, другое тело.
+	h._blasts = Blasts.record([], Vector3.ZERO, Time.get_ticks_msec(), 2.0, true)
+	var victim2 := FakeAgent2.new()
+	victim2.name = "AI_Bandit2"
+	victim2.variant.faction = 1
+	root.add_child(victim2)
+	victim2.global_position = Vector3(0, 0, -10)
+	lib._caller = victim2
+	h._on_ai_explosion(Vector3.ZERO, null)
+	_die_native(h, lib, victim2, true)
+	ck(evs.size() == 2, "вторая жертва добавляет событие")
+	if evs.size() == 2:
+		ck(str(evs[1]["killer_kind"]) == "player" and bool(evs[1]["mine"]),
+			"вторая жертва того же взрыва -> player + mine")
+	ck(h.get_kill_count() == 2, "обе жертвы посчитаны игроку")
+
+	# 3. Мина сработала сама: Detonate взводит, повтор игнорируется.
+	var mine2 := FakeMine.new()
+	mine2.name = "Mine2"
+	root.add_child(mine2)
+	mine2.global_position = Vector3(100, 0, 0)
+	h._blasts.clear()
+	lib._caller = mine2
+	h._on_mine_detonate()
+	var armed: int = h._blasts.size()
+	ck(armed == 1, "Detonate пишет одну запись")
+	ck(not bool(h._blasts[0]["player"]), "Detonate: player=false")
+	mine2.isDetonated = true
+	lib._caller = mine2
+	h._on_mine_detonate()
+	ck(h._blasts.size() == armed, "повторный Detonate не пишет вторую запись")
+
+	var victim3 := FakeAgent2.new()
+	victim3.name = "AI_Bandit3"
+	victim3.variant.faction = 1
+	root.add_child(victim3)
+	victim3.global_position = Vector3(100, 0, 9)
+	lib._caller = victim3
+	h._on_ai_explosion(Vector3.ZERO, null)
+	_die_native(h, lib, victim3, true)
+	ck(evs.size() == 3, "мина сама: событие есть")
+	if evs.size() == 3:
+		ck(str(evs[2]["killer_kind"]) == "mine", "мина сама -> killer_kind mine")
+		ck(str(evs[2]["killer_name"]) == "", "у мины пустое имя убийцы")
+		ck(bool(evs[2]["mine"]), "мина сама: mine=true")
+	ck(h.get_kill_count() == 2, "мина сама не добавляет килл игроку")
+
+	# 4. Взрыв без записи в кольце: строка не появляется.
+	var victim4 := FakeAgent2.new()
+	victim4.name = "AI_Bandit4"
+	victim4.variant.faction = 1
+	root.add_child(victim4)
+	victim4.global_position = Vector3(300, 0, 0)
+	lib._caller = victim4
+	h._on_ai_explosion(Vector3.ZERO, null)
+	_die_native(h, lib, victim4, true)
+	ck(evs.size() == 3, "взрыв без записи в кольце события не даёт")
+	ck(h.get_kill_count() == 2, "счётчик не вырос")
+
+	# 5. Граната ИИ внутри окна: id != null, к мину не уезжает.
+	h._blasts = Blasts.record([], Vector3(100, 0, 0), Time.get_ticks_msec(), 2.0, false)
+	var thrower := FakeAgent2.new()
+	thrower.name = "AI_Thrower"
+	thrower.variant.faction = 1
+	root.add_child(thrower)
+	var victim5 := FakeAgent2.new()
+	victim5.name = "AI_Bandit5"
+	victim5.variant.faction = 1
+	root.add_child(victim5)
+	victim5.global_position = Vector3(100, 0, 5)
+	lib._caller = victim5
+	h._on_ai_explosion(Vector3.ZERO, thrower)
+	_die_native(h, lib, victim5, true)
+	ck(evs.size() == 4, "граната ИИ: событие есть")
+	if evs.size() == 4:
+		ck(str(evs[3]["killer_kind"]) == "enemy", "id != null -> граната ИИ, не мина")
+		ck(not bool(evs[3]["mine"]), "граната ИИ: mine=false")
+	ck(h.get_kill_count() == 2, "граната ИИ не засчитана игроку")
+
+	mine.free(); mine2.free(); thrower.free()
+	victim.free(); victim2.free(); victim3.free(); victim4.free(); victim5.free()
 	h.queue_free()
 
 # Ни GameData, ни узел игрока не несут имени оружия: настоящее — WeaponRig
@@ -1598,7 +1731,7 @@ func t_hook_handles_are_counted() -> void:
 	root.add_child(lib)
 	h._lib = lib
 	h._do_register()
-	ck(lib.names.size() == 25, "регистрируются все 25 хуков")
+	ck(lib.names.size() == 27, "регистрируются все 27 хуков")
 	ck(h._hook_ids.size() == lib.names.size(), "каждый hook() кладёт хэндл в _hook_ids")
 	var seen := {}
 	for id in h._hook_ids:
@@ -1609,7 +1742,7 @@ func t_hook_handles_are_counted() -> void:
 		uniq[n] = true
 	ck(uniq.size() == lib.names.size(), "имена хуков не повторяются")
 	h._do_register()
-	ck(lib.names.size() == 25, "повторный _do_register не регистрирует хуки заново")
+	ck(lib.names.size() == 27, "повторный _do_register не регистрирует хуки заново")
 	h.queue_free()
 	lib.queue_free()
 

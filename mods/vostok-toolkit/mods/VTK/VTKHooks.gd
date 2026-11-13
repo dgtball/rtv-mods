@@ -9,7 +9,7 @@ var _registered: bool = false
 const OBSERVER_CONTRACT := 1
 var _lib = null
 var _kill_count: int = 0
-# Хэндлы всех 26 хуков: единственный источник цифры в логе регистрации.
+# Хэндлы всех 27 хуков: единственный источник цифры в логе регистрации.
 var _hook_ids: Array[int] = []
 
 const KC = preload("res://mods/VTK/VTKKillCounter.gd")
@@ -21,6 +21,7 @@ const Items := preload("res://mods/VTK/VTKItemStore.gd")
 const ConfigRec := preload("res://mods/VTK/VTKConfig.gd")
 const SEASONS := preload("res://mods/VTK/VTKSeasons.gd")
 const SEASON_DRV := preload("res://mods/VTK/VTKSeasonDriver.gd")
+const Blasts := preload("res://mods/VTK/VTKBlasts.gd")
 const HIT_WINDOW_MSEC := 15000
 const SEEN_DEATHS_TTL_MSEC := 600000
 # Сезон меняется раз в season_cycle_days: проверять его 60 раз в секунду
@@ -49,9 +50,14 @@ signal kill_event(ev: Dictionary)
 signal player_died
 signal new_game_started
 signal travel_arrived
+# Взвод мины: VTKMines вешает на него дым. Флаг «чей» сигналу не нужен.
+signal mine_detonated(pos: Vector3)
 
 var _last_damager: Dictionary = {}
 var _seen_deaths: Dictionary = {}
+# Кольцо недавних взводов: ai-explosiondamage с id == null приходит без
+# бросившего, и покрывающая запись восстанавливает убийцу.
+var _blasts: Array = []
 var _sweep_at: int = 0
 
 var _gd_node = null
@@ -180,6 +186,9 @@ func _do_register() -> void:
 	_hook_ids.append(_lib.hook("interface-contexttransfer-post", _on_contexttransfer_post))
 	_hook_ids.append(_lib.hook("interface-grab-pre", _on_grab_pre))
 	_hook_ids.append(_lib.hook("interface-release-post", _on_release_post))
+	# Мина: оба метода ванильные void без аргументов, мина — _lib._caller.
+	_hook_ids.append(_lib.hook("mine-detonate-pre", _on_mine_detonate))
+	_hook_ids.append(_lib.hook("mine-instantdetonate-pre", _on_mine_instantdetonate))
 	_registered = true
 	Log.log("[VTK] Per-frame hooks registered (" + str(_hook_ids.size()) + " hooks)")
 
@@ -792,6 +801,38 @@ func _on_ai_weapon_damage(_hitbox, _damage, _vector, id) -> void:
 			rec["weapon"] = _weapon_name_of(atk)
 	_last_damager[victim_ai.get_instance_id()] = rec
 
+# Взвод мины. Detonate — мина сработала сама (наступили), InstantDetonate —
+# выстрел по мине. Оба ванильных метода void без аргументов, мина лежит в
+# _lib._caller. Пишем в pre, чтобы запись в кольце была до ExplosionDamage.
+func _on_mine_detonate() -> void:
+	var mine := _mine_caller()
+	if mine == null:
+		return
+	# Ваниль уже защищена isDetonated, но вторая запись испортила бы окно.
+	if bool(_ai_prop(mine, "isDetonated")):
+		return
+	_arm_mine(mine, 2.0, false)
+
+func _on_mine_instantdetonate() -> void:
+	var mine := _mine_caller()
+	if mine == null:
+		return
+	_arm_mine(mine, 0.5, true)
+
+func _mine_caller() -> Node3D:
+	if _lib == null:
+		return null
+	var mine = _lib._caller
+	if mine == null or not is_instance_valid(mine) or not (mine is Node3D):
+		return null
+	return mine
+
+# Высота взрыва разная: InstantDetonate бьёт почти по земле, Detonate — выше.
+func _arm_mine(mine: Node3D, h: float, player: bool) -> void:
+	var pos := mine.global_position
+	_blasts = Blasts.record(_blasts, pos, Time.get_ticks_msec(), h, player)
+	mine_detonated.emit(pos)
+
 # Гранаты и взрывы идут мимо ai-weapondamage (probe Task 1, п.4):
 # ai-explosiondamage(_direction, id), caller=жертва, id=Area бросившего
 # (grpP=true). Без записи здесь взрывной килл не попадает ни в счётчик,
@@ -817,6 +858,18 @@ func _on_ai_explosion(_direction, id) -> void:
 			var kind := KC.agent_kind(atk)
 			rec["killer_kind"] = kind if kind != "" else "enemy"
 			rec["killer_name"] = KC.agent_display_name(atk)
+	# Мина не отдаёт бросившего (id == null): убийцу восстанавливаем по кольцу
+	# взводов. Раньше такой взрыв уходил в _on_ai_death с пустым killer_kind, и
+	# _resolve_kill возвращал {} — килл пропадал и из ленты, и из счётчика.
+	if id == null and victim_ai is Node3D:
+		var blast: Dictionary = Blasts.match(_blasts, victim_ai.global_position, int(rec["t"]))
+		if not blast.is_empty():
+			if bool(blast["player"]):
+				rec["killer_kind"] = "player"
+				rec["killer_name"] = _player_name
+			else:
+				rec["killer_kind"] = "mine"
+			rec["mine"] = true
 	_last_damager[victim_ai.get_instance_id()] = rec
 
 func _on_ai_death(_direction, _force) -> void:
@@ -874,6 +927,7 @@ func _resolve_kill(ai: Node) -> Dictionary:
 			"weapon": "",
 			"headshot": false,
 			"grenade": false,
+			"mine": bool(rec.get("mine", false)),
 			"t": now,
 			"distance": -1.0,
 		}
@@ -898,6 +952,7 @@ func _resolve_kill(ai: Node) -> Dictionary:
 		"weapon": weapon,
 		"headshot": str(rec.get("hitbox", "")).to_lower() == "head",
 		"grenade": bool(rec.get("grenade", false)) or _is_grenade(weapon),
+		"mine": bool(rec.get("mine", false)),
 		"t": now,
 		"distance": distance,
 	}

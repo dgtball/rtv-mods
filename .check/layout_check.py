@@ -47,14 +47,14 @@ HOOK_RE = re.compile(r'_lib\.hook\("([^"]+)"')
 # Если VTKHooks.gd переименуют, hook_requirements вернёт пусто, и проход молча
 # отчитается "HOOKS: 0" вместо провала - ровно тот тихий отказ, ради которого
 # он заведён. Счётчик - единственная страховка от этого.
-HOOK_COUNT = 25
+HOOK_COUNT = 27
 # Префикс имени хука -> файл ванильного скрипта. Единственная ручная часть:
 # неизвестный префикс - провал, иначе новый хук выпал бы из проверки молча.
 HOOK_CLASS = {
     "controller": "Controller", "ai": "AI", "trader": "Trader",
     "interface": "Interface", "task": "Task", "loader": "Loader",
     "compiler": "Compiler", "death": "Death", "context": "Context",
-    "pickup": "Pickup",
+    "pickup": "Pickup", "mine": "Mine",
 }
 
 GONE = [
@@ -245,6 +245,7 @@ PRESENT = [
     "_target_bar",
     "_make_facet_row",
     "_on_facet_input",
+    "mine_detonated",
     "_set_gear_facet",
     "_refresh_gear_catalog",
     "_gear_facets_box",

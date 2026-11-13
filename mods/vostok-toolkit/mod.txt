@@ -17,6 +17,7 @@ res://Scripts/Task.gd = _on_complete_pressed
 res://Scripts/Death.gd = _ready, _on_load_pressed
 res://Scripts/Loader.gd = NewGame, LoadCharacter
 res://Scripts/Compiler.gd = Spawn
+res://Scripts/Mine.gd = Detonate, InstantDetonate
 
 [updates]
 source="vostokmods:01a130a0-7fae-7214-bc07-7d33d99e3d70"
