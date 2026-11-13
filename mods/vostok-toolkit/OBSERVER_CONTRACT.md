@@ -142,17 +142,26 @@ Always present, always these types:
 | Key | Type | Meaning |
 |---|---|---|
 | `self_death` | `bool` | The hit record is older than 15 s — the NPC died on its own |
-| `killer_kind` | `String` | `"player"`, an agent kind, or `""` for self death |
+| `killer_kind` | `String` | `"player"`, an agent kind, `"mine"`, or `""` for self death |
 | `killer_name` | `String` | Display name; `"Player"` (or the configured name) for the player |
 | `victim_kind` | `String` | Agent kind of the victim |
 | `victim_name` | `String` | Display name of the victim |
 | `weapon` | `String` | Weapon name when resolvable, otherwise `""` |
 | `headshot` | `bool` | Hitbox string was `head` |
 | `grenade` | `bool` | Explosion kill, or the weapon is in `Grenades/` |
+| `mine` | `bool` | Mine kill: true for a mine kill, a shot on a mine, or a blast that trips one |
 | `t` | `int` | `Time.get_ticks_msec()` at emit |
 | `distance` | `float` | Metres, player kills only; `-1.0` otherwise |
 
-Ten keys, no more and no less in v1.
+Eleven keys, no more and no less in v1.
+
+`mine` is **additive**. It was added for display only: the lethal gate, dedup,
+emit ordering and the meaning of every pre-existing key are unchanged, which is
+why `OBSERVER_CONTRACT` stays `1`. An observer written against the ten-key
+payload keeps working — extra keys are ignored. A mine that goes off on its own
+reports `killer_kind == "mine"` with an empty `killer_name`; a shot on a mine
+reports `killer_kind == "player"` like any other player kill. `grenade` remains
+`true` in both cases, because it is the flag the lethal gate uses for blasts.
 
 Two different cases hide behind "the victim died without a live hit record":
 
@@ -224,7 +233,7 @@ Structural checks, no source hashing:
    `_hooks` on that object is the `VTKHooks` node. Zero connections is valid when
    the HUD has never been enabled.
 4. No replace hooks on `ai-weapondamage`, `ai-explosiondamage`, `ai-death`.
-5. Payload shape: all ten keys present with the declared types.
+5. Payload shape: all eleven keys present with the declared types.
 
 Behaviour checks that need a live run:
 
@@ -245,7 +254,7 @@ is the cheap "is the surface still shaped as expected" check above.
 
 - VTK release version, or any mapping from it to the contract version.
 - Source file hashes of any VTK script.
-- Hooks unrelated to death observation (25 registered in total).
+- Hooks unrelated to death observation (27 registered in total).
 - MCM keys and values, `config.ini`, saved sets, deposit ledger.
 - UI appearance and layout: window, tabs, HUD widget styling, HUD position,
   offset and font size. The node *identity* used in §5 is in scope; how it looks

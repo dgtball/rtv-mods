@@ -1,5 +1,15 @@
 # Changelog
 
+## [5.7.0] - 2026-11-13
+
+### Added
+
+- Mines appear in the kill feed with their own icon instead of disappearing.
+  Shooting a mine that kills an enemy counts as your kill; a mine that goes off
+  on its own is credited to the mine and does not add to your count or streak.
+- NPCs now trip mines (MCM: NPC-triggered mines and trigger radius).
+- A smoke cloud rises after a mine detonates (MCM: Smoke after detonation).
+
 ## [5.6.6] - 2026-11-13
 
 ### Fixed

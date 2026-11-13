@@ -16,6 +16,7 @@ Everything a Vostok run needs in one mod: loadout presets, dynamic seasons, fast
 | **Item delete** | Delete an item straight from the inventory. |
 | **Better Tasks** | Completed-quest auto-cleanup, partial hand-in, Notes icon rows. |
 | **Kill Stats & Killfeed** | HUD kill/enemy counter and a dynamic killfeed that shows your own name (set in MCM). |
+| **Mine kills** | Mines appear in the killfeed, NPCs trip mines, and smoke rises after detonation (MCM). |
 | **Fast Travel** | Move between maps, shelters and traders. |
 
 ## Installation
