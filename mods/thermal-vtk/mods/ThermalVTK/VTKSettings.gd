@@ -60,6 +60,8 @@ class Rec:
 	var color_normal: Color = States.DEFAULT_NORMAL
 	var color_combat: Color = States.DEFAULT_COMBAT
 	var color_defend: Color = States.DEFAULT_DEFEND
+	# Display colour of the mine ESP (mines are filled whole, not outlined).
+	var color_mine: Color = States.DEFAULT_MINE
 
 	func state_colors() -> Dictionary:
 		return {
@@ -81,13 +83,14 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Bool", "key": "body_fill", "name": "Full body fill", "def": false, "cat": "01. ThermalVision", "pos": 4, "tip": "Paint the whole NPC silhouette instead of a ring. The rim is still drawn around the fill, and walls still clip it."},
 	{"sect": "Bool", "key": "outline_xray", "name": "X-ray Triggers", "def": true, "cat": "01. ThermalVision", "pos": 5, "tip": "While on, the NPC ring lights up through walls only while a sound event is live: gunfire, shouts, idle chatter, footsteps, reloads, pain cries or grenade throws. Between events the outline stays a normal ring behind walls. The reveal timers themselves show on the debug labels regardless of this toggle."},
 	{"sect": "Bool", "key": "thermal_mines", "name": "Mine ESP", "def": true, "cat": "01. ThermalVision", "pos": 6, "tip": "Highlight mines while thermal vision is on."},
+	{"sect": "Color", "key": "mine_color", "name": "Mine", "def": States.DEFAULT_MINE, "cat": "01. ThermalVision", "pos": 7, "tip": "Colour the thermal layer paints over a mine. Mines are filled whole, not outlined."},
 	{"sect": "Bool", "key": "nomad_marker", "name": "Nomads marker", "def": true, "cat": "01. ThermalVision", "pos": 2, "tip": "Draw a small triangle over friendly nomads while thermal vision is on. Obeys the Distance setting. Independent of the debug log."},
-	{"sect": "Float", "key": "nvg_noise", "name": "NVG noise", "def": 0.0, "min": 0.0, "max": 60.0, "step": 0.5, "cat": "01. ThermalVision", "pos": 7, "tip": "Grain amount over the NVG image. Lower is cleaner. Vanilla is fixed at 10."},
-	{"sect": "Float", "key": "nvg_white", "name": "NVG brightness", "def": 1.0, "min": 0.05, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 8, "tip": "Brightness of the NVG image. 1 = full brightness; lower darkens the whole overlay."},
-	{"sect": "Float", "key": "thermal_world", "name": "World brightness", "def": 1.70, "min": 1.0, "max": 4.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 9, "tip": "How bright the surrounding world reads in thermal."},
-	{"sect": "Bool", "key": "daylight_compensation", "name": "Daylight compensation", "def": true, "cat": "01. ThermalVision", "pos": 10, "tip": "In bright daylight, lower the game's exposure so snow and sky keep detail instead of washing out. At night the unmodified night-vision exposure is kept, so the picture matches vanilla. Dark places seen in daylight stay readable."},
-	{"sect": "Float", "key": "daylight_strength", "name": "Daylight strength", "def": 1.0, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 11, "tip": "How much daylight compensation is applied at all. 0 = vanilla NVG exposure, 1 = full compensation."},
-	{"sect": "Float", "key": "thermal_highlight_knee", "name": "Highlight softness", "def": 0.6, "min": 0.3, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 12, "tip": "In daylight, background pixels brighter than this (snow, sky, clouds) bend into a softer highlight and keep their detail instead of washing out. Lower = stronger trim. Night is unaffected; 1.0 disables it."},
+	{"sect": "Float", "key": "nvg_noise", "name": "NVG noise", "def": 0.0, "min": 0.0, "max": 60.0, "step": 0.5, "cat": "01. ThermalVision", "pos": 8, "tip": "Grain amount over the NVG image. Lower is cleaner. Vanilla is fixed at 10."},
+	{"sect": "Float", "key": "nvg_white", "name": "NVG brightness", "def": 1.0, "min": 0.05, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 9, "tip": "Brightness of the NVG image. 1 = full brightness; lower darkens the whole overlay."},
+	{"sect": "Float", "key": "thermal_world", "name": "World brightness", "def": 1.70, "min": 1.0, "max": 4.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 10, "tip": "How bright the surrounding world reads in thermal."},
+	{"sect": "Bool", "key": "daylight_compensation", "name": "Daylight compensation", "def": true, "cat": "01. ThermalVision", "pos": 11, "tip": "In bright daylight, lower the game's exposure so snow and sky keep detail instead of washing out. At night the unmodified night-vision exposure is kept, so the picture matches vanilla. Dark places seen in daylight stay readable."},
+	{"sect": "Float", "key": "daylight_strength", "name": "Daylight strength", "def": 1.0, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 12, "tip": "How much daylight compensation is applied at all. 0 = vanilla NVG exposure, 1 = full compensation."},
+	{"sect": "Float", "key": "thermal_highlight_knee", "name": "Highlight softness", "def": 0.6, "min": 0.3, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 13, "tip": "In daylight, background pixels brighter than this (snow, sky, clouds) bend into a softer highlight and keep their detail instead of washing out. Lower = stronger trim. Night is unaffected; 1.0 disables it."},
 	{"sect": "Float", "key": "outline_distance", "name": "Distance", "def": 60.0, "min": 0.0, "max": 300.0, "step": 10.0, "cat": "02. NPC", "pos": 0, "tip": "Maximum distance for an outline. Outlines are hidden past this range."},
 	{"sect": "Float", "key": "outline_rim", "name": "Rim", "def": 2.0, "min": 0.0, "max": 6.0, "step": 0.5, "cat": "02. NPC", "pos": 1, "tip": "Edge sharpness of the outline. 1.0 is a linear falloff; higher values tighten the band toward the silhouette."},
 	{"sect": "Float", "key": "outline_thickness", "name": "Thickness", "def": 0.006, "min": 0.001, "max": 0.02, "step": 0.001, "cat": "02. NPC", "pos": 2, "tip": "How far the outline band grows beyond the body."},
@@ -193,6 +196,7 @@ static func read(cfg: ConfigFile) -> Rec:
 	rec.color_normal = _col(cfg, "state_normal", rec.color_normal)
 	rec.color_combat = _col(cfg, "state_combat", rec.color_combat)
 	rec.color_defend = _col(cfg, "state_defend", rec.color_defend)
+	rec.color_mine = _col(cfg, "mine_color", rec.color_mine)
 	return rec
 
 # One shape for an MCM entry: {"name": ..., "value": X, ...}. A bare scalar

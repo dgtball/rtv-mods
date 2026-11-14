@@ -3,7 +3,6 @@ extends SceneTree
 const Outline = preload("res://mods/ThermalVTK/VTKOutline.gd")
 const Sh = preload("res://mods/ThermalVTK/VTKShaders.gd")
 const S = preload("res://mods/ThermalVTK/VTKStates.gd")
-const EspMask = preload("res://mods/ThermalVTK/VTKEspMask.gd")
 
 var fails := 0
 
@@ -25,8 +24,9 @@ func _run() -> void:
 	t_material_mask_contract()
 	t_scope_thin_rim()
 	t_scope_seed_on_late_apply()
-	t_shells()
-	t_shell_recollect()
+	t_overlay_on_mesh()
+	t_fill_chain()
+	t_recollect_keeps_overlay()
 	t_entry_xray()
 	t_clear_not_in()
 	print("")
@@ -56,9 +56,9 @@ func t_collect_all_geometry() -> void:
 	mesh.mesh = BoxMesh.new()
 	mesh.visible = false
 	root.add_child(mesh)
-	# A shell is a sibling copy of a mesh, so a MultiMesh/CSG/Decal has nothing
-	# to mirror: collecting them only grew empty pairs and triggered recollects
-	# (a bullet decal on a body did it on every hit).
+	# The overlay only attaches to MeshInstance3D: a MultiMesh/CSG/Decal has no
+	# material_overlay to paint, and collecting them only grew empty work and
+	# triggered recollects (a bullet decal on a body did it on every hit).
 	var mm := MultiMeshInstance3D.new()
 	root.add_child(mm)
 	var plain := Node3D.new()
@@ -67,12 +67,12 @@ func t_collect_all_geometry() -> void:
 	var out: Array = []
 	o._collect(root, out)
 	ck(out.size() == 1, "geometry collected (mesh instances only): %d" % out.size())
-	ck(out.has(mesh), "an invisible LOD still carries a shell")
-	ck(not out.has(mm), "a MultiMesh has no sibling shell")
+	ck(out.has(mesh), "an invisible LOD still gets the overlay")
+	ck(not out.has(mm), "a MultiMesh has no overlay target")
 	root.free()
 
 # The nomad marker and the debug label live under the bot; painting them too
-# would put a ring around a ring.
+# would put a contour around a contour.
 func t_collect_skips_mod_geometry() -> void:
 	var root := Node3D.new()
 	var bot := MeshInstance3D.new()
@@ -92,7 +92,7 @@ func t_collect_skips_mod_geometry() -> void:
 	root.free()
 
 # The ring carries the mask category (not a drawn colour), grow, rim and the
-# cooling fade from opts.
+# cooling fade from opts, and the material is in place on the first frame.
 func t_refresh_sets_state_color() -> void:
 	var root := Node3D.new()
 	var mesh := MeshInstance3D.new()
@@ -101,7 +101,7 @@ func t_refresh_sets_state_color() -> void:
 	var o = Outline.new()
 	o.apply(7, root, {"cat": S.COMBAT, "grow": 0.01, "cool": 0.5, "rim": 1.4})
 	var ring: ShaderMaterial = o._items[7]["ring"]
-	ck(ring.get_shader_parameter("state_color") == S.MASK_COMBAT, "ring state_color set to the category mask key")
+	ck(ring.get_shader_parameter("state_color") == S.KEY_COMBAT, "ring state_color set to the category key")
 	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.01), "ring grow set")
 	ck(is_equal_approx(float(ring.get_shader_parameter("cool")), 0.5), "ring cool set")
 	ck(is_equal_approx(float(ring.get_shader_parameter("rim_power")), 1.4), "ring rim_power set")
@@ -109,9 +109,10 @@ func t_refresh_sets_state_color() -> void:
 	o.clear(7)
 	root.free()
 
-# The mask shader writes the pure channel key; the NVG overlay reads the
-# dominant channel and substitutes the display colour. The old daylight key
-# gain is meaningless here: the mask never passes through the tonemap.
+# The ring shader writes the raw category key into the main 3D pass; the NVG
+# overlay matches the washed pixel and substitutes the display colour. The key
+# gain is back: daylight compensation lowers the exposure, so the key has to be
+# scaled by the same factor or its washed value drifts out of the detector.
 func t_material_mask_contract() -> void:
 	var root := Node3D.new()
 	var mesh := MeshInstance3D.new()
@@ -123,9 +124,9 @@ func t_material_mask_contract() -> void:
 	var code := String(ring.shader.code)
 	ck(code.contains("uniform vec3 state_color"), "mask ring declares state_color")
 	ck(code.contains("stencil_mode read"), "mask ring reads the body stencil")
-	ck(not code.contains("vtk_key_gain"), "mask ring has no daylight key gain")
-	ck(not code.contains("state_key"), "mask ring has no detector key")
-	ck(ring.get_shader_parameter("state_color") == S.MASK_DEFEND, "defend writes the blue channel")
+	ck(code.contains("vtk_key_gain"), "mask ring scales the key back in daylight")
+	ck(not code.contains("floor_alpha"), "mask ring has no coverage floor")
+	ck(ring.get_shader_parameter("state_color") == S.KEY_DEFEND, "defend writes the magenta key")
 	o.clear(11)
 	root.free()
 
@@ -169,11 +170,10 @@ func t_scope_seed_on_late_apply() -> void:
 	o.clear(9)
 	root.free()
 
-# The ring draws on ghost shells: a sibling copy of the mesh receives
-# material_override, so the bot's own material pipeline cannot hide it. The
-# shells live on the mask layer only, so no picture camera draws them; the
-# source mesh keeps its material untouched.
-func t_shells() -> void:
+# The contour is a material_overlay on the bot's own meshes: it lives in the
+# main 3D pass, so the depth test clips it against walls, the weapon and the
+# sight glass for free. There is no second world pass and no ghost shell.
+func t_overlay_on_mesh() -> void:
 	var root := Node3D.new()
 	var mesh := MeshInstance3D.new()
 	mesh.mesh = BoxMesh.new()
@@ -182,65 +182,84 @@ func t_shells() -> void:
 	root.add_child(mm)
 	var o = Outline.new()
 	o.apply(3, root, {"cat": S.NORMAL, "grow": 0.01, "cool": 0.0})
-	var pairs: Array = o._items[3]["pairs"]
-	ck(pairs.size() == 1, "one pair per collected mesh")
-	var shell: MeshInstance3D = pairs[0]["shell"]
-	ck(shell != null and is_instance_valid(shell), "mesh got a shell")
-	ck(shell.mesh == mesh.mesh, "shell shares the source mesh")
-	ck(shell.layers == EspMask.LAYER_MASK, "shell lives on the mask layer only")
-	ck((shell.layers & 1) == 0, "shell is invisible to the world camera")
-	ck(shell.material_override == o._items[3]["ring"], "shell carries the ring as override")
-	ck(shell.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "shell casts no shadow")
-	ck(shell.has_meta("vtk_no_contour"), "shell opts out of the sweep")
-	ck(shell.get_parent() == root, "shell neighbours the source")
-	ck(mesh.material_overlay == null, "source mesh keeps its material")
-	ck(mm.material_overlay == null, "non-mesh geometry is not collected and keeps its own material")
+	var mat: ShaderMaterial = o._items[3]["mat"]
+	ck(mat != null and mat.shader == Sh.mask_ring(), "the ring material is the contour overlay")
+	ck(mesh.material_overlay == mat, "the mesh carries the contour as material_overlay")
+	ck(mesh.material_override == null, "the source material pipeline is untouched")
+	ck(mm.material_overlay == null, "non-mesh geometry gets no overlay")
+	ck(o.shell_count() == 1, "one overlay pass is counted")
+	ck(o._items[3]["ring"] == mat, "a plain ring is its own ring pass")
 	o.clear(3)
-	ck(not is_instance_valid(shell) or shell.is_queued_for_deletion(), "clear frees the shell")
+	ck(mesh.material_overlay == null, "clear removes the overlay")
 	root.free()
 
-# Recollect on child-count growth re-sweeps the rig, but it is incremental: a
-# shell whose source is still there is reused, only a newly appeared mesh gets
-# a new one. The vanilla AI adds and removes a direct child on most steps and
-# lines (audio players, identifier), so free-and-recreate here churned 10-23
-# MeshInstance3D per event, several times per second per bot.
-func t_shell_recollect() -> void:
+# Full body is one chain: the body pass paints the silhouette and marks the
+# stencil, the next_pass ring draws strictly outside it. Both write the key, so
+# the NVG detector finds the category anywhere on the silhouette, and every
+# uniform has to reach the pass that actually uses it.
+func t_fill_chain() -> void:
+	var root := Node3D.new()
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	root.add_child(mesh)
+	var o = Outline.new()
+	o.apply(4, root, {"cat": S.COMBAT, "fill": true, "grow": 0.01, "rim": 1.5})
+	var body: ShaderMaterial = o._items[4]["mat"]
+	var ring: ShaderMaterial = o._items[4]["ring"]
+	ck(body.shader == Sh.mask_fill(), "fill mode starts with the body pass")
+	ck(ring != body and ring.shader == Sh.mask_ring(), "the body chains the ring through next_pass")
+	ck(body.next_pass == ring, "next_pass points at the ring")
+	ck(mesh.material_overlay == body, "the chain goes on as one overlay")
+	ck(body.get_shader_parameter("state_color") == S.KEY_COMBAT, "the body paints the category key")
+	ck(ring.get_shader_parameter("state_color") == S.KEY_COMBAT, "the ring paints the same key")
+	ck(is_equal_approx(float(ring.get_shader_parameter("rim_power")), 1.5), "ring uniforms reach the next_pass")
+	o.refresh(4, {"cat": S.DEFEND, "fill": true, "grow": 0.02, "rim": 0.0, "cool": 0.4})
+	ck(body.get_shader_parameter("state_color") == S.KEY_DEFEND, "refresh repaints the body")
+	ck(ring.get_shader_parameter("state_color") == S.KEY_DEFEND, "refresh repaints the next_pass")
+	ck(is_equal_approx(float(ring.get_shader_parameter("rim_power")), 0.0), "refresh reaches the next_pass rim")
+	ck(is_equal_approx(float(ring.get_shader_parameter("cool")), 0.4), "refresh reaches the next_pass cool")
+	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.02), "grow reaches the body")
+	o.set_entry_fill(4, false)
+	ck(mesh.material_overlay != null and (mesh.material_overlay as ShaderMaterial).shader == Sh.mask_ring(), "leaving fill mode collapses the chain")
+	o.clear(4)
+	root.free()
+
+# Recollect on child-count growth re-sweeps the rig, but the material is kept:
+# only a newly appeared mesh has to receive it. The vanilla AI adds and removes
+# a direct child on most steps (audio players, identifier), so re-applying the
+# overlay to every mesh on each event would churn the render tree.
+func t_recollect_keeps_overlay() -> void:
 	var root := Node3D.new()
 	var mesh := MeshInstance3D.new()
 	mesh.mesh = BoxMesh.new()
 	root.add_child(mesh)
 	var o = Outline.new()
 	o.apply(5, root, {"cat": S.NORMAL, "grow": 0.01, "cool": 0.0})
-	var old_shell: MeshInstance3D = o._items[5]["pairs"][0]["shell"]
+	var mat: ShaderMaterial = o._items[5]["mat"]
 	ck(o.take_recols() == 0, "apply is not a recollect")
-	# A non-geometry direct child only moves the count: keep every shell.
+	# A non-geometry direct child only moves the count: keep the mesh list.
 	root.add_child(Node3D.new())
 	o.refresh(5, {"cat": S.NORMAL, "grow": 0.01, "cool": 0.0})
-	ck(is_instance_valid(old_shell) and not old_shell.is_queued_for_deletion(), "a non-geometry child keeps the shell")
 	ck(o.take_recols() == 0, "a non-geometry child rebuilds nothing")
-	ck(o._items[5]["pairs"].size() == 1, "the pair list is unchanged")
+	ck(o._items[5]["meshes"].size() == 1, "the mesh list is unchanged")
 	var extra := MeshInstance3D.new()
 	extra.mesh = QuadMesh.new()
 	root.add_child(extra)
 	o.refresh(5, {"cat": S.NORMAL, "grow": 0.01, "cool": 0.0})
-	var shells: Array = []
-	for c in root.get_children():
-		if c.is_queued_for_deletion():
-			continue
-		if c is MeshInstance3D and c.has_meta("vtk_no_contour"):
-			shells.append(c)
-	ck(shells.size() == 2, "recollect added exactly one shell for the new mesh")
-	ck(is_instance_valid(old_shell) and not old_shell.is_queued_for_deletion(), "the known mesh keeps its shell")
-	ck(o._items[5]["pairs"][0]["shell"] == old_shell, "the reused pair still points at the old shell")
-	ck(o._items[5]["pairs"][1]["src"] == extra, "the new mesh got the new pair")
+	ck(o._items[5]["meshes"].size() == 2, "recollect picked up the new mesh")
+	ck(mesh.material_overlay == mat, "the known mesh keeps its overlay")
+	ck(extra.material_overlay == mat, "the new mesh got the same overlay")
 	ck(o.take_recols() == 1, "one real rebuild was counted")
-	# Our own shells must never look like a game-side child count change.
-	ck(o._child_count(root) == 3, "mod shells are excluded from the child count")
+	# Our own marker must never look like a game-side child count change.
+	var marker := MeshInstance3D.new()
+	marker.set_meta(Outline.NO_CONTOUR_META, true)
+	root.add_child(marker)
+	ck(o._child_count(root) == 3, "mod geometry is excluded from the child count")
 	o.clear(5)
 	root.free()
 
-# A live trigger window swaps that bot's shell material to the depth-free mask
-# shader; the idle ring keeps the normal depth test.
+# A live trigger window swaps that bot's overlay to the depth-free mask shader;
+# the idle ring keeps the normal depth test.
 func t_entry_xray() -> void:
 	var root := Node3D.new()
 	var mesh := MeshInstance3D.new()
@@ -249,21 +268,21 @@ func t_entry_xray() -> void:
 	var o = Outline.new()
 	o.apply(6, root, {"cat": S.NORMAL, "grow": 0.01, "cool": 0.0})
 	var ring: ShaderMaterial = o._items[6]["ring"]
-	var xmat: ShaderMaterial = o._items[6]["xray_mat"]
-	var shell: MeshInstance3D = o._items[6]["pairs"][0]["shell"]
 	ck(ring.shader == Sh.mask_ring(), "the ring keeps the depth-tested mask shader")
-	ck(shell.material_override == ring, "idle shell carries the ring")
+	ck(mesh.material_overlay == ring, "the idle mesh carries the ring")
 	o.set_entry_xray(6, true)
-	ck(shell.material_override == xmat, "a live window swaps the shell to the x-ray material")
+	var xmat: ShaderMaterial = o._items[6]["mat"]
 	ck(xmat.shader == Sh.mask_xray(), "the x-ray material is the depth-free mask shader")
+	ck(mesh.material_overlay == xmat, "a live window swaps the overlay to x-ray")
 	o.set_entry_xray(6, true)
-	ck(shell.material_override == xmat, "same value keeps the material")
+	ck(o._items[6]["mat"] == xmat, "same value keeps the material")
 	o.set_entry_xray(6, false)
-	ck(shell.material_override == ring, "closing the window restores the ring")
+	ck(mesh.material_overlay == o._items[6]["mat"], "closing the window restores the ring")
+	ck((mesh.material_overlay as ShaderMaterial).shader == Sh.mask_ring(), "the restored material is the ring")
 	o.refresh(6, {"cat": S.NORMAL, "grow": 0.01, "cool": 0.0, "xray": true})
-	ck(shell.material_override == xmat, "opts xray swaps the material")
+	ck(mesh.material_overlay != null and (mesh.material_overlay as ShaderMaterial).shader == Sh.mask_xray(), "opts xray swaps the material")
 	o.refresh(6, {"cat": S.NORMAL, "grow": 0.01, "cool": 0.0})
-	ck(shell.material_override == ring, "opts without xray restores the ring")
+	ck(mesh.material_overlay != null and (mesh.material_overlay as ShaderMaterial).shader == Sh.mask_ring(), "opts without xray restores the ring")
 	o.clear(6)
 	root.free()
 

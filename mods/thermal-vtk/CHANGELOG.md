@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.7.3] - 2026-11-14
+
+### Added
+- Mines can now be given their own colour. They are magenta by default and the
+  colour is picked under Thermal vision in the mod settings.
+
+### Fixed
+- NPC outlines show their state colours again: idle NPCs are yellow, combat red
+  and defending blue, instead of every outline staying yellow.
+
 ## [2.7.2] - 2026-11-12
 
 ### Changed

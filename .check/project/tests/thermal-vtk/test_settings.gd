@@ -92,6 +92,7 @@ func t_read_defaults() -> void:
 	ck(rec.key_live_panel == KEY_F9, "live panel key defaults to F9")
 	ck(rec.color_normal == Color(0.98, 0.96, 0, 1), "normal colour default")
 	ck(rec.color_defend == Color(0.11, 0.6, 0.96, 1), "defend colour default")
+	ck(rec.color_mine == Color(1.0, 0.2, 0.85, 1), "mine colour default")
 
 # Hand-written scalars (a bare value instead of the {..: ..} entry) must still
 # land: the profile file is player-writable.
@@ -112,6 +113,7 @@ func t_mcm_config_shape() -> void:
 	ck(cfg.has_section_key("Float", "outline_rim"), "the rim is declared")
 	ck(cfg.has_section_key("Keycode", "key_thermal_toggle"), "the thermal hotkey is declared")
 	ck(cfg.has_section_key("Color", "state_defend"), "the defend colour is declared")
+	ck(cfg.has_section_key("Color", "mine_color"), "the mine colour is declared")
 	var rim = cfg.get_value("Float", "outline_rim", {})
 	ck(rim.get("name") == "Rim", "the registration carries the label")
 	ck(float(rim.get("default")) == 2.0, "the registration carries the default")
@@ -200,6 +202,7 @@ func t_nvg_apply_maps_fields() -> void:
 	rec.daylight_compensation = false
 	rec.daylight_strength = 0.5
 	rec.color_combat = Color(0.0, 1.0, 0.0)
+	rec.color_mine = Color(0.25, 0.5, 0.75)
 	var nvg = NVG.new()
 	nvg.apply_config(rec)
 	ck(nvg.set_nvg_noise == 12.5, "NVG maps nvg_noise")
@@ -211,6 +214,7 @@ func t_nvg_apply_maps_fields() -> void:
 	ck(nvg.set_daylight == false, "NVG maps the daylight toggle")
 	ck(nvg.set_strength == 0.5, "NVG maps daylight strength")
 	ck(nvg._state_colors.get("state_combat") == Color(0.0, 1.0, 0.0), "NVG maps the state colours")
+	ck(nvg.mine_color() == Color(0.25, 0.5, 0.75), "NVG maps the mine colour")
 	nvg._register_key_gain()
 	ck(nvg._key_gain_registered, "NVG registers the daylight key gain")
 	nvg.free()

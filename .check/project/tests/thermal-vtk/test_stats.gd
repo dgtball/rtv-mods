@@ -2,7 +2,6 @@ extends SceneTree
 
 const Stats = preload("res://mods/ThermalVTK/VTKStats.gd")
 const SceneProbe = preload("res://mods/ThermalVTK/VTKSceneProbe.gd")
-const EspMask = preload("res://mods/ThermalVTK/VTKEspMask.gd")
 
 var fails := 0
 
@@ -24,7 +23,7 @@ func _run() -> void:
 	t_image_half_black_half_cream()
 	t_image_empty()
 	t_probe_rests_dark()
-	t_probe_excludes_shells()
+	t_probe_mirrors_camera_mask()
 	t_probe_readback()
 	t_probe_readback_source()
 	t_probe_auto_gate()
@@ -100,16 +99,18 @@ func t_probe_rests_dark() -> void:
 	ck(probe._cam.environment == null, "probe camera carries no private environment")
 	probe.free()
 
-func t_probe_excludes_shells() -> void:
+# The contour lives in the main 3D pass now, so there is no shell layer to
+# cull: the probe mirrors the game camera's cull mask exactly and measures the
+# frame as the player sees it.
+func t_probe_mirrors_camera_mask() -> void:
 	var probe = SceneProbe.new()
 	root.add_child(probe)
 	var cam := Camera3D.new()
 	root.add_child(cam)
-	cam.cull_mask = 0xFFFFFFFF
+	cam.cull_mask = 0x0000000F
 	probe._sync_camera(cam)
-	var want: int = 0xFFFFFFFF & ~EspMask.LAYER_MASK
-	ck(probe._cam.cull_mask == want, "probe camera drops the ESP shell layer")
-	ck(cam.cull_mask == 0xFFFFFFFF, "the game camera's mask is untouched")
+	ck(probe._cam.cull_mask == 0x0000000F, "probe camera mirrors the game camera mask")
+	ck(cam.cull_mask == 0x0000000F, "the game camera's mask is untouched")
 	probe.free()
 	cam.free()
 

@@ -11,9 +11,9 @@ extends Node
 # exposure the shader compensates for. A private Environment would measure
 # a different picture than the one on screen.
 #
-# ESP shells live on EspMask.LAYER_MASK and are excluded from the probe's
+# ESP shells live on the ESP shell layer and are excluded from the probe's
 # cull mask: the instrument measures the world, not the overlay. The game
-# camera's own mask belongs to VTKEspMask; this module only reads it.
+# camera's own mask is the world's; this module only reads it.
 #
 # Auto mode exists for daylight source B in a normal game, so the owner is
 # VTKNVG: it arms set_auto(cadence) while the measured-frame source is live
@@ -23,7 +23,6 @@ extends Node
 
 signal measured(stats: Dictionary)
 
-const EspMask = preload("res://mods/ThermalVTK/VTKEspMask.gd")
 const Stats = preload("res://mods/ThermalVTK/VTKStats.gd")
 
 # 16:9 and ~2.3k samples: coarse enough for a ~13 ms readback on button
@@ -68,7 +67,7 @@ func _ready() -> void:
 	name = "VTKSceneProbe"
 	_vp = SubViewport.new()
 	_vp.name = "ProbeViewport"
-	# Same recipe as VTKEspMask._ready, minus everything pictorial: the
+	# Same recipe as the old mask module, minus everything pictorial: the
 	# probe never renders at rest and carries no lights or shadows of its
 	# own -- only the measured picture matters.
 	_vp.own_world_3d = false
@@ -87,7 +86,9 @@ func _ready() -> void:
 	_cam.name = "ProbeCamera"
 	# No environment here (see the header): the shared world's WorldEnvironment
 	# must reach the probe frame untouched.
-	_cam.cull_mask = 0xFFFFFFFF & ~EspMask.LAYER_MASK
+	# The contour lives in the main 3D pass now (material_overlay), so there is
+	# no shell layer to cull: the probe mirrors the game camera's mask exactly.
+	_cam.cull_mask = 0xFFFFFFFF
 	_vp.add_child(_cam)
 	# `current` only takes effect once the camera is inside the viewport: set
 	# it after add_child, or the viewport renders with no camera at all.
@@ -136,11 +137,12 @@ static func readback(tex: Texture2D) -> Image:
 	return tex.get_image()
 
 # Copy the picture camera's pose and optics wholesale -- the same list
-# VTKEspMask.sync mirrors, with two probe-specific differences: `far` comes
+# the old mask module mirrored, with two probe-specific differences: `far` comes
 # straight from the game camera (the instrument wants the whole frame, not
 # the reach-clipped mask view), and `attributes` rides along so anything
 # the game applies through camera attributes matches the picture. The game
-# camera is read-only here: EspMask owns clearing its cull mask.
+# camera is read-only here; the probe mirrors its cull mask as-is, because the
+# contour overlays it would otherwise have to skip are inside that mask.
 func _sync_camera(cam: Camera3D) -> void:
 	_cam.global_transform = cam.global_transform
 	_cam.projection = cam.projection
@@ -153,4 +155,4 @@ func _sync_camera(cam: Camera3D) -> void:
 	_cam.v_offset = cam.v_offset
 	_cam.frustum_offset = cam.frustum_offset
 	_cam.attributes = cam.attributes
-	_cam.cull_mask = cam.cull_mask & ~EspMask.LAYER_MASK
+	_cam.cull_mask = cam.cull_mask

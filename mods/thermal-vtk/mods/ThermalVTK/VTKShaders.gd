@@ -1,7 +1,9 @@
 ﻿extends RefCounted
-# Builds the ESP mask shaders. The ring and the body fill write a category
-# colour into the mask viewport (VTKEspMask.gd); the NVG overlay substitutes
-# the display colour from that mask, so no key has to survive the tonemap.
+# Builds the contour overlay shaders. The ring and the body fill are chained
+# through material_overlay (the NPCESP_ex approach): the body pass writes the
+# stencil, the ring pass reads it and draws the band, and the NVG overlay
+# substitutes the display colour from the category key the main pass wrote,
+# so no key has to survive the tonemap.
 
 const MASK_RING_SRC := preload("res://mods/ThermalVTK/VTKEspMaskRing.gdshader")
 const MASK_FILL_SRC := preload("res://mods/ThermalVTK/VTKEspMaskFill.gdshader")

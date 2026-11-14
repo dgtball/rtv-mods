@@ -89,12 +89,6 @@ func _unhandled_input(event: InputEvent) -> void:
 			_toggle_live_panel()
 			get_viewport().set_input_as_handled()
 		return
-	if _key_mask_cand != 0 and (k.keycode == _key_mask_cand or k.physical_keycode == _key_mask_cand):
-		# TEMP: mask quality cycle, debug-only like the keys above.
-		if VTKDebug.enabled:
-			_cycle_mask_cand(k.shift_pressed)
-			get_viewport().set_input_as_handled()
-		return
 	if _key_thermal_toggle == 0:
 		return
 	if k.keycode == _key_thermal_toggle or k.physical_keycode == _key_thermal_toggle:
@@ -215,14 +209,12 @@ func _apply_mode() -> void:
 		var contour: bool = on and _outline_enabled
 		var xray: bool = on and _xray_enabled
 		_esp.set_layers(contour, xray)
-		# The mask feeds both layers: the ring is read from it, and a live
-		# x-ray reveal is written into it with the depth test disabled. It is
-		# the only thing that costs a second world pass, so the layer switch
-		# arms it and the per-frame demand gate below decides whether it can
-		# actually render.
-		if _nvg != null and is_instance_valid(_nvg) and _nvg.has_method("set_esp_mask"):
-			_nvg.set_esp_mask(contour or xray)
-			_push_mask_gate()
+		# The contour overlay draws its category key into the main 3D pass
+		# (VTKOutline); the NVG overlay substitutes the display colour from the
+		# screen pixel. There is no second world pass any more, so arming the
+		# layer is the whole hand-off: no camera, no reach, no gate hold.
+		if _nvg != null and is_instance_valid(_nvg):
+			_nvg.set_esp_layer(contour or xray)
 
 func _nvg_active() -> bool:
 	if _nvg == null or not is_instance_valid(_nvg):
@@ -237,129 +229,21 @@ func _process(_delta: float) -> void:
 	if worn != _nvg_worn:
 		_nvg_worn = worn
 		_apply_mode()
-	_push_mask_gate()
-	_perf_tick(_delta)
+	_push_esp_gate()
 
-# --- TEMP perf probe: remove after the baseline run -------------------------
-# One line per window into the normal debug log, so a frame-time reading can be
-# tied to the state that produced it (thermal on/off, mask armed, bots tracked).
-# Gated by the MCM "Debug log" toggle, so it costs nothing for players.
-const PERF_WINDOW := 2.0
-var _perf_ms: Array[float] = []
-var _perf_t: float = 0.0
-
-# TEMP: F10 walks the candidate mask settings (Shift+F10 backwards) so the price
-# and the look can be compared inside one session. The PERF line carries the
-# active set as mres/mmaa/mlod/meg/mef/mbk, which is all the log needs to bucket
-# the windows.
-#
-# After the profile run the verdict was "1.00 hard is the crispest, 0.75 at
-# distance still not pleasant", and `hard` at 1.00 with MSAA 4x measured ~5.5 ms
-# -- over the 4 ms target. This round holds the profile at `hard`/lod 0.2 and
-# walks the three remaining levers one at a time: sample coverage on the full
-# target (+2.0 ms by the last run), the world backdrop the mask does not need
-# (approach A: black clear colour, no ambient, no reflections), and resolution.
-const MASK_CANDIDATES := [
-	{"name": "1.00 hard AA4x", "scale": 1.0, "msaa": Viewport.MSAA_4X, "lod": 0.2, "gate": 0.12, "full": 0.20, "backdrop": true},
-	{"name": "1.00 hard AA0", "scale": 1.0, "msaa": Viewport.MSAA_DISABLED, "lod": 0.2, "gate": 0.12, "full": 0.20, "backdrop": true},
-	{"name": "1.00 hard AA0 dark", "scale": 1.0, "msaa": Viewport.MSAA_DISABLED, "lod": 0.2, "gate": 0.12, "full": 0.20, "backdrop": false},
-	{"name": "0.75 hard AA0 dark", "scale": 0.75, "msaa": Viewport.MSAA_DISABLED, "lod": 0.2, "gate": 0.12, "full": 0.20, "backdrop": false},
-]
-var _key_mask_cand: int = KEY_F10
-# -1 so the first press lands on candidate 0: the reference look should be the
-# first thing on screen, not the third.
-var _mask_cand: int = -1
-
-func _cycle_mask_cand(back: bool) -> void:
-	var mask: Node = null
-	if _nvg != null and is_instance_valid(_nvg):
-		mask = _nvg._mask
-	if mask == null or not is_instance_valid(mask):
-		return
-	var step := -1 if back else 1
-	_mask_cand = (_mask_cand + step + MASK_CANDIDATES.size()) % MASK_CANDIDATES.size()
-	var c: Dictionary = MASK_CANDIDATES[_mask_cand]
-	mask.set_scale(float(c["scale"]))
-	mask.set_msaa(int(c["msaa"]))
-	mask.set_lod(float(c["lod"]))
-	mask.set_backdrop(bool(c["backdrop"]))
-	if _nvg != null and is_instance_valid(_nvg):
-		_nvg.set_esp_edge(float(c["gate"]), float(c["full"]))
-	VTKDebug.log("MASK", "candidate %d/%d: %s" % [_mask_cand, MASK_CANDIDATES.size(), str(c["name"])])
-	_notify("Mask " + str(c["name"]), Color(0.55, 0.85, 1.0))
-
-func _perf_tick(delta: float) -> void:
-	if not VTKDebug.enabled:
-		return
-	if _perf_ms.size() >= 4096:
-		_perf_ms.clear()
-	_perf_ms.append(delta * 1000.0)
-	_perf_t += delta
-	if _perf_t < PERF_WINDOW:
-		return
-	_perf_t = 0.0
-	var s: Array[float] = _perf_ms.duplicate()
-	_perf_ms.clear()
-	if s.is_empty():
-		return
-	s.sort()
-	var n := s.size()
-	var total := 0.0
-	for v in s:
-		total += v
-	var bots := 0
-	var want := 0
-	var shells := 0
-	var recols := 0
-	var esp_ms := 0.0
-	if _esp != null and is_instance_valid(_esp):
-		bots = _esp._entries.size()
-		want = _esp._want_ids.size()
-		esp_ms = float(_esp._dbg_draw_ms)
-		if _esp._outline != null:
-			shells = int(_esp._outline.shell_count())
-			recols = int(_esp._outline.take_recols())
-	var mask_on := false
-	var mres := 1.0
-	var mmaa := 0
-	var mlod := 0.0
-	var meg := 0.0
-	var mef := 0.0
-	var mbk := 1
-	if _nvg != null and is_instance_valid(_nvg) and _nvg._mask != null and is_instance_valid(_nvg._mask):
-		mask_on = bool(_nvg._mask.is_enabled())
-		mres = float(_nvg._mask.scale())
-		mmaa = int(_nvg._mask.msaa())
-		mlod = float(_nvg._mask.lod())
-		mbk = 1 if bool(_nvg._mask.backdrop()) else 0
-	if _nvg != null and is_instance_valid(_nvg):
-		var edge: Vector2 = _nvg.esp_edge()
-		meg = edge.x
-		mef = edge.y
-	VTKDebug.log("PERF", "fps=%.1f ms=%.2f p50=%.2f p95=%.2f max=%.2f draws=%d prims=%d thermal=%d nvg=%d mask=%d mres=%.2f mmaa=%d mlod=%.2f meg=%.2f mef=%.2f mbk=%d bots=%d want=%d shells=%d recols=%d esp=%.2f" % [
-		Engine.get_frames_per_second(), total / float(n),
-		s[n / 2], s[mini(n - 1, int(float(n) * 0.95))], s[n - 1],
-		int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
-		int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)),
-		1 if _thermal_enabled else 0, 1 if _nvg_active() else 0,
-		1 if mask_on else 0, mres, mmaa, mlod, meg, mef, mbk, bots, want, shells, recols, esp_ms])
-
-# The mask renders the world a second time, so it is only enabled while a ring
-# is actually on screen (VTKESP.wants_mask), not for every frame the layers are
-# on. An empty map therefore costs nothing, and a fight only pays for the
-# shells that exist. Demand is one frame old at worst: this coordinator runs
-# before its ESP child.
-func _push_mask_gate() -> void:
+# The shells only exist for ids the collection pass kept (`_want`), so the
+# demand here is "is any shell wanted right now". The NVG overlay substitutes
+# from the screen only while the layer is armed AND the demand holds.
+# The gate never touches `_want` or the shells: only clear_not_in frees a
+# shell, so a closed gate must not read as "nothing wanted" or the outline
+# would rebuild every frame.
+func _push_esp_gate() -> void:
 	if _nvg == null or not is_instance_valid(_nvg) or not _nvg.has_method("set_esp_demand"):
 		return
 	var demand := false
-	var reach := 0.0
 	if _esp != null and is_instance_valid(_esp):
-		demand = bool(_esp.wants_mask())
-		reach = float(_esp.mask_reach())
+		demand = bool(_esp.wants_contour())
 	_nvg.set_esp_demand(demand)
-	if _nvg.has_method("set_esp_reach"):
-		_nvg.set_esp_reach(reach)
 
 # Toast channel exposed by the game's /root/Loader (loader.Message).
 func _notify(text: String, color: Color) -> void:

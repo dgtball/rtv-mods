@@ -111,7 +111,7 @@ $tests = [ordered]@{
     "thermal-vtk" = @(
         "res://tests/thermal-vtk/test_calibration.gd", "res://tests/thermal-vtk/test_daylight.gd",
         "res://tests/thermal-vtk/test_daylight_runtime.gd", "res://tests/thermal-vtk/test_debug.gd",
-        "res://tests/thermal-vtk/test_esp.gd", "res://tests/thermal-vtk/test_esp_mask.gd",
+        "res://tests/thermal-vtk/test_esp.gd",
         "res://tests/thermal-vtk/test_labels.gd", "res://tests/thermal-vtk/test_nvg.gd",
         "res://tests/thermal-vtk/test_outline.gd", "res://tests/thermal-vtk/test_preset.gd",
         "res://tests/thermal-vtk/test_probe.gd", "res://tests/thermal-vtk/test_profile.gd",

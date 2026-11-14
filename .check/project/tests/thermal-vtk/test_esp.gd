@@ -38,7 +38,7 @@ func _run() -> void:
 	t_zero_dist_never_tags()
 	t_distance_crops()
 	t_label_suffix_independent()
-	t_opts_state_key()
+	t_opts_contour_key()
 	t_calibration_opts()
 	t_no_through_walls_opt()
 	t_dead_node_marks_entry()
@@ -50,7 +50,7 @@ func _run() -> void:
 	t_label_reads_stored_window()
 	t_xray_layer_without_contour()
 	t_layers_drive_marker()
-	t_mask_demand()
+	t_wants_contour()
 	t_weapon_runs_without_contour()
 	print("")
 	if fails == 0:
@@ -265,10 +265,9 @@ func t_label_suffix_independent() -> void:
 	# Live window with a reveal range (100 m) well past Distance (5 m).
 	Tracker.tag_trig(resp._entries[rid], "fire", 100.0, rnow + 60.0, 60.0)
 	resp._draw(Vector3.ZERO)
-	var rring: ShaderMaterial = resp._outline._items[rid]["ring"]
-	ck(resp._outline.has(rid) and rring.shader == Sh.mask_ring(), "reveal past Distance keeps the depth-tested ring")
-	var rshell: MeshInstance3D = resp._outline._items[rid]["pairs"][0]["shell"]
-	ck(rshell.material_override == resp._outline._items[rid]["xray_mat"], "reveal past Distance swaps the shell material")
+	var rmat: ShaderMaterial = resp._outline._items[rid]["mat"]
+	ck(resp._outline.has(rid) and rmat.shader == Sh.mask_xray(), "reveal past Distance goes through walls")
+	ck(rmesh.material_overlay == rmat, "reveal past Distance paints the bot mesh")
 	# Expire the window: Time stays real (no fake clock), so tag the same way a
 	# timeout ages it — expires behind now. pick_trig erases it and the frame
 	# loop reaches the bot only through the skip branch. 1.10.1: the skip
@@ -281,26 +280,26 @@ func t_label_suffix_independent() -> void:
 	resp.free()
 	rscene.queue_free()
 
-func t_opts_state_key() -> void:
+func t_opts_contour_key() -> void:
 	var esp = ESP.new()
 	esp.name = "VTKESP_opts"
 	root.add_child(esp)
 	var node := Node3D.new()
 	root.add_child(node)
 	var hostile := esp._opts_for({"cat": S.COMBAT, "nomad": false}, node, 0.0)
-	ck(hostile["state_key"] == S.KEY_COMBAT, "hostile combat keys combat")
-	ck(not hostile.has("fill_key"), "no fill_key in opts")
-	ck(not hostile.has("fill_on"), "no fill_on in opts")
-	ck(not hostile.has("fill_color"), "no display fill_color in opts")
-	var nomad := esp._opts_for({"cat": S.NORMAL, "nomad": true}, node, 0.0)
-	ck(nomad["state_key"] == S.KEY_NORMAL, "nomad keys by its category, not a nomad key")
-	ck(bool(nomad["nomad"]) == true, "nomad flag is still carried for the friendly marker")
+	ck(hostile["key"] == S.KEY_COMBAT, "hostile combat keys combat")
+	ck(not hostile.has("state_key"), "the old detector key is gone")
+	ck(not hostile.has("nomad"), "nomad is not duplicated into the contour opts")
+	ck(not hostile.has("fill_alpha"), "fill alpha lives in the shader, not in opts")
+	ck(not hostile.has("fill_grow"), "fill grow lives in the shader, not in opts")
+	var normal := esp._opts_for({"cat": S.NORMAL, "nomad": true}, node, 0.0)
+	ck(normal["key"] == S.KEY_NORMAL, "normal keys by its category")
 	esp.free()
 	node.free()
 
-# The debug calibration cycle paints the ring and the nomad marker with one
-# candidate key, so its colour under the NVG can be measured with the probe.
-# Everything else about the draw stays as it is.
+# The debug calibration cycle paints the contour with one candidate key, so its
+# colour under the NVG can be measured with the probe. Everything else about the
+# draw stays as it is.
 func t_calibration_opts() -> void:
 	var esp = ESP.new()
 	esp.name = "VTKESP_cal"
@@ -308,15 +307,15 @@ func t_calibration_opts() -> void:
 	var node := Node3D.new()
 	root.add_child(node)
 	var plain := esp._opts_for({"cat": S.COMBAT, "nomad": false}, node, 0.0)
-	ck(plain["state_key"] == S.KEY_COMBAT, "no calibration: the state key is the category key")
+	ck(plain["key"] == S.KEY_COMBAT, "no calibration: the key is the category key")
 	esp.set_calibration(true, 3)
 	var cal := esp._opts_for({"cat": S.COMBAT, "nomad": false}, node, 0.0)
-	ck(cal["state_key"] == Cal.candidate(3), "calibration overrides the state key")
+	ck(cal["key"] == Cal.candidate(3), "calibration overrides the contour key")
 	ck(cal["cat"] == S.COMBAT, "calibration keeps the category")
 	ck(float(cal["cool"]) == float(plain["cool"]), "calibration keeps the corpse cooling")
 	esp.set_calibration(false, 0)
 	var back := esp._opts_for({"cat": S.COMBAT, "nomad": false}, node, 0.0)
-	ck(back["state_key"] == S.KEY_COMBAT, "calibration off restores the state key")
+	ck(back["key"] == S.KEY_COMBAT, "calibration off restores the category key")
 	esp.free()
 	node.free()
 
@@ -441,7 +440,7 @@ func t_opts_reuse_updates() -> void:
 	esp._draw(Vector3.ZERO)
 	var second: Dictionary = esp._entries[id].get("opts")
 	ck(is_same(second, first), "the dictionary object is reused")
-	ck(second["state_key"] == S.KEY_COMBAT, "the reused dictionary carries the new state")
+	ck(second["key"] == S.KEY_COMBAT, "the reused dictionary carries the new state")
 	esp.free()
 	scene.queue_free()
 
@@ -518,10 +517,9 @@ func t_xray_layer_without_contour() -> void:
 	Tracker.tag_trig(esp._entries[id], "fire", 100.0, now + 60.0, 60.0)
 	esp._draw(Vector3.ZERO)
 	ck(esp._outline.has(id), "reveal draws with the contour off")
-	var ring: ShaderMaterial = esp._outline._items[id]["ring"]
-	ck(ring.shader == Sh.mask_ring(), "the reveal keeps the depth-tested ring")
-	var shell: MeshInstance3D = esp._outline._items[id]["pairs"][0]["shell"]
-	ck(shell.material_override == esp._outline._items[id]["xray_mat"], "the reveal swaps the shell material")
+	var mat: ShaderMaterial = esp._outline._items[id]["mat"]
+	ck(mat != null and mat.shader == Sh.mask_xray(), "the reveal swaps the overlay to the depth-free material")
+	ck(mesh.material_overlay == mat, "the revealed mesh carries it")
 	Tracker.tag_trig(esp._entries[id], "fire", 100.0, now - 1.0, 60.0)
 	esp._draw(Vector3.ZERO)
 	ck(not esp._outline.has(id), "an expired window clears the ring")
@@ -540,14 +538,16 @@ func t_layers_drive_marker() -> void:
 	ck(not esp.contour_layer and not esp.xray_layer, "both layers can be off")
 	esp.free()
 
-# The mask is a second world pass, so it is only demanded while a shell is
-# actually wanted: no NPC in range and no live reveal means no mask at all.
-# The reach is the farthest shell the current layers can produce.
-func t_mask_demand() -> void:
+# The NVG substitution now reads the frame itself, but it is still only armed
+# while a contour is wanted: no NPC in range and no live reveal means the shader
+# must not even enter the branch. The shells stay built either way (only
+# clear_not_in frees one), so a closed gate can never read as "nothing wanted"
+# and re-apply the outline every frame.
+func t_wants_contour() -> void:
 	var scene := Node3D.new()
-	scene.name = "Map_mask_demand"
+	scene.name = "Map_wants_contour"
 	var bot := FakeBot.new()
-	bot.name = "AI_Bandit_mask_demand"
+	bot.name = "AI_Bandit_wants_contour"
 	var mesh := MeshInstance3D.new()
 	mesh.mesh = BoxMesh.new()
 	bot.add_child(mesh)
@@ -556,57 +556,34 @@ func t_mask_demand() -> void:
 	root.add_child(scene)
 	current_scene = scene
 	var esp = ESP.new()
-	esp.name = "VTKESP_mask_demand"
+	esp.name = "VTKESP_wants_contour"
 	root.add_child(esp)
 	esp.p_trig = false
 	esp.p_dist = 5.0
 	esp.set_layers(true, false)
 	esp._draw(Vector3.ZERO)
-	ck(not esp.wants_mask(), "an empty range demands no mask")
-	ck(esp.mask_reach() == 0.0, "no ring means no reach")
+	ck(not esp.wants_contour(), "an empty range demands no substitution")
 	bot.global_position = Vector3(0.0, 0.0, -2.0)
 	esp._draw(Vector3.ZERO)
-	ck(esp.wants_mask(), "a ring in range demands the mask")
-	ck(esp.mask_reach() == 2.0, "reach follows the actual ring distance")
+	ck(esp.wants_contour(), "a contour in range demands the substitution")
 	bot.global_position = Vector3(0.0, 0.0, -50.0)
 	esp._draw(Vector3.ZERO)
-	ck(not esp.wants_mask(), "a ring outside Distance does not demand the mask")
+	ck(not esp.wants_contour(), "a contour outside Distance does not demand it")
+	# The gate never touches the want set: the shell is freed by clear_not_in,
+	# not by the demand going false.
+	ck(not esp._outline.has(bot.get_instance_id()), "the far contour is released by the draw")
 	esp.p_dist = 60.0
 	esp._draw(Vector3.ZERO)
-	ck(esp.wants_mask(), "a ring inside Distance demands the mask again")
-	ck(esp.mask_reach() == 50.0, "reach follows the new ring distance")
-	# X-ray alone: a live reveal keeps the pass alive and its distance is the
-	# reach, even though the contour layer is off.
+	ck(esp.wants_contour(), "a contour inside Distance demands it again")
+	# X-ray alone: a live reveal keeps the substitution alive even though the
+	# contour layer is off.
 	esp.set_layers(false, true)
 	esp.p_trig = true
 	Tracker.tag_trig(esp._entries[bot.get_instance_id()], "fire", 100.0, esp._now() + 60.0, 60.0)
 	esp._draw(Vector3.ZERO)
-	ck(esp.wants_mask(), "a live reveal demands the mask")
-	ck(esp.mask_reach() == 50.0, "reach follows the revealed NPC")
-	# The mask is a second world pass, so a ring behind the player must not arm
-	# it. The shells stay built (only clear_not_in frees them), and a missing
-	# camera keeps the gate open: a wasted pass beats rings that vanish.
-	var cam := Camera3D.new()
-	scene.add_child(cam)
-	cam.current = true
-	cam.global_position = Vector3.ZERO
-	esp._mask_hold_until = -1000.0
-	bot.global_position = Vector3(0.0, 0.0, 30.0)
-	esp._draw(Vector3.ZERO)
-	ck(not esp.wants_mask(), "a ring behind the camera does not demand the mask")
-	ck(esp._outline.has(bot.get_instance_id()), "the shells stay built while the mask gate is closed")
-	bot.global_position = Vector3(0.0, 0.0, 1.0)
-	esp._draw(Vector3.ZERO)
-	ck(esp.wants_mask(), "the body margin keeps a ring just behind the camera")
-	bot.global_position = Vector3(0.0, 0.0, 30.0)
-	cam.current = false
-	esp._draw(Vector3.ZERO)
-	ck(esp.wants_mask(), "no camera keeps the mask gate open")
-	bot.global_position = Vector3(0.0, 0.0, -50.0)
-	esp._draw(Vector3.ZERO)
+	ck(esp.wants_contour(), "a live reveal demands the substitution")
 	esp.set_layers(false, false)
-	ck(not esp.wants_mask(), "layers off demands no mask")
-	ck(esp.mask_reach() == 0.0, "layers off clears the reach")
+	ck(not esp.wants_contour(), "layers off demands nothing")
 	esp.free()
 	scene.queue_free()
 

@@ -17,49 +17,22 @@ const DEFEND_STATES: Array[int] = [5, 6, 7, 10, 12, 14, 15]
 const DEFAULT_NORMAL := Color(0.98, 0.96, 0, 1)
 const DEFAULT_COMBAT := Color(0.95, 0.18, 0.15)
 const DEFAULT_DEFEND := Color(0.11, 0.6, 0.96, 1)
-# Detector keys the ring emits; the overlay detector matches them and swaps in
-# the category colour. The overlay matches the CLOSEST key within its radius
-# (DET_TOL_CORE in VTKNVG.gdshader), so every key -- the three outline keys, the
-# mine key and the nomad key -- must stay more than that radius apart, or one
-# key's detector can claim another key's pixel. The current minimum is well
-# above the radius.
-const KEY_NORMAL := Color(1.0, 0.0, 0.0)
-# Bright by design (measured 2026-10-24 against three dimming candidates,
-# calibration cand08/09/10). The KEY_NOMAD lesson holds: a key survives the
-# wash with a dominant channel and two near-zero channels. Reducing this
-# key's dominant pair collapses the post-NVG pixel into neutral gray
-# (cand08 (0,0.60,0.72) -> (0.22,0.25,0.25), spread 0.03), which palette
-# midtones then claim; dropping the dominant light entirely (cand09
-# (0,0.10,0.70) -> (0.05,0.07,0.11)) keeps hue stable but lands inside the
-# palette dark bands -- a 2D claim surface no guard can separate. A variant
-# with the dominant channel kept bright and only the secondary dimmed
-# (cand10 (0,0.55,1.00)) measured two wash-stable but mutually divergent
-# anchor orbits (day (0.20,0.32,0.50) / night (0.13,0.60,0.93), ~0.52 apart)
-# and is documented in the design docs for a later detector pass:
-# it needs a day/night-lerped detector constant first, plus an Ice-palette
-# day claim check, and a day/night fix is scheduled before that. Until then
-# the wash guard in VTKNVG.gdshader is the mechanism, not a patch.
-const KEY_COMBAT := Color(0.0, 1.0, 1.0)
-const KEY_DEFEND := Color(1.0, 0.0, 1.0)
-
+# Display colour of the mine ESP. Not a state: a mine is painted whole, so this
+# one never has to share the screen with a category key. Magenta sits furthest
+# from all three state colours (yellow, red, light blue).
+const DEFAULT_MINE := Color(1.0, 0.2, 0.85, 1)
+# Detector keys the contour shell overlay writes into the main 3D pass. The
+# overlay matches the CLOSEST washed key within DET_TOL_CORE and swaps in the
+# display colour, so the keys have to stay more than that radius apart AFTER
+# the NVG wash (the measured pairs live in VTKNVG.gd DET_ST_*). Combat and
+# defend are two-channel keys on purpose: measured 2026-10-24, pure green and
+# pure blue do not survive the wash far enough from the world and from each
+# other. Red / cyan / magenta is the set the shipped screen-key detector used.
+const KEY_NORMAL := Color(1.0, 0.0, 0.0, 1)
+const KEY_COMBAT := Color(0.0, 1.0, 1.0, 1)
+const KEY_DEFEND := Color(1.0, 0.0, 1.0, 1)
 const CATEGORY_KEY_COLORS: Array[Color] = [KEY_NORMAL, KEY_COMBAT, KEY_DEFEND]
 
-# Mask channel keys (VTKEspMask). These never reach the screen: the shell
-# writes them into the mask viewport and VTKNVG.gdshader recovers the category
-# from the dominant channel. Pure primaries on purpose -- the world behind the
-# shell adds to the mask pixel, so only the channel gap survives, and the equal
-# channels of a two-channel key like (0,1,1) would cancel out.
-const MASK_NORMAL := Color(1.0, 0.0, 0.0, 1)
-const MASK_COMBAT := Color(0.0, 1.0, 0.0, 1)
-const MASK_DEFEND := Color(0.0, 0.0, 1.0, 1)
-const CATEGORY_MASK_COLORS: Array[Color] = [MASK_NORMAL, MASK_COMBAT, MASK_DEFEND]
-
-
-
-static func mask_key(cat: int) -> Color:
-	if cat < 0 or cat >= CATEGORY_MASK_COLORS.size():
-		return MASK_NORMAL
-	return CATEGORY_MASK_COLORS[cat]
 
 static func state_key(cat: int) -> Color:
 	if cat < 0 or cat >= CATEGORY_KEY_COLORS.size():

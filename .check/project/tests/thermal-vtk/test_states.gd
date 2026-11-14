@@ -2,12 +2,6 @@ extends SceneTree
 
 const S = preload("res://mods/ThermalVTK/VTKStates.gd")
 
-# The widest detector radius: the body fill matches with 0.40 (DET_TOL_FILL
-# in VTKNVG.gdshader), the rest with 0.22. Two world keys closer than this
-# let one detector claim the other's pixels, so this is the floor for the
-# distance between ANY two world keys.
-const MIN_KEY_SEPARATION := 0.22
-
 var fails := 0
 
 func ck(cond: bool, msg: String) -> void:
@@ -16,11 +10,6 @@ func ck(cond: bool, msg: String) -> void:
 	else:
 		fails += 1
 		print("FAIL  ", msg)
-
-# Raw 3D distance, the same measure the overlay shader uses (distance(c, k)).
-# Color is a built-in type in Godot 4 and has no distance_to() of its own.
-func dist(a: Color, b: Color) -> float:
-	return Vector3(a.r, a.g, a.b).distance_to(Vector3(b.r, b.g, b.b))
 
 func _init() -> void:
 	process_frame.connect(_run)
@@ -32,7 +21,8 @@ func _run() -> void:
 	t_unknown_defaults_to_normal()
 	t_colors()
 	t_keys()
-	t_world_key_separation()
+	t_keys_are_distinct()
+	t_mine_colour_differs()
 	print("")
 	if fails == 0:
 		print("States tests passed")
@@ -65,21 +55,22 @@ func t_keys() -> void:
 	ck(S.state_key(S.NORMAL) == S.KEY_NORMAL, "state_key(NORMAL)")
 	ck(S.state_key(S.COMBAT) == S.KEY_COMBAT, "state_key(COMBAT)")
 	ck(S.state_key(S.DEFEND) == S.KEY_DEFEND, "state_key(DEFEND)")
+	ck(S.state_key(99) == S.KEY_NORMAL, "unknown category falls back to NORMAL")
 
-func t_world_key_separation() -> void:
-	# After 2.2.0 the friendly-nomad marker is a 2D diamond and no longer
-	# emits a world key, so the set under test is the three outline keys plus
-	# the mine key.
-	var all: Array = []
-	all.append_array([S.KEY_NORMAL, S.KEY_COMBAT, S.KEY_DEFEND])
-	all.append(Color(0.0, 0.0, 1.0)) # MINE_KEY
-	var min_sep := 99.0
-	var min_pair := ""
-	for a in all.size():
-		for b in range(a + 1, all.size()):
-			var d := dist(all[a], all[b])
-			if d < min_sep:
-				min_sep = d
-				min_pair = "%d,%d" % [a, b]
-			ck(d >= MIN_KEY_SEPARATION, "keys %d,%d separated by >= %.2f (got %.3f)" % [a, b, MIN_KEY_SEPARATION, d])
-	print("min world-key separation: %.4f (pair %s, rule >= %.2f)" % [min_sep, min_pair, MIN_KEY_SEPARATION])
+# The detector matches the CLOSEST washed key, so the raw keys only have to be
+# distinct and bright enough to survive the NVG wash; the washed-space spacing
+# rule belongs to VTKNVG.DET_ST_* (test_nvg). Two-channel keys are fine here.
+func t_keys_are_distinct() -> void:
+	var keys := [S.KEY_NORMAL, S.KEY_COMBAT, S.KEY_DEFEND]
+	for i in keys.size():
+		ck(keys[i].r + keys[i].g + keys[i].b > 0.5, "key %d is bright enough to survive the wash" % i)
+		for j in range(i + 1, keys.size()):
+			ck(keys[i] != keys[j], "keys %d and %d differ" % [i, j])
+
+# The mine is painted whole by its own material and is not a state: its display
+# colour must not collide with any category colour, or the two would be
+# unreadable on screen.
+func t_mine_colour_differs() -> void:
+	ck(S.DEFAULT_MINE != S.DEFAULT_NORMAL and S.DEFAULT_MINE != S.DEFAULT_COMBAT and S.DEFAULT_MINE != S.DEFAULT_DEFEND,
+		"the mine colour differs from every state colour")
+	ck(S.DEFAULT_MINE.a > 0.99, "the mine colour is opaque")

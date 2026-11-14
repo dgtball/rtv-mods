@@ -18,8 +18,8 @@ func _run() -> void:
 	t_dirty_batches_setters()
 	t_mine_retry_is_bounded()
 	t_off_upkeep_clears_dead_mines()
-	t_mask_demand_gate()
-	t_edge_profile_reaches_material()
+	t_esp_demand_gate()
+	t_mine_colour_and_keys_reach_material()
 	t_script_kind_cache()
 	print("")
 	if fails == 0:
@@ -71,46 +71,54 @@ func t_off_upkeep_clears_dead_mines() -> void:
 	ck(nvg._mines.is_empty(), "the early return keeps the next pass cheap")
 	nvg.free()
 
-# The mask pass renders the world a second time. Arming the layer is not
-# enough: it also needs a ring on screen (ThermalVTK polls VTKESP), and the
-# mask must stop the instant that demand goes away instead of freezing on the
-# last texture.
-func t_mask_demand_gate() -> void:
+# The substitution reads the frame itself, so there is no second pass to arm:
+# the layer switch plus the per-frame demand decide whether the shader samples
+# the screen, and either one going off must clear the uniform right away
+# instead of freezing on the last frame.
+func t_esp_demand_gate() -> void:
 	var nvg = NVG.new()
 	root.add_child(nvg)
-	ck(nvg._mask != null, "the NVG owns the mask")
-	nvg.set_esp_mask(true)
-	ck(not nvg._mask.is_enabled(), "layers armed without demand leave the mask off")
-	nvg.set_esp_demand(true)
-	ck(nvg._mask.is_enabled(), "demand turns the second pass on")
-	nvg.set_esp_reach(60.0)
-	ck(nvg._mask._reach == 60.0, "reach is forwarded to the mask camera")
-	nvg.set_esp_demand(false)
-	ck(not nvg._mask.is_enabled(), "demand off stops the second pass")
-	nvg.set_esp_mask(false)
-	nvg.free()
-
-# The edge profile lives on the overlay material, and the overlay is rebuilt on
-# every map load: a value set once must survive that rebuild, which is why the
-# setter stores it and _apply_uniforms re-pushes it. Both halves are checked
-# against a real ShaderMaterial so a renamed uniform cannot pass silently.
-func t_edge_profile_reaches_material() -> void:
-	var nvg = NVG.new()
-	root.add_child(nvg)
-	nvg.set_esp_edge(0.12, 0.20)
-	var edge: Vector2 = nvg.esp_edge()
-	ck(is_equal_approx(edge.x, 0.12) and is_equal_approx(edge.y, 0.20), "edge profile is stored without a material")
-	nvg.set_esp_edge(0.55, 0.10)
-	var clamped: Vector2 = nvg.esp_edge()
-	ck(clamped.x <= 1.0 and clamped.y > clamped.x, "a full gap below the gate is pushed above it")
 	var rect := ColorRect.new()
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://mods/ThermalVTK/VTKNVG.gdshader")
 	rect.material = mat
 	nvg._nvg_mat_node = rect
-	nvg.set_esp_edge(0.30, 0.45)
-	ck(is_equal_approx(float(mat.get_shader_parameter("espGate")), 0.30), "gate reaches the overlay material")
-	ck(is_equal_approx(float(mat.get_shader_parameter("espFull")), 0.45), "full gap reaches the overlay material")
+	nvg.set_esp_layer(true)
+	ck(mat.get_shader_parameter("espOn") == false, "layers armed without demand leave the substitution off")
+	ck(not nvg._esp_render_on(), "the render switch follows the demand")
+	nvg.set_esp_demand(true)
+	ck(nvg._esp_render_on(), "demand turns the substitution on")
+	ck(mat.get_shader_parameter("espOn") == true, "the overlay material sees the demand")
+	nvg.set_esp_demand(false)
+	ck(not nvg._esp_render_on(), "demand off stops the substitution")
+	ck(mat.get_shader_parameter("espOn") == false, "the overlay material is cleared on demand off")
+	nvg.set_esp_layer(false)
+	nvg._nvg_mat_node = null
+	rect.free()
+	nvg.free()
+
+# The mine display colour and the measured detector targets live on the overlay
+# material, and the overlay is rebuilt on every map load: a value set once must
+# survive that rebuild, which is why the setter stores it and _apply_uniforms
+# re-pushes it. Checked against a real ShaderMaterial so a renamed uniform
+# cannot pass silently.
+func t_mine_colour_and_keys_reach_material() -> void:
+	var nvg = NVG.new()
+	root.add_child(nvg)
+	nvg.set_mine_color(Color(0.2, 0.4, 0.9))
+	ck(nvg.mine_color() == Color(0.2, 0.4, 0.9), "mine colour is stored without a material")
+	var rect := ColorRect.new()
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://mods/ThermalVTK/VTKNVG.gdshader")
+	rect.material = mat
+	nvg._nvg_mat_node = rect
+	nvg._installed = true
+	nvg._apply_uniforms()
+	ck(mat.get_shader_parameter("mineColor") == Color(0.2, 0.4, 0.9), "mine colour reaches the overlay material")
+	ck(mat.get_shader_parameter("stNormalKey") == NVG.DET_ST_NORMAL, "the washed normal key reaches the overlay material")
+	ck(mat.get_shader_parameter("stCombatKey") == NVG.DET_ST_COMBAT, "the washed combat key reaches the overlay material")
+	ck(mat.get_shader_parameter("stDefendKey") == NVG.DET_ST_DEFEND, "the washed defend key reaches the overlay material")
+	ck(mat.get_shader_parameter("mineKey") == NVG.DET_MINE, "the washed mine key reaches the overlay material")
 	nvg._nvg_mat_node = null
 	rect.free()
 	nvg.free()

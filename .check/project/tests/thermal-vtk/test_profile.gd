@@ -172,6 +172,8 @@ class FakeNVG extends Node:
 		mines_on = v
 	func set_state_colors(v: Dictionary) -> void:
 		pass
+	func set_esp_layer(_on: bool) -> void:
+		pass
 	func nvg_active() -> bool:
 		return true
 

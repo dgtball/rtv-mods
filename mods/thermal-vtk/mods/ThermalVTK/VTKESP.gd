@@ -37,12 +37,10 @@ const TRIG_LOG_GAP := 1.0
 # one cry, not one per frame. The reveal stays up for p_pain_s anyway, so the
 # player sees the same window; only the re-tagging is debounced.
 const PAIN_MIN_GAP := 0.4
-# The mask is a second world pass, so it is only armed while a ring could be on
-# screen. `MASK_MARGIN` is the body radius plus the ring grow (a ring on the
-# screen edge must not blink with the gate); `MASK_HOLD` keeps the pass alive
-# for a moment after the last visible ring leaves the frame.
-const MASK_MARGIN := 2.0
-const MASK_HOLD := 0.2
+# The overlay runs in the main 3D pass, so the shells need no dedicated camera
+# and no reach clip: the depth test of the source mesh does the clipping
+# (walls, weapon, sight glass), and the demand below only says whether any
+# shell is wanted this frame.
 
 # Two independent layers share one collection pass. `enabled` is gone: the
 # contour layer gates rings and the marker, the x-ray layer gates reveals.
@@ -91,9 +89,6 @@ var _cand_refs: Array = []
 var _keep_pool: Array = []
 var _want: Dictionary = {}
 var _want_ids: Array = []
-# Until this timestamp (seconds) the mask stays armed after the last ring that
-# was inside the camera frustum. -1000 = never armed yet.
-var _mask_hold_until: float = -1000.0
 var _stale: Array = []
 var _dbg_draw_ms: float = 0.0
 # Test seam: when valid, it answers "is the diamond visible" and the camera
@@ -166,53 +161,15 @@ func set_layers(contour: bool, xray: bool) -> void:
 func _any_layer() -> bool:
 	return contour_layer or xray_layer
 
-# Mask demand. The second world pass is only worth its cost while a shell is
-# actually wanted: `_want` is rebuilt by _draw and holds exactly the ids the
-# outline keeps for this frame. The NVG coordinator polls this each frame
-# (ThermalVTK._push_mask_gate). `_mask_hold_until` narrows it to rings that are
-# near the frame: a bot behind the player kept the pass armed for 83% of the
-# measured session.
-func wants_mask() -> bool:
-	return _any_layer() and not _want.is_empty() and _mask_hold_until >= _now()
+# Demand gate. The NVG substitution is what the old second world pass used to
+# pay for; the shells themselves are only built for ids the collection pass
+# kept (`_want`), so the demand here is "is there anything wanted right now".
+# The gate never touches `_want` or the shells: only clear_not_in frees a
+# shell, so a closed gate must not read as "nothing wanted" or the outline
+# would rebuild every frame.
+func wants_contour() -> bool:
+	return _any_layer() and not _want.is_empty()
 
-# Re-arm the gate if any wanted ring falls inside the camera frustum. Called
-# from _draw once `_want` is complete. The gate never touches `_want` or the
-# shells: only clear_not_in frees a shell, so a closed gate must not read as
-# "nothing wanted" or the outline would rebuild every frame.
-func _refresh_mask_gate(now: float) -> void:
-	var cam := _camera()
-	if cam == null:
-		# Menu, load screen, headless: there is no frame to test against.
-		_mask_hold_until = now + MASK_HOLD
-		return
-	var planes: Array = cam.get_frustum()
-	for id in _want_ids:
-		if not _entries.has(id):
-			continue
-		var node = _entries[id].get("node")
-		if node == null or not is_instance_valid(node) or not (node is Node3D):
-			continue
-		if Tracker.in_frustum(planes, (node as Node3D).global_position, MASK_MARGIN):
-			_mask_hold_until = now + MASK_HOLD
-			return
-
-# Farthest ring on screen right now; the mask camera clips the world there
-# instead of at the picture camera's far plane. `_want` is rebuilt by _draw and
-# `dist` is stored on every entry in the same pass, so a fight at 15 m pays for
-# 25 m of world, not the full Distance slider.
-func mask_reach() -> float:
-	if not _any_layer():
-		return 0.0
-	var r := 0.0
-	for id in _want_ids:
-		if not _entries.has(id):
-			continue
-		r = maxf(r, float(_entries[id].get("dist", 0.0)))
-	return r
-
-# Labels are a diagnostic layer of their own: the log is the master switch and
-# the npc_labels toggle is the refinement. Thermal vision and the NVG helmet are
-# not required.
 func _labels_on() -> bool:
 	return Dbg.enabled and p_npc_labels
 
@@ -247,9 +204,8 @@ func apply_config(rec) -> void:
 	p_brightness = rec.outline_brightness
 	p_rim = rec.outline_rim
 
-# Debug key calibration. The candidate key replaces the state key and the
-# fill key of every NPC, and the nomad marker repaints with it, so the probe
-# measures one candidate at a time.
+# Debug key calibration. The candidate key replaces the contour key of every
+# NPC, so the probe measures one candidate at a time.
 func set_calibration(active: bool, index: int) -> void:
 	p_cal_active = active
 	p_cal_index = index
@@ -563,8 +519,8 @@ func _gd_cached() -> Resource:
 
 # The scope view itself; PIP rides along in the same read. Both flags go to
 # the outline and the weapon module: with PIP on the optic camera supplies the
-# in-scope picture, and the Mask depth write hides the main-camera ring inside
-# the lens, so the picture does not show it twice.
+# in-scope picture, and the depth swap keeps the main-camera ring out of the
+# lens, so the picture does not show it twice.
 func _scoped_now() -> bool:
 	var gd := _gd_cached()
 	if gd == null:
@@ -686,7 +642,6 @@ func _draw(ppos: Vector3) -> void:
 	var keep: Array = Tracker.pick_nearest(_cand_refs, CAP, _keep_pool)
 	for id in keep:
 		_want_add(id)
-	_refresh_mask_gate(now)
 	var applied := 0
 	for id in _want_ids:
 		if not _entries.has(id):
@@ -862,26 +817,19 @@ func _fill_opts(opts: Dictionary, e: Dictionary, now: float) -> void:
 	if xray and not win.is_empty():
 		cool = clampf(1.0 - Tracker.fade_factor(win, now), 0.0, 1.0)
 	var cat: int = int(e.get("cat", States.NORMAL))
-	var key: Color = States.state_key(cat)
-	if p_cal_active:
-		key = Calibration.candidate(p_cal_index)
 	opts["cat"] = cat
-	opts["nomad"] = bool(e.get("nomad", false))
-	opts["state_key"] = key
+	# The shell writes this key into the main pass and the NVG substitutes the
+	# display colour from it; the calibration sweep overrides it to measure one
+	# candidate at a time.
+	if p_cal_active:
+		opts["key"] = Calibration.candidate(p_cal_index)
+	else:
+		opts["key"] = States.state_key(cat)
 	opts["cool"] = cool
 	opts["rim"] = p_rim
-	opts["brightness"] = p_brightness
 	opts["grow"] = p_thickness
 	opts["xray"] = xray
-	# The overlay paints only where the world hides the bot. Past the ESP
-	# distance there is no ring of its own, so the reveal forces the whole
-	# contour -- that is the 70 m shot case.
-	var esp_live: bool = contour_layer and float(e.get("dist", 0.0)) <= p_dist
-	opts["force"] = xray and not esp_live
-	opts["pulse"] = (0.5 + 0.5 * sin(now * 9.0)) if xray else 0.0
 	opts["fill"] = p_body_fill
-	opts["fill_alpha"] = 0.2
-	opts["fill_grow"] = 0.004
 
 func _nomad_los(e: Dictionary, anchor_world: Vector3) -> bool:
 	if los_probe.is_valid():

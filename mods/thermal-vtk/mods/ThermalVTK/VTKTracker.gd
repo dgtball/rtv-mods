@@ -62,13 +62,14 @@ static func is_silent(variant: Variant) -> bool:
 		return bool(variant.get("silent"))
 	return false
 
-# Is a ring near the frame? The mask is a second world pass, so it is only
-# worth arming while something it paints is actually visible. `planes` come
-# from `Camera3D.get_frustum()`, where the normals face OUTWARD: a point is
-# inside when `distance_to` is <= 0 on every plane. `margin` is the body radius
-# plus the ring grow, so a ring on the screen edge does not blink in and out of
-# the gate. An empty plane list means "no camera" (menu, load, headless) and
-# fails open: a wasted pass beats rings that disappear.
+# Is a ring near the frame? The overlay runs in the main 3D pass, so the same
+# question is asked of the picture camera directly (the contour needs no second
+# view of the world). `planes` come from `Camera3D.get_frustum()`, where the
+# normals face OUTWARD: a point is inside when `distance_to` is <= 0 on every
+# plane. `margin` is the body radius plus the ring grow, so a ring on the screen
+# edge does not blink in and out of the gate. An empty plane list means "no
+# camera" (menu, load, headless) and fails open: a wasted pass beats rings that
+# disappear.
 static func in_frustum(planes: Array, point: Vector3, margin: float) -> bool:
 	for p in planes:
 		if (p as Plane).distance_to(point) > margin:

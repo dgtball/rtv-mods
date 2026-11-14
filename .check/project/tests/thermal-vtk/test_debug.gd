@@ -90,6 +90,8 @@ class FakeNVG extends Node:
 		pass
 	func set_mines_enabled(_v: bool) -> void:
 		pass
+	func set_esp_layer(_on: bool) -> void:
+		pass
 
 # F6 cycles the world thermal palette, which only exists while the thermal
 # picture is actually on screen. That takes both switches: the thermal toggle
