@@ -1,19 +1,21 @@
 ﻿extends RefCounted
-# Builds the contour overlay shaders. The ring and the body fill are chained
-# through material_overlay (the NPCESP_ex approach): the body pass writes the
-# stencil, the ring pass reads it and draws the band, and the NVG overlay
-# substitutes the display colour from the category key the main pass wrote,
-# so no key has to survive the tonemap.
+# Builds the direct-color stencil contour shaders. The body pass writes the
+# stencil and can render the silhouette fill; the ring pass reads the stencil
+# and draws only the grown band outside the body.
 
-const MASK_RING_SRC := preload("res://mods/ThermalVTK/VTKEspMaskRing.gdshader")
-const MASK_FILL_SRC := preload("res://mods/ThermalVTK/VTKEspMaskFill.gdshader")
-const MASK_XRAY_SRC := preload("res://mods/ThermalVTK/VTKEspMaskXray.gdshader")
+const BODY_LOS_SRC := preload("res://mods/ThermalVTK/VTKEspBody.gdshader")
+const BODY_XRAY_SRC := preload("res://mods/ThermalVTK/VTKEspBodyXray.gdshader")
+const RING_LOS_SRC := preload("res://mods/ThermalVTK/VTKEspRing.gdshader")
+const RING_XRAY_SRC := preload("res://mods/ThermalVTK/VTKEspRingXray.gdshader")
 
-static func mask_ring() -> Shader:
-	return MASK_RING_SRC
+static func body_los() -> Shader:
+	return BODY_LOS_SRC
 
-static func mask_fill() -> Shader:
-	return MASK_FILL_SRC
+static func body_xray() -> Shader:
+	return BODY_XRAY_SRC
 
-static func mask_xray() -> Shader:
-	return MASK_XRAY_SRC
+static func ring_los() -> Shader:
+	return RING_LOS_SRC
+
+static func ring_xray() -> Shader:
+	return RING_XRAY_SRC

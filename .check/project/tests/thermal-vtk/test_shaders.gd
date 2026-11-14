@@ -4,9 +4,10 @@ const Sh = preload("res://mods/ThermalVTK/VTKShaders.gd")
 const S = preload("res://mods/ThermalVTK/VTKStates.gd")
 const NVG = preload("res://mods/ThermalVTK/VTKNVG.gd")
 const NVG_SHADER_RES := "res://mods/ThermalVTK/VTKNVG.gdshader"
-const MASK_RING_RES := "res://mods/ThermalVTK/VTKEspMaskRing.gdshader"
-const MASK_FILL_RES := "res://mods/ThermalVTK/VTKEspMaskFill.gdshader"
-const MASK_XRAY_RES := "res://mods/ThermalVTK/VTKEspMaskXray.gdshader"
+const BODY_RES := "res://mods/ThermalVTK/VTKEspBody.gdshader"
+const BODY_XRAY_RES := "res://mods/ThermalVTK/VTKEspBodyXray.gdshader"
+const RING_RES := "res://mods/ThermalVTK/VTKEspRing.gdshader"
+const RING_XRAY_RES := "res://mods/ThermalVTK/VTKEspRingXray.gdshader"
 
 var fails := 0
 
@@ -21,10 +22,8 @@ func _init() -> void:
 	process_frame.connect(_run)
 
 func _run() -> void:
-	t_mask_shaders_compile()
-	t_mask_ring_contract()
-	t_mask_fill_contract()
-	t_mask_xray_contract()
+	t_direct_shaders_compile()
+	t_direct_stencil_and_depth_contract()
 	t_nvg_esp_branch()
 	t_nvg_contour_reads_mines()
 	t_palette_four_modes()
@@ -49,50 +48,26 @@ func _uniform_names(sh: Shader) -> Array:
 		names.append(p.get("name", ""))
 	return names
 
-func t_mask_shaders_compile() -> void:
-	var pairs := [
-		["ring", Sh.mask_ring(), MASK_RING_RES],
-		["fill", Sh.mask_fill(), MASK_FILL_RES],
-		["x-ray", Sh.mask_xray(), MASK_XRAY_RES],
-	]
+func t_direct_shaders_compile() -> void:
+	var pairs := [["body", Sh.body_los(), BODY_RES], ["body_xray", Sh.body_xray(), BODY_XRAY_RES], ["ring", Sh.ring_los(), RING_RES], ["ring_xray", Sh.ring_xray(), RING_XRAY_RES]]
 	for pair in pairs:
-		var sh: Shader = pair[1]
-		ck(sh != null and FileAccess.file_exists(pair[2]), "mask %s shader resolves" % pair[0])
-		var names := _uniform_names(sh)
-		ck(names.has("state_color"), "mask %s shader exposes state_color" % pair[0])
-		ck(names.has("grow"), "mask %s shader exposes grow" % pair[0])
-		ck(names.has("cool"), "mask %s shader exposes cool" % pair[0])
+		ck(pair[1] != null and FileAccess.file_exists(pair[2]), "direct %s shader resolves" % pair[0])
+		var names := _uniform_names(pair[1])
+		for u in ["outline_color", "brightness", "alpha", "grow", "cool"]:
+			ck(names.has(u), "direct %s shader exposes %s" % [pair[0], u])
 
-# The idle ring keeps the depth test: the overlay is drawn inside the main 3D
-# pass, so walls and the sight glass clip it there. The stencil read is a no-op
-# when no body pass wrote 1, which is what lets one shader serve both styles.
-func t_mask_ring_contract() -> void:
-	var src := FileAccess.get_file_as_string(MASK_RING_RES)
-	ck(src.contains("stencil_mode read, compare_not_equal, 1"), "ring reads the body stencil")
-	ck(not src.contains("depth_test_disabled"), "ring keeps the depth test")
-	ck(src.contains("depth_draw_never"), "ring never writes depth")
-	ck(not src.contains("discard"), "ring keeps the band instead of dropping its tail")
-	ck(src.contains("uniform float rim_power"), "ring declares rim_power")
-	ck(src.contains("global uniform float vtk_key_gain"), "ring scales the key back in daylight")
-	ck(not src.contains("floor_alpha"), "the mask floor dial is gone")
-
-func t_mask_fill_contract() -> void:
-	var src := FileAccess.get_file_as_string(MASK_FILL_RES)
-	ck(src.contains("stencil_mode write, 1"), "fill writes the body stencil")
-	ck(src.contains("uniform vec3 state_color"), "fill declares the category colour")
-	ck(src.contains("depth_draw_never"), "fill never writes depth")
-	ck(src.contains("global uniform float vtk_key_gain"), "fill scales the key back in daylight")
-	ck(src.contains("uniform float alpha"), "fill coverage is a uniform (whole silhouette)")
-
-# A live trigger window punches through walls: the only mask shader without a
-# depth test.
-func t_mask_xray_contract() -> void:
-	var src := FileAccess.get_file_as_string(MASK_XRAY_RES)
-	ck(src.contains("depth_test_disabled"), "x-ray mask ring drops the depth test")
-	ck(src.contains("depth_draw_never"), "x-ray mask ring never writes depth")
-	ck(src.contains("uniform float rim_power"), "x-ray mask ring keeps the rim feel")
-	ck(src.contains("global uniform float vtk_key_gain"), "x-ray mask ring scales the key back in daylight")
-	ck(not src.contains("stencil_mode"), "x-ray mask ring ignores the body stencil")
+func t_direct_stencil_and_depth_contract() -> void:
+	var body := FileAccess.get_file_as_string(BODY_RES)
+	var ring := FileAccess.get_file_as_string(RING_RES)
+	var bx := FileAccess.get_file_as_string(BODY_XRAY_RES)
+	var rx := FileAccess.get_file_as_string(RING_XRAY_RES)
+	ck(body.contains("stencil_mode write, 1"), "body writes stencil")
+	ck(ring.contains("stencil_mode read, compare_not_equal, 1"), "ring reads stencil")
+	ck(not body.contains("depth_test_disabled") and not ring.contains("depth_test_disabled"), "LOS shaders keep depth test")
+	ck(bx.contains("depth_test_disabled") and rx.contains("depth_test_disabled"), "XRAY shaders disable depth test")
+	ck(ring.contains("uniform float rim_power") and rx.contains("uniform float rim_power"), "ring shaders expose rim_power")
+	ck(not body.contains("state_color") and not ring.contains("state_color"), "direct shaders do not use key state_color")
+	ck(not body.contains("vtk_key_gain") and not ring.contains("vtk_key_gain"), "direct shaders do not depend on vtk_key_gain")
 
 # The overlay reads the category from the frame the shell wrote into: the shell
 # emits a key into the main 3D pass and the overlay matches the WASHED pixel
@@ -163,9 +138,10 @@ func t_no_key_path_left() -> void:
 	ck(owner.contains("_push_esp_on"), "VTKNVG pushes the contour uniform")
 	ck(owner.contains("func set_mine_color"), "VTKNVG owns the mine display colour")
 	var store := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKShaders.gd")
-	ck(store.contains("func mask_ring"), "the store exposes the mask ring")
-	ck(store.contains("func mask_fill"), "the store exposes the mask fill")
-	ck(store.contains("func mask_xray"), "the store exposes the mask x-ray")
+	ck(store.contains("func body_los"), "the store exposes the body LOS shader")
+	ck(store.contains("func body_xray"), "the store exposes the body XRAY shader")
+	ck(store.contains("func ring_los"), "the store exposes the ring LOS shader")
+	ck(store.contains("func ring_xray"), "the store exposes the ring XRAY shader")
 	ck(not store.contains("RING_DEPTH_SRC"), "the store no longer ships the key ring")
 	ck(not FileAccess.file_exists("res://mods/ThermalVTK/VTKEspMask.gd"), "the second-pass module is deleted")
 
