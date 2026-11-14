@@ -13,6 +13,7 @@ var _esp: Node = null
 var _nvg: Node = null
 var _owner: Node = null
 var _open: bool = false
+var _toggle_key: int = KEY_F8
 
 var _root: Control = null
 var _panel: PanelContainer = null
@@ -22,6 +23,7 @@ var _status: Label = null
 var _saved: Dictionary = {}
 var _prev_mouse_mode: int = Input.MOUSE_MODE_VISIBLE
 var _prev_paused: bool = false
+var _prev_esp_process_mode: int = Node.PROCESS_MODE_INHERIT
 
 # Widgets
 var _fill_mode: OptionButton = null
@@ -47,10 +49,11 @@ func _ready() -> void:
 	_build_ui()
 	visible = false
 
-func setup(esp: Node, nvg: Node, owner: Node) -> void:
+func setup(esp: Node, nvg: Node, owner: Node, toggle_key: int = KEY_F8) -> void:
 	_esp = esp
 	_nvg = nvg
 	_owner = owner
+	_toggle_key = toggle_key if toggle_key != 0 else KEY_F8
 
 func is_open() -> bool:
 	return _open
@@ -64,19 +67,27 @@ func open() -> void:
 	_sync_from_runtime()
 	_prev_mouse_mode = Input.mouse_mode
 	_prev_paused = get_tree().paused
+	_prev_esp_process_mode = _esp.process_mode
+	# Keep ESP processing while paused so outline/material changes apply live.
+	_esp.process_mode = Node.PROCESS_MODE_ALWAYS
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	visible = true
 	_open = true
 	_refresh_status()
+	_apply_live()
 
 func close() -> void:
 	if not _open:
 		return
 	visible = false
 	_open = false
+	if _esp != null and is_instance_valid(_esp):
+		_esp.process_mode = _prev_esp_process_mode
 	get_tree().paused = _prev_paused
 	Input.mouse_mode = _prev_mouse_mode
+	# Apply once more on close so the live scene reflects final values.
+	_apply_live()
 
 func _snapshot() -> void:
 	_saved.clear()
@@ -120,9 +131,16 @@ func _restore_snapshot() -> void:
 	_esp.p_color_normal = Color(_saved.get("c_normal", States.DEFAULT_NORMAL))
 	_esp.p_color_combat = Color(_saved.get("c_combat", States.DEFAULT_COMBAT))
 	_esp.p_color_defend = Color(_saved.get("c_defend", States.DEFAULT_DEFEND))
+	if _nvg != null and is_instance_valid(_nvg):
+		_nvg.set_state_brightness = float(_saved.get("brightness", 0.6))
+		var cols = _saved.get("nvg_colors", {})
+		if cols is Dictionary and not cols.is_empty():
+			_nvg.set_state_colors(cols)
+		_nvg.set_mine_color(Color(_saved.get("c_mine", States.DEFAULT_MINE)))
 	_apply_nvg_side()
 	_sync_from_runtime()
 	_refresh_status()
+	_apply_live()
 
 func _sync_from_runtime() -> void:
 	if _esp == null or not is_instance_valid(_esp):
@@ -178,12 +196,21 @@ func _on_changed(_v = null) -> void:
 	if _nvg != null and is_instance_valid(_nvg):
 		_nvg.set_state_brightness = float(_brightness.value)
 		_nvg.set_mine_color(Color(_c_mine.color))
-		_apply_nvg_side()
-		# Push uniforms immediately so the paused frame reflects changes.
+	_apply_nvg_side()
+	_refresh_status()
+	_apply_live()
+
+func _apply_live() -> void:
+	if _nvg != null and is_instance_valid(_nvg):
 		_nvg._dirty = true
 		if _nvg.has_method("_apply_uniforms"):
 			_nvg._apply_uniforms()
-	_refresh_status()
+	if _esp != null and is_instance_valid(_esp):
+		if _esp.has_method("refresh_outlines_now"):
+			_esp.refresh_outlines_now()
+		# Keep NVG fill mode in sync with ESP's current body_fill/alpha.
+		if _nvg != null and is_instance_valid(_nvg) and _nvg.has_method("set_esp_fill"):
+			_nvg.set_esp_fill(bool(_esp.p_body_fill), float(_esp.p_fill_alpha))
 
 func _refresh_status() -> void:
 	if _status == null:
@@ -343,6 +370,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		var k := event as InputEventKey
 		if k.keycode == KEY_ESCAPE:
 			close()
+			get_viewport().set_input_as_handled()
+			return
+		# Toggle key closes the panel even while the tree is paused.
+		if _toggle_key != 0 and (k.keycode == _toggle_key or k.physical_keycode == _toggle_key):
+			if _owner != null and is_instance_valid(_owner) and _owner.has_method("_toggle_esp_panel"):
+				_owner._toggle_esp_panel()
+			else:
+				close()
 			get_viewport().set_input_as_handled()
 			return
 	# While open the panel owns the input; prevent game actions.

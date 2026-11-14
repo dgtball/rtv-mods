@@ -153,6 +153,25 @@ func _any_layer() -> bool:
 func wants_contour() -> bool:
 	return _any_layer() and not _want.is_empty()
 
+# Live panel helper: reapply current opts to all outlined entries so changes
+# (rim/thickness/fill/colors/distance effects via opts) show immediately while
+# the game is paused.
+func refresh_outlines_now() -> void:
+	var now := _now()
+	# Refresh every currently drawn outline with fresh opts. Distance filtering
+	# and want-set membership are recomputed on the next normal draw; this keeps
+	# the visible materials in sync right away.
+	for id in _outline._items.keys():
+		if not _entries.has(id):
+			continue
+		var e: Dictionary = _entries[id]
+		var opts = e.get("opts")
+		if opts == null:
+			opts = {}
+			e["opts"] = opts
+		_fill_opts(opts, e, now)
+		_outline.refresh(id, opts)
+
 func _labels_on() -> bool:
 	return Dbg.enabled and p_npc_labels
 

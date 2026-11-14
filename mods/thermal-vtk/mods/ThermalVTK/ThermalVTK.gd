@@ -152,7 +152,7 @@ func _ensure_esp_panel() -> void:
 		return
 	_esp_panel = EspPanel.new()
 	add_child(_esp_panel)
-	_esp_panel.setup(_esp, _nvg, self)
+	_esp_panel.setup(_esp, _nvg, self, _key_esp_panel)
 
 func _toggle_esp_panel() -> void:
 	_ensure_esp_panel()

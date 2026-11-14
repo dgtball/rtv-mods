@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.8.1] - 2026-11-14
+
+### Fixed
+
+- The ESP tuning panel now opens and closes with its hotkey while it is open.
+- ESP settings now update live while the ESP tuning panel is open, without needing to close and reopen it.
+
 ## [2.8.0] - 2026-11-14
 
 ### Added
