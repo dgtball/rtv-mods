@@ -1,6 +1,11 @@
 # Changelog
 
-## [2.8.0] - 2026-11-14
+## [2.7.6] - 2026-11-14
+
+### Changed
+- Internal cleanup pass over the code; no player-visible change.
+
+## [2.7.5] - 2026-11-14
 
 ### Changed
 - NPC labels are now off by default; turn them on in the mod settings while the
