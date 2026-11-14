@@ -77,7 +77,7 @@ func setup(nvg: Node, owner: Node) -> void:
 	_add_slider(box, "Day trim", 0.40, 1.0, 0.01, "set_day_trim")
 	_add_slider(box, "Frame level", 0.02, 0.30, 0.01, "set_frame_level")
 	_add_slider(box, "Probe cadence", 0.25, 5.0, 0.25, "set_frame_cadence")
-	_add_slider(box, "Time scale", 1.0, 10.0, 0.1, "set_time_scale")
+	_add_slider(box, "Time scale", 0.0, 10.0, 0.1, "set_time_scale")
 	_add_slider(box, "Highlight knee", 0.30, 1.0, 0.05, "set_highlight_knee")
 	_add_slider(box, "World brightness", 1.0, 4.0, 0.05, "set_world")
 	_add_slider(box, "NVG brightness", 0.05, 1.0, 0.01, "set_nvg_white")
@@ -227,7 +227,7 @@ func _sim_line(sim: Dictionary) -> String:
 	var season: int = int(sim.get("season", -1))
 	var time_txt := "-"
 	if t >= 0.0:
-		time_txt = _fmt_time(t, true)
+		time_txt = "%s (raw=%s)" % [_fmt_time(t), _trim_num(t)]
 	var line := "time %s day %s season %s" % [time_txt, str(day) if day >= 0 else "-", _fmt_season(season)]
 	var wtxt := _fmt_weather(sim.get("weather", {}))
 	if wtxt != "":
@@ -235,18 +235,29 @@ func _sim_line(sim: Dictionary) -> String:
 	return line
 
 
-func _fmt_time(t: float, include_raw: bool) -> String:
+func _fmt_time(t: float) -> String:
+	# Match vanilla Interface.DisplayTime: HHMM with 5-minute rounding and
+	# minute-overflow carry, so the label aligns with the in-game clock.
 	var hhmm := int(floorf(t))
-	var raw_hh := hhmm / 100
-	var raw_mm := hhmm % 100
-	var total := raw_hh * 60 + raw_mm
 	@warning_ignore("integer_division")
-	var nh := (int(total / 60)) % 24
-	var nm := total % 60
-	var txt := "%02d:%02d" % [nh, nm]
-	if include_raw and raw_mm >= 60:
-		txt += " (raw=%s)" % str(t)
-	return txt
+	var hours := hhmm / 100
+	var minutes_raw := hhmm % 100
+	@warning_ignore("integer_division")
+	var minutes := int(floorf(float(minutes_raw) / 5.0)) * 5
+	if minutes >= 60:
+		minutes = 0
+		hours += 1
+	hours = hours % 24
+	return "%02d:%02d" % [hours, minutes]
+
+
+func _trim_num(v: float) -> String:
+	var s := "%.3f" % v
+	while s.ends_with("0"):
+		s = s.substr(0, s.length() - 1)
+	if s.ends_with("."):
+		s = s.substr(0, s.length() - 1)
+	return s
 
 
 func _fmt_season(season: int) -> String:
@@ -331,11 +342,11 @@ func _panel_line(stats: Dictionary) -> String:
 	var t: float = float(sim.get("time", -1.0))
 	var day_n: int = int(sim.get("day", -1))
 	var season: int = int(sim.get("season", -1))
-	var ttxt := _fmt_time(maxf(t, 0.0), true) if t >= 0.0 else "--:--"
+	var ttxt := _fmt_time(maxf(t, 0.0)) if t >= 0.0 else "--:--"
 	var wtxt := _fmt_weather(sim.get("weather", {}))
 	var wfield := (" " + wtxt) if wtxt != "" else ""
 	return "t=%s raw=%s day=%d season=%s%s E=%.3f sunDown=%d indoor=%d shelter=%d u=%.3f ceiling=%.2f factor=%.2f measured=%.3f mix=%.2f snowTrim=%.2f dayTrim=%.2f exp=%.2f helmet=%d thermal=%d | Esky=%.3f Eamb=%.3f Esun=%.3f Emoon=%.3f Efog=%.3f | raw p05=%.3f p25=%.3f p50=%.3f p75=%.3f p95=%.3f mean=%.3f black=%.3f cream=%.3f n=%d | pal p05=%.3f p50=%.3f p95=%.3f" % [
-		ttxt, str(t), day_n, _fmt_season(season), wfield,
+		ttxt, _trim_num(t), day_n, _fmt_season(season), wfield,
 		float(_nvg.get("_light_est")),
 		1 if bool(_nvg.get("_sun_down")) else 0,
 		1 if bool(_nvg.get("_sim_indoor")) else 0,

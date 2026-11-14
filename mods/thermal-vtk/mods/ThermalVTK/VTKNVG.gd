@@ -568,16 +568,33 @@ static func minutes_to_hhmm(total: float) -> Dictionary:
 	return {"time": float(h * 100) + m, "day_inc": day_inc}
 
 
-# Time acceleration of the day/night cycle (F9 "Time scale" lever). Advances the
-# simulation clock only: Engine.time_scale stays at 1.0 so physics/audio run at
-# normal speed.
+# Time control of the day/night cycle (F9 "Time scale" lever). 1.0 = normal,
+# >1 accelerates by advancing Simulation.time, 0 freezes the clock (best-effort:
+# re-applies the latched time/day, so weather and other time-driven systems may
+# behave oddly). Engine.time_scale stays at 1.0 so physics/audio run normally.
 func _apply_time_scale(delta: float) -> void:
 	Engine.time_scale = 1.0
-	var scale := clampf(set_time_scale, 1.0, 10.0)
-	if not set_daylight or not _installed or not _nvg_active() or scale <= 1.0 or delta <= 0.0:
+	var scale := clampf(set_time_scale, 0.0, 10.0)
+	if not set_daylight or not _installed or not _nvg_active() or delta <= 0.0:
 		return
 	var sim := _sim_time_node()
 	if sim == null or not is_instance_valid(sim):
+		return
+	if scale <= 0.0:
+		# Best-effort freeze for debug captures: keep writing back the latched
+		# time/day so the game clock does not advance while the lever is at 0.
+		if not has_meta("_vtk_time_frozen"):
+			set_meta("_vtk_time_frozen", true)
+			set_meta("_vtk_frozen_time", sim.get("time"))
+			set_meta("_vtk_frozen_day", sim.get("day"))
+		sim.set("time", get_meta("_vtk_frozen_time"))
+		sim.set("day", get_meta("_vtk_frozen_day"))
+		return
+	if has_meta("_vtk_time_frozen"):
+		remove_meta("_vtk_time_frozen")
+		remove_meta("_vtk_frozen_time")
+		remove_meta("_vtk_frozen_day")
+	if scale <= 1.0:
 		return
 	var extra := (scale - 1.0) * SIM_MINUTES_PER_REAL_SEC * delta
 	var total := hhmm_to_minutes(float(sim.get("time"))) + extra
@@ -776,6 +793,10 @@ func _reset_daylight() -> void:
 	set_frame_cadence = Daylight.FRAME_CADENCE
 	set_time_scale = 1.0
 	Engine.time_scale = 1.0
+	if has_meta("_vtk_time_frozen"):
+		remove_meta("_vtk_time_frozen")
+		remove_meta("_vtk_frozen_time")
+		remove_meta("_vtk_frozen_day")
 	_set_key_gain(1.0)
 	_push_day_mix()
 	_dirty = true

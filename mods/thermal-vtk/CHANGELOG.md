@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.13] - 2026-11-14
+
+### Changed
+
+- Live panel and debug log measurements now show the in-game clock time with the raw simulation value, making time easier to compare in logs.
+- The live panel time scale can now be set to 0 to freeze the in-game clock for measurements (best-effort; weather and other time-based effects may behave unexpectedly while frozen).
+
 ## [2.7.12] - 2026-11-14
 
 ### Changed
