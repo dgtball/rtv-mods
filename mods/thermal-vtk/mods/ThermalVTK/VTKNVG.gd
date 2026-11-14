@@ -77,11 +77,6 @@ var set_strength: float = 1.0
 var set_day_target: float = Daylight.TARGET
 var set_day_floor: float = Daylight.FLOOR
 var set_day_trim: float = Daylight.DAY_TRIM
-# Daylight source: 0 folds the game's light state and the measured-frame
-# ceiling (hybrid, default), 1 keeps the game's light state only, 2 keeps the
-# measured frame only. The flag is a panel choice, not a persisted setting, so
-# a reset leaves it alone.
-var set_daylight_source: int = 0
 var set_frame_level: float = Daylight.DAY_LEVEL
 var set_frame_cadence: float = Daylight.FRAME_CADENCE
 # Brightness of the state key the ESP outlines emit; the overlay uses it to
@@ -535,16 +530,11 @@ func _refresh_daylight_state() -> void:
 		_ceiling = _factor_a
 
 
-# The factor the active source wants, with the night gate and strength applied.
-# 0 Hybrid = the looser of source A and the frame ceiling; 1 Game light = A
-# only; 2 Measured frame = the ceiling only. At night the gate returns 1.0
-# before strength, so all three modes show vanilla.
+# The factor the picture wants: the looser of source A (the game's light
+# state) and the frame ceiling, with the night gate and strength applied. At
+# night the gate returns 1.0 before strength, so the picture is vanilla.
 func _target_factor() -> float:
-	var raw := _factor_a
-	if set_daylight_source == 2:
-		raw = _ceiling
-	elif set_daylight_source == 0:
-		raw = maxf(_factor_a, _ceiling)
+	var raw := maxf(_factor_a, _ceiling)
 	return Daylight.strength_factor(Daylight.night_gate(raw, _sun_down), set_strength)
 
 
@@ -569,12 +559,12 @@ func _on_probe_measured(stats: Dictionary) -> void:
 	_frame_l = float(stats.get("p50", 0.0))
 
 
-# Arm the probe only while the ceiling can matter. Game light does not use it,
-# and at night the gate throws the ceiling away, so measuring then is a pure
-# waste of the GPU sync. The first morning measurement arrives after Probe
-# cadence; until then the ceiling is inert and source A runs.
+# Arm the probe only while the ceiling can matter: at night the gate throws it
+# away, so measuring then is a pure waste of the GPU sync. The first morning
+# measurement arrives after Probe cadence; until then the ceiling is inert and
+# source A runs.
 func _sync_probe() -> void:
-	var want := set_daylight and set_daylight_source != 1 and not _sun_down and _installed and _nvg_active()
+	var want := set_daylight and not _sun_down and _installed and _nvg_active()
 	if not want:
 		if _probe != null and is_instance_valid(_probe):
 			_probe.set_auto(0.0)
@@ -702,8 +692,7 @@ func _reset_daylight() -> void:
 	_world = null
 	_env = null
 	# The instrument levers do not survive a helmet-off or a map change: the
-	# panel is a measurement tool, not a persisted setting. The source flag is
-	# the exception -- it is a deliberate comparison choice, not a probe value.
+	# panel is a measurement tool, not a persisted setting.
 	set_day_target = Daylight.TARGET
 	set_day_floor = Daylight.FLOOR
 	set_day_trim = Daylight.DAY_TRIM

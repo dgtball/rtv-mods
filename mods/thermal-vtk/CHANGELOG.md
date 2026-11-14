@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.8.0] - 2026-11-14
+
+### Changed
+- NPC labels are now off by default; turn them on in the mod settings while the
+  debug log is on.
+- The F9 tuning panel now uses only the hybrid daylight source.
+
 ## [2.7.4] - 2026-11-14
 
 ### Fixed

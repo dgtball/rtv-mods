@@ -19,7 +19,7 @@ class Rec:
 	var key_live_panel: int = KEY_F9
 	# Toggles.
 	var debug_log: bool = false
-	var npc_labels: bool = true
+	var npc_labels: bool = false
 	var outline_enabled: bool = true
 	var body_fill: bool = false
 	var outline_xray: bool = true
@@ -115,7 +115,7 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Color", "key": "state_combat", "name": "In combat", "def": States.DEFAULT_COMBAT, "cat": "02. NPC", "pos": 6, "tip": "Colour for NPCs in combat, hunting, attacking or throwing grenades."},
 	{"sect": "Color", "key": "state_defend", "name": "Defending", "def": States.DEFAULT_DEFEND, "cat": "02. NPC", "pos": 7, "tip": "Colour for NPCs taking cover, defending, ambushing or lurking."},
 	{"sect": "Bool", "key": "debug_log", "name": "Debug log", "def": false, "cat": "04. Diagnostics", "pos": 0, "tip": "Write a diagnostic log of the contour ESP to user://MCM/thermal-vtk/debug.log. For troubleshooting; leave off for normal play."},
-	{"sect": "Bool", "key": "npc_labels", "name": "NPC labels (debug)", "def": true, "cat": "04. Diagnostics", "pos": 1, "tip": "Draw NPC nametags, health bars and trigger timers while the debug log is on. Works without thermal vision or the NVG helmet, so states can be checked in plain daylight."},
+	{"sect": "Bool", "key": "npc_labels", "name": "NPC labels (debug)", "def": false, "cat": "04. Diagnostics", "pos": 1, "tip": "Draw NPC nametags, health bars and trigger timers while the debug log is on. Works without thermal vision or the NVG helmet, so states can be checked in plain daylight."},
 	{"sect": "Keycode", "key": "key_debug_probe", "name": "Hotkey: Debug key probe", "def": KEY_F7, "cat": "04. Diagnostics", "pos": 20, "tip": "Writes the colour under the crosshair to the debug log. Turn the debug log on first, then press it while aiming at an outlined NPC or the nomad marker. The view blinks for one frame."},
 	{"sect": "Keycode", "key": "key_cal_cycle", "name": "Hotkey: Calibration cycle", "def": KEY_F8, "cat": "04. Diagnostics", "pos": 21, "tip": "Debug tool: cycles a test colour for the outline and the nomad marker, so its colour under the night-vision helmet can be measured with the debug probe. Turn the debug log on first, then aim at an outlined NPC and press the probe key. Shift turns the calibration off."},
 	{"sect": "Keycode", "key": "key_live_panel", "name": "Hotkey: Live panel", "def": KEY_F9, "cat": "04. Diagnostics", "pos": 22, "tip": "Debug tool: opens the live daylight tuning panel; the game pauses while it is open. Turn the debug log on first -- without it the key stays free for the game. The panel saves nothing: slider values live until the helmet comes off."},

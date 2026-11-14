@@ -1,8 +1,7 @@
 extends CanvasLayer
 # The F9 live tuning panel: a daylight calibration instrument, not a settings
-# surface. Nine levers over the VTKNVG runtime fields, a three-way source
-# picker (Hybrid, Game light, Measured frame), a readout of the live state,
-# and a Measure button that renders one probe frame and logs the frame
+# surface. Nine levers over the VTKNVG runtime fields, a readout of the live
+# state, and a Measure button that renders one probe frame and logs the frame
 # percentiles as a PANEL line for the fitting session.
 #
 # The hybrid picture is two layers. The night gate hands the vanilla exposure
@@ -36,7 +35,6 @@ var _nvg: Node = null
 var _owner: Node = null
 var _readout: Label = null
 var _measure_label: Label = null
-var _source_btn: OptionButton = null
 # Lever rows, keyed by the NVG field name: {"slider", "label", "name"}.
 var _rows := {}
 var _open := false
@@ -70,14 +68,6 @@ func setup(nvg: Node, owner: Node) -> void:
 	var title := Label.new()
 	title.text = "ThermalVTK live panel (F9)"
 	box.add_child(title)
-	_source_btn = OptionButton.new()
-	_source_btn.name = "Source"
-	_source_btn.add_item("Hybrid")
-	_source_btn.add_item("Game light")
-	_source_btn.add_item("Measured frame")
-	_source_btn.selected = int(_nvg.get("set_daylight_source"))
-	_source_btn.item_selected.connect(_apply_live.bind("set_daylight_source"))
-	box.add_child(_source_btn)
 	_readout = Label.new()
 	_readout.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_readout)
@@ -99,7 +89,7 @@ func setup(nvg: Node, owner: Node) -> void:
 	_measure_label = Label.new()
 	_measure_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_measure_label)
-	# The probe belongs to VTKNVG now (source B rides on it in a normal game);
+	# The probe belongs to VTKNVG (the ceiling rides on it in a normal game);
 	# the panel just asks for a measurement through measure_frame().
 	visible = false
 
@@ -135,14 +125,11 @@ func _lever(field: String) -> float:
 		return 0.0
 	return float(_nvg.get(field))
 
-# Every live control runs the same sequence: write the field, refresh the
-# daylight state at once (refresh_daylight_now carries its own guards, so this
-# is a harmless recompute for the uniform levers), then force a uniform push so
-# the non-daylight levers land too. The source picker takes the same path, so
-# switching the source answers the choice immediately; the measured-frame source
-# needs no seeding -- its ceiling is inert until the first probe lands, and
-# until then source A runs.
-func _apply_live(value: Variant, field: String) -> void:
+# Every lever runs the same sequence: write the field, refresh the daylight
+# state at once (refresh_daylight_now carries its own guards, so this is a
+# harmless recompute for the uniform levers), then force a uniform push so the
+# non-daylight levers land too.
+func _apply_live(value: float, field: String) -> void:
 	if _nvg == null or not is_instance_valid(_nvg):
 		return
 	_nvg.set(field, value)
@@ -211,12 +198,10 @@ func _refresh_readout() -> void:
 		return
 	var e := _exposure()
 	var e_txt := "-" if e < 0.0 else "%.2f" % e
-	var src := int(_nvg.get("set_daylight_source"))
-	var src_name := "hybrid" if src == 0 else ("light" if src == 1 else "frame")
 	var snap: Dictionary = _nvg._snapshot()
 	var terms: Dictionary = Daylight.estimate_terms(snap)
-	_readout.text = "src %s | E %.3f (sky %.2f amb %.2f sun %.2f moon %.2f fog %.2f)\nsunDown %d indoor %d shelter %d | factor %.3f (A %.3f ceil %.3f) u %.3f frame %.3f\nmix %.2f bgTrim %.2f exp %s | world %.2f knee %.2f strength %.2f helmet %d thermal %d" % [
-		src_name, float(_nvg.get("_light_est")),
+	_readout.text = "E %.3f (sky %.2f amb %.2f sun %.2f moon %.2f fog %.2f)\nsunDown %d indoor %d shelter %d | factor %.3f (A %.3f ceil %.3f) u %.3f frame %.3f\nmix %.2f bgTrim %.2f exp %s | world %.2f knee %.2f strength %.2f helmet %d thermal %d" % [
+		float(_nvg.get("_light_est")),
 		float(terms["sky"]), float(terms["amb"]), float(terms["sun"]), float(terms["moon"]), float(terms["fog"]),
 		1 if bool(_nvg.get("_sun_down")) else 0,
 		1 if bool(_nvg.get("_sim_indoor")) else 0,
@@ -246,8 +231,6 @@ func _exposure() -> float:
 func _sync_sliders() -> void:
 	if _nvg == null or not is_instance_valid(_nvg):
 		return
-	if _source_btn != null:
-		_source_btn.selected = int(_nvg.get("set_daylight_source"))
 	for field in _rows.keys():
 		var row: Dictionary = _rows[field]
 		var s: HSlider = row["slider"]
@@ -307,7 +290,6 @@ func _panel_line(stats: Dictionary) -> String:
 
 # Reset puts every lever back: the MCM snapshot the autoload caches (the
 # levers that live in MCM) and then the model constants MCM does not carry.
-# The source flag is not a lever -- it is a comparison choice -- so it stays.
 # One push at the end, and the sliders resync.
 func _on_reset() -> void:
 	if _nvg == null or not is_instance_valid(_nvg):

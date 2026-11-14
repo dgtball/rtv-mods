@@ -50,7 +50,7 @@ var p_nomad_marker: bool = true
 var p_body_fill: bool = false
 # NPC nametags: their own switch under Diagnostics, so the diagnostic overlay
 # can stay on without the log and without the NVG helmet.
-var p_npc_labels: bool = true
+var p_npc_labels: bool = false
 var p_color_normal: Color = States.DEFAULT_NORMAL
 var p_color_combat: Color = States.DEFAULT_COMBAT
 var p_color_defend: Color = States.DEFAULT_DEFEND

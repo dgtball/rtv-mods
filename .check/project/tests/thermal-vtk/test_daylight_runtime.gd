@@ -57,10 +57,7 @@ func _run() -> void:
 	t_refresh_snaps_without_lag()
 	t_day_frame_keeps_source_a()
 	t_ceiling_releases_the_cave()
-	t_measured_frame_source_uses_ceiling()
-	t_game_light_source_ignores_ceiling()
 	t_night_gate_is_vanilla()
-	t_night_gate_all_sources()
 	t_sun_down_from_snapshot()
 	t_probe_measured_stores_frame()
 	t_sync_probe_rests_at_night()
@@ -342,7 +339,6 @@ func t_reset_returns_levers() -> void:
 	nvg.set_day_target = 0.5
 	nvg.set_day_trim = 0.5
 	nvg.set_frame_level = 0.25
-	nvg.set_daylight_source = 1
 	nvg._daylight_tick(1.0)
 	nvg._reset_daylight()
 	ck(absf(nvg.set_day_target - Daylight.TARGET) < 0.001, "reset returns the target lever to the constant")
@@ -350,7 +346,6 @@ func t_reset_returns_levers() -> void:
 	ck(absf(nvg.set_day_trim - Daylight.DAY_TRIM) < 0.001, "reset returns the trim lever to the constant")
 	ck(absf(nvg.set_frame_level - Daylight.DAY_LEVEL) < 0.001, "reset returns the frame level to the constant")
 	ck(absf(nvg.set_frame_cadence - Daylight.FRAME_CADENCE) < 0.001, "reset returns the probe cadence to the constant")
-	ck(nvg.set_daylight_source == 1, "the source flag survives a reset")
 	ck(absf(nvg._day_trim - 1.0) < 0.001, "reset clears the applied day trim")
 	w["map"].free()
 
@@ -365,7 +360,6 @@ func t_day_frame_keeps_source_a() -> void:
 	nvg._frame_l = 0.151
 	nvg._day_factor = 0.22
 	nvg._sun_down = false
-	nvg.set_daylight_source = 0
 	nvg.refresh_daylight_now()
 	ck(absf(nvg._day_factor - 0.22) < 0.001, "a day-level frame leaves source A in charge")
 	ck(absf(env.tonemap_exposure - 0.66) < 0.005, "the day exposure is bit-identical to 2.6.0")
@@ -382,45 +376,12 @@ func t_ceiling_releases_the_cave() -> void:
 	nvg._frame_l = 0.031
 	nvg._day_factor = 0.12
 	nvg._sun_down = false
-	nvg.set_daylight_source = 0
 	nvg.refresh_daylight_now()
 	ck(absf(nvg._factor_a - Daylight.FLOOR) < 0.001, "a global noon level pins source A on the floor")
 	ck(absf(nvg._u - 0.258) < 0.005, "the ceiling reads the frame uncompensated")
 	ck(nvg._ceiling > 0.35 and nvg._ceiling < 0.45, "the dark frame lifts the ceiling off the floor")
-	ck(absf(nvg._day_factor - nvg._ceiling) < 0.001, "the hybrid takes the ceiling over source A")
+	ck(absf(nvg._day_factor - nvg._ceiling) < 0.001, "the ceiling takes over source A")
 	ck(env.tonemap_exposure > 1.0, "the cave lands between the floor and the vanilla exposure")
-	w["map"].free()
-
-func t_measured_frame_source_uses_ceiling() -> void:
-	var w := _world()
-	var nvg = w["nvg"]
-	var env: Environment = w["env"]
-	var sim: FakeSim = w["sim"]
-	var data: FakeData = nvg._game_data
-	data.NVG = true
-	_reset(nvg, env, sim, 3.367)
-	nvg._frame_l = 0.031
-	nvg._day_factor = 0.12
-	nvg._sun_down = false
-	nvg.set_daylight_source = 2
-	nvg.refresh_daylight_now()
-	ck(absf(nvg._day_factor - nvg._ceiling) < 0.001, "the measured-frame source writes the ceiling alone")
-	w["map"].free()
-
-func t_game_light_source_ignores_ceiling() -> void:
-	var w := _world()
-	var nvg = w["nvg"]
-	var env: Environment = w["env"]
-	var sim: FakeSim = w["sim"]
-	var data: FakeData = nvg._game_data
-	data.NVG = true
-	_reset(nvg, env, sim, 3.367)
-	nvg._frame_l = 0.031
-	nvg._day_factor = 0.12
-	nvg._sun_down = false
-	nvg.set_daylight_source = 1
-	nvg.refresh_daylight_now()
-	ck(absf(nvg._day_factor - Daylight.FLOOR) < 0.001, "the game-light source keeps the floor (the old black cave)")
 	w["map"].free()
 
 func t_night_gate_is_vanilla() -> void:
@@ -434,29 +395,11 @@ func t_night_gate_is_vanilla() -> void:
 	nvg._frame_l = 0.149
 	nvg._day_factor = 0.18
 	nvg._sun_down = true
-	nvg.set_daylight_source = 0
 	nvg.refresh_daylight_now()
 	ck(is_equal_approx(env.tonemap_exposure, 3.0), "a sunless sky restores the vanilla night exposure")
 	ck(is_equal_approx(nvg._day_mix, 0.0), "night leaves the shader curve off")
 	ck(is_equal_approx(nvg._day_trim, 1.0), "night leaves the palette trim off")
 	ck(is_equal_approx(nvg._key_gain, 1.0), "night leaves the key gain at 1")
-	w["map"].free()
-
-func t_night_gate_all_sources() -> void:
-	var w := _world()
-	var nvg = w["nvg"]
-	var env: Environment = w["env"]
-	var sim: FakeSim = w["sim"]
-	var data: FakeData = nvg._game_data
-	data.NVG = true
-	for src in [0, 1, 2]:
-		_reset(nvg, env, sim, 1.209)
-		nvg._frame_l = 0.149
-		nvg._day_factor = 0.18
-		nvg._sun_down = true
-		nvg.set_daylight_source = src
-		nvg.refresh_daylight_now()
-		ck(is_equal_approx(env.tonemap_exposure, 3.0), "source %d keeps the vanilla night" % src)
 	w["map"].free()
 
 func t_sun_down_from_snapshot() -> void:
@@ -485,7 +428,6 @@ func t_sync_probe_rests_at_night() -> void:
 	data.NVG = true
 	_reset(nvg, w["env"], w["sim"], 1.209)
 	nvg._sun_down = true
-	nvg.set_daylight_source = 0
 	nvg._sync_probe()
 	ck(nvg._probe == null, "the probe stays off while the sun is down")
 	w["map"].free()
