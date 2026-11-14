@@ -6,57 +6,22 @@ const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 const SceneProbe = preload("res://mods/ThermalVTK/VTKSceneProbe.gd")
 
-# Owns the NVG overlay shader, plus the thermal/mines layer that rides on it.
+# Owns the NVG overlay shader and the direct-material mine highlight layer.
 #
-# Architecture (ported from the ThermalVision reference mod):
-#   1. Our own shader REPLACES the vanilla one on the NVG ColorRect. Because
-#      vanilla only ever calls set_shader_parameter("tint", ...) on that same
-#      ShaderMaterial, plain green NVG keeps working untouched -- we only get
-#      a "noise" uniform we can actually drive (vanilla's own shader declares
-#      noise as a `const`, which is why BetterNVG's set_shader_parameter
-#      calls there did nothing).
-#   2. Mines carry a fixed emissive "key" colour and are painted by
-#      material_override, so the whole on-screen shell IS the key pixel. The
-#      contour's state-key ring (normal/combat/defend) is a
-#      separate unshaded layer owned by VTKOutline.
-#   3. The shader samples the screen, finds whichever key is nearest, and
-#      substitutes a display color. Everything else goes through the
-#      false-color thermal palette.
+# The NVG shader handles thermal/NVG output only (palette, daylight, noise,
+# white/tint). ESP contour rendering and mine highlighting are direct 3D
+# materials: contour overlays live in VTKOutline/VTKESP, mine highlights are
+# applied here as direct display-colour material_override on mine meshes.
 #
-# Detection is event-driven (SceneTree.node_added) rather than a full scene
-# walk, and per-entity work is only a reference swap between pre-built
-# materials -- no shader or material allocation after startup.
+# Mine discovery is event-driven (SceneTree.node_added + batched drain) rather
+# than a full scene walk, and per-mine work is a cached reference swap -- no
+# material allocation after startup except colour refresh.
 
 const GAME_DATA_RES := Paths.GAME_DATA
 const NVG_SCRIPT_SUFFIX := "NVG.gd"
 const SHADER_RES := "res://mods/ThermalVTK/VTKNVG.gdshader"
-const KEY_GAIN_PARAM := &"vtk_key_gain"
 
 const TICK := 0.1
-
-# Detector key for mines. Fixed by design and kept in lockstep with the
-# shader's mineKey uniform and the unshaded overlay material that emits it.
-const MINE_KEY := Color(0.0, 0.0, 1.0)
-
-# Detection target, NOT the emitted key. The vanilla NVG WorldEnvironment
-# (glow + tonemap) desaturates the unshaded key colour toward white BEFORE the
-# frame reaches our screen shader, so matching the raw key always misses.
-# This is the measured post-NVG value for the emitted mine key (calibration
-# band, F8 / F9 screenshot): mine (0,0,1)->(0.50,0.06,0.94). The material still
-# EMITS the raw key; only the detector compares against it.
-const DET_MINE := Color(0.50, 0.06, 0.94)
-
-# Contour state detection targets, NOT the emitted keys. The contour shell
-# writes the raw category key (VTKStates.KEY_*) into the main 3D pass, and the
-# vanilla NVG world processing washes that pixel toward white before this
-# shader sees it -- the same reason the mine key needs DET_MINE. These are the
-# measured post-NVG values from the ring probe (motion-gated, 3 runs):
-# normal (1,0,0) -> (1.00,0.21,0.16), combat (0,1,1) -> (0.82,1.00,1.00),
-# defend (1,0,1) -> (1.00,0.34,1.00). Keep in lockstep with the shader's
-# st*Key uniforms and VTKStates.KEY_*.
-const DET_ST_NORMAL := Color(1.00, 0.21, 0.16)
-const DET_ST_COMBAT := Color(0.82, 1.00, 1.00)
-const DET_ST_DEFEND := Color(1.00, 0.34, 1.00)
 
 # settings
 var set_nvg_noise: float = 0.0
@@ -81,12 +46,8 @@ var set_frame_level: float = Daylight.DAY_LEVEL
 var set_frame_cadence: float = Daylight.FRAME_CADENCE
 # Time acceleration of the day/night cycle (F9 "Time scale" lever; testing).
 var set_time_scale: float = 1.0
-# Brightness of the state key the ESP outlines emit; the overlay uses it to
-# scale the substituted state colour.
-var set_state_brightness: float = 0.6
 
-var _state_colors: Dictionary = {}
-# Display colour substituted for the detected mine key (MCM "Mine" colour).
+# Display colour for direct mine highlights (MCM "Mine" colour).
 var _mine_color: Color = States.DEFAULT_MINE
 var _game_data: Resource = null
 var _shader: Shader = null
@@ -94,16 +55,8 @@ var _nvg_root: Node = null
 var _nvg_mat_node: Node = null
 var _installed: bool = false
 
+# Direct mine highlight material: unshaded display colour, reused across mines.
 var _mat_mine: StandardMaterial3D = null
-# `_esp_on` is the layer switch (armed by ThermalVTK._apply_mode through
-# set_esp_layer); `_esp_demand` is whether a ring is actually on screen this
-# frame (ThermalVTK pushes it from VTKESP.wants_contour). The shader substitutes
-# from the screen when both hold, so the frozen frame is never re-read.
-var _esp_on: bool = false
-var _esp_demand: bool = false
-# Full-body ESP fill: flat state colour blended over the thermal background.
-var _esp_fill: bool = false
-var _esp_fill_alpha: float = 0.4
 
 var _mines: Dictionary = {}
 var _mine_watch: Dictionary = {}
@@ -115,16 +68,12 @@ var _tick_cd: float = 0.0
 var _scene_ref: Node = null
 # прошлое значение on, нужно ровно для перехода on->off (снять покраску один раз).
 var _was_on: bool = false
-# PIP off + magnifying scope rotates colour channels, so the overlay detector
-# matches a key's orbit; pushed only on change (see _process).
-var _scope_rotate: bool = false
 
 # Daylight compensation. `_last_exposure` is the value WE last wrote; if the
 # environment reads something else, the vanilla ResetCheck has written it and
 # that value becomes the new vanilla baseline.
 var _day_factor: float = 1.0
 var _day_mix: float = 0.0
-var _key_gain: float = 1.0
 # Source A: the scene level folded from the game's light state (see _snapshot)
 # and the RAW factor it produced -- no strength here, strength is applied once
 # in _target_factor. _factor_a is kept current under every source so the panel
@@ -155,13 +104,6 @@ var _snow_trim: float = 1.0
 var _day_trim: float = 1.0
 var _vanilla_exposure: float = 3.0
 var _last_exposure: float = -1.0
-# Process-wide, not per instance: the global lives in RenderingServer, so a
-# rebuilt VTKNVG must not add it twice (a second add pushes "Condition
-# global_shader_variables.has(p_name) is true"). Static because there is no
-# usable existence probe in a shipping build: global_shader_parameter_get_list()
-# and global_shader_parameter_get() both log "This function should never be used
-# outside the editor" and the get() returns null even for a registered name.
-static var _key_gain_registered: bool = false
 var _was_worn: bool = false
 var _sim: Node = null
 var _world: Node = null
@@ -179,20 +121,13 @@ func _ready() -> void:
 	if ResourceLoader.exists(SHADER_RES):
 		_shader = load(SHADER_RES) as Shader
 
-	# Key materials emit the detector pixels. Mines use a plain
-	# unshaded+emission StandardMaterial3D; the contour's overlay material
-	# lives in the vanilla NVG overlay node and substitutes the display colour
-	# from the screen pixel the shell wrote (see VTKOutline and the NVG shader).
-	_mat_mine = _key_material(MINE_KEY)
-	_register_key_gain()
+	_mat_mine = _mine_material(_mine_color)
 
 	get_tree().node_added.connect(_on_node_added)
 	_scene_ref = get_tree().current_scene
 	_reseed(get_tree().current_scene)
 
 
-# A single diamond quad reads as a glyph. Billboarded via the material, so the
-# exact winding does not matter (cull is disabled anyway).
 func _reseed(scene: Node) -> void:
 	if scene == null:
 		return
@@ -212,7 +147,7 @@ func _scan_node(n: Node) -> void:
 		_scan_node(c)
 
 
-func _key_material(c: Color) -> StandardMaterial3D:
+func _mine_material(c: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.albedo_color = c
@@ -222,16 +157,13 @@ func _key_material(c: Color) -> StandardMaterial3D:
 	return m
 
 
-# Repaint an existing key material. Must mirror _key_material exactly, otherwise
-# the emitted pixel stops matching the shader key and the category disappears.
-# The daylight gain lives here too: the key is scaled BEFORE the tonemap, and
-# the reduced exposure divides it back, so the detector sees the same pixel.
-func _key_set(m: StandardMaterial3D, c: Color) -> void:
-	if m == null:
+func _sync_mine_material() -> void:
+	if _mat_mine == null:
+		_mat_mine = _mine_material(_mine_color)
 		return
-	m.albedo_color = Color(c.r * _key_gain, c.g * _key_gain, c.b * _key_gain, c.a)
-	m.emission = c
-	m.emission_energy_multiplier = _key_gain
+	_mat_mine.albedo_color = _mine_color
+	_mat_mine.emission = _mine_color
+	_mat_mine.emission_energy_multiplier = 1.0
 
 
 func _on_node_added(node: Node) -> void:
@@ -314,12 +246,6 @@ func _try_install_shader() -> void:
 
 func _apply_uniforms() -> void:
 	_dirty = false
-	# The key materials are what actually emit the detector's key pixels on
-	# screen, pinned to the key constants.
-	#
-	# Kept ahead of the _installed check on purpose -- if this were gated on the
-	# shader being live, the two sides could desync during startup.
-	_key_set(_mat_mine, MINE_KEY)
 	if not _installed or _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
 		return
 	var nvg_mat = _nvg_mat_node.get("material")
@@ -332,78 +258,15 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("worldPaletteMode", set_palette)
 	nvg_mat.set_shader_parameter("highlightKnee", set_highlight_knee)
 	nvg_mat.set_shader_parameter("nvgWhite", set_nvg_white)
-	nvg_mat.set_shader_parameter("mineKey", DET_MINE)
-	_push_esp_on()
-	# Fallbacks are the VTKStates defaults, not copies: a profile without a
-	# colour section and a fresh profile paint the same three colours.
-	nvg_mat.set_shader_parameter("stNormalColor", _state_colors.get("state_normal", States.DEFAULT_NORMAL))
-	nvg_mat.set_shader_parameter("stCombatColor", _state_colors.get("state_combat", States.DEFAULT_COMBAT))
-	nvg_mat.set_shader_parameter("stDefendColor", _state_colors.get("state_defend", States.DEFAULT_DEFEND))
-	nvg_mat.set_shader_parameter("mineColor", _mine_color)
-	nvg_mat.set_shader_parameter("stateBright", set_state_brightness)
-	nvg_mat.set_shader_parameter("espFill", _esp_fill)
-	nvg_mat.set_shader_parameter("fillAlpha", _esp_fill_alpha)
-	# The detector compares against the washed values, not the emitted keys.
-	nvg_mat.set_shader_parameter("stNormalKey", DET_ST_NORMAL)
-	nvg_mat.set_shader_parameter("stCombatKey", DET_ST_COMBAT)
-	nvg_mat.set_shader_parameter("stDefendKey", DET_ST_DEFEND)
-
-	nvg_mat.set_shader_parameter("scopeRotate", _scope_rotate)
 
 
-# Display colour of the mine key. Stored even before the overlay material is
-# installed: _apply_uniforms pushes it on every install, so a value set here
-# survives a map change that rebuilds the overlay.
+# Display colour for direct mine highlights.
 func set_mine_color(c: Color) -> void:
 	_mine_color = c
-	if _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
-		return
-	var mat = _nvg_mat_node.get("material")
-	if mat is ShaderMaterial:
-		(mat as ShaderMaterial).set_shader_parameter("mineColor", _mine_color)
+	_sync_mine_material()
 
 func mine_color() -> Color:
 	return _mine_color
-
-# The contour asks for the screen through ThermalVTK._apply_mode: this arms the
-# layer switch. The per-frame demand below decides whether the substitution runs.
-func set_esp_layer(on: bool) -> void:
-	if _esp_on == on:
-		return
-	_esp_on = on
-	_push_esp_on()
-
-# A contour is on screen this frame (ThermalVTK polls VTKESP.wants_contour). Turning
-# the layer off here also turns the shader substitution off, so the last frame
-# can never linger on screen.
-func set_esp_demand(on: bool) -> void:
-	if _esp_demand == on:
-		return
-	_esp_demand = on
-	_push_esp_on()
-
-# chord keeping espOn uniform in sync even before the 0.1 s tick.
-func _push_esp_on() -> void:
-	if _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
-		return
-	var mat = _nvg_mat_node.get("material")
-	if mat is ShaderMaterial:
-		(mat as ShaderMaterial).set_shader_parameter("espOn", _esp_render_on())
-
-
-func set_esp_fill(fill: bool, alpha: float) -> void:
-	_esp_fill = fill
-	_esp_fill_alpha = clampf(alpha, 0.05, 1.0)
-	if _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
-		return
-	var mat = _nvg_mat_node.get("material")
-	if mat is ShaderMaterial:
-		(mat as ShaderMaterial).set_shader_parameter("espFill", _esp_fill)
-		(mat as ShaderMaterial).set_shader_parameter("fillAlpha", _esp_fill_alpha)
-
-
-func _esp_render_on() -> bool:
-	return _esp_on and _esp_demand
 
 
 func _nvg_active() -> bool:
@@ -431,22 +294,6 @@ func _process(delta: float) -> void:
 		_reset_daylight()
 	var worn := _nvg_active()
 	var on := set_thermal and worn
-	# PIP off + aiming a magnifying scope is the only path that rotates colour
-	# channels; flag the overlay then so it matches whole key orbits. Cache and
-	# push on change only: _apply_uniforms is not called per frame.
-	var want := false
-	if _game_data != null and _game_data.has_method("get"):
-		want = bool(_game_data.get("isScoped"))
-		if want:
-			var pip = _game_data.get("PIP")
-			if pip == null or bool(pip):
-				want = false
-	if want != _scope_rotate:
-		_scope_rotate = want
-		if _installed and _nvg_mat_node != null and is_instance_valid(_nvg_mat_node):
-			var sm = _nvg_mat_node.get("material")
-			if sm is ShaderMaterial:
-				(sm as ShaderMaterial).set_shader_parameter("scopeRotate", _scope_rotate)
 	if worn != _was_worn:
 		_was_worn = worn
 		_dirty = true
@@ -729,11 +576,9 @@ func _daylight_tick(delta: float) -> void:
 
 
 # The tail of _daylight_tick: whatever factor sits in _day_factor, write the
-# exposure, the shader mix and the key gain. Shared with refresh_daylight_now
-# so the tick and the panel lever can never compute different things. `cur`
-# is the environment exposure as the caller read it before applying. The mix
-# lands before the gain so the [DAY] debug line prints the mix the factor
-# produced, not the previous step's.
+# exposure and the shader mix. Shared with refresh_daylight_now so the tick and
+# the panel lever can never compute different things. `cur` is the environment
+# exposure as the caller read it before applying.
 func _daylight_apply(env: Environment, cur: float) -> void:
 	var want := _vanilla_exposure * _day_factor
 	if absf(want - cur) > 0.002:
@@ -743,9 +588,6 @@ func _daylight_apply(env: Environment, cur: float) -> void:
 	if absf(mix - _day_mix) > 0.001:
 		_day_mix = mix
 		_push_day_mix()
-	var gain := Daylight.key_gain(_day_factor)
-	if absf(gain - _key_gain) > 0.001:
-		_set_key_gain(gain)
 
 
 # Snow and day trims from one place: the tick pushes them with the fresh day
@@ -818,7 +660,6 @@ func _reset_daylight() -> void:
 		remove_meta("_vtk_time_frozen")
 		remove_meta("_vtk_frozen_time")
 		remove_meta("_vtk_frozen_day")
-	_set_key_gain(1.0)
 	_push_day_mix()
 	_dirty = true
 
@@ -831,22 +672,6 @@ func _restore_exposure() -> void:
 		if env != null and absf(env.tonemap_exposure - _last_exposure) <= 0.004:
 			env.tonemap_exposure = _vanilla_exposure
 	_reset_daylight()
-
-
-func _register_key_gain() -> void:
-	if not _key_gain_registered:
-		RenderingServer.global_shader_parameter_add(KEY_GAIN_PARAM, RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 1.0)
-		_key_gain_registered = true
-	RenderingServer.global_shader_parameter_set(KEY_GAIN_PARAM, _key_gain)
-
-
-func _set_key_gain(g: float) -> void:
-	if Dbg.enabled and absf(clampf(g, 0.01, 10.0) - _key_gain) > 0.05:
-		Dbg.log("DAY", "gain=%.2f strength=%.2f dayMix=%.2f" % [g, set_strength, _day_mix])
-	_key_gain = clampf(g, 0.01, 10.0)
-	_key_set(_mat_mine, MINE_KEY)
-	if _key_gain_registered:
-		RenderingServer.global_shader_parameter_set(KEY_GAIN_PARAM, _key_gain)
 
 
 func _push_day_mix() -> void:
@@ -1070,7 +895,11 @@ func _update_mine(id: int, thermal_on: bool, ppos: Vector3) -> void:
 
 
 func set_thermal_enabled(on: bool) -> void:
+	var was_on := set_thermal
 	set_thermal = on
+	if was_on and not on:
+		_clear_paint()
+		_was_on = false
 	_dirty = true
 	_tick_cd = 0.0
 
@@ -1089,18 +918,11 @@ func apply_config(rec) -> void:
 	set_nvg_white = rec.nvg_white
 	set_world = rec.world
 	set_highlight_knee = rec.highlight_knee
-	set_state_brightness = rec.outline_brightness
 	set_glow_distance = rec.outline_distance
 	set_mines = rec.thermal_mines
-	set_state_colors(rec.state_colors())
 	set_mine_color(rec.color_mine)
 	_dirty = true
 	_tick_cd = 0.0
-
-
-func set_state_colors(colors: Dictionary) -> void:
-	_state_colors = colors
-	_dirty = true
 
 
 func set_palette_mode(mode: int) -> void:

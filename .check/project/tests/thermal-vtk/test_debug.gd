@@ -90,10 +90,6 @@ class FakeNVG extends Node:
 		palette_writes += 1
 	func set_thermal_enabled(_v: bool) -> void:
 		pass
-	func set_esp_layer(_on: bool) -> void:
-		pass
-	func set_esp_fill(_fill: bool, _alpha: float) -> void:
-		pass
 	# The real module maps the MCM snapshot through this; the F6 guard only
 	# exercises the palette cycle.
 	func apply_config(_rec) -> void:

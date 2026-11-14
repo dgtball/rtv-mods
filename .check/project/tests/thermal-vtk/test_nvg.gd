@@ -18,8 +18,8 @@ func _run() -> void:
 	t_dirty_batches_setters()
 	t_mine_retry_is_bounded()
 	t_off_upkeep_clears_dead_mines()
-	t_esp_demand_gate()
-	t_mine_colour_and_keys_absent_from_shader()
+	t_mine_direct_material_gating()
+	t_mine_material_clears_on_free()
 	t_script_kind_cache()
 	print("")
 	if fails == 0:
@@ -34,7 +34,7 @@ func _run() -> void:
 func t_dirty_batches_setters() -> void:
 	var nvg = NVG.new()
 	root.add_child(nvg)
-	nvg.set_state_colors({"state_normal": Color.RED})
+	nvg.set_palette_mode(2)
 	ck(nvg._dirty, "a setter marks the uniforms dirty")
 	nvg._apply_uniforms()
 	ck(not nvg._dirty, "a push clears the flag")
@@ -71,51 +71,63 @@ func t_off_upkeep_clears_dead_mines() -> void:
 	ck(nvg._mines.is_empty(), "the early return keeps the next pass cheap")
 	nvg.free()
 
-# ESP demand/layer state remains tracked on the NVG module for now (Task 6
-# cleans the plumbing), but the shader no longer consumes an espOn key-detection
-# uniform.
-func t_esp_demand_gate() -> void:
+# Mines render with the direct display mine colour on intended meshes while
+# thermal is on, the mine toggle is on and the mine is in range; distance exit,
+# toggle off and thermal off clear the override.
+func t_mine_direct_material_gating() -> void:
 	var nvg = NVG.new()
 	root.add_child(nvg)
-	var rect := ColorRect.new()
-	var mat := ShaderMaterial.new()
-	mat.shader = load("res://mods/ThermalVTK/VTKNVG.gdshader")
-	rect.material = mat
-	nvg._nvg_mat_node = rect
-	nvg.set_esp_layer(true)
-	ck(not nvg._esp_render_on(), "layers armed without demand leave render off")
-	nvg.set_esp_demand(true)
-	ck(nvg._esp_render_on(), "demand turns render on")
-	nvg.set_esp_demand(false)
-	ck(not nvg._esp_render_on(), "demand off stops render")
-	nvg.set_esp_layer(false)
-	ck(not nvg._esp_render_on(), "layer off keeps render off")
-	nvg._nvg_mat_node = null
-	rect.free()
+	var mine := Node3D.new()
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	mine.add_child(mesh)
+	root.add_child(mine)
+	nvg._register_mine(mine)
+	var id := mine.get_instance_id()
+	ck(nvg._mines.has(id), "a mine with a mesh registers")
+	ck(mesh.material_override == null, "registered mine starts unpainted")
+	var col := Color(0.2, 0.4, 0.9)
+	nvg.set_mine_color(col)
+	nvg.set_thermal = true
+	nvg.set_mines = true
+	nvg.set_glow_distance = 10.0
+	nvg._update_mine(id, true, Vector3.ZERO)
+	ck(mesh.material_override != null, "enabled thermal mine in range is painted")
+	var mat := mesh.material_override as StandardMaterial3D
+	ck(mat != null and mat.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED, "mine highlight is unshaded")
+	ck(mat != null and mat.albedo_color == col, "mine highlight uses display mine colour")
+	ck(mat != null and mat.emission_enabled and mat.emission == col, "mine highlight emits display mine colour")
+	nvg._update_mine(id, true, Vector3(100, 0, 0))
+	ck(mesh.material_override == null, "out-of-range mine clears")
+	nvg._update_mine(id, true, Vector3.ZERO)
+	ck(mesh.material_override != null, "mine repaints on re-entry")
+	nvg.set_mines = false
+	nvg._update_mine(id, true, Vector3.ZERO)
+	ck(mesh.material_override == null, "mine toggle off clears")
+	nvg.set_mines = true
+	nvg._update_mine(id, true, Vector3.ZERO)
+	ck(mesh.material_override != null, "mine toggle on repaints in range")
+	nvg.set_thermal_enabled(false)
+	ck(mesh.material_override == null, "thermal off clears the painted mine")
 	nvg.free()
+	mine.free()
 
-# Mine/state ESP key substitution is no longer part of the NVG shader. The
-# module may retain storage/APIs until Task 6 cleans them up, but the overlay
-# shader must not expose the removed detector uniforms.
-func t_mine_colour_and_keys_absent_from_shader() -> void:
+func t_mine_material_clears_on_free() -> void:
 	var nvg = NVG.new()
 	root.add_child(nvg)
-	nvg.set_mine_color(Color(0.2, 0.4, 0.9))
-	ck(nvg.mine_color() == Color(0.2, 0.4, 0.9), "mine colour storage remains until Task 6 cleanup")
-	var rect := ColorRect.new()
-	var mat := ShaderMaterial.new()
-	mat.shader = load("res://mods/ThermalVTK/VTKNVG.gdshader")
-	rect.material = mat
-	nvg._nvg_mat_node = rect
-	nvg._installed = true
-	nvg._apply_uniforms()
-	var names := []
-	for p in mat.shader.get_shader_uniform_list():
-		names.append(p.get("name", ""))
-	for u in ["mineColor", "mineKey", "stNormalKey", "stCombatKey", "stDefendKey", "espOn", "espFill", "fillAlpha", "stateBright", "scopeRotate"]:
-		ck(not names.has(u), "NVG shader omits removed uniform %s" % u)
-	nvg._nvg_mat_node = null
-	rect.free()
+	var mine := Node3D.new()
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	mine.add_child(mesh)
+	root.add_child(mine)
+	nvg._register_mine(mine)
+	var id := mine.get_instance_id()
+	nvg.set_mine_color(Color(0.9, 0.2, 0.7))
+	nvg._update_mine(id, true, Vector3.ZERO)
+	ck(mesh.material_override != null, "mine painted before removal")
+	mine.free()
+	nvg._off_frame_upkeep()
+	ck(not nvg._mines.has(id), "freed mine entry is removed")
 	nvg.free()
 
 # The script verdict is cached per script, not per node: the map load queues
@@ -125,8 +137,7 @@ func t_script_kind_cache() -> void:
 	root.add_child(nvg)
 	var script := GDScript.new()
 	script.resource_path = "res://Scripts/NVG.gd"
-	script.source_code = "extends Node
-func _ready(): pass"
+	script.source_code = "extends Node\nfunc _ready(): pass"
 	script.reload()
 	var a := Node.new()
 	var b := Node.new()

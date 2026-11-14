@@ -122,7 +122,6 @@ func _reset(nvg, env: Environment, sim: FakeSim, e: float, season: int = 1) -> v
 	nvg._last_exposure = -1.0
 	nvg._day_factor = 1.0
 	nvg._day_mix = 0.0
-	nvg._key_gain = 1.0
 	nvg._factor_a = 1.0
 	nvg._frame_l = 0.0
 	nvg._sun_down = false
@@ -145,7 +144,6 @@ func t_day_lowers_exposure() -> void:
 	ck(absf(env.tonemap_exposure - 0.66) < 0.005, "a bright scene lowers exposure to 22%")
 	ck(absf(nvg._day_factor - 0.22) < 0.001, "the day factor lands on TARGET")
 	ck(absf(nvg._day_mix - 1.0) < 0.001, "the shader curve runs at full strength")
-	ck(nvg._key_gain > 3.0, "the key gain rises to compensate")
 	w["map"].free()
 
 func t_night_is_untouched() -> void:
@@ -156,7 +154,6 @@ func t_night_is_untouched() -> void:
 	_reset(nvg, env, sim, 0.03)
 	nvg._daylight_tick(1.0)
 	ck(is_equal_approx(env.tonemap_exposure, 3.0), "night keeps the vanilla exposure")
-	ck(is_equal_approx(nvg._key_gain, 1.0), "night keeps the key gain at 1")
 	ck(is_equal_approx(nvg._day_mix, 0.0), "night leaves the curve off")
 	w["map"].free()
 
@@ -295,7 +292,6 @@ func t_toggle_restores_exposure() -> void:
 	nvg._daylight_tick(1.0)
 	nvg._restore_exposure()
 	ck(is_equal_approx(env.tonemap_exposure, 3.0), "toggle off hands the exposure back")
-	ck(is_equal_approx(nvg._key_gain, 1.0), "toggle off clears the key gain")
 	ck(nvg._last_exposure < 0.0, "toggle off forgets the written value")
 	w["map"].free()
 
@@ -407,7 +403,6 @@ func t_night_gate_is_vanilla() -> void:
 	ck(is_equal_approx(env.tonemap_exposure, 3.0), "a sunless sky restores the vanilla night exposure")
 	ck(is_equal_approx(nvg._day_mix, 0.0), "night leaves the shader curve off")
 	ck(is_equal_approx(nvg._day_trim, 1.0), "night leaves the palette trim off")
-	ck(is_equal_approx(nvg._key_gain, 1.0), "night leaves the key gain at 1")
 	w["map"].free()
 
 func t_sun_down_from_snapshot() -> void:

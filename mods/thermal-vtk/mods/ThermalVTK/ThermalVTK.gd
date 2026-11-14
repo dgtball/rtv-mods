@@ -178,13 +178,6 @@ func _apply_mode() -> void:
 		var contour: bool = on and _outline_enabled
 		var xray: bool = on and _xray_enabled
 		_esp.set_layers(contour, xray)
-		# The contour overlay draws its category key into the main 3D pass
-		# (VTKOutline); the NVG overlay substitutes the display colour from the
-		# screen pixel. There is no second world pass any more, so arming the
-		# layer is the whole hand-off: no camera, no reach, no gate hold.
-		if _nvg != null and is_instance_valid(_nvg):
-			_nvg.set_esp_layer(contour or xray)
-			_nvg.set_esp_fill(bool(_esp.p_body_fill), float(_esp.p_fill_alpha))
 
 func _nvg_active() -> bool:
 	if _nvg == null or not is_instance_valid(_nvg):
@@ -199,21 +192,6 @@ func _process(_delta: float) -> void:
 	if worn != _nvg_worn:
 		_nvg_worn = worn
 		_apply_mode()
-	_push_esp_gate()
-
-# The shells only exist for ids the collection pass kept (`_want`), so the
-# demand here is "is any shell wanted right now". The NVG overlay substitutes
-# from the screen only while the layer is armed AND the demand holds.
-# The gate never touches `_want` or the shells: only clear_not_in frees a
-# shell, so a closed gate must not read as "nothing wanted" or the outline
-# would rebuild every frame.
-func _push_esp_gate() -> void:
-	if _nvg == null or not is_instance_valid(_nvg) or not _nvg.has_method("set_esp_demand"):
-		return
-	var demand := false
-	if _esp != null and is_instance_valid(_esp):
-		demand = bool(_esp.wants_contour())
-	_nvg.set_esp_demand(demand)
 
 # Toast channel exposed by the game's /root/Loader (loader.Message).
 func _notify(text: String, color: Color) -> void:
@@ -375,8 +353,6 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 	_ensure_esp()
 	if _esp != null and is_instance_valid(_esp):
 		_esp.apply_config(rec)
-		if _nvg != null and is_instance_valid(_nvg):
-			_nvg.set_esp_fill(rec.body_fill, rec.fill_alpha)
 	_outline_enabled = rec.outline_enabled
 	_xray_enabled = rec.outline_xray
 	_apply_mode()

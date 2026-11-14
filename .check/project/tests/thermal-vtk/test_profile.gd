@@ -153,7 +153,6 @@ class FakeNVG extends Node:
 	var set_nvg_noise: float = 10.0
 	var set_nvg_white: float = 1.0
 	var set_world: float = 1.0
-	var set_state_brightness: float = 1.0
 	var set_glow_distance: float = 0.0
 	var set_mines: bool = true
 	var palette_mode: int = 0
@@ -162,15 +161,8 @@ class FakeNVG extends Node:
 		set_nvg_noise = rec.nvg_noise
 		set_nvg_white = rec.nvg_white
 		set_world = rec.world
-		set_state_brightness = rec.outline_brightness
 		set_glow_distance = rec.outline_distance
 		set_mines = rec.thermal_mines
-	func set_esp_fill(_fill: bool, _alpha: float) -> void:
-		pass
-	func set_esp_layer(_on: bool) -> void:
-		pass
-	func set_state_colors(_v: Dictionary) -> void:
-		pass
 	func set_palette_mode(v: int) -> void:
 		palette_mode = v
 	func set_thermal_enabled(v: bool) -> void:
@@ -192,7 +184,6 @@ func t_apply_reads_active_profile() -> void:
 	profile.save(PROFILE_PATH)
 	mod._config_path = PROFILE_PATH
 	mod._mcm_apply(ConfigFile.new())
-	ck(nvg.set_state_brightness == 1.23, "the brightness comes from the active profile")
 	ck(esp.p_rim == 3.5, "the rim comes from the active profile")
 	ck(esp.p_decay == 90.0, "a missing ESP setting falls back to the registered default")
 	ck(nvg.set_glow_distance == 60.0, "a missing NVG setting falls back to the registered default")

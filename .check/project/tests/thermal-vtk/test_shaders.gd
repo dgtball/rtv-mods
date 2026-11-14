@@ -106,16 +106,19 @@ func t_nvg_shader_compiles() -> void:
 	for u in ["espOn", "espFill", "fillAlpha", "stNormalKey", "stCombatKey", "stDefendKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineKey", "mineColor", "stateBright", "scopeRotate"]:
 		ck(not names.has(u), "compiled shader dropped %s" % u)
 
-# The key path is back end to end: the ring/fill shell emits the raw category
-# key, VTKNVG owns the measured washed targets, and the second-pass module stays
-# deleted.
+# NVG no longer owns ESP contour/mine key detection: contour ESP key APIs and
+# detector-key constants are removed, while direct mine display-colour support
+# remains.
 func t_no_key_path_left() -> void:
 	var owner := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKNVG.gd")
-	ck(owner.contains("DET_ST_NORMAL"), "VTKNVG carries the measured state keys")
-	ck(owner.contains("MINE_KEY"), "VTKNVG still emits the raw mine key")
-	ck(owner.contains("set_esp_layer"), "VTKNVG owns the contour layer switch")
-	ck(owner.contains("_push_esp_on"), "VTKNVG pushes the contour uniform")
 	ck(owner.contains("func set_mine_color"), "VTKNVG owns the mine display colour")
+	ck(not owner.contains("func set_esp_layer"), "VTKNVG has no contour layer switch")
+	ck(not owner.contains("func set_esp_demand"), "VTKNVG has no ESP demand gate")
+	ck(not owner.contains("func set_esp_fill"), "VTKNVG has no ESP fill plumbing")
+	ck(not owner.contains("func set_state_colors"), "VTKNVG has no contour state-colour plumbing")
+	ck(not owner.contains("func set_state_brightness"), "VTKNVG has no contour brightness plumbing")
+	for token in ["DET_ST_NORMAL", "DET_ST_COMBAT", "DET_ST_DEFEND", "DET_MINE", "MINE_KEY", "vtk_key_gain"]:
+		ck(not owner.contains(token), "VTKNVG drops %s" % token)
 	var store := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKShaders.gd")
 	ck(store.contains("func body_los"), "the store exposes the body LOS shader")
 	ck(store.contains("func body_xray"), "the store exposes the body XRAY shader")
@@ -124,23 +127,9 @@ func t_no_key_path_left() -> void:
 	ck(not store.contains("RING_DEPTH_SRC"), "the store no longer ships the key ring")
 	ck(not FileAccess.file_exists("res://mods/ThermalVTK/VTKEspMask.gd"), "the second-pass module is deleted")
 
-# The detector matches the closest washed key, so every pair of targets has to
-# be farther apart than the detector radius: otherwise one key's shell would be
-# painted in another key's colour.
+# Direct ESP/mine rendering no longer depends on detector key spacing.
 func t_detector_keys_are_spaced() -> void:
-	var keys := {
-		"mine": NVG.DET_MINE,
-		"normal": NVG.DET_ST_NORMAL,
-		"combat": NVG.DET_ST_COMBAT,
-		"defend": NVG.DET_ST_DEFEND,
-	}
-	var names: Array = keys.keys()
-	for i in names.size():
-		for j in range(i + 1, names.size()):
-			var a: Color = keys[names[i]]
-			var b: Color = keys[names[j]]
-			var d: float = Vector3(a.r - b.r, a.g - b.g, a.b - b.b).length()
-			ck(d > 0.34, "washed %s and %s keys are farther than the detector radius (%.2f)" % [names[i], names[j], d])
+	ck(true, "detector key spacing retired with NVG key detection")
 
 # The raw keys are what the shell emits; they only have to be distinct and
 # bright. Two-channel keys are fine -- the wash turns them into the measured
