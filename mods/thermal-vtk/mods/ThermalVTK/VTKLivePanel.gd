@@ -201,7 +201,9 @@ func _refresh_readout() -> void:
 	var e_txt := "-" if e < 0.0 else "%.2f" % e
 	var snap: Dictionary = _nvg._snapshot()
 	var terms: Dictionary = Daylight.estimate_terms(snap)
-	_readout.text = "E %.3f (sky %.2f amb %.2f sun %.2f moon %.2f fog %.2f)\nsunDown %d indoor %d shelter %d | factor %.3f (A %.3f ceil %.3f) u %.3f frame %.3f\nmix %.2f bgTrim %.2f exp %s | world %.2f knee %.2f strength %.2f helmet %d thermal %d" % [
+	var sim: Dictionary = _nvg.debug_sim_state() if _nvg.has_method("debug_sim_state") else {}
+	_readout.text = "%s\nE %.3f (sky %.2f amb %.2f sun %.2f moon %.2f fog %.2f)\nsunDown %d indoor %d shelter %d | factor %.3f (A %.3f ceil %.3f) u %.3f frame %.3f\nmix %.2f bgTrim %.2f exp %s | world %.2f knee %.2f strength %.2f helmet %d thermal %d" % [
+		_sim_line(sim),
 		float(_nvg.get("_light_est")),
 		float(terms["sky"]), float(terms["amb"]), float(terms["sun"]), float(terms["moon"]), float(terms["fog"]),
 		1 if bool(_nvg.get("_sun_down")) else 0,
@@ -215,6 +217,29 @@ func _refresh_readout() -> void:
 		1 if _nvg.nvg_active() else 0,
 		1 if bool(_nvg.get("set_thermal")) else 0,
 	]
+
+
+func _sim_line(sim: Dictionary) -> String:
+	if sim.is_empty():
+		return "time - day - season -"
+	var t: float = float(sim.get("time", -1.0))
+	var day: int = int(sim.get("day", -1))
+	var season: int = int(sim.get("season", -1))
+	var season_name := "summer" if season == 1 else ("winter" if season == 2 else str(season))
+	var time_txt := "-"
+	if t >= 0.0:
+		var hh := int(floorf(t / 100.0))
+		var mm := int(floorf(fmod(floorf(t), 100.0)))
+		time_txt = "%02d:%02d" % [hh, mm]
+	var line := "time %s day %s season %s(%d)" % [time_txt, str(day) if day >= 0 else "-", season_name, season]
+	var weather: Dictionary = sim.get("weather", {})
+	if not weather.is_empty():
+		var parts: Array[String] = []
+		for k in weather.keys():
+			parts.append("%s=%s" % [str(k), str(weather[k])])
+		parts.sort()
+		line += " | weather " + " ".join(parts)
+	return line
 
 # The live tonemap exposure the frame is rendered with, or -1 when the
 # environment is not resolved (main menu, map change).
@@ -272,7 +297,20 @@ func _panel_line(stats: Dictionary) -> String:
 	var knee: float = float(_nvg.get("set_highlight_knee"))
 	var snap: Dictionary = _nvg._snapshot()
 	var terms: Dictionary = Daylight.estimate_terms(snap)
-	return "E=%.3f sunDown=%d indoor=%d shelter=%d u=%.3f ceiling=%.2f factor=%.2f measured=%.3f mix=%.2f snowTrim=%.2f dayTrim=%.2f exp=%.2f helmet=%d thermal=%d | Esky=%.3f Eamb=%.3f Esun=%.3f Emoon=%.3f Efog=%.3f | raw p05=%.3f p25=%.3f p50=%.3f p75=%.3f p95=%.3f mean=%.3f black=%.3f cream=%.3f n=%d | pal p05=%.3f p50=%.3f p95=%.3f" % [
+	var sim: Dictionary = _nvg.debug_sim_state() if _nvg.has_method("debug_sim_state") else {}
+	var t: float = float(sim.get("time", -1.0))
+	var day_n: int = int(sim.get("day", -1))
+	var season: int = int(sim.get("season", -1))
+	var hh := int(floorf(maxf(t, 0.0) / 100.0))
+	var mm := int(floorf(fmod(floorf(maxf(t, 0.0)), 100.0)))
+	var weather: Dictionary = sim.get("weather", {})
+	var wparts: Array[String] = []
+	for k in weather.keys():
+		wparts.append("%s=%s" % [str(k), str(weather[k])])
+	wparts.sort()
+	var wtxt := (" weather=%s" % " ".join(wparts)) if not wparts.is_empty() else ""
+	return "t=%02d:%02d day=%d season=%d%s E=%.3f sunDown=%d indoor=%d shelter=%d u=%.3f ceiling=%.2f factor=%.2f measured=%.3f mix=%.2f snowTrim=%.2f dayTrim=%.2f exp=%.2f helmet=%d thermal=%d | Esky=%.3f Eamb=%.3f Esun=%.3f Emoon=%.3f Efog=%.3f | raw p05=%.3f p25=%.3f p50=%.3f p75=%.3f p95=%.3f mean=%.3f black=%.3f cream=%.3f n=%d | pal p05=%.3f p50=%.3f p95=%.3f" % [
+		hh, mm, day_n, season, wtxt,
 		float(_nvg.get("_light_est")),
 		1 if bool(_nvg.get("_sun_down")) else 0,
 		1 if bool(_nvg.get("_sim_indoor")) else 0,

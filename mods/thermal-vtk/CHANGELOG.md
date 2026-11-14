@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.7.11] - 2026-11-14
+
+### Changed
+
+- The live panel and debug log measurements now show the current time, day, season, and detected weather.
+
 ## [2.7.10] - 2026-11-14
 
 ### Changed

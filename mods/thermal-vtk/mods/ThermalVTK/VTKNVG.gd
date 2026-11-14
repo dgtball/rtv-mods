@@ -846,6 +846,44 @@ func _sim_value(key: String, fallback) -> Variant:
 	return fallback if v == null else v
 
 
+# Debug/state snapshot for the live panel: simulation time, day, season and any
+# weather-like fields exposed by the game. Read-only and best-effort.
+func debug_sim_state() -> Dictionary:
+	var sim := _sim_time_node()
+	var out := {
+		"time": -1.0,
+		"day": -1,
+		"season": int(_sim_season),
+	}
+	if sim != null and is_instance_valid(sim):
+		var t = sim.get("time")
+		if t != null:
+			out["time"] = float(t)
+		var d = sim.get("day")
+		if d != null:
+			out["day"] = int(d)
+		var s = sim.get("season")
+		if s != null:
+			out["season"] = int(s)
+	# Weather: probe likely property names on Simulation and World. Values are
+	# kept as-is when present so the debug log shows whatever the game exposes.
+	var weather := {}
+	var probes := ["weather", "currentWeather", "weatherState", "overcast", "fog", "rain", "snow", "precipitation", "storm", "wind", "clouds"]
+	for src in [sim, _world]:
+		if src == null or not is_instance_valid(src):
+			continue
+		for key in probes:
+			if weather.has(key):
+				continue
+			var v = src.get(key)
+			if v == null:
+				continue
+			if typeof(v) in [TYPE_INT, TYPE_FLOAT, TYPE_BOOL, TYPE_STRING, TYPE_STRING_NAME]:
+				weather[key] = v
+	out["weather"] = weather
+	return out
+
+
 func _game_flag(name: String) -> bool:
 	if _game_data == null or not _game_data.has_method("get"):
 		return false
