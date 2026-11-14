@@ -25,11 +25,6 @@ const LOS_EVERY := 6
 # only follows a category that held for this long.
 const CAT_HOLD := 0.35
 const SPRINT_SPEED := 4.0
-# Trigger diagnostics: at most one line per entry per source per second. A
-# walking bot re-tags its window twice a second and a bot under sustained fire
-# re-tags on every hit, so unthrottled logging cost a file write (and a flush)
-# per event: 38k lines and a 24.6k-event pain storm in one 70-minute session.
-const TRIG_LOG_GAP := 1.0
 # Pain cries: sustained damage (a burst, a shotgun, several pellets landing) is
 # one cry, not one per frame. The reveal stays up for p_pain_s anyway, so the
 # player sees the same window; only the re-tagging is debounced.
@@ -116,8 +111,6 @@ var p_cal_index: int = 0
 var marker_visible: bool = false
 var _dbg_cd: float = 0.0
 var _dbg_sig: String = ""
-# Last trigger log time per entry per source, diagnostics only.
-var _trig_log: Dictionary = {}
 var _dbg_cand: int = 0
 var _dbg_keep: int = 0
 var _dbg_applied: int = 0
@@ -311,7 +304,6 @@ func _on_ai_deactivate() -> void:
 	if is_instance_valid(n):
 		var id := n.get_instance_id()
 		_entries.erase(id)
-		_trig_log.erase(id)
 		Dbg.log("ESP", "deactivate id=%d" % id)
 
 func _on_ai_changestate(_state: String) -> void:
@@ -389,20 +381,12 @@ func _trig_node(node: Node, source: String, span: float, dist: float) -> void:
 	if not _entries.has(id):
 		_register(node)
 	if _entries.has(id):
-		Tracker.tag_trig(_entries[id], source, dist, _now() + span, span)
-		if Dbg.enabled:
-			var now := _now()
-			if _log_ok(id, source, now):
-				Dbg.log("ESP", "trig id=%d source=%s span=%.1f dist=%.0f" % [id, source, span, dist])
-
-# One diagnostic line per entry per source per TRIG_LOG_GAP seconds.
-func _log_ok(id: int, source: String, now: float) -> bool:
-	var row: Dictionary = _trig_log.get(id, {})
-	if now - float(row.get(source, -1000.0)) < TRIG_LOG_GAP:
-		return false
-	row[source] = now
-	_trig_log[id] = row
-	return true
+		var e: Dictionary = _entries[id]
+		var now := _now()
+		var rising := now >= float(e.get("trig_until", 0.0))
+		Tracker.tag_trig(e, source, dist, now + span, span)
+		if Dbg.enabled and rising:
+			Dbg.log("ESP", "trig id=%d source=%s span=%.1f dist=%.0f" % [id, source, span, dist])
 
 # Pain cry without a hook on PlayDamage: a hook there lands inside another
 # mod's damage witness window and disables its counter. Poll instead.
@@ -627,7 +611,6 @@ func _draw(ppos: Vector3) -> void:
 			_want_add(id)
 	for id in _stale:
 		_entries.erase(id)
-		_trig_log.erase(id)
 	_cand_refs.resize(used)
 	for i in used:
 		_cand_refs[i] = _cand_pool[i]

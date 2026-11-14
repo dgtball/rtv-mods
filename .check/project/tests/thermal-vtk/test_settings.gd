@@ -88,7 +88,7 @@ func t_read_defaults() -> void:
 	ck(rec.daylight_compensation, "daylight compensation defaults on")
 	ck(rec.debug_log == false, "debug log defaults off")
 	ck(rec.key_thermal_toggle == 0, "thermal hotkey defaults unbound")
-	ck(rec.key_palette_cycle == KEY_F6 and rec.key_debug_probe == KEY_F7 and rec.key_cal_cycle == KEY_F8, "diagnostic hotkeys default to the F keys")
+	ck(rec.key_palette_cycle == KEY_F6 and rec.key_cal_cycle == KEY_F8, "diagnostic hotkeys default to the F keys")
 	ck(rec.key_live_panel == KEY_F9, "live panel key defaults to F9")
 	ck(rec.color_normal == Color(0.98, 0.96, 0, 1), "normal colour default")
 	ck(rec.color_defend == Color(0.11, 0.6, 0.96, 1), "defend colour default")

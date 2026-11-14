@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.10] - 2026-11-14
+
+### Changed
+
+- Debug logging for X-ray triggers now records each activation once instead of repeating while the trigger stays active.
+- Removed the unused debug probe hotkey from Diagnostics.
+
 ## [2.7.9] - 2026-11-14
 
 ### Fixed

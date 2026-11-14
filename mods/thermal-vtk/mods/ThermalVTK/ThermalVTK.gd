@@ -3,7 +3,6 @@ const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Settings = preload("res://mods/ThermalVTK/VTKSettings.gd")
 const VTKDebug = preload("res://mods/ThermalVTK/VTKDebug.gd")
-const Probe = preload("res://mods/ThermalVTK/VTKProbe.gd")
 const Calibration = preload("res://mods/ThermalVTK/VTKCalibration.gd")
 const LivePanel = preload("res://mods/ThermalVTK/VTKLivePanel.gd")
 
@@ -22,7 +21,6 @@ var _esp: Node = null
 var _config_path: String = CONFIG_FILE
 var _key_thermal_toggle: int = 0
 var _key_palette_cycle: int = KEY_F6
-var _key_debug_probe: int = KEY_F7
 var _key_cal_cycle: int = KEY_F8
 var _key_live_panel: int = KEY_F9
 var _thermal_enabled: bool = false
@@ -66,13 +64,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _key_palette_cycle != 0 and (k.keycode == _key_palette_cycle or k.physical_keycode == _key_palette_cycle):
 		_cycle_palette()
 		get_viewport().set_input_as_handled()
-		return
-	if _key_debug_probe != 0 and (k.keycode == _key_debug_probe or k.physical_keycode == _key_debug_probe):
-		# The probe is a debug tool: without the debug log the key stays free
-		# for the game, so nothing is consumed.
-		if VTKDebug.enabled:
-			_probe_center()
-			get_viewport().set_input_as_handled()
 		return
 	if _key_cal_cycle != 0 and (k.keycode == _key_cal_cycle or k.physical_keycode == _key_cal_cycle):
 		# The calibration cycle is a debug tool: without the debug log the key
@@ -143,30 +134,6 @@ func _push_calibration() -> void:
 	if _esp == null or not is_instance_valid(_esp):
 		return
 	_esp.set_calibration(_cal_active, _cal_index)
-
-# Debug key probe: read the colour under the crosshair into the debug log.
-# The NVG overlay paints the thermal palette (or the green tint) over the whole
-# frame, so the overlay rect is hidden for the sampled frame -- the raw scene
-# pixel underneath is what the key detector compares against.
-func _probe_center() -> void:
-	if not VTKDebug.enabled:
-		return
-	var vp := get_viewport()
-	if vp == null:
-		return
-	var nvg = _nvg
-	if nvg != null and is_instance_valid(nvg):
-		nvg.set_overlay_visible(false)
-	var rgb: Color = await Probe.read_center(vp)
-	if nvg != null and is_instance_valid(nvg):
-		nvg.set_overlay_visible(true)
-	if rgb.a <= 0.0:
-		VTKDebug.log("PROBE", "probe failed: no frame")
-		return
-	var hint := "raw-nvg-off"
-	if _nvg_active():
-		hint = "raw-thermal" if _thermal_enabled else "raw-nvg"
-	VTKDebug.log("PROBE", Probe.format(rgb, hint))
 
 # The live panel exists only while the debug log is on: the autoload owns it,
 # so the gate lives here, not inside the panel. The panel itself is a pure
@@ -385,7 +352,6 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 		return
 	_key_thermal_toggle = rec.key_thermal_toggle
 	_key_palette_cycle = rec.key_palette_cycle
-	_key_debug_probe = rec.key_debug_probe
 	_key_cal_cycle = rec.key_cal_cycle
 	_key_live_panel = rec.key_live_panel
 	# The thermal toggle and the world palette live in our own state file, not
