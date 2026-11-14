@@ -109,7 +109,7 @@ $tests = [ordered]@{
         "res://tests/vostok-toolkit/test_session.gd", "res://tests/vostok-toolkit/test_spawn.gd",
         "res://tests/vostok-toolkit/test_travel.gd")
     "thermal-vtk" = @(
-        "res://tests/thermal-vtk/test_calibration.gd", "res://tests/thermal-vtk/test_daylight.gd",
+        "res://tests/thermal-vtk/test_daylight.gd",
         "res://tests/thermal-vtk/test_daylight_runtime.gd", "res://tests/thermal-vtk/test_debug.gd",
         "res://tests/thermal-vtk/test_esp.gd",
         "res://tests/thermal-vtk/test_labels.gd", "res://tests/thermal-vtk/test_nvg.gd",

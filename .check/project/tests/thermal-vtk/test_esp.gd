@@ -2,7 +2,6 @@
 
 const ESP = preload("res://mods/ThermalVTK/VTKESP.gd")
 const S = preload("res://mods/ThermalVTK/VTKStates.gd")
-const Cal = preload("res://mods/ThermalVTK/VTKCalibration.gd")
 const Outline = preload("res://mods/ThermalVTK/VTKOutline.gd")
 const Sh = preload("res://mods/ThermalVTK/VTKShaders.gd")
 const Tracker = preload("res://mods/ThermalVTK/VTKTracker.gd")
@@ -46,7 +45,7 @@ func _run() -> void:
 	t_distance_crops()
 	t_label_suffix_independent()
 	t_opts_contour_key()
-	t_calibration_opts()
+	t_fill_opts_carry_alpha()
 	t_no_through_walls_opt()
 	t_dead_node_marks_entry()
 	t_los_excludes_self()
@@ -295,29 +294,23 @@ func t_opts_contour_key() -> void:
 	ck(hostile["key"] == S.KEY_COMBAT, "hostile combat keys combat")
 	ck(not hostile.has("state_key"), "the old detector key is gone")
 	ck(not hostile.has("nomad"), "nomad is not duplicated into the contour opts")
-	ck(not hostile.has("fill_alpha"), "fill alpha lives in the shader, not in opts")
+	ck(hostile.has("fill_alpha"), "fill alpha is carried in contour opts")
 	ck(not hostile.has("fill_grow"), "fill grow lives in the shader, not in opts")
 	var normal := opts_of(esp, {"cat": S.NORMAL, "nomad": true})
 	ck(normal["key"] == S.KEY_NORMAL, "normal keys by its category")
 	esp.free()
 
-# The debug calibration cycle paints the contour with one candidate key, so its
-# colour under the NVG can be measured with the probe. Everything else about the
-# draw stays as it is.
-func t_calibration_opts() -> void:
+# Full-body fill carries the configured alpha into the contour opts.
+func t_fill_opts_carry_alpha() -> void:
 	var esp = ESP.new()
-	esp.name = "VTKESP_cal"
+	esp.name = "VTKESP_fill"
 	root.add_child(esp)
-	var plain := opts_of(esp, {"cat": S.COMBAT, "nomad": false})
-	ck(plain["key"] == S.KEY_COMBAT, "no calibration: the key is the category key")
-	esp.set_calibration(true, 3)
-	var cal := opts_of(esp, {"cat": S.COMBAT, "nomad": false})
-	ck(cal["key"] == Cal.candidate(3), "calibration overrides the contour key")
-	ck(cal["cat"] == S.COMBAT, "calibration keeps the category")
-	ck(float(cal["cool"]) == float(plain["cool"]), "calibration keeps the corpse cooling")
-	esp.set_calibration(false, 0)
-	var back := opts_of(esp, {"cat": S.COMBAT, "nomad": false})
-	ck(back["key"] == S.KEY_COMBAT, "calibration off restores the category key")
+	esp.p_body_fill = true
+	esp.p_fill_alpha = 0.55
+	var opts := opts_of(esp, {"cat": S.COMBAT, "nomad": false})
+	ck(opts["key"] == S.KEY_COMBAT, "fill opts keep the category key")
+	ck(bool(opts.get("fill", false)) == true, "fill opts carry the fill flag")
+	ck(absf(float(opts.get("fill_alpha", 0.0)) - 0.55) < 0.001, "fill opts carry fill alpha")
 	esp.free()
 
 # The nomad marker paints its key through a shader uniform, so the

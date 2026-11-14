@@ -101,6 +101,9 @@ var _mat_mine: StandardMaterial3D = null
 # from the screen when both hold, so the frozen frame is never re-read.
 var _esp_on: bool = false
 var _esp_demand: bool = false
+# Full-body ESP fill: flat state colour blended over the thermal background.
+var _esp_fill: bool = false
+var _esp_fill_alpha: float = 0.4
 
 var _mines: Dictionary = {}
 var _mine_watch: Dictionary = {}
@@ -338,6 +341,8 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("stDefendColor", _state_colors.get("state_defend", States.DEFAULT_DEFEND))
 	nvg_mat.set_shader_parameter("mineColor", _mine_color)
 	nvg_mat.set_shader_parameter("stateBright", set_state_brightness)
+	nvg_mat.set_shader_parameter("espFill", _esp_fill)
+	nvg_mat.set_shader_parameter("fillAlpha", _esp_fill_alpha)
 	# The detector compares against the washed values, not the emitted keys.
 	nvg_mat.set_shader_parameter("stNormalKey", DET_ST_NORMAL)
 	nvg_mat.set_shader_parameter("stCombatKey", DET_ST_COMBAT)
@@ -384,6 +389,17 @@ func _push_esp_on() -> void:
 	var mat = _nvg_mat_node.get("material")
 	if mat is ShaderMaterial:
 		(mat as ShaderMaterial).set_shader_parameter("espOn", _esp_render_on())
+
+
+func set_esp_fill(fill: bool, alpha: float) -> void:
+	_esp_fill = fill
+	_esp_fill_alpha = clampf(alpha, 0.05, 1.0)
+	if _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
+		return
+	var mat = _nvg_mat_node.get("material")
+	if mat is ShaderMaterial:
+		(mat as ShaderMaterial).set_shader_parameter("espFill", _esp_fill)
+		(mat as ShaderMaterial).set_shader_parameter("fillAlpha", _esp_fill_alpha)
 
 
 func _esp_render_on() -> bool:

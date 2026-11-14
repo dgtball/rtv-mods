@@ -3,8 +3,8 @@ const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Settings = preload("res://mods/ThermalVTK/VTKSettings.gd")
 const VTKDebug = preload("res://mods/ThermalVTK/VTKDebug.gd")
-const Calibration = preload("res://mods/ThermalVTK/VTKCalibration.gd")
 const LivePanel = preload("res://mods/ThermalVTK/VTKLivePanel.gd")
+const EspPanel = preload("res://mods/ThermalVTK/VTKEspPanel.gd")
 
 const MOD_ID := "thermal-vtk"
 const MOD_NAME := "ThermalVTK"
@@ -21,18 +21,17 @@ var _esp: Node = null
 var _config_path: String = CONFIG_FILE
 var _key_thermal_toggle: int = 0
 var _key_palette_cycle: int = KEY_F6
-var _key_cal_cycle: int = KEY_F8
+var _key_esp_panel: int = KEY_F8
 var _key_live_panel: int = KEY_F9
 var _thermal_enabled: bool = false
 var _outline_enabled: bool = true
 var _xray_enabled: bool = true
 var _nvg_worn: bool = false
-var _cal_active: bool = false
-var _cal_index: int = 0
-# The live panel node and the cached settings snapshot its Reset needs. The
+# The live panel nodes and the cached settings snapshot their Reset needs. The
 # snapshot is filled on every apply (MCM or defaults), so Reset works even in
 # an install without MCM.
 var _live_panel: Node = null
+var _esp_panel: Node = null
 var _rec = null
 
 func _ready() -> void:
@@ -65,11 +64,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		_cycle_palette()
 		get_viewport().set_input_as_handled()
 		return
-	if _key_cal_cycle != 0 and (k.keycode == _key_cal_cycle or k.physical_keycode == _key_cal_cycle):
-		# The calibration cycle is a debug tool: without the debug log the key
-		# stays free for the game, so nothing is consumed.
+	if _key_esp_panel != 0 and (k.keycode == _key_esp_panel or k.physical_keycode == _key_esp_panel):
+		# The ESP panel is a debug tool: without the debug log the key stays
+		# free for the game, so nothing is consumed.
 		if VTKDebug.enabled:
-			_cal_step(k.shift_pressed)
+			_toggle_esp_panel()
 			get_viewport().set_input_as_handled()
 		return
 	if _key_live_panel != 0 and (k.keycode == _key_live_panel or k.physical_keycode == _key_live_panel):
@@ -109,33 +108,7 @@ func _cycle_palette() -> void:
 	_notify("World palette: " + PALETTE_NAMES[mode], Color(0.6, 0.8, 1.0))
 	_save_state("world_palette", mode)
 
-# Debug key calibration: the hotkey cycles the candidate keys, so their
-# colour under the night-vision helmet can be measured with the probe.
-# The first press turns the calibration on at the first candidate, every
-# further press advances it, and Shift turns it off again.
-func _cal_step(off: bool) -> void:
-	if off:
-		_cal_active = false
-		_cal_index = 0
-		_push_calibration()
-		VTKDebug.log("CAL", "off")
-		return
-	if _cal_active:
-		_cal_index = (_cal_index + 1) % Calibration.count()
-	else:
-		_cal_active = true
-		_cal_index = 0
-	_push_calibration()
-	VTKDebug.log("CAL", "candidate #%d %s" % [_cal_index, Calibration.label(_cal_index)])
-	if _esp == null or not is_instance_valid(_esp) or not bool(_esp.contour_layer):
-		VTKDebug.log("CAL", "the contour is off, nothing is painted")
-
-func _push_calibration() -> void:
-	if _esp == null or not is_instance_valid(_esp):
-		return
-	_esp.set_calibration(_cal_active, _cal_index)
-
-# The live panel exists only while the debug log is on: the autoload owns it,
+# The NVG live panel exists only while the debug log is on: the autoload owns it,
 # so the gate lives here, not inside the panel. The panel itself is a pure
 # instrument -- it holds NVG/owner references and checks is_instance_valid
 # everywhere, and it never touches the config files.
@@ -167,6 +140,36 @@ func _free_live_panel() -> void:
 	_live_panel.queue_free()
 	_live_panel = null
 
+# The ESP live panel is a runtime calibration tool (debug log gated). It tunes
+# ESP/outline parameters in-game without persisting to MCM; Reset returns to the
+# current settings snapshot.
+func _ensure_esp_panel() -> void:
+	if _esp_panel != null and is_instance_valid(_esp_panel):
+		return
+	_ensure_nvg()
+	_ensure_esp()
+	if _esp == null or not is_instance_valid(_esp):
+		return
+	_esp_panel = EspPanel.new()
+	add_child(_esp_panel)
+	_esp_panel.setup(_esp, _nvg, self)
+
+func _toggle_esp_panel() -> void:
+	_ensure_esp_panel()
+	if _esp_panel == null or not is_instance_valid(_esp_panel):
+		return
+	if _esp_panel.is_open():
+		_esp_panel.close()
+	else:
+		_esp_panel.open()
+
+func _free_esp_panel() -> void:
+	if _esp_panel == null or not is_instance_valid(_esp_panel):
+		return
+	_esp_panel.close()
+	_esp_panel.queue_free()
+	_esp_panel = null
+
 func _apply_mode() -> void:
 	if _esp != null and is_instance_valid(_esp):
 		# The ESP only shows while the thermal vision actually runs: the goggles
@@ -181,6 +184,7 @@ func _apply_mode() -> void:
 		# layer is the whole hand-off: no camera, no reach, no gate hold.
 		if _nvg != null and is_instance_valid(_nvg):
 			_nvg.set_esp_layer(contour or xray)
+			_nvg.set_esp_fill(bool(_esp.p_body_fill), float(_esp.p_fill_alpha))
 
 func _nvg_active() -> bool:
 	if _nvg == null or not is_instance_valid(_nvg):
@@ -340,19 +344,23 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 	var rec = Settings.read(cfg)
 	_rec = rec
 	VTKDebug.set_enabled(rec.debug_log)
-	# The panel is a debug-log tool: it lives only while the log is on. A
-	# re-apply with the log still on only closes it -- apply_config has just
-	# rewritten the NVG fields, and the sliders resync on the next open.
+	# The panels are debug-log tools: they live only while the log is on. A
+	# re-apply with the log still on only closes them -- apply_config has just
+	# rewritten the fields, and the sliders resync on the next open.
 	if not rec.debug_log:
 		_free_live_panel()
-	elif _live_panel != null and is_instance_valid(_live_panel) and _live_panel.is_open():
-		_live_panel.close()
+		_free_esp_panel()
+	else:
+		if _live_panel != null and is_instance_valid(_live_panel) and _live_panel.is_open():
+			_live_panel.close()
+		if _esp_panel != null and is_instance_valid(_esp_panel) and _esp_panel.is_open():
+			_esp_panel.close()
 	_ensure_nvg()
 	if _nvg == null or not is_instance_valid(_nvg):
 		return
 	_key_thermal_toggle = rec.key_thermal_toggle
 	_key_palette_cycle = rec.key_palette_cycle
-	_key_cal_cycle = rec.key_cal_cycle
+	_key_esp_panel = rec.key_esp_panel
 	_key_live_panel = rec.key_live_panel
 	# The thermal toggle and the world palette live in our own state file, not
 	# in the MCM config: the hotkey writes them, and a second source of truth
@@ -367,6 +375,8 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 	_ensure_esp()
 	if _esp != null and is_instance_valid(_esp):
 		_esp.apply_config(rec)
+		if _nvg != null and is_instance_valid(_nvg):
+			_nvg.set_esp_fill(rec.body_fill, rec.fill_alpha)
 	_outline_enabled = rec.outline_enabled
 	_xray_enabled = rec.outline_xray
 	_apply_mode()

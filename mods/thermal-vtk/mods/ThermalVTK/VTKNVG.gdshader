@@ -55,6 +55,10 @@ uniform vec3 mineKey : source_color = vec3(0.0, 0.0, 1.0);
 // colours the shaders emit. The world behind the ring adds to the pixel, which
 // is why the ring keys are bright and two of them are two-channel.
 uniform bool espOn = false;
+// Full-body mode: state-key pixels are replaced with a flat display colour
+// blended over the thermal background (no contour, no thermal heat mapping).
+uniform bool espFill = false;
+uniform float fillAlpha : hint_range(0.05, 1.0, 0.01) = 0.4;
 
 uniform vec3 stNormalKey : source_color = vec3(1.0, 0.21, 0.16);
 uniform vec3 stCombatKey : source_color = vec3(0.82, 1.0, 1.0);
@@ -224,6 +228,16 @@ void fragment()
 			// not a see-through wash.
 			if (dCore == dMine) {
 				color = vec4(mineColor, pixelColor.a);
+			} else if (espFill && dCore != dMine) {
+				// Full-body fill: flat state colour blended over the thermal
+				// background, no contour ring and no thermal heat mapping.
+				vec3 flatCol = stNormalColor * stateBright;
+				if (dCore == dStC) {
+					flatCol = stCombatColor * stateBright;
+				} else if (dCore == dStD) {
+					flatCol = stDefendColor * stateBright;
+				}
+				color = vec4(mix(backgroundColor, flatCol, fillAlpha), pixelColor.a);
 			} else if (dCore == dStN) {
 				color = vec4(stNormalColor * stateBright, pixelColor.a);
 			} else if (dCore == dStC) {

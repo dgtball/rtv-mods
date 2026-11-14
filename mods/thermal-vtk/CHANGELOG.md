@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.8.0] - 2026-11-14
+
+### Added
+
+- A live ESP tuning panel (default F8, with the debug log enabled) for adjusting ESP in-game: switch between outline and full-body fill, tune rim, thickness, brightness, fill opacity, distance and cooling time, and pick colours for normal, combat, defend and mines. Changes apply live and are not saved to the mod menu.
+
+### Changed
+
+- Full-body fill now shows a flat, semi-transparent state colour over the whole silhouette without a contour ring and without heat colouring, closer to a simple body highlight. Outline mode is unchanged when full-body fill is off.
+- Fill opacity is now adjustable (default 0.4).
+
+### Removed
+
+- The old debug calibration cycle hotkey has been replaced by the ESP tuning panel.
+
 ## [2.7.14] - 2026-11-14
 
 ### Changed

@@ -99,6 +99,8 @@ class FakeESP extends Node:
 	var p_dist: float = 60.0
 	var p_thickness: float = 0.006
 	var p_rim: float = 2.0
+	var p_body_fill: bool = false
+	var p_fill_alpha: float = 0.4
 	var p_trig: bool = true
 	var p_fire_s: float = 5.0
 	var p_fire_d: float = 100.0
@@ -126,6 +128,8 @@ class FakeESP extends Node:
 	func apply_config(rec: Variant) -> void:
 		p_decay = rec.corpse_decay
 		p_dist = rec.outline_distance
+		p_body_fill = rec.body_fill
+		p_fill_alpha = rec.fill_alpha
 		p_trig = rec.outline_xray
 		p_fire_s = rec.fire_s
 		p_fire_d = rec.fire_d
@@ -161,14 +165,16 @@ class FakeNVG extends Node:
 		set_state_brightness = rec.outline_brightness
 		set_glow_distance = rec.outline_distance
 		set_mines = rec.thermal_mines
+	func set_esp_fill(_fill: bool, _alpha: float) -> void:
+		pass
+	func set_esp_layer(_on: bool) -> void:
+		pass
+	func set_state_colors(_v: Dictionary) -> void:
+		pass
 	func set_palette_mode(v: int) -> void:
 		palette_mode = v
 	func set_thermal_enabled(v: bool) -> void:
 		thermal_on = v
-	func set_state_colors(v: Dictionary) -> void:
-		pass
-	func set_esp_layer(_on: bool) -> void:
-		pass
 	func nvg_active() -> bool:
 		return true
 

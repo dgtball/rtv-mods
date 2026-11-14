@@ -90,9 +90,10 @@ func _material_for(xray: bool, fill: bool) -> Material:
 	if xray:
 		return _build_xray()
 	if fill:
-		var body: ShaderMaterial = _build_fill_body()
-		_build_fill_ring(body)
-		return body
+		# Full body mode: flat state fill over the whole silhouette, no contour
+		# ring (like NPCESP_ex body fill). The NVG shader detects the key and
+		# outputs a flat display colour.
+		return _build_fill_body()
 	return _build_ring()
 
 func _set_material(entry: Dictionary, mat: Material) -> void:
@@ -170,6 +171,12 @@ func refresh(id: int, opts: Dictionary) -> void:
 		body_mat.set_shader_parameter("grow", grow)
 		ring_mat.set_shader_parameter("grow", grow)
 		entry["p_grow"] = grow
+	var fill_alpha: float = float(opts.get("fill_alpha", 0.4))
+	if fill and not xray and body_mat.shader == Shaders.mask_fill():
+		var p_alpha = entry.get("p_alpha")
+		if p_alpha == null or not is_equal_approx(float(p_alpha), fill_alpha):
+			body_mat.set_shader_parameter("alpha", fill_alpha)
+			entry["p_alpha"] = fill_alpha
 	var rim_user: float = float(opts.get("rim", 1.0))
 	if Dbg.enabled and rim_user <= 0.01 and int(_fill_log.get(id, -1)) != int(opts.get("cat", 0)):
 		var t_ms: int = Time.get_ticks_msec()

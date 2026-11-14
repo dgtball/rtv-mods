@@ -192,34 +192,32 @@ func t_overlay_on_mesh() -> void:
 	ck(mesh.material_overlay == null, "clear removes the overlay")
 	root.free()
 
-# Full body is one chain: the body pass paints the silhouette and marks the
-# stencil, the next_pass ring draws strictly outside it. Both write the key, so
-# the NVG detector finds the category anywhere on the silhouette, and every
-# uniform has to reach the pass that actually uses it.
+# Full body is a flat silhouette fill with no contour ring: the body pass paints
+# the whole silhouette with the category key and the NVG shader substitutes a
+# flat display colour (semi-transparent). No next_pass chain is used.
 func t_fill_chain() -> void:
 	var root := Node3D.new()
 	var mesh := MeshInstance3D.new()
 	mesh.mesh = BoxMesh.new()
 	root.add_child(mesh)
 	var o = Outline.new()
-	o.apply(4, root, {"cat": S.COMBAT, "fill": true, "grow": 0.01, "rim": 1.5})
+	o.apply(4, root, {"cat": S.COMBAT, "fill": true, "grow": 0.01, "fill_alpha": 0.4})
 	var body: ShaderMaterial = o._items[4]["mat"]
 	var ring: ShaderMaterial = o._items[4]["ring"]
-	ck(body.shader == Sh.mask_fill(), "fill mode starts with the body pass")
-	ck(ring != body and ring.shader == Sh.mask_ring(), "the body chains the ring through next_pass")
-	ck(body.next_pass == ring, "next_pass points at the ring")
-	ck(mesh.material_overlay == body, "the chain goes on as one overlay")
+	ck(body.shader == Sh.mask_fill(), "fill mode uses the body fill shader")
+	ck(ring == body, "full-body fill has no contour ring pass")
+	ck(body.next_pass == null, "full-body fill has no next_pass chain")
+	ck(mesh.material_overlay == body, "the fill overlay is applied to the mesh")
 	ck(body.get_shader_parameter("state_color") == S.KEY_COMBAT, "the body paints the category key")
-	ck(ring.get_shader_parameter("state_color") == S.KEY_COMBAT, "the ring paints the same key")
-	ck(is_equal_approx(float(ring.get_shader_parameter("rim_power")), 1.5), "ring uniforms reach the next_pass")
-	o.refresh(4, {"cat": S.DEFEND, "fill": true, "grow": 0.02, "rim": 0.0, "cool": 0.4})
+	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.01), "grow reaches the body fill")
+	ck(is_equal_approx(float(body.get_shader_parameter("alpha")), 0.4), "fill alpha reaches the body fill")
+	o.refresh(4, {"cat": S.DEFEND, "fill": true, "grow": 0.02, "cool": 0.4, "fill_alpha": 0.6})
 	ck(body.get_shader_parameter("state_color") == S.KEY_DEFEND, "refresh repaints the body")
-	ck(ring.get_shader_parameter("state_color") == S.KEY_DEFEND, "refresh repaints the next_pass")
-	ck(is_equal_approx(float(ring.get_shader_parameter("rim_power")), 0.0), "refresh reaches the next_pass rim")
-	ck(is_equal_approx(float(ring.get_shader_parameter("cool")), 0.4), "refresh reaches the next_pass cool")
-	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.02), "grow reaches the body")
+	ck(is_equal_approx(float(body.get_shader_parameter("cool")), 0.4), "refresh reaches the body cool")
+	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.02), "refresh updates grow")
+	ck(is_equal_approx(float(body.get_shader_parameter("alpha")), 0.6), "refresh updates fill alpha")
 	o.refresh(4, {"cat": S.DEFEND, "fill": false, "grow": 0.02, "rim": 0.0, "cool": 0.4})
-	ck(mesh.material_overlay != null and (mesh.material_overlay as ShaderMaterial).shader == Sh.mask_ring(), "leaving fill mode collapses the chain")
+	ck(mesh.material_overlay != null and (mesh.material_overlay as ShaderMaterial).shader == Sh.mask_ring(), "leaving fill mode restores the outline ring")
 	o.clear(4)
 	root.free()
 

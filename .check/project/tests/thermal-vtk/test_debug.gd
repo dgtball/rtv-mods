@@ -72,6 +72,8 @@ class FakeESP extends Node:
 	var contour_layer: bool = false
 	var xray_layer: bool = false
 	var marker_visible: bool = false
+	var p_body_fill: bool = false
+	var p_fill_alpha: float = 0.4
 	func set_layers(contour: bool, xray: bool) -> void:
 		contour_layer = contour
 		xray_layer = xray
@@ -89,6 +91,8 @@ class FakeNVG extends Node:
 	func set_thermal_enabled(_v: bool) -> void:
 		pass
 	func set_esp_layer(_on: bool) -> void:
+		pass
+	func set_esp_fill(_fill: bool, _alpha: float) -> void:
 		pass
 	# The real module maps the MCM snapshot through this; the F6 guard only
 	# exercises the palette cycle.

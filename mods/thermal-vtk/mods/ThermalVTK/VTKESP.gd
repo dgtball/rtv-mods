@@ -12,7 +12,6 @@ const WeaponOcclusion = preload("res://mods/ThermalVTK/VTKWeaponOcclusion.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
 const ScopeDebug = preload("res://mods/ThermalVTK/VTKScopeDebug.gd")
-const Calibration = preload("res://mods/ThermalVTK/VTKCalibration.gd")
 
 
 # Polling cadence for state re-reads / fallback discovery (frames).
@@ -43,6 +42,7 @@ var p_decay := 30.0
 var p_dist := 60.0
 var p_nomad_marker: bool = true
 var p_body_fill: bool = false
+var p_fill_alpha: float = 0.4
 # NPC nametags: their own switch under Diagnostics, so the diagnostic overlay
 # can stay on without the log and without the NVG helmet.
 var p_npc_labels: bool = false
@@ -101,10 +101,6 @@ var _hook_wait_cd: float = 0.0
 var _hp_live := false
 var _overlay_layer: CanvasLayer = null
 var _overlay: Control = null
-# Debug key calibration: when it is on, every NPC is painted with the
-# candidate key so its post-NVG colour can be measured with the probe.
-var p_cal_active: bool = false
-var p_cal_index: int = 0
 # Shown when thermal vision, the NVG helmet and the contour ESP are all live
 # (the marker belongs to the contour, not the diagnostic log). Set from
 # ThermalVTK._apply_mode.
@@ -167,6 +163,7 @@ func apply_config(rec) -> void:
 	p_dist = rec.outline_distance
 	p_nomad_marker = rec.nomad_marker
 	p_body_fill = rec.body_fill
+	p_fill_alpha = rec.fill_alpha
 	p_npc_labels = rec.npc_labels
 	p_color_normal = rec.color_normal
 	p_color_combat = rec.color_combat
@@ -189,12 +186,6 @@ func apply_config(rec) -> void:
 	p_nade_d = rec.nade_d
 	p_thickness = rec.outline_thickness
 	p_rim = rec.outline_rim
-
-# Debug key calibration. The candidate key replaces the contour key of every
-# NPC, so the probe measures one candidate at a time.
-func set_calibration(active: bool, index: int) -> void:
-	p_cal_active = active
-	p_cal_index = index
 
 # ---------------------------------------------------------------------------
 # Discovery
@@ -789,17 +780,14 @@ func _fill_opts(opts: Dictionary, e: Dictionary, now: float) -> void:
 	var cat: int = int(e.get("cat", States.NORMAL))
 	opts["cat"] = cat
 	# The shell writes this key into the main pass and the NVG substitutes the
-	# display colour from it; the calibration sweep overrides it to measure one
-	# candidate at a time.
-	if p_cal_active:
-		opts["key"] = Calibration.candidate(p_cal_index)
-	else:
-		opts["key"] = States.state_key(cat)
+	# display colour from it.
+	opts["key"] = States.state_key(cat)
 	opts["cool"] = cool
 	opts["rim"] = p_rim
 	opts["grow"] = p_thickness
 	opts["xray"] = xray
 	opts["fill"] = p_body_fill
+	opts["fill_alpha"] = p_fill_alpha
 
 func _nomad_los(e: Dictionary, anchor_world: Vector3) -> bool:
 	if los_probe.is_valid():

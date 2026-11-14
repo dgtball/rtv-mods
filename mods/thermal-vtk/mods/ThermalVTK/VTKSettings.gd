@@ -14,7 +14,7 @@ class Rec:
 	# Hotkeys (0 = unbound; KEY_* fallbacks).
 	var key_thermal_toggle: int = 0
 	var key_palette_cycle: int = KEY_F6
-	var key_cal_cycle: int = KEY_F8
+	var key_esp_panel: int = KEY_F8
 	var key_live_panel: int = KEY_F9
 	# Toggles.
 	var debug_log: bool = false
@@ -38,6 +38,7 @@ class Rec:
 	var outline_thickness: float = 0.006
 	var outline_brightness: float = 0.6
 	var outline_rim: float = 2.0
+	var fill_alpha: float = 0.4
 	# X-ray Triggers: reveal window ranges ("_d") and durations ("_s").
 	var fire_d: float = 80.0
 	var fire_s: float = 2.0
@@ -115,8 +116,9 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Color", "key": "state_defend", "name": "Defending", "def": States.DEFAULT_DEFEND, "cat": "02. NPC", "pos": 7, "tip": "Colour for NPCs taking cover, defending, ambushing or lurking."},
 	{"sect": "Bool", "key": "debug_log", "name": "Debug log", "def": false, "cat": "04. Diagnostics", "pos": 0, "tip": "Write a diagnostic log of the contour ESP to user://MCM/thermal-vtk/debug.log. For troubleshooting; leave off for normal play."},
 	{"sect": "Bool", "key": "npc_labels", "name": "NPC labels (debug)", "def": false, "cat": "04. Diagnostics", "pos": 1, "tip": "Draw NPC nametags, health bars and trigger timers while the debug log is on. Works without thermal vision or the NVG helmet, so states can be checked in plain daylight."},
-	{"sect": "Keycode", "key": "key_cal_cycle", "name": "Hotkey: Calibration cycle", "def": KEY_F8, "cat": "04. Diagnostics", "pos": 21, "tip": "Debug tool: cycles a test colour for the outline and the nomad marker so their colour under the night-vision helmet can be checked in the debug log. Turn the debug log on first, then aim at an outlined NPC. Shift turns the calibration off."},
-	{"sect": "Keycode", "key": "key_live_panel", "name": "Hotkey: Live panel", "def": KEY_F9, "cat": "04. Diagnostics", "pos": 22, "tip": "Debug tool: opens the live daylight tuning panel; the game pauses while it is open. Turn the debug log on first -- without it the key stays free for the game. The panel saves nothing: slider values live until the helmet comes off."},
+	{"sect": "Keycode", "key": "key_esp_panel", "name": "Hotkey: ESP panel", "def": KEY_F8, "cat": "04. Diagnostics", "pos": 21, "tip": "Debug tool: opens the live ESP tuning panel; the game pauses while it is open. Turn the debug log on first -- without it the key stays free for the game. The panel saves nothing: slider values live until the helmet comes off or the map changes."},
+	{"sect": "Keycode", "key": "key_live_panel", "name": "Hotkey: NVG panel", "def": KEY_F9, "cat": "04. Diagnostics", "pos": 22, "tip": "Debug tool: opens the live daylight/NVG tuning panel; the game pauses while it is open. Turn the debug log on first -- without it the key stays free for the game. The panel saves nothing: slider values live until the helmet comes off."},
+	{"sect": "Float", "key": "fill_alpha", "name": "Fill alpha", "def": 0.4, "min": 0.05, "max": 1.0, "step": 0.05, "cat": "02. NPC", "pos": 8, "tip": "Opacity of the full-body fill when 'Full body fill' is on."},
 ]
 
 # The seed MCM copies a fresh profile from: every entry the mod declares, with
@@ -155,7 +157,7 @@ static func read(cfg: ConfigFile) -> Rec:
 	var rec := Rec.new()
 	rec.key_thermal_toggle = int(_val(cfg, "Keycode", "key_thermal_toggle", rec.key_thermal_toggle))
 	rec.key_palette_cycle = int(_val(cfg, "Keycode", "key_palette_cycle", rec.key_palette_cycle))
-	rec.key_cal_cycle = int(_val(cfg, "Keycode", "key_cal_cycle", rec.key_cal_cycle))
+	rec.key_esp_panel = int(_val(cfg, "Keycode", "key_esp_panel", rec.key_esp_panel))
 	rec.key_live_panel = int(_val(cfg, "Keycode", "key_live_panel", rec.key_live_panel))
 	rec.debug_log = bool(_val(cfg, "Bool", "debug_log", rec.debug_log))
 	rec.npc_labels = bool(_val(cfg, "Bool", "npc_labels", rec.npc_labels))
@@ -175,6 +177,7 @@ static func read(cfg: ConfigFile) -> Rec:
 	rec.outline_thickness = float(_val(cfg, "Float", "outline_thickness", rec.outline_thickness))
 	rec.outline_brightness = float(_val(cfg, "Float", "outline_brightness", rec.outline_brightness))
 	rec.outline_rim = float(_val(cfg, "Float", "outline_rim", rec.outline_rim))
+	rec.fill_alpha = float(_val(cfg, "Float", "fill_alpha", rec.fill_alpha))
 	rec.fire_d = float(_val(cfg, "Float", "trigger_fire_dist", rec.fire_d))
 	rec.fire_s = float(_val(cfg, "Float", "trigger_fire_time", rec.fire_s))
 	rec.voice_d = float(_val(cfg, "Float", "trigger_voice_dist", rec.voice_d))

@@ -20,7 +20,7 @@ func _init() -> void:
 	process_frame.connect(_run)
 
 func _run() -> void:
-	t_fill_keys_gone()
+	t_fill_keys_present()
 	t_rim_and_decay_defaults()
 	t_single_state_source()
 	t_mcm_labels()
@@ -32,18 +32,18 @@ func _run() -> void:
 		print("Preset tests failed: ", fails)
 		quit(1)
 
-# The body fill is gone: the ESP has no fill field and the MCM registers no
-# fill setting, so the outline always draws the ring alone.
-func t_fill_keys_gone() -> void:
+# Full-body fill is configurable: ESP carries fill mode/alpha and MCM registers
+# body_fill and fill_alpha.
+func t_fill_keys_present() -> void:
 	var esp = ESP.new()
-	ck(esp.get("p_fill") == null, "ESP has no p_fill field")
-	ck(esp.get("p_fill_alpha") == null, "ESP has no p_fill_alpha field")
+	ck(esp.get("p_body_fill") != null, "ESP has a p_body_fill field")
+	ck(esp.get("p_fill_alpha") != null, "ESP has a p_fill_alpha field")
 	esp.free()
-	var src := FileAccess.get_file_as_string(SRC)
-	ck(not src.contains("outline_body_fill"), "MCM drops outline_body_fill")
-	ck(not src.contains("\"fill_opacity\""), "MCM drops fill_opacity")
-	ck(not src.contains("PRESET_FILL_ALPHA"), "PRESET_FILL_ALPHA is gone")
-	ck(not src.contains("_apply_style_preset"), "the fill preset is gone")
+	var set_src := FileAccess.get_file_as_string(SET_SRC)
+	ck(set_src.contains("\"body_fill\""), "MCM registers body_fill")
+	ck(set_src.contains("\"fill_alpha\""), "MCM registers fill_alpha")
+	ck(not set_src.contains("PRESET_FILL_ALPHA"), "PRESET_FILL_ALPHA is gone")
+	ck(not FileAccess.get_file_as_string(SRC).contains("_apply_style_preset"), "the fill preset is gone")
 
 # The outline no longer offers a style dropdown: it always draws the ring.
 # The rim defaults to 2.0 in steps of 0.5, and the cooling time to 30 s over
