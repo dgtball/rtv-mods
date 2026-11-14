@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.7.9] - 2026-11-14
+
+### Fixed
+
+- The live panel time scale now speeds up the day/night clock only, without affecting the rest of the simulation.
+
 ## [2.7.8] - 2026-11-14
 
 ### Changed

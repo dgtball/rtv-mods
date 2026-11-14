@@ -14,6 +14,8 @@ func ck(cond: bool, msg: String) -> void:
 
 class FakeSim extends Node:
 	var season: int = 1
+	var time: float = 600.0
+	var day: int = 1
 
 class FakeData extends Resource:
 	var indoor: bool = false
@@ -66,6 +68,7 @@ func _run() -> void:
 	t_time_scale_applies_while_live()
 	t_time_scale_clamps_to_the_range()
 	t_time_scale_resets_when_not_live()
+	t_time_scale_rolls_over_hhmm()
 	t_reset_returns_levers()
 	print("")
 	if fails == 0:
@@ -481,10 +484,14 @@ func t_time_scale_applies_while_live() -> void:
 	var sim: FakeSim = w["sim"]
 	var data: FakeData = nvg._game_data
 	data.NVG = true
+	sim.time = 600.0
+	sim.day = 1
 	_reset(nvg, env, sim, 1.0)
 	nvg.set_time_scale = 2.5
 	nvg._daylight_tick(1.0)
-	ck(Engine.time_scale == 2.5, "the time scale lever writes Engine.time_scale while live")
+	ck(absf(sim.time - 600.25) < 0.001, "time scale advances the simulation clock without Engine.time_scale")
+	ck(Engine.time_scale == 1.0, "Engine.time_scale stays at 1.0")
+	ck(sim.day == 1, "the day does not roll over inside the same hour")
 	w["map"].free()
 
 func t_time_scale_clamps_to_the_range() -> void:
@@ -494,13 +501,14 @@ func t_time_scale_clamps_to_the_range() -> void:
 	var sim: FakeSim = w["sim"]
 	var data: FakeData = nvg._game_data
 	data.NVG = true
+	sim.time = 600.0
 	_reset(nvg, env, sim, 1.0)
 	nvg.set_time_scale = 20.0
 	nvg._daylight_tick(1.0)
-	ck(Engine.time_scale == 10.0, "the time scale clamps to the top of the range")
+	ck(absf(sim.time - 601.5) < 0.001, "the time scale clamps to the top of the range")
 	nvg.set_time_scale = 0.5
 	nvg._daylight_tick(1.0)
-	ck(Engine.time_scale == 1.0, "the time scale clamps to the bottom of the range")
+	ck(absf(sim.time - 601.5) < 0.001, "the time scale clamps to the bottom of the range")
 	w["map"].free()
 
 func t_time_scale_resets_when_not_live() -> void:
@@ -510,13 +518,31 @@ func t_time_scale_resets_when_not_live() -> void:
 	var sim: FakeSim = w["sim"]
 	var data: FakeData = nvg._game_data
 	data.NVG = true
+	sim.time = 600.0
 	_reset(nvg, env, sim, 1.0)
 	nvg.set_time_scale = 4.0
 	nvg._daylight_tick(1.0)
-	ck(Engine.time_scale == 4.0, "the time scale lever writes while the compensation is live")
+	ck(absf(sim.time - 600.5) < 0.001, "the time scale lever advances while the compensation is live")
 	nvg.set_daylight = false
 	nvg._daylight_tick(1.0)
-	ck(Engine.time_scale == 1.0, "the time scale resets when the compensation is off")
+	ck(absf(sim.time - 600.5) < 0.001, "the clock does not advance when the compensation is off")
+	ck(Engine.time_scale == 1.0, "Engine.time_scale stays at 1.0")
+	w["map"].free()
+
+func t_time_scale_rolls_over_hhmm() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	var sim: FakeSim = w["sim"]
+	var data: FakeData = nvg._game_data
+	data.NVG = true
+	sim.time = 2359.0
+	sim.day = 3
+	_reset(nvg, env, sim, 1.0)
+	nvg.set_time_scale = 7.0
+	nvg._daylight_tick(2.0)
+	ck(absf(sim.time - 1.0) < 0.001, "advancing past midnight rolls the HHMM clock")
+	ck(sim.day == 4, "advancing past midnight increments the day")
 	w["map"].free()
 
 func t_snow_trim_ignores_indoor() -> void:

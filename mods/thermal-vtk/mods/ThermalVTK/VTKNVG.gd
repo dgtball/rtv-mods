@@ -543,14 +543,49 @@ func _target_factor() -> float:
 	return Daylight.strength_factor(Daylight.night_gate(raw, _sun_down), set_strength)
 
 
-# Time acceleration of the day/night cycle (F9 "Time scale" lever). The lever
-# writes Engine.time_scale directly; the compensation path owns when it is live,
-# and when it is not the world runs at normal speed again.
-func _apply_time_scale() -> void:
-	if not set_daylight or not _installed or not _nvg_active():
-		Engine.time_scale = 1.0
+# 24 in-game hours per 2.4 real hours (owner measurement): 1440 / 8640.
+const SIM_MINUTES_PER_REAL_SEC := 1.0 / 6.0
+
+
+func _sim_time_node() -> Node:
+	return get_node_or_null(Paths.SIMULATION)
+
+
+static func hhmm_to_minutes(t: float) -> float:
+	return floorf(t / 100.0) * 60.0 + fmod(floorf(t), 100.0) + fmod(t, 1.0)
+
+
+static func minutes_to_hhmm(total: float) -> Dictionary:
+	var day_inc := 0
+	while total >= 1440.0:
+		total -= 1440.0
+		day_inc += 1
+	while total < 0.0:
+		total += 1440.0
+		day_inc -= 1
+	var h := int(floorf(total / 60.0))
+	var m := total - float(h * 60)
+	return {"time": float(h * 100) + m, "day_inc": day_inc}
+
+
+# Time acceleration of the day/night cycle (F9 "Time scale" lever). Advances the
+# simulation clock only: Engine.time_scale stays at 1.0 so physics/audio run at
+# normal speed.
+func _apply_time_scale(delta: float) -> void:
+	Engine.time_scale = 1.0
+	var scale := clampf(set_time_scale, 1.0, 10.0)
+	if not set_daylight or not _installed or not _nvg_active() or scale <= 1.0 or delta <= 0.0:
 		return
-	Engine.time_scale = clampf(set_time_scale, 1.0, 10.0)
+	var sim := _sim_time_node()
+	if sim == null or not is_instance_valid(sim):
+		return
+	var extra := (scale - 1.0) * SIM_MINUTES_PER_REAL_SEC * delta
+	var total := hhmm_to_minutes(float(sim.get("time"))) + extra
+	var conv: Dictionary = minutes_to_hhmm(total)
+	sim.set("time", conv["time"])
+	var day_inc: int = int(conv.get("day_inc", 0))
+	if day_inc != 0:
+		sim.set("day", int(sim.get("day")) + day_inc)
 
 
 # Lazily create the frame probe and wire its signal. The probe is a child of
@@ -621,7 +656,7 @@ func measure_frame() -> Dictionary:
 # _physics_process and re-applies the device power on its own cadence; _process
 # runs after physics, so this value is the one the frame is rendered with.
 func _daylight_tick(delta: float) -> void:
-	_apply_time_scale()
+	_apply_time_scale(delta)
 	if not set_daylight or not _installed:
 		return
 	var env := _environment()
@@ -697,7 +732,7 @@ func _push_daylight_trims(mix: float) -> void:
 # Deactivate has already restored the exposure, and writing here would
 # fight it.
 func refresh_daylight_now() -> void:
-	_apply_time_scale()
+	Engine.time_scale = 1.0
 	if not set_daylight or not _installed or not _nvg_active():
 		return
 	var env := _environment()
@@ -740,6 +775,7 @@ func _reset_daylight() -> void:
 	set_frame_level = Daylight.DAY_LEVEL
 	set_frame_cadence = Daylight.FRAME_CADENCE
 	set_time_scale = 1.0
+	Engine.time_scale = 1.0
 	_set_key_gain(1.0)
 	_push_day_mix()
 	_dirty = true
