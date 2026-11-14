@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.8.2] - 2026-11-14
+
+### Added
+
+- A "Log snapshot" button in the ESP tuning panel that writes the current ESP settings to the debug log, so tuned outline or fill presets can be shared.
+- An option in the ESP tuning panel to temporarily disable ESP, useful for side-by-side comparison with another mod.
+
+### Changed
+
+- Outline thickness can now be set to finer (thinner) values in the ESP tuning panel and mod settings.
+
 ## [2.8.1] - 2026-11-14
 
 ### Fixed

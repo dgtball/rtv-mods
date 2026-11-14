@@ -8,6 +8,7 @@ extends CanvasLayer
 # and owns the node lifetime).
 
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
+const VTKDebug = preload("res://mods/ThermalVTK/VTKDebug.gd")
 
 var _esp: Node = null
 var _nvg: Node = null
@@ -26,6 +27,7 @@ var _prev_paused: bool = false
 var _prev_esp_process_mode: int = Node.PROCESS_MODE_INHERIT
 
 # Widgets
+var _esp_enabled: CheckBox = null
 var _fill_mode: OptionButton = null
 var _rim: HSlider = null
 var _thickness: HSlider = null
@@ -106,6 +108,7 @@ func _snapshot() -> void:
 		"c_normal": Color(_esp.p_color_normal),
 		"c_combat": Color(_esp.p_color_combat),
 		"c_defend": Color(_esp.p_color_defend),
+		"esp_preview_on": bool(_esp.contour_layer or _esp.xray_layer),
 	}
 	if _nvg != null and is_instance_valid(_nvg):
 		_saved["brightness"] = float(_nvg.set_state_brightness)
@@ -139,6 +142,8 @@ func _restore_snapshot() -> void:
 		_nvg.set_mine_color(Color(_saved.get("c_mine", States.DEFAULT_MINE)))
 	_apply_nvg_side()
 	_sync_from_runtime()
+	if _esp_enabled != null:
+		_esp_enabled.button_pressed = bool(_saved.get("esp_preview_on", true))
 	_refresh_status()
 	_apply_live()
 
@@ -146,6 +151,8 @@ func _sync_from_runtime() -> void:
 	if _esp == null or not is_instance_valid(_esp):
 		return
 	_suppress = true
+	if _esp_enabled != null:
+		_esp_enabled.button_pressed = bool(_esp.contour_layer or _esp.xray_layer)
 	_fill_mode.selected = 1 if bool(_esp.p_body_fill) else 0
 	_rim.value = float(_esp.p_rim)
 	_thickness.value = float(_esp.p_thickness)
@@ -206,6 +213,13 @@ func _apply_live() -> void:
 		if _nvg.has_method("_apply_uniforms"):
 			_nvg._apply_uniforms()
 	if _esp != null and is_instance_valid(_esp):
+		# Runtime preview toggle: allow disabling ESP layers to compare with
+		# another mod, without touching saved MCM settings.
+		if _esp_enabled != null and not bool(_esp_enabled.button_pressed):
+			_esp.set_layers(false, false)
+		else:
+			if _owner != null and is_instance_valid(_owner) and _owner.has_method("_apply_mode"):
+				_owner._apply_mode()
 		if _esp.has_method("refresh_outlines_now"):
 			_esp.refresh_outlines_now()
 		# Keep NVG fill mode in sync with ESP's current body_fill/alpha.
@@ -216,13 +230,16 @@ func _refresh_status() -> void:
 	if _status == null:
 		return
 	var mode := "FILL" if _fill_mode != null and _fill_mode.selected == 1 else "OUTLINE"
-	_status.text = "Mode: %s  |  Rim %.1f  Thickness %.3f  Brightness %.2f  Alpha %.2f  Dist %.0f" % [
+	var esp_on := _esp_enabled == null or bool(_esp_enabled.button_pressed)
+	_status.text = "ESP: %s  |  Mode: %s  |  Rim %.2f  Thickness %.4f  Bright %.2f  Alpha %.2f  Dist %.0f  Cool %.0f" % [
+		"ON" if esp_on else "OFF",
 		mode,
 		_rim.value if _rim != null else 0.0,
 		_thickness.value if _thickness != null else 0.0,
 		_brightness.value if _brightness != null else 0.0,
 		_fill_alpha.value if _fill_alpha != null else 0.0,
 		_distance.value if _distance != null else 0.0,
+		_cooling.value if _cooling != null else 0.0,
 	]
 
 func _build_ui() -> void:
@@ -264,9 +281,10 @@ func _build_ui() -> void:
 
 	v.add_child(HSeparator.new())
 
+	_esp_enabled = _add_check(v, "ESP enabled (preview)", true)
 	_fill_mode = _add_option(v, "Mode", ["Outline", "FILL (flat body)"])
 	_rim = _add_slider(v, "Rim", 0.0, 6.0, 0.5, 2.0)
-	_thickness = _add_slider(v, "Thickness (grow)", 0.001, 0.02, 0.001, 0.006)
+	_thickness = _add_slider(v, "Thickness (grow)", 0.0005, 0.02, 0.0005, 0.006)
 	_brightness = _add_slider(v, "State brightness", 0.1, 3.0, 0.1, 0.6)
 	_fill_alpha = _add_slider(v, "Fill alpha", 0.05, 1.0, 0.05, 0.4)
 	_distance = _add_slider(v, "Distance", 0.0, 300.0, 10.0, 60.0)
@@ -294,6 +312,10 @@ func _build_ui() -> void:
 	reset_btn.text = "Reset"
 	reset_btn.pressed.connect(_restore_snapshot)
 	row.add_child(reset_btn)
+	var log_btn := Button.new()
+	log_btn.text = "Log snapshot"
+	log_btn.pressed.connect(_log_snapshot)
+	row.add_child(log_btn)
 	var close_btn := Button.new()
 	close_btn.text = "Close"
 	close_btn.pressed.connect(close)
@@ -362,6 +384,34 @@ func _add_color(parent: Control, label_text: String, def: Color) -> ColorPickerB
 	cp.color_changed.connect(func(_c): _on_changed())
 	h.add_child(cp)
 	return cp
+
+func _color_hex(c: Color) -> String:
+	return "#%02x%02x%02x" % [int(round(c.r * 255.0)), int(round(c.g * 255.0)), int(round(c.b * 255.0))]
+
+func _log_snapshot() -> void:
+	if _esp == null or not is_instance_valid(_esp):
+		return
+	var mode := "FILL" if _fill_mode != null and _fill_mode.selected == 1 else "OUTLINE"
+	var esp_on := _esp_enabled == null or bool(_esp_enabled.button_pressed)
+	var bright := float(_brightness.value) if _brightness != null else 0.0
+	var mine_c: Color = _c_mine.color if _c_mine != null else States.DEFAULT_MINE
+	var parts: Array[String] = []
+	parts.append("mode=%s" % mode)
+	parts.append("esp_enabled=%s" % str(esp_on))
+	parts.append("rim=%.3f" % float(_rim.value))
+	parts.append("thickness=%.4f" % float(_thickness.value))
+	parts.append("state_brightness=%.3f" % bright)
+	parts.append("fill_alpha=%.3f" % float(_fill_alpha.value))
+	parts.append("distance=%.1f" % float(_distance.value))
+	parts.append("cooling=%.1f" % float(_cooling.value))
+	parts.append("xray=%s" % str(bool(_xray.button_pressed)))
+	parts.append("nomad=%s" % str(bool(_nomad.button_pressed)))
+	parts.append("labels=%s" % str(bool(_labels.button_pressed)))
+	parts.append("normal=%s" % _color_hex(_c_normal.color))
+	parts.append("combat=%s" % _color_hex(_c_combat.color))
+	parts.append("defend=%s" % _color_hex(_c_defend.color))
+	parts.append("mine=%s" % _color_hex(mine_c))
+	VTKDebug.log("ESP_PANEL", "snapshot " + " ".join(parts))
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not _open:
