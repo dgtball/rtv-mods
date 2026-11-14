@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.7.8] - 2026-11-14
+
+### Changed
+
+- Day and night can now be sped up with one live panel slider during testing.
+
 ## [2.7.7] - 2026-11-14
 
 ### Changed
