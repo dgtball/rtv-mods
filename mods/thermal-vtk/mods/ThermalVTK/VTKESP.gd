@@ -190,8 +190,7 @@ func apply_config(rec) -> void:
 	p_color_combat = rec.color_combat
 	p_color_defend = rec.color_defend
 	p_brightness = rec.outline_brightness
-	var mix = rec.get("thermal_mix") if rec is Object else null
-	p_thermal_mix = float(mix) if mix != null else 1.0
+	p_thermal_mix = float(rec.thermal_mix)
 	p_trig = rec.outline_xray
 	p_fire_s = rec.fire_s
 	p_fire_d = rec.fire_d

@@ -91,6 +91,7 @@ func t_read_defaults() -> void:
 	ck(rec.key_palette_cycle == KEY_F6 and rec.key_esp_panel == KEY_F8, "diagnostic hotkeys default to the F keys")
 	ck(rec.key_live_panel == KEY_F9, "live panel key defaults to F9")
 	ck(absf(rec.fill_alpha - 0.4) < 0.001, "fill alpha defaults to 0.4")
+	ck(rec.thermal_mix == 1.0, "missing thermal-mix falls back to 1.0")
 	ck(rec.color_normal == Color(0.98, 0.96, 0, 1), "normal colour default")
 	ck(rec.color_defend == Color(0.11, 0.6, 0.96, 1), "defend colour default")
 	ck(rec.color_mine == Color(1.0, 0.2, 0.85, 1), "mine colour default")
@@ -113,6 +114,7 @@ func t_mcm_config_shape() -> void:
 	var cfg = Settings.mcm_config()
 	ck(cfg.has_section_key("Float", "outline_rim"), "the rim is declared")
 	ck(cfg.has_section_key("Float", "fill_alpha"), "fill alpha is declared")
+	ck(cfg.has_section_key("Float", "thermal_mix"), "thermal-mix is declared")
 	ck(cfg.has_section_key("Keycode", "key_thermal_toggle"), "the thermal hotkey is declared")
 	ck(cfg.has_section_key("Keycode", "key_esp_panel"), "the ESP panel hotkey is declared")
 	ck(cfg.has_section_key("Color", "state_defend"), "the defend colour is declared")
@@ -162,6 +164,7 @@ func t_esp_apply_maps_fields() -> void:
 	rec.outline_rim = 4.0
 	rec.body_fill = true
 	rec.fill_alpha = 0.35
+	rec.thermal_mix = 0.5
 	rec.outline_xray = false
 	rec.fire_d = 90.0
 	rec.fire_s = 4.0
@@ -186,6 +189,7 @@ func t_esp_apply_maps_fields() -> void:
 	ck(esp.p_rim == 4.0, "ESP maps outline_rim")
 	ck(esp.p_body_fill == true, "ESP maps body_fill")
 	ck(absf(esp.p_fill_alpha - 0.35) < 0.001, "ESP maps fill_alpha")
+	ck(absf(esp.p_thermal_mix - 0.5) < 0.001, "ESP maps thermal-mix")
 	ck(esp.p_trig == false, "ESP maps the x-ray toggle")
 	ck(esp.p_fire_d == 90.0 and esp.p_fire_s == 4.0, "ESP maps the fire window")
 	ck(esp.p_voice_d == 18.0 and esp.p_voice_s == 4.0, "ESP maps the voice window")

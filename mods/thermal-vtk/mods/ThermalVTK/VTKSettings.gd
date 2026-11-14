@@ -39,6 +39,7 @@ class Rec:
 	var outline_brightness: float = 0.6
 	var outline_rim: float = 2.0
 	var fill_alpha: float = 0.4
+	var thermal_mix: float = 1.0
 	# X-ray Triggers: reveal window ranges ("_d") and durations ("_s").
 	var fire_d: float = 80.0
 	var fire_s: float = 2.0
@@ -119,6 +120,7 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Keycode", "key": "key_esp_panel", "name": "Hotkey: ESP panel", "def": KEY_F8, "cat": "04. Diagnostics", "pos": 21, "tip": "Debug tool: opens the live ESP tuning panel; the game pauses while it is open. Turn the debug log on first -- without it the key stays free for the game. The panel saves nothing: slider values live until the helmet comes off or the map changes."},
 	{"sect": "Keycode", "key": "key_live_panel", "name": "Hotkey: NVG panel", "def": KEY_F9, "cat": "04. Diagnostics", "pos": 22, "tip": "Debug tool: opens the live daylight/NVG tuning panel; the game pauses while it is open. Turn the debug log on first -- without it the key stays free for the game. The panel saves nothing: slider values live until the helmet comes off."},
 	{"sect": "Float", "key": "fill_alpha", "name": "Fill alpha", "def": 0.4, "min": 0.05, "max": 1.0, "step": 0.05, "cat": "02. NPC", "pos": 8, "tip": "Opacity of the full-body fill when 'Full body fill' is on."},
+	{"sect": "Float", "key": "thermal_mix", "name": "thermal-mix", "def": 1.0, "min": 0.0, "max": 2.0, "step": 0.05, "cat": "02. NPC", "pos": 9, "tip": "Separate multiplier on full-body tint opacity/intensity under NVG. 1.0 is neutral; it does not blend with the thermal palette."},
 ]
 
 # The seed MCM copies a fresh profile from: every entry the mod declares, with
@@ -178,6 +180,7 @@ static func read(cfg: ConfigFile) -> Rec:
 	rec.outline_brightness = float(_val(cfg, "Float", "outline_brightness", rec.outline_brightness))
 	rec.outline_rim = float(_val(cfg, "Float", "outline_rim", rec.outline_rim))
 	rec.fill_alpha = float(_val(cfg, "Float", "fill_alpha", rec.fill_alpha))
+	rec.thermal_mix = float(_val(cfg, "Float", "thermal_mix", rec.thermal_mix))
 	rec.fire_d = float(_val(cfg, "Float", "trigger_fire_dist", rec.fire_d))
 	rec.fire_s = float(_val(cfg, "Float", "trigger_fire_time", rec.fire_s))
 	rec.voice_d = float(_val(cfg, "Float", "trigger_voice_dist", rec.voice_d))
