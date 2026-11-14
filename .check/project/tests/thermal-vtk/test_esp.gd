@@ -46,6 +46,8 @@ func _run() -> void:
 	t_label_suffix_independent()
 	t_opts_contour_key()
 	t_fill_opts_carry_alpha()
+	t_opts_brightness_thermal_mix()
+	t_fullbody_xray_no_ring()
 	t_no_through_walls_opt()
 	t_dead_node_marks_entry()
 	t_los_excludes_self()
@@ -272,7 +274,8 @@ func t_label_suffix_independent() -> void:
 	Tracker.tag_trig(resp._entries[rid], "fire", 100.0, rnow + 60.0, 60.0)
 	resp._draw(Vector3.ZERO)
 	var rmat: ShaderMaterial = resp._outline._items[rid]["mat"]
-	ck(resp._outline.has(rid) and rmat.shader == Sh.mask_xray(), "reveal past Distance goes through walls")
+	ck(resp._outline.has(rid) and rmat.shader == Sh.body_xray(), "reveal past Distance goes through walls")
+	ck(resp._outline._items[rid]["ring"] != null, "outline reveal keeps the ring pass")
 	ck(rmesh.material_overlay == rmat, "reveal past Distance paints the bot mesh")
 	# Expire the window: Time stays real (no fake clock), so tag the same way a
 	# timeout ages it — expires behind now. pick_trig erases it and the frame
@@ -291,16 +294,20 @@ func t_opts_contour_key() -> void:
 	esp.name = "VTKESP_opts"
 	root.add_child(esp)
 	var hostile := opts_of(esp, {"cat": S.COMBAT, "nomad": false})
-	ck(hostile["key"] == S.KEY_COMBAT, "hostile combat keys combat")
+	ck(hostile.get("color") == S.DEFAULT_COMBAT, "hostile combat uses combat display color")
+	ck(not hostile.has("key"), "detector key is not emitted")
 	ck(not hostile.has("state_key"), "the old detector key is gone")
 	ck(not hostile.has("nomad"), "nomad is not duplicated into the contour opts")
-	ck(hostile.has("fill_alpha"), "fill alpha is carried in contour opts")
+	for k in ["color", "brightness", "alpha", "grow", "rim", "cool", "xray", "fill"]:
+		ck(hostile.has(k), "contour opts include %s" % k)
 	ck(not hostile.has("fill_grow"), "fill grow lives in the shader, not in opts")
 	var normal := opts_of(esp, {"cat": S.NORMAL, "nomad": true})
-	ck(normal["key"] == S.KEY_NORMAL, "normal keys by its category")
+	ck(normal.get("color") == S.DEFAULT_NORMAL, "normal uses normal display color")
+	var defend := opts_of(esp, {"cat": S.DEFEND, "nomad": false})
+	ck(defend.get("color") == S.DEFAULT_DEFEND, "defend uses defend display color")
 	esp.free()
 
-# Full-body fill carries the configured alpha into the contour opts.
+# Full-body fill carries the configured effective alpha into the contour opts.
 func t_fill_opts_carry_alpha() -> void:
 	var esp = ESP.new()
 	esp.name = "VTKESP_fill"
@@ -308,10 +315,57 @@ func t_fill_opts_carry_alpha() -> void:
 	esp.p_body_fill = true
 	esp.p_fill_alpha = 0.55
 	var opts := opts_of(esp, {"cat": S.COMBAT, "nomad": false})
-	ck(opts["key"] == S.KEY_COMBAT, "fill opts keep the category key")
+	ck(opts.get("color") == S.DEFAULT_COMBAT, "fill opts keep the display color")
 	ck(bool(opts.get("fill", false)) == true, "fill opts carry the fill flag")
-	ck(absf(float(opts.get("fill_alpha", 0.0)) - 0.55) < 0.001, "fill opts carry fill alpha")
+	ck(absf(float(opts.get("alpha", 0.0)) - 0.55) < 0.001, "fill opts carry effective alpha")
+	ck(absf(float(opts.get("brightness", -1.0)) - 0.6) < 0.001, "fill opts carry brightness")
 	esp.free()
+
+func t_opts_brightness_thermal_mix() -> void:
+	var esp = ESP.new()
+	esp.name = "VTKESP_mix"
+	root.add_child(esp)
+	esp.p_fill_alpha = 0.5
+	esp.p_thermal_mix = 0.5
+	esp.p_brightness = 1.2
+	var opts := opts_of(esp, {"cat": S.NORMAL, "nomad": false})
+	ck(absf(float(opts.get("alpha", 0.0)) - 0.25) < 0.001, "alpha multiplies fill_alpha by thermal_mix")
+	ck(absf(float(opts.get("brightness", 0.0)) - 1.2) < 0.001, "brightness comes from ESP field")
+	esp.p_thermal_mix = 3.0
+	opts = opts_of(esp, {"cat": S.NORMAL, "nomad": false})
+	ck(absf(float(opts.get("alpha", 0.0)) - 1.0) < 0.001, "alpha clamps to 1.0")
+	esp.free()
+
+func t_fullbody_xray_no_ring() -> void:
+	var scene := Node3D.new()
+	scene.name = "Map_fill_xray"
+	var bot := FakeBot.new()
+	bot.name = "AI_Bandit_fill_xray"
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	bot.add_child(mesh)
+	bot.global_position = Vector3(0.0, 0.0, -3.0)
+	scene.add_child(bot)
+	root.add_child(scene)
+	current_scene = scene
+	var esp = ESP.new()
+	esp.name = "VTKESP_fill_xray"
+	root.add_child(esp)
+	esp.set_layers(true, true)
+	esp.p_body_fill = true
+	esp.p_dist = 60.0
+	var id := bot.get_instance_id()
+	var now := esp._now()
+	Tracker.tag_trig(esp._entries[id], "fire", 100.0, now + 60.0, 60.0)
+	esp._draw(Vector3.ZERO)
+	ck(esp._outline.has(id), "full-body xray reveal draws")
+	var entry: Dictionary = esp._outline._items[id]
+	var mat: ShaderMaterial = entry["mat"]
+	ck(mat != null and mat.shader == Sh.body_xray(), "full-body xray uses body xray shader")
+	ck(entry.get("ring") == null, "full-body xray has no ring")
+	ck(mat.shader != Sh.ring_xray(), "full-body xray is not ring xray")
+	esp.free()
+	scene.queue_free()
 
 # The nomad marker paints its key through a shader uniform, so the
 # calibration has to rewrite that uniform on the live markers.
@@ -431,7 +485,7 @@ func t_opts_reuse_updates() -> void:
 	esp._draw(Vector3.ZERO)
 	var second: Dictionary = esp._entries[id].get("opts")
 	ck(is_same(second, first), "the dictionary object is reused")
-	ck(second["key"] == S.KEY_COMBAT, "the reused dictionary carries the new state")
+	ck(second.get("color") == S.DEFAULT_COMBAT, "the reused dictionary carries the new state")
 	esp.free()
 	scene.queue_free()
 
@@ -509,7 +563,8 @@ func t_xray_layer_without_contour() -> void:
 	esp._draw(Vector3.ZERO)
 	ck(esp._outline.has(id), "reveal draws with the contour off")
 	var mat: ShaderMaterial = esp._outline._items[id]["mat"]
-	ck(mat != null and mat.shader == Sh.mask_xray(), "the reveal swaps the overlay to the depth-free material")
+	ck(mat != null and mat.shader == Sh.body_xray(), "the reveal swaps the overlay to the depth-free material")
+	ck(esp._outline._items[id]["ring"] != null, "outline reveal keeps its ring")
 	ck(mesh.material_overlay == mat, "the revealed mesh carries it")
 	Tracker.tag_trig(esp._entries[id], "fire", 100.0, now - 1.0, 60.0)
 	esp._draw(Vector3.ZERO)

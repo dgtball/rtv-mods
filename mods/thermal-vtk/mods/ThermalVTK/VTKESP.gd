@@ -49,6 +49,8 @@ var p_npc_labels: bool = false
 var p_color_normal: Color = States.DEFAULT_NORMAL
 var p_color_combat: Color = States.DEFAULT_COMBAT
 var p_color_defend: Color = States.DEFAULT_DEFEND
+var p_brightness: float = 0.6
+var p_thermal_mix: float = 1.0
 # The X-ray Triggers toggle state: on = a live trigger window swaps that bot's
 # ring to the x-ray shader (through walls). Off = windows are still tagged,
 # but the ring never lights up through the wall; labels read them regardless.
@@ -187,6 +189,9 @@ func apply_config(rec) -> void:
 	p_color_normal = rec.color_normal
 	p_color_combat = rec.color_combat
 	p_color_defend = rec.color_defend
+	p_brightness = rec.outline_brightness
+	var mix = rec.get("thermal_mix") if rec is Object else null
+	p_thermal_mix = float(mix) if mix != null else 1.0
 	p_trig = rec.outline_xray
 	p_fire_s = rec.fire_s
 	p_fire_d = rec.fire_d
@@ -798,15 +803,19 @@ func _fill_opts(opts: Dictionary, e: Dictionary, now: float) -> void:
 		cool = clampf(1.0 - Tracker.fade_factor(win, now), 0.0, 1.0)
 	var cat: int = int(e.get("cat", States.NORMAL))
 	opts["cat"] = cat
-	# The shell writes this key into the main pass and the NVG substitutes the
-	# display colour from it.
-	opts["key"] = States.state_key(cat)
+	var color := p_color_normal
+	if cat == States.COMBAT:
+		color = p_color_combat
+	elif cat == States.DEFEND:
+		color = p_color_defend
+	opts["color"] = color
+	opts["brightness"] = p_brightness
 	opts["cool"] = cool
 	opts["rim"] = p_rim
 	opts["grow"] = p_thickness
 	opts["xray"] = xray
 	opts["fill"] = p_body_fill
-	opts["fill_alpha"] = p_fill_alpha
+	opts["alpha"] = clampf(p_fill_alpha * p_thermal_mix, 0.0, 1.0)
 
 func _nomad_los(e: Dictionary, anchor_world: Vector3) -> bool:
 	if los_probe.is_valid():
