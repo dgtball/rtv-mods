@@ -68,7 +68,7 @@ var set_glow_distance: float = 60.0
 var set_palette: int = 0
 var set_world: float = 1.70
 # Daylight highlight rolloff knee (shader "highlightKnee"); 1.0 = off.
-var set_highlight_knee: float = 0.6
+var set_highlight_knee: float = 0.55
 var set_daylight: bool = true
 var set_strength: float = 1.0
 # Live-panel levers (the F9 instrument): probe values, never persisted. The
@@ -488,13 +488,18 @@ func _snapshot() -> Dictionary:
 	# one falls back to the environment sky. env.sky is null on maps that set
 	# no Sky at all -- guard it, or the readback crashes at runtime.
 	var sky_col: Variant = null
+	var sky_overcast: Variant = null
 	var mat = _world.get("skyMaterial")
 	if mat is ShaderMaterial:
 		sky_col = (mat as ShaderMaterial).get_shader_parameter("skyColor")
+		sky_overcast = (mat as ShaderMaterial).get_shader_parameter("overcast")
 	elif env.sky != null and env.sky.sky_material is ShaderMaterial:
 		sky_col = (env.sky.sky_material as ShaderMaterial).get_shader_parameter("skyColor")
+		sky_overcast = (env.sky.sky_material as ShaderMaterial).get_shader_parameter("overcast")
 	if sky_col is Color:
 		snap["sky_color"] = sky_col
+	if sky_overcast != null:
+		snap["overcast"] = float(sky_overcast)
 	_snapshot_light(snap, "sun", _world.get("sunLight"))
 	_snapshot_light(snap, "moon", _world.get("moonLight"))
 	return snap
@@ -733,7 +738,7 @@ func _daylight_apply(env: Environment, cur: float) -> void:
 # adds no tree lookups. `_sim_indoor`/`_sim_shelter` stay cached for the panel
 # and the [DAY] line only: the snow trim deliberately ignores them.
 func _push_daylight_trims(mix: float) -> void:
-	var snow: float = Daylight.snow_trim(_sim_season, mix)
+	var snow: float = Daylight.snow_trim(_sim_season, mix, Daylight.SNOW_TRIM_NIGHT, Daylight.SNOW_TRIM_DAY, _day_factor)
 	if absf(snow - _snow_trim) > 0.001:
 		_snow_trim = snow
 		_dirty = true

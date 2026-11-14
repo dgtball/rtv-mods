@@ -143,10 +143,18 @@ static func night_gate(factor: float, sun_down: bool) -> float:
 # come back. The cost is accepted: winter interiors and shelters are darker
 # than they were, by the same factor the outdoors already was. The constants
 # themselves were not recalibrated here.
-static func snow_trim(season: int, mix: float, trim_night := SNOW_TRIM_NIGHT, trim_day := SNOW_TRIM_DAY) -> float:
+#
+# `factor` is the effective exposure factor: in dim/overcast winter days the
+# strong bright-snow compression (trim_day) crushes mids, so the day target
+# eases back toward trim_night as the scene gets dimmer (factor lifted above
+# the bright-day TARGET by the ceiling).
+static func snow_trim(season: int, mix: float, trim_night := SNOW_TRIM_NIGHT, trim_day := SNOW_TRIM_DAY, factor := FLOOR) -> float:
 	if season != SEASON_WINTER:
 		return 1.0
-	return lerpf(trim_night, trim_day, clampf(mix, 0.0, 1.0))
+	var m := clampf(mix, 0.0, 1.0)
+	var dim := clampf((factor - TARGET) / maxf(1.0 - TARGET, 0.001), 0.0, 1.0)
+	var day := lerpf(trim_day, trim_night, dim)
+	return lerpf(trim_night, day, m)
 
 # Daylight background trim: blends toward `day` by the day mix, the same mix
 # the shader sees. The ends are what matter: night stays 1.0 (palette

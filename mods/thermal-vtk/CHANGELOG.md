@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.14] - 2026-11-14
+
+### Changed
+
+- Improved thermal vision in dim, overcast winter daylight so the picture stays more readable instead of getting crushed.
+- Softened blown-out highlights in bright summer daylight.
+
 ## [2.7.13] - 2026-11-14
 
 ### Changed

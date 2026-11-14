@@ -118,6 +118,13 @@ func t_snow_trim_mix() -> void:
 	ck(near(D.snow_trim(2, 1.0, 0.5, 0.9), 0.9), "explicit winter trims are honoured")
 	ck(near(D.snow_trim(2, -1.0), D.SNOW_TRIM_NIGHT), "a mix below zero clamps to night")
 	ck(near(D.snow_trim(2, 2.0), D.SNOW_TRIM_DAY), "a mix above one clamps to day")
+	# Brightness-aware dimming: when the ceiling lifts the factor above the
+	# bright-day TARGET, the scene is genuinely dimmer and the winter trim eases
+	# back toward the night trim instead of crushing mids.
+	ck(near(D.snow_trim(2, 1.0, D.SNOW_TRIM_NIGHT, D.SNOW_TRIM_DAY, D.TARGET), D.SNOW_TRIM_DAY), "bright winter day at TARGET keeps the day trim")
+	ck(near(D.snow_trim(2, 1.0, D.SNOW_TRIM_NIGHT, D.SNOW_TRIM_DAY, 1.0), D.SNOW_TRIM_NIGHT), "very dim winter day eases to the night trim")
+	ck(near(D.snow_trim(2, 1.0, D.SNOW_TRIM_NIGHT, D.SNOW_TRIM_DAY, 0.38), D.SNOW_TRIM_DAY + (D.SNOW_TRIM_NIGHT - D.SNOW_TRIM_DAY) * ((0.38 - D.TARGET) / (1.0 - D.TARGET))), "a ceiling-lifted factor eases the winter trim")
+	ck(near(D.snow_trim(2, 0.5, D.SNOW_TRIM_NIGHT, D.SNOW_TRIM_DAY, 1.0), D.SNOW_TRIM_NIGHT), "dim winter half-mix stays at the night trim")
 
 func t_palette_input() -> void:
 	ck(near(D.palette_input(0.5, 1.7, 0.6, 0.0), 0.85), "mix 0: shoulder and lift off, raw darken only")

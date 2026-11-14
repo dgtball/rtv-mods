@@ -39,7 +39,7 @@ uniform float dayMix : hint_range(0.0, 1.0, 0.01) = 0.0;
 // sky, cloud decks) bends into a soft shoulder below white before the palette,
 // so it keeps gradient instead of clipping into one flat colour. 1.0 = off.
 // Night is unaffected either way: the shoulder only engages with daylight mix.
-uniform float highlightKnee : hint_range(0.3, 1.0, 0.05) = 0.6;
+uniform float highlightKnee : hint_range(0.3, 1.0, 0.05) = 0.55;
 uniform int worldPaletteMode = 0;
 // Final image brightness while NVG is on. Applied to the composited overlay, so
 // unlike the old Environment.tonemap_white poke it is actually visible.
