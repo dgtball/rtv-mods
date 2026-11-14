@@ -1,20 +1,15 @@
 ﻿extends RefCounted
-# Owns one contour material per NPC and renders it on the NPC's own meshes
-# through `material_overlay` -- the NPCESP_ex approach. The contour therefore
-# lives in the main 3D pass: the depth test clips it against walls, the weapon
-# and the sight glass for free, and no second world pass exists anywhere.
+# Owns direct-color contour materials per NPC and renders them on the NPC's own
+# meshes through `material_overlay` in the main 3D pass.
 #
-# The overlay chains:
-#   xray : the ring shader with depth_test_disabled (through walls);
-#   fill : the body shader (stencil write) -> the ring shader (stencil read,
-#          draws strictly outside the body) -- full-body silhouette;
-#   ring : the ring shader on its own (stencil read, depth-tested).
-#
-# State and the x-ray flag come in via `opts`.
+# Shape and depth mode are independent:
+#   outline (fill=false): body shader (stencil write, mask-only, alpha 0) with a
+#          next_pass ring shader (stencil read, visible band outside the body)
+#   full-body (fill=true): body shader only (visible tint), no ring
+#   xray=true preserves shape and only swaps LOS shaders for depth_test_disabled
+#          XRAY variants.
 
 const Shaders = preload("res://mods/ThermalVTK/VTKShaders.gd")
-const States = preload("res://mods/ThermalVTK/VTKStates.gd")
-const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 
 # Nodes the mod adds under a bot's subtree (the nomad marker, the debug label,
 # the overlays themselves) carry this meta: the sweep must skip them.
@@ -24,7 +19,6 @@ var _items: Dictionary = {}
 const SCOPE_RIM := 6.0
 var _scoped: bool = false
 var _clear_pool: Array = []
-var _fill_log: Dictionary = {}
 
 func has(id: int) -> bool:
 	return _items.has(id)
@@ -52,57 +46,40 @@ func _same_meshes(old: Array, fresh: Array) -> bool:
 			return false
 	return true
 
-func _build_ring() -> ShaderMaterial:
-	var ring_mat := ShaderMaterial.new()
-	ring_mat.shader = Shaders.mask_ring()
-	return ring_mat
-
-func _build_xray() -> ShaderMaterial:
+func _build_body(los: bool) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
-	mat.shader = Shaders.mask_xray()
+	mat.shader = Shaders.body_los() if los else Shaders.body_xray()
 	return mat
 
-func _build_fill_body() -> ShaderMaterial:
+func _build_ring(los: bool) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
-	mat.shader = Shaders.mask_fill()
+	mat.shader = Shaders.ring_los() if los else Shaders.ring_xray()
 	return mat
 
-func _build_fill_ring(body_mat: ShaderMaterial) -> ShaderMaterial:
-	var mat := ShaderMaterial.new()
-	mat.shader = Shaders.mask_ring()
-	body_mat.next_pass = mat
-	return mat
+func _material_for(fill: bool, xray: bool) -> ShaderMaterial:
+	var los: bool = not xray
+	var body := _build_body(los)
+	if not fill:
+		body.next_pass = _build_ring(los)
+	return body
 
-# The pass that carries the ring uniforms: in fill mode the body material owns
-# `next_pass`, and the ring lives there; everywhere else the material itself is
-# the ring. Setting the uniforms on the body in fill mode would silently leave
-# the visible band at its shader defaults.
+# Visible ring pass when present (outline chain), else null for full-body.
 func _ring_of(mat: Material) -> ShaderMaterial:
 	var body := mat as ShaderMaterial
 	if body == null:
 		return null
-	var chain := body.next_pass as ShaderMaterial
-	if chain != null:
-		return chain
-	return body
+	return body.next_pass as ShaderMaterial
 
-func _material_for(xray: bool, fill: bool) -> Material:
-	if xray:
-		return _build_xray()
-	if fill:
-		# Full body mode: flat state fill over the whole silhouette, no contour
-		# ring (like NPCESP_ex body fill). The NVG shader detects the key and
-		# outputs a flat display colour.
-		return _build_fill_body()
-	return _build_ring()
-
-func _set_material(entry: Dictionary, mat: Material) -> void:
+func _set_material(entry: Dictionary, mat: ShaderMaterial) -> void:
 	entry["mat"] = mat
 	entry["ring"] = _ring_of(mat)
-	entry["p_key"] = null
+	entry["p_color"] = null
+	entry["p_brightness"] = null
 	entry["p_grow"] = null
 	entry["p_rim"] = null
 	entry["p_cool"] = null
+	entry["p_alpha_body"] = null
+	entry["p_alpha_ring"] = null
 	_apply_to(entry.get("meshes", []), mat)
 
 # The one overlay write. A null material takes the contour off the mesh.
@@ -117,20 +94,23 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 	_collect(node, meshes)
 	var xray: bool = bool(opts.get("xray", false))
 	var fill: bool = bool(opts.get("fill", false))
-	var mat: Material = _material_for(xray, fill)
+	var mat := _material_for(fill, xray)
 	_items[id] = {
-			"node": node,
-			"meshes": meshes,
-			"mat": mat,
-			"ring": _ring_of(mat),
-			"fill_mode": fill,
-			"xray": xray,
-			"child_count": _child_count(node),
-			"p_key": null,
-			"p_grow": null,
-			"p_rim": null,
-			"p_cool": null,
-		}
+		"node": node,
+		"meshes": meshes,
+		"mat": mat,
+		"ring": _ring_of(mat),
+		"fill_mode": fill,
+		"xray": xray,
+		"child_count": _child_count(node),
+		"p_color": null,
+		"p_brightness": null,
+		"p_grow": null,
+		"p_rim": null,
+		"p_cool": null,
+		"p_alpha_body": null,
+		"p_alpha_ring": null,
+	}
 	_apply_to(meshes, mat)
 	# Seed the uniforms in the same frame: the first draw of a fresh bot must
 	# already carry its category, not the shader default.
@@ -148,49 +128,52 @@ func refresh(id: int, opts: Dictionary) -> void:
 	if bool(entry.get("xray", false)) != xray or bool(entry.get("fill_mode", false)) != fill:
 		entry["xray"] = xray
 		entry["fill_mode"] = fill
-		_set_material(entry, _material_for(xray, fill))
-	var color: Color = opts.get("key", States.state_key(int(opts.get("cat", States.NORMAL))))
+		_set_material(entry, _material_for(fill, xray))
+	var color: Color = opts.get("color", Color(1.0, 0.0, 0.0, 1.0))
+	var brightness: float = float(opts.get("brightness", 1.0))
+	var alpha: float = float(opts.get("alpha", 0.4))
 	var grow: float = float(opts.get("grow", 0.006))
 	var cool: float = float(opts.get("cool", 0.0))
+	var rim_user: float = float(opts.get("rim", 1.0))
 	var body_mat: ShaderMaterial = entry.get("mat") as ShaderMaterial
 	var ring_mat: ShaderMaterial = entry.get("ring") as ShaderMaterial
-	if ring_mat == null:
-		ring_mat = body_mat
-	if body_mat == null or ring_mat == null:
+	if body_mat == null:
 		return
-	var p_key = entry.get("p_key")
-	if p_key == null or p_key != color:
-		# Both passes write the key: the body paints the silhouette (and marks
-		# the stencil) while the ring paints the band around it, so the NVG
-		# detector must find the same colour in either.
-		body_mat.set_shader_parameter("state_color", color)
-		ring_mat.set_shader_parameter("state_color", color)
-		entry["p_key"] = color
-	var p_grow = entry.get("p_grow")
-	if p_grow == null or not is_equal_approx(float(p_grow), grow):
+	var body_alpha: float = 0.0 if not fill else alpha
+	if entry.get("p_color") == null or entry.get("p_color") != color:
+		body_mat.set_shader_parameter("outline_color", color)
+		if ring_mat != null:
+			ring_mat.set_shader_parameter("outline_color", color)
+		entry["p_color"] = color
+	if entry.get("p_brightness") == null or not is_equal_approx(float(entry.get("p_brightness")), brightness):
+		body_mat.set_shader_parameter("brightness", brightness)
+		if ring_mat != null:
+			ring_mat.set_shader_parameter("brightness", brightness)
+		entry["p_brightness"] = brightness
+	if entry.get("p_grow") == null or not is_equal_approx(float(entry.get("p_grow")), grow):
 		body_mat.set_shader_parameter("grow", grow)
-		ring_mat.set_shader_parameter("grow", grow)
+		if ring_mat != null:
+			ring_mat.set_shader_parameter("grow", grow)
 		entry["p_grow"] = grow
-	var fill_alpha: float = float(opts.get("fill_alpha", 0.4))
-	if fill and not xray and body_mat.shader == Shaders.mask_fill():
-		var p_alpha = entry.get("p_alpha")
-		if p_alpha == null or not is_equal_approx(float(p_alpha), fill_alpha):
-			body_mat.set_shader_parameter("alpha", fill_alpha)
-			entry["p_alpha"] = fill_alpha
-	var rim_user: float = float(opts.get("rim", 1.0))
-	if Dbg.enabled and rim_user <= 0.01 and int(_fill_log.get(id, -1)) != int(opts.get("cat", 0)):
-		var t_ms: int = Time.get_ticks_msec()
-		if t_ms - int(_fill_log.get(id, -100000)) >= 2000:
-			_fill_log[id] = int(opts.get("cat", 0))
-			Dbg.log("FILL", "id=%d cat=%d color=%.2f/%.2f/%.2f rim=%.2f xray=%s" % [id, int(opts.get("cat", 0)), color.r, color.g, color.b, rim_user, str(bool(opts.get("xray", false)))])
-	var rim: float = SCOPE_RIM if (_scoped and rim_user > 0.01) else rim_user
-	if entry.get("p_rim") == null or not is_equal_approx(float(entry.get("p_rim")), rim):
-		ring_mat.set_shader_parameter("rim_power", rim)
-		entry["p_rim"] = rim
 	if entry.get("p_cool") == null or not is_equal_approx(float(entry.get("p_cool")), cool):
 		body_mat.set_shader_parameter("cool", cool)
-		ring_mat.set_shader_parameter("cool", cool)
+		if ring_mat != null:
+			ring_mat.set_shader_parameter("cool", cool)
 		entry["p_cool"] = cool
+	if entry.get("p_alpha_body") == null or not is_equal_approx(float(entry.get("p_alpha_body")), body_alpha):
+		body_mat.set_shader_parameter("alpha", body_alpha)
+		entry["p_alpha_body"] = body_alpha
+	if ring_mat != null:
+		var rim: float = SCOPE_RIM if (_scoped and rim_user > 0.01) else rim_user
+		if entry.get("p_rim") == null or not is_equal_approx(float(entry.get("p_rim")), rim):
+			ring_mat.set_shader_parameter("rim_power", rim)
+			entry["p_rim"] = rim
+		if entry.get("p_alpha_ring") == null or not is_equal_approx(float(entry.get("p_alpha_ring")), alpha):
+			ring_mat.set_shader_parameter("alpha", alpha)
+			entry["p_alpha_ring"] = alpha
+	else:
+		entry["p_rim"] = null
+		entry["p_alpha_ring"] = null
 
 func set_scoped(on: bool) -> void:
 	_scoped = on
