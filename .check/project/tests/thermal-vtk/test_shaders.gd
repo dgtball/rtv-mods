@@ -24,8 +24,7 @@ func _init() -> void:
 func _run() -> void:
 	t_direct_shaders_compile()
 	t_direct_stencil_and_depth_contract()
-	t_nvg_esp_branch()
-	t_nvg_contour_reads_mines()
+	t_nvg_no_esp_key_detection()
 	t_palette_four_modes()
 	t_nvg_shader_compiles()
 	t_no_key_path_left()
@@ -69,36 +68,18 @@ func t_direct_stencil_and_depth_contract() -> void:
 	ck(not body.contains("state_color") and not ring.contains("state_color"), "direct shaders do not use key state_color")
 	ck(not body.contains("vtk_key_gain") and not ring.contains("vtk_key_gain"), "direct shaders do not depend on vtk_key_gain")
 
-# The overlay reads the category from the frame the shell wrote into: the shell
-# emits a key into the main 3D pass and the overlay matches the WASHED pixel
-# against the measured key values, then replaces the pixel with the display
-# colour. The old channel-gap classifier and its edge dials are gone.
-func t_nvg_esp_branch() -> void:
+# The NVG shader renders thermal/NVG output only. ESP contour/mine key
+# detection and substitution moved out of this shader, so the old uniforms and
+# matching branches must stay absent.
+func t_nvg_no_esp_key_detection() -> void:
 	var code := FileAccess.get_file_as_string(NVG_SHADER_RES)
 	ck(code.contains("uniform sampler2D screen_texture"), "overlay declares the screen sampler")
-	ck(code.contains("uniform bool espOn"), "overlay declares the contour switch")
 	ck(code.contains("texture(screen_texture, SCREEN_UV)"), "overlay samples the frame itself")
-	ck(not code.contains("EspColor"), "the gap classifier is gone")
-	ck(not code.contains("EspGap"), "the gap classifier is gone")
-	ck(not code.contains("uniform float espGate"), "the gap gate dial is gone")
-	ck(not code.contains("uniform float espFull"), "the opaque-gap dial is gone")
+	for u in ["espOn", "espFill", "fillAlpha", "stNormalKey", "stCombatKey", "stDefendKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineKey", "mineColor", "stateBright", "scopeRotate"]:
+		ck(not code.contains(u), "NVG shader has no %s key-detection contract" % u)
+	for token in ["orbitDist", "DET_TOL_CORE", "dCore", "dMine", "washSpread"]:
+		ck(not code.contains(token), "NVG shader has no %s detection path" % token)
 	ck(not code.contains("esp_mask"), "the mask sampler is gone")
-	for u in ["stNormalColor", "stCombatColor", "stDefendColor"]:
-		ck(code.contains("uniform vec3 %s" % u), "overlay keeps %s" % u)
-	for u in ["stNormalKey", "stCombatKey", "stDefendKey"]:
-		ck(code.contains("uniform vec3 %s" % u), "overlay matches the washed %s" % u)
-	ck(code.contains("washSpread"), "overlay keeps the combat wash guard")
-	# PIP-off orbit detection is still needed for the mine key.
-	ck(code.contains("scopeRotate"), "overlay declares scopeRotate")
-	ck(code.contains("orbitDist"), "overlay declares orbitDist")
-
-func t_nvg_contour_reads_mines() -> void:
-	var code := FileAccess.get_file_as_string(NVG_SHADER_RES)
-	ck(code.contains("vec4(mineColor, pixelColor.a)"), "contour branch substitutes mineColor")
-	ck(code.contains("dCore == dMine"), "the mine key takes part in the nearest-key match")
-	# The state keys are only on screen while a contour is armed; the mine key
-	# is not gated by that (a mine is a mine between shells).
-	ck(code.contains("if (!espOn) {"), "the contour switch gates the state keys")
 
 func t_palette_four_modes() -> void:
 	var code := FileAccess.get_file_as_string(NVG_SHADER_RES)
@@ -119,12 +100,10 @@ func t_nvg_shader_compiles() -> void:
 	var names := _uniform_names(sh)
 	ck(names.size() > 0, "NVG shader compiled (uniform list not empty)")
 	# `screen_texture` is a built-in hinted sampler and never appears in the
-	# uniform list; t_nvg_esp_branch checks it in the source instead.
-	for u in ["mineColor", "scopeRotate", "dayMix", "espOn", "stNormalColor", "stNormalKey", "stCombatKey", "stDefendKey"]:
+	# uniform list; source checks above cover it.
+	for u in ["thermalMode", "thermalDarken", "dayMix", "worldPaletteMode", "nvgWhite", "noise", "vignette", "goggleSeparation", "goggleSize", "goggleAspect", "goggleOutline", "tint", "highlightKnee"]:
 		ck(names.has(u), "compiled shader exposes %s" % u)
-	for u in ["espGate", "espFull", "EspGap", "EspColor"]:
-		ck(not names.has(u), "compiled shader dropped %s" % u)
-	for u in ["fillNormKey", "fillDefKey", "fillOpacity"]:
+	for u in ["espOn", "espFill", "fillAlpha", "stNormalKey", "stCombatKey", "stDefendKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineKey", "mineColor", "stateBright", "scopeRotate"]:
 		ck(not names.has(u), "compiled shader dropped %s" % u)
 
 # The key path is back end to end: the ring/fill shell emits the raw category

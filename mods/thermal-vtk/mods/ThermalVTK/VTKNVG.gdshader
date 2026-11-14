@@ -2,18 +2,10 @@ shader_type canvas_item;
 
 // NVG / thermal overlay. Replaces the vanilla NVG ColorRect shader (see
 // VTKNVG.gd for why the swap is safe). The whole frame is read back through
-// the false-colour thermal palette; the mine and the three contour state keys
-// are pulled out by comparing the screen against the
-// *Key uniforms. Those keys are NOT the raw colours the world-space shaders
-// emit -- the vanilla NVG world processing washes bright keys toward white
-// before this shader ever sees them -- but the measured post-NVG values
-// (VTKNVG.gd DET_*). Keep the key lists in lockstep with VTKNVG.gd. The *Color
-// uniforms are the freely chosen substitution colours.
-//
-// The contour is a main-pass overlay (VTKOutline): it writes a pure primary
-// key colour into the screen through material_overlay, and this shader reads
-// that frame back through screen_texture to decide the category and the
-// coverage. No second world pass, no mask viewport.
+// the false-colour thermal palette in thermal mode, or tinted NVG output in
+// the plain NVG branch. ESP/mine highlighting is rendered as direct overlays
+// in the main 3D pass; this shader no longer detects or substitutes key
+// colours.
 
 // filter_linear, not filter_linear_mipmap: the screen is sampled 1:1 through
 // SCREEN_UV, so mip 0 is the only one ever read. Requesting mipmaps makes the
@@ -28,12 +20,10 @@ uniform float goggleAspect : hint_range(0.0, 2.0, 0.1) = 1.6;
 uniform float goggleOutline : hint_range(0.0, 0.1, 0.01) = 0.05;
 
 uniform bool thermalMode = false;
-uniform bool scopeRotate = false;
 uniform float thermalDarken : hint_range(1.0, 4.0, 0.01) = 1.70;
 // 0 at night, 1 at full daylight. Daylight compensation lowers the exposure
 // (keeping snow/sky below the tonemap ceiling); this curve then lifts the now
-// darker background into the palette so the image stays readable. Applied to
-// the background only: detector keys are substituted before the palette.
+// darker background into the palette so the image stays readable.
 uniform float dayMix : hint_range(0.0, 1.0, 0.01) = 0.0;
 // Highlight rolloff knee for daylight: background brighter than this (snow,
 // sky, cloud decks) bends into a soft shoulder below white before the palette,
@@ -44,34 +34,6 @@ uniform int worldPaletteMode = 0;
 // Final image brightness while NVG is on. Applied to the composited overlay, so
 // unlike the old Environment.tonemap_white poke it is actually visible.
 uniform float nvgWhite : hint_range(0.05, 1.0, 0.05) = 1.0;
-
-uniform vec3 mineKey : source_color = vec3(0.0, 0.0, 1.0);
-
-// Contour ESP: the shell overlay draws a category key colour into the main 3D
-// pass (VTKOutline), whose screen the overlay samples through SCREEN_UV, so
-// nearest is exact: no extra blur on the ring edge. The pixel arrives after the
-// vanilla NVG world processing, which washes a bright key toward white, so the
-// *Key uniforms hold the MEASURED post-NVG values (VTKNVG.gd DET_ST_*), not the
-// colours the shaders emit. The world behind the ring adds to the pixel, which
-// is why the ring keys are bright and two of them are two-channel.
-uniform bool espOn = false;
-// Full-body mode: state-key pixels are replaced with a flat display colour
-// blended over the thermal background (no contour, no thermal heat mapping).
-uniform bool espFill = false;
-uniform float fillAlpha : hint_range(0.05, 1.0, 0.01) = 0.4;
-
-uniform vec3 stNormalKey : source_color = vec3(1.0, 0.21, 0.16);
-uniform vec3 stCombatKey : source_color = vec3(0.82, 1.0, 1.0);
-uniform vec3 stDefendKey : source_color = vec3(1.0, 0.34, 1.0);
-uniform vec3 stNormalColor : source_color = vec3(1.0, 0.72, 0.28);
-uniform vec3 stCombatColor : source_color = vec3(0.95, 0.18, 0.15);
-uniform vec3 stDefendColor : source_color = vec3(0.62, 0.30, 0.95);
-uniform float stateBright : hint_range(0.1, 3.0, 0.05) = 0.6;
-
-// Body-fill and friendly-nomad detector removed in 2.2.0: both now draw as a 2D overlay
-// outside this screen-space key substitution, so the overlay no longer needs them.
-
-uniform vec3 mineColor : source_color = vec3(1.0, 0.2, 0.85);
 
 float Goggles(vec2 uv)
 {
@@ -152,57 +114,11 @@ float hiShoulder(float x, float knee, float strength)
 	return top + (cap - top) * (1.0 - exp(-(x - 1.0) * slope / (cap - top)));
 }
 
-// PIP off + magnifying scope: the lens path rotates colour channels on screen,
-// so a key shows up as its three cyclic rotations. Match the orbit when that can
-// happen, plain distance otherwise (zero change off-scope / PIP on).
-float orbitDist(vec3 c, vec3 k)
-{
-	if (!scopeRotate) {
-		return distance(c, k);
-	}
-	float d = distance(c, k);
-	d = min(d, distance(c, k.brg));
-	d = min(d, distance(c, k.gbr));
-	return d;
-}
 
-// Detector radius. The mine and the state keys are matched tightly: those
-// branches replace the pixel outright, so a loose radius would paint the
-// wrong colour over unrelated pixels.
-// A full-body fill is a large flat area: bloom and the tonemap pull it further
-// from the emitted key than a thin ring ever drifts, so the tolerance is wider.
-const float DET_TOL_CORE = 0.34;
 
 void fragment()
 {
 	vec4 pixelColor = texture(screen_texture, SCREEN_UV);
-	// The mine key is emitted by an unshaded material on the mine itself, so the
-	// whole mine is that pixel. The state keys are emitted by the contour shells
-	// (VTKOutline). Both are matched by distance against their MEASURED washed
-	// values: the NVG world processing lifts and mixes the channels before this
-	// shader sees them, so the raw key never matches.
-	float dMine = orbitDist(pixelColor.rgb, mineKey);
-	float dStN = orbitDist(pixelColor.rgb, stNormalKey);
-	float dStC = orbitDist(pixelColor.rgb, stCombatKey);
-	float dStD = orbitDist(pixelColor.rgb, stDefendKey);
-	// The state keys are only on screen while a contour is armed; the mine key
-	// is not gated by that (a mine is a mine even between shells).
-	if (!espOn) {
-		dStN = 99.0;
-		dStC = 99.0;
-		dStD = 99.0;
-	}
-	// Wash guard for the combat key. Combat is the only two-channel-saturated
-	// key, so a fully washed pixel (daylight sky, snow, cloud decks) converges
-	// onto its measured orbit. The ring pixel keeps one channel behind by ~0.18;
-	// a white wash has all channels together. Spread below the margin cannot be
-	// the ring, whatever the scope rotation did to its orbit.
-	float washSpread = max(pixelColor.r, max(pixelColor.g, pixelColor.b))
-		- min(pixelColor.r, min(pixelColor.g, pixelColor.b));
-	if (washSpread < 0.04) {
-		dStC = 99.0;
-	}
-	float dCore = min(dMine, min(dStN, min(dStC, dStD)));
 	float goggleMask = smoothstep(goggleSize + vignette, goggleSize, Goggles(UV));
 	float goggleRim = abs(Goggles(UV) - goggleSize);
 	float goggleOutlines = 1.0 - smoothstep(0.0, goggleOutline, goggleRim);
@@ -222,34 +138,7 @@ void fragment()
 			luminance = mix(luminance, lifted, dayMix);
 		}
 		vec3 backgroundColor = ThermalPalette(luminance) * 0.7;
-		if (dCore < DET_TOL_CORE) {
-			// Closest key wins. Order (exact ties only): mine, then states.
-			// The whole pixel is replaced, not tinted: the key ring is a line,
-			// not a see-through wash.
-			if (dCore == dMine) {
-				color = vec4(mineColor, pixelColor.a);
-			} else if (espFill && dCore != dMine) {
-				// Full-body fill: flat state colour blended over the thermal
-				// background, no contour ring and no thermal heat mapping.
-				vec3 flatCol = stNormalColor * stateBright;
-				if (dCore == dStC) {
-					flatCol = stCombatColor * stateBright;
-				} else if (dCore == dStD) {
-					flatCol = stDefendColor * stateBright;
-				}
-				color = vec4(mix(backgroundColor, flatCol, fillAlpha), pixelColor.a);
-			} else if (dCore == dStN) {
-				color = vec4(stNormalColor * stateBright, pixelColor.a);
-			} else if (dCore == dStC) {
-				color = vec4(stCombatColor * stateBright, pixelColor.a);
-			} else if (dCore == dStD) {
-				color = vec4(stDefendColor * stateBright, pixelColor.a);
-			} else {
-				color = vec4(backgroundColor, pixelColor.a);
-			}
-		} else {
-			color = vec4(backgroundColor, pixelColor.a);
-		}
+		color = vec4(backgroundColor, pixelColor.a);
 	} else {
 		color = pixelColor * tint;
 		// The plain NVG branch runs without the thermal palette, so the same
@@ -261,12 +150,6 @@ void fragment()
 			tintLum = hiShoulder(tintLum, highlightKnee, dayMix);
 			float liftedLum = 1.0 - pow(1.0 - min(tintLum, 1.0), 1.6);
 			color.rgb *= mix(1.0, liftedLum / tintLum, dayMix);
-		}
-		// Contour mode: no world palette, but mine keys are still painted onto
-		// mines so they stay readable here instead of reading as a plain
-		// tinted shell.
-		if (dMine < 0.15) {
-			color = vec4(mineColor, pixelColor.a);
 		}
 	}
 	color.rgb *= nvgWhite;

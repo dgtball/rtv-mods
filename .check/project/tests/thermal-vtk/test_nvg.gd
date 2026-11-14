@@ -19,7 +19,7 @@ func _run() -> void:
 	t_mine_retry_is_bounded()
 	t_off_upkeep_clears_dead_mines()
 	t_esp_demand_gate()
-	t_mine_colour_and_keys_reach_material()
+	t_mine_colour_and_keys_absent_from_shader()
 	t_script_kind_cache()
 	print("")
 	if fails == 0:
@@ -71,10 +71,9 @@ func t_off_upkeep_clears_dead_mines() -> void:
 	ck(nvg._mines.is_empty(), "the early return keeps the next pass cheap")
 	nvg.free()
 
-# The substitution reads the frame itself, so there is no second pass to arm:
-# the layer switch plus the per-frame demand decide whether the shader samples
-# the screen, and either one going off must clear the uniform right away
-# instead of freezing on the last frame.
+# ESP demand/layer state remains tracked on the NVG module for now (Task 6
+# cleans the plumbing), but the shader no longer consumes an espOn key-detection
+# uniform.
 func t_esp_demand_gate() -> void:
 	var nvg = NVG.new()
 	root.add_child(nvg)
@@ -84,29 +83,25 @@ func t_esp_demand_gate() -> void:
 	rect.material = mat
 	nvg._nvg_mat_node = rect
 	nvg.set_esp_layer(true)
-	ck(mat.get_shader_parameter("espOn") == false, "layers armed without demand leave the substitution off")
-	ck(not nvg._esp_render_on(), "the render switch follows the demand")
+	ck(not nvg._esp_render_on(), "layers armed without demand leave render off")
 	nvg.set_esp_demand(true)
-	ck(nvg._esp_render_on(), "demand turns the substitution on")
-	ck(mat.get_shader_parameter("espOn") == true, "the overlay material sees the demand")
+	ck(nvg._esp_render_on(), "demand turns render on")
 	nvg.set_esp_demand(false)
-	ck(not nvg._esp_render_on(), "demand off stops the substitution")
-	ck(mat.get_shader_parameter("espOn") == false, "the overlay material is cleared on demand off")
+	ck(not nvg._esp_render_on(), "demand off stops render")
 	nvg.set_esp_layer(false)
+	ck(not nvg._esp_render_on(), "layer off keeps render off")
 	nvg._nvg_mat_node = null
 	rect.free()
 	nvg.free()
 
-# The mine display colour and the measured detector targets live on the overlay
-# material, and the overlay is rebuilt on every map load: a value set once must
-# survive that rebuild, which is why the setter stores it and _apply_uniforms
-# re-pushes it. Checked against a real ShaderMaterial so a renamed uniform
-# cannot pass silently.
-func t_mine_colour_and_keys_reach_material() -> void:
+# Mine/state ESP key substitution is no longer part of the NVG shader. The
+# module may retain storage/APIs until Task 6 cleans them up, but the overlay
+# shader must not expose the removed detector uniforms.
+func t_mine_colour_and_keys_absent_from_shader() -> void:
 	var nvg = NVG.new()
 	root.add_child(nvg)
 	nvg.set_mine_color(Color(0.2, 0.4, 0.9))
-	ck(nvg.mine_color() == Color(0.2, 0.4, 0.9), "mine colour is stored without a material")
+	ck(nvg.mine_color() == Color(0.2, 0.4, 0.9), "mine colour storage remains until Task 6 cleanup")
 	var rect := ColorRect.new()
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://mods/ThermalVTK/VTKNVG.gdshader")
@@ -114,11 +109,11 @@ func t_mine_colour_and_keys_reach_material() -> void:
 	nvg._nvg_mat_node = rect
 	nvg._installed = true
 	nvg._apply_uniforms()
-	ck(mat.get_shader_parameter("mineColor") == Color(0.2, 0.4, 0.9), "mine colour reaches the overlay material")
-	ck(mat.get_shader_parameter("stNormalKey") == NVG.DET_ST_NORMAL, "the washed normal key reaches the overlay material")
-	ck(mat.get_shader_parameter("stCombatKey") == NVG.DET_ST_COMBAT, "the washed combat key reaches the overlay material")
-	ck(mat.get_shader_parameter("stDefendKey") == NVG.DET_ST_DEFEND, "the washed defend key reaches the overlay material")
-	ck(mat.get_shader_parameter("mineKey") == NVG.DET_MINE, "the washed mine key reaches the overlay material")
+	var names := []
+	for p in mat.shader.get_shader_uniform_list():
+		names.append(p.get("name", ""))
+	for u in ["mineColor", "mineKey", "stNormalKey", "stCombatKey", "stDefendKey", "espOn", "espFill", "fillAlpha", "stateBright", "scopeRotate"]:
+		ck(not names.has(u), "NVG shader omits removed uniform %s" % u)
 	nvg._nvg_mat_node = null
 	rect.free()
 	nvg.free()
