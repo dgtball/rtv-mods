@@ -32,16 +32,18 @@ const SIZE := Vector2i(64, 36)
 var _vp: SubViewport = null
 var _cam: Camera3D = null
 # Auto mode: <= 0.0 is off (the rest state). While armed the probe measures on
-# its own cadence and emits `measured`; the first tick waits one interval.
+# its own cadence and emits `measured`; the first tick waits one interval, and a
+# cadence change restarts the countdown at the new value.
 var _auto_interval: float = 0.0
 var _auto_cd: float = 0.0
 # One measurement at a time (see the header).
 var _busy: bool = false
 
 func set_auto(interval: float) -> void:
+	if interval == _auto_interval:
+		return
 	_auto_interval = interval
-	if interval <= 0.0:
-		_auto_cd = 0.0
+	_auto_cd = interval if interval > 0.0 else 0.0
 
 func is_busy() -> bool:
 	return _busy

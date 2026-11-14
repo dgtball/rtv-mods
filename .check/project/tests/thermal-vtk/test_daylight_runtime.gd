@@ -60,7 +60,9 @@ func _run() -> void:
 	t_night_gate_is_vanilla()
 	t_sun_down_from_snapshot()
 	t_probe_measured_stores_frame()
+	t_probe_measured_adapts_cadence()
 	t_sync_probe_rests_at_night()
+	t_sync_probe_stays_off_without_thermal()
 	t_reset_returns_levers()
 	print("")
 	if fails == 0:
@@ -430,6 +432,43 @@ func t_sync_probe_rests_at_night() -> void:
 	nvg._sun_down = true
 	nvg._sync_probe()
 	ck(nvg._probe == null, "the probe stays off while the sun is down")
+	w["map"].free()
+
+func t_probe_measured_adapts_cadence() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	var sim: FakeSim = w["sim"]
+	_reset(nvg, env, sim, 1.0)
+	nvg.set_frame_cadence = 1.0
+	nvg._probe_interval = 1.0
+	nvg._frame_l_prev = 0.0
+	nvg._probe_stable = 0
+	nvg._on_probe_measured({"p50": 0.25})
+	ck(absf(nvg._frame_l - 0.25) < 0.001, "a measurement lands in _frame_l")
+	ck(absf(nvg._probe_interval - 1.0) < 0.001, "the first measurement arms the base cadence")
+	nvg._on_probe_measured({"p50": 0.25})
+	ck(absf(nvg._probe_interval - 2.0) < 0.001, "a stable frame doubles the cadence")
+	nvg._on_probe_measured({"p50": 0.25})
+	ck(absf(nvg._probe_interval - 2.0) < 0.001, "the cadence holds while the frame stays stable")
+	nvg._on_probe_measured({"p50": 0.26})
+	ck(absf(nvg._probe_interval - 1.0) < 0.001, "a real frame change re-arms the base cadence")
+	w["map"].free()
+
+func t_sync_probe_stays_off_without_thermal() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	var sim: FakeSim = w["sim"]
+	var data: FakeData = nvg._game_data
+	data.NVG = true
+	_reset(nvg, env, sim, 1.209)
+	nvg.set_thermal = false
+	nvg._sync_probe()
+	ck(nvg._probe == null, "the probe stays off while the thermal overlay is off")
+	nvg.set_thermal = true
+	nvg._sync_probe()
+	ck(nvg._probe != null, "the probe arms again once the thermal overlay is on")
 	w["map"].free()
 
 func t_snow_trim_ignores_indoor() -> void:

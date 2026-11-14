@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.7.7] - 2026-11-14
+
+### Changed
+
+- Auto day measurements now wait longer while the frame stays still, so a quiet
+  scene costs less GPU work.
+- Day measurements no longer run while the thermal overlay is off.
+
 ## [2.7.6] - 2026-11-14
 
 ### Changed

@@ -42,6 +42,14 @@ const RESPONSE := 1.5
 # Cadence of the frame probe that feeds the ceiling (the panel's `Probe
 # cadence` lever).
 const FRAME_CADENCE := 1.0
+# Adaptive auto-probe cadence (source B): while the measured frame level holds
+# still for PROBE_STABLE_FRAMES frames within PROBE_STABLE_TOL, the cadence
+# doubles up to PROBE_MAX_MULT x base -- a quiet scene needs no GPU sync per base
+# beat anymore -- and a frame change restarts the run at the base.
+const PROBE_GROWTH := 2.0
+const PROBE_MAX_MULT := 4.0
+const PROBE_STABLE_TOL := 0.005
+const PROBE_STABLE_FRAMES := 2
 
 # Weights of the source-A light terms. Unit for now: the fit against the
 # owner's PANEL measurements is a follow-up commit, so the instrument starts
@@ -173,6 +181,18 @@ static func step(current: float, target: float, delta: float, response: float = 
 		return target
 	var k := 1.0 - exp(-maxf(delta, 0.0) / response)
 	return lerpf(current, target, clampf(k, 0.0, 1.0))
+
+
+# The cadence for the next auto measurement of the frame probe. While the frame
+# run is still younger than PROBE_STABLE_FRAMES the base wins; afterwards the
+# interval doubles, capped at base x PROBE_MAX_MULT. Pure inputs, so the whole
+# adaptive decision lives in this module and stays headless-testable.
+static func adaptive_interval(base: float, stable: int, interval: float) -> float:
+	if base <= 0.0 or interval <= 0.0:
+		return 0.0
+	if stable < PROBE_STABLE_FRAMES:
+		return base
+	return minf(interval * PROBE_GROWTH, base * PROBE_MAX_MULT)
 
 # Mirror of the thermal branch in VTKNVG.gdshader: hiShoulder over the
 # unclamped raw luminance, the clamp, then the soft lift. The shader is the

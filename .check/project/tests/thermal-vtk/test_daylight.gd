@@ -29,6 +29,7 @@ func _run() -> void:
 	t_key_gain()
 	t_smoothing()
 	t_palette_input()
+	t_adaptive_interval()
 	t_clamps()
 	print("")
 	if fails == 0:
@@ -148,6 +149,14 @@ func t_smoothing() -> void:
 	ck(near(D.step(1.0, 0.33, 5.0, 0.0), 0.33), "zero response snaps")
 	ck(near(D.step(0.5, 0.5, 1.0), 0.5), "equal values stay put")
 	ck(near(D.step(0.5, 1.0, 100.0), 1.0, 0.001), "a long delta converges")
+
+func t_adaptive_interval() -> void:
+	ck(near(D.adaptive_interval(0.0, 2, 1.0), 0.0), "a zero base arms nothing")
+	ck(near(D.adaptive_interval(1.0, 1, 1.0), 1.0), "a young frame run stays on the base")
+	ck(near(D.adaptive_interval(1.0, 2, 1.0), 2.0), "a stable run doubles the cadence")
+	ck(near(D.adaptive_interval(1.0, 2, 2.0), 4.0), "the growth doubles up to the cap")
+	ck(near(D.adaptive_interval(1.0, 2, 4.0), 4.0), "the cadence never exceeds the cap")
+	ck(near(D.adaptive_interval(0.5, 2, 0.5), 1.0), "the cap scales with the base")
 
 func t_clamps() -> void:
 	ck(D.factor_for_light(1.0) >= D.FLOOR, "the factor never drops below the floor")

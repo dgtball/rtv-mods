@@ -144,6 +144,8 @@ func t_probe_auto_gate() -> void:
 	ck(probe._auto_interval == 0.0, "the probe rests with auto mode off")
 	probe.set_auto(1.0)
 	ck(probe._auto_interval == 1.0, "set_auto arms the interval")
+	probe.set_auto(2.0)
+	ck(probe._auto_interval == 2.0, "set_auto re-arms on a cadence change")
 	probe.set_auto(0.0)
 	ck(probe._auto_interval == 0.0, "set_auto(0) disarms auto mode")
 	probe.free()

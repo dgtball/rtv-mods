@@ -136,6 +136,9 @@ var _sun_down: bool = false
 var _ceiling: float = 1.0
 var _u: float = 0.0
 var _probe: Node = null
+var _probe_interval: float = Daylight.FRAME_CADENCE
+var _frame_l_prev: float = 0.0
+var _probe_stable: int = 0
 var _sim_cd: float = 0.0
 var _sim_season: int = 1
 var _sim_indoor: bool = false
@@ -556,20 +559,41 @@ func _ensure_probe() -> Node:
 func _on_probe_measured(stats: Dictionary) -> void:
 	if stats.is_empty():
 		return
-	_frame_l = float(stats.get("p50", 0.0))
+	var measured := float(stats.get("p50", 0.0))
+	_frame_l = measured
+	_adapt_probe(measured)
+
+
+# Adaptive auto-probe cadence (source B): while the measured frame level holds
+# still the interval doubles (a quiet scene no longer pays a GPU sync per base
+# beat), and a frame change restarts it at the base. The decision itself is pure
+# (Daylight.adaptive_interval); this keeps the stable-run state.
+func _adapt_probe(measured: float) -> void:
+	if _frame_l_prev <= 0.0 or absf(measured - _frame_l_prev) > Daylight.PROBE_STABLE_TOL:
+		# First measurement, or a frame that really moved: (re)start the run at
+		# the base cadence.
+		_probe_stable = 1
+		_probe_interval = set_frame_cadence
+	else:
+		_probe_stable += 1
+	if _probe_stable >= Daylight.PROBE_STABLE_FRAMES:
+		_probe_interval = Daylight.adaptive_interval(set_frame_cadence, _probe_stable, _probe_interval)
+		_probe_stable = 0
+	_frame_l_prev = measured
 
 
 # Arm the probe only while the ceiling can matter: at night the gate throws it
-# away, so measuring then is a pure waste of the GPU sync. The first morning
-# measurement arrives after Probe cadence; until then the ceiling is inert and
-# source A runs.
+# away, so measuring then is a pure waste of the GPU sync, and with the thermal
+# overlay off the compensation is not running, so the ceiling is inert too. The
+# first measurement after arming lands after one cadence; until then the
+# ceiling is inert and source A runs.
 func _sync_probe() -> void:
-	var want := set_daylight and not _sun_down and _installed and _nvg_active()
+	var want := set_daylight and set_thermal and not _sun_down and _installed and _nvg_active()
 	if not want:
 		if _probe != null and is_instance_valid(_probe):
 			_probe.set_auto(0.0)
 		return
-	_ensure_probe().set_auto(set_frame_cadence)
+	_ensure_probe().set_auto(_probe_interval)
 
 
 # The F9 panel's Measure button: one synchronous-request measurement of the
@@ -684,6 +708,9 @@ func _reset_daylight() -> void:
 	_light_est = 0.0
 	_factor_a = 1.0
 	_frame_l = 0.0
+	_probe_interval = Daylight.FRAME_CADENCE
+	_probe_stable = 0
+	_frame_l_prev = 0.0
 	_sun_down = false
 	_ceiling = 1.0
 	_u = 0.0
