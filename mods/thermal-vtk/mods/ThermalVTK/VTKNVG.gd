@@ -79,6 +79,8 @@ var set_day_floor: float = Daylight.FLOOR
 var set_day_trim: float = Daylight.DAY_TRIM
 var set_frame_level: float = Daylight.DAY_LEVEL
 var set_frame_cadence: float = Daylight.FRAME_CADENCE
+# Time acceleration of the day/night cycle (F9 "Time scale" lever; testing).
+var set_time_scale: float = 1.0
 # Brightness of the state key the ESP outlines emit; the overlay uses it to
 # scale the substituted state colour.
 var set_state_brightness: float = 0.6
@@ -541,6 +543,16 @@ func _target_factor() -> float:
 	return Daylight.strength_factor(Daylight.night_gate(raw, _sun_down), set_strength)
 
 
+# Time acceleration of the day/night cycle (F9 "Time scale" lever). The lever
+# writes Engine.time_scale directly; the compensation path owns when it is live,
+# and when it is not the world runs at normal speed again.
+func _apply_time_scale() -> void:
+	if not set_daylight or not _installed or not _nvg_active():
+		Engine.time_scale = 1.0
+		return
+	Engine.time_scale = clampf(set_time_scale, 1.0, 10.0)
+
+
 # Lazily create the frame probe and wire its signal. The probe is a child of
 # this node (which the ThermalVTK autoload parents under its own tree), so it
 # survives a map change along with the rest of the mod.
@@ -609,6 +621,7 @@ func measure_frame() -> Dictionary:
 # _physics_process and re-applies the device power on its own cadence; _process
 # runs after physics, so this value is the one the frame is rendered with.
 func _daylight_tick(delta: float) -> void:
+	_apply_time_scale()
 	if not set_daylight or not _installed:
 		return
 	var env := _environment()
@@ -684,6 +697,7 @@ func _push_daylight_trims(mix: float) -> void:
 # Deactivate has already restored the exposure, and writing here would
 # fight it.
 func refresh_daylight_now() -> void:
+	_apply_time_scale()
 	if not set_daylight or not _installed or not _nvg_active():
 		return
 	var env := _environment()
@@ -725,6 +739,7 @@ func _reset_daylight() -> void:
 	set_day_trim = Daylight.DAY_TRIM
 	set_frame_level = Daylight.DAY_LEVEL
 	set_frame_cadence = Daylight.FRAME_CADENCE
+	set_time_scale = 1.0
 	_set_key_gain(1.0)
 	_push_day_mix()
 	_dirty = true

@@ -63,6 +63,9 @@ func _run() -> void:
 	t_probe_measured_adapts_cadence()
 	t_sync_probe_rests_at_night()
 	t_sync_probe_stays_off_without_thermal()
+	t_time_scale_applies_while_live()
+	t_time_scale_clamps_to_the_range()
+	t_time_scale_resets_when_not_live()
 	t_reset_returns_levers()
 	print("")
 	if fails == 0:
@@ -469,6 +472,51 @@ func t_sync_probe_stays_off_without_thermal() -> void:
 	nvg.set_thermal = true
 	nvg._sync_probe()
 	ck(nvg._probe != null, "the probe arms again once the thermal overlay is on")
+	w["map"].free()
+
+func t_time_scale_applies_while_live() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	var sim: FakeSim = w["sim"]
+	var data: FakeData = nvg._game_data
+	data.NVG = true
+	_reset(nvg, env, sim, 1.0)
+	nvg.set_time_scale = 2.5
+	nvg._daylight_tick(1.0)
+	ck(Engine.time_scale == 2.5, "the time scale lever writes Engine.time_scale while live")
+	w["map"].free()
+
+func t_time_scale_clamps_to_the_range() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	var sim: FakeSim = w["sim"]
+	var data: FakeData = nvg._game_data
+	data.NVG = true
+	_reset(nvg, env, sim, 1.0)
+	nvg.set_time_scale = 20.0
+	nvg._daylight_tick(1.0)
+	ck(Engine.time_scale == 10.0, "the time scale clamps to the top of the range")
+	nvg.set_time_scale = 0.5
+	nvg._daylight_tick(1.0)
+	ck(Engine.time_scale == 1.0, "the time scale clamps to the bottom of the range")
+	w["map"].free()
+
+func t_time_scale_resets_when_not_live() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	var sim: FakeSim = w["sim"]
+	var data: FakeData = nvg._game_data
+	data.NVG = true
+	_reset(nvg, env, sim, 1.0)
+	nvg.set_time_scale = 4.0
+	nvg._daylight_tick(1.0)
+	ck(Engine.time_scale == 4.0, "the time scale lever writes while the compensation is live")
+	nvg.set_daylight = false
+	nvg._daylight_tick(1.0)
+	ck(Engine.time_scale == 1.0, "the time scale resets when the compensation is off")
 	w["map"].free()
 
 func t_snow_trim_ignores_indoor() -> void:
