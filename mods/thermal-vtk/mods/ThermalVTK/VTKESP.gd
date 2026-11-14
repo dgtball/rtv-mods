@@ -146,12 +146,9 @@ func set_layers(contour: bool, xray: bool) -> void:
 func _any_layer() -> bool:
 	return contour_layer or xray_layer
 
-# Demand gate. The NVG substitution is what the old second world pass used to
-# pay for; the shells themselves are only built for ids the collection pass
-# kept (`_want`), so the demand here is "is there anything wanted right now".
-# The gate never touches `_want` or the shells: only clear_not_in frees a
-# shell, so a closed gate must not read as "nothing wanted" or the outline
-# would rebuild every frame.
+# Demand gate helper: reports whether any outline or live reveal is currently
+# wanted. Kept for test/introspection use after the NVG key-substitution path
+# was removed; it never mutates state.
 func wants_contour() -> bool:
 	return _any_layer() and not _want.is_empty()
 

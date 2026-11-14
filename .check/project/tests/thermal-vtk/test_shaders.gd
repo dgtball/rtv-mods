@@ -1,8 +1,6 @@
 extends SceneTree
 
 const Sh = preload("res://mods/ThermalVTK/VTKShaders.gd")
-const S = preload("res://mods/ThermalVTK/VTKStates.gd")
-const NVG = preload("res://mods/ThermalVTK/VTKNVG.gd")
 const NVG_SHADER_RES := "res://mods/ThermalVTK/VTKNVG.gdshader"
 const BODY_RES := "res://mods/ThermalVTK/VTKEspBody.gdshader"
 const BODY_XRAY_RES := "res://mods/ThermalVTK/VTKEspBodyXray.gdshader"
