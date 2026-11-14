@@ -225,21 +225,51 @@ func _sim_line(sim: Dictionary) -> String:
 	var t: float = float(sim.get("time", -1.0))
 	var day: int = int(sim.get("day", -1))
 	var season: int = int(sim.get("season", -1))
-	var season_name := "summer" if season == 1 else ("winter" if season == 2 else str(season))
 	var time_txt := "-"
 	if t >= 0.0:
-		var hh := int(floorf(t / 100.0))
-		var mm := int(floorf(fmod(floorf(t), 100.0)))
-		time_txt = "%02d:%02d" % [hh, mm]
-	var line := "time %s day %s season %s(%d)" % [time_txt, str(day) if day >= 0 else "-", season_name, season]
-	var weather: Dictionary = sim.get("weather", {})
-	if not weather.is_empty():
-		var parts: Array[String] = []
-		for k in weather.keys():
-			parts.append("%s=%s" % [str(k), str(weather[k])])
-		parts.sort()
-		line += " | weather " + " ".join(parts)
+		time_txt = _fmt_time(t, true)
+	var line := "time %s day %s season %s" % [time_txt, str(day) if day >= 0 else "-", _fmt_season(season)]
+	var wtxt := _fmt_weather(sim.get("weather", {}))
+	if wtxt != "":
+		line += " | " + wtxt
 	return line
+
+
+func _fmt_time(t: float, include_raw: bool) -> String:
+	var hhmm := int(floorf(t))
+	var raw_hh := hhmm / 100
+	var raw_mm := hhmm % 100
+	var total := raw_hh * 60 + raw_mm
+	@warning_ignore("integer_division")
+	var nh := (int(total / 60)) % 24
+	var nm := total % 60
+	var txt := "%02d:%02d" % [nh, nm]
+	if include_raw and raw_mm >= 60:
+		txt += " (raw=%s)" % str(t)
+	return txt
+
+
+func _fmt_season(season: int) -> String:
+	if season == 1:
+		return "summer(1)"
+	if season == 2:
+		return "winter(2)"
+	return str(season)
+
+
+func _fmt_weather(weather: Dictionary) -> String:
+	if weather.is_empty():
+		return ""
+	var parts: Array[String] = []
+	var state = weather.get("weather", null)
+	for k in weather.keys():
+		if str(k) == "weather":
+			continue
+		parts.append("%s=%s" % [str(k), str(weather[k])])
+	parts.sort()
+	if state != null:
+		parts.insert(0, "state=%s" % str(state))
+	return "weather " + " ".join(parts)
 
 # The live tonemap exposure the frame is rendered with, or -1 when the
 # environment is not resolved (main menu, map change).
@@ -301,16 +331,11 @@ func _panel_line(stats: Dictionary) -> String:
 	var t: float = float(sim.get("time", -1.0))
 	var day_n: int = int(sim.get("day", -1))
 	var season: int = int(sim.get("season", -1))
-	var hh := int(floorf(maxf(t, 0.0) / 100.0))
-	var mm := int(floorf(fmod(floorf(maxf(t, 0.0)), 100.0)))
-	var weather: Dictionary = sim.get("weather", {})
-	var wparts: Array[String] = []
-	for k in weather.keys():
-		wparts.append("%s=%s" % [str(k), str(weather[k])])
-	wparts.sort()
-	var wtxt := (" weather=%s" % " ".join(wparts)) if not wparts.is_empty() else ""
-	return "t=%02d:%02d day=%d season=%d%s E=%.3f sunDown=%d indoor=%d shelter=%d u=%.3f ceiling=%.2f factor=%.2f measured=%.3f mix=%.2f snowTrim=%.2f dayTrim=%.2f exp=%.2f helmet=%d thermal=%d | Esky=%.3f Eamb=%.3f Esun=%.3f Emoon=%.3f Efog=%.3f | raw p05=%.3f p25=%.3f p50=%.3f p75=%.3f p95=%.3f mean=%.3f black=%.3f cream=%.3f n=%d | pal p05=%.3f p50=%.3f p95=%.3f" % [
-		hh, mm, day_n, season, wtxt,
+	var ttxt := _fmt_time(maxf(t, 0.0), true) if t >= 0.0 else "--:--"
+	var wtxt := _fmt_weather(sim.get("weather", {}))
+	var wfield := (" " + wtxt) if wtxt != "" else ""
+	return "t=%s raw=%s day=%d season=%s%s E=%.3f sunDown=%d indoor=%d shelter=%d u=%.3f ceiling=%.2f factor=%.2f measured=%.3f mix=%.2f snowTrim=%.2f dayTrim=%.2f exp=%.2f helmet=%d thermal=%d | Esky=%.3f Eamb=%.3f Esun=%.3f Emoon=%.3f Efog=%.3f | raw p05=%.3f p25=%.3f p50=%.3f p75=%.3f p95=%.3f mean=%.3f black=%.3f cream=%.3f n=%d | pal p05=%.3f p50=%.3f p95=%.3f" % [
+		ttxt, str(t), day_n, _fmt_season(season), wfield,
 		float(_nvg.get("_light_est")),
 		1 if bool(_nvg.get("_sun_down")) else 0,
 		1 if bool(_nvg.get("_sim_indoor")) else 0,

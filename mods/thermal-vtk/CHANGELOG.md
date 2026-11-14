@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.7.12] - 2026-11-14
+
+### Changed
+
+- Live panel and debug log measurements now show normalized time with the raw value, season names, and clearer weather details.
+
 ## [2.7.11] - 2026-11-14
 
 ### Changed
