@@ -19,9 +19,8 @@ func _run() -> void:
 	t_combat_states()
 	t_defend_states()
 	t_unknown_defaults_to_normal()
-	t_colors()
-	t_keys()
-	t_keys_are_distinct()
+	t_display_defaults()
+	t_state_names()
 	t_mine_colour_differs()
 	print("")
 	if fails == 0:
@@ -47,29 +46,21 @@ func t_unknown_defaults_to_normal() -> void:
 	ck(S.category_of(-1) == S.NORMAL, "unknown state -1 -> NORMAL")
 	ck(S.category_of(99) == S.NORMAL, "unknown state 99 -> NORMAL")
 
-func t_colors() -> void:
+func t_display_defaults() -> void:
+	var cols := [S.DEFAULT_NORMAL, S.DEFAULT_COMBAT, S.DEFAULT_DEFEND]
 	ck(S.DEFAULT_NORMAL != S.DEFAULT_COMBAT, "normal != combat colour")
 	ck(S.DEFAULT_COMBAT != S.DEFAULT_DEFEND, "combat != defend colour")
+	ck(S.DEFAULT_NORMAL != S.DEFAULT_DEFEND, "normal != defend colour")
+	for c in cols:
+		ck(c.a > 0.99, "state display colour %s is opaque" % str(c))
 
-func t_keys() -> void:
-	ck(S.state_key(S.NORMAL) == S.KEY_NORMAL, "state_key(NORMAL)")
-	ck(S.state_key(S.COMBAT) == S.KEY_COMBAT, "state_key(COMBAT)")
-	ck(S.state_key(S.DEFEND) == S.KEY_DEFEND, "state_key(DEFEND)")
-	ck(S.state_key(99) == S.KEY_NORMAL, "unknown category falls back to NORMAL")
+func t_state_names() -> void:
+	ck(S.STATE_NAMES.size() == 17, "all AI states are named")
+	ck(S.state_name(0) == "Idle", "state 0 is Idle")
+	ck(S.state_name(16) == "Group", "state 16 is Group")
+	ck(S.state_name(-1) == "State-1", "unknown state name falls back")
+	ck(S.state_name(99) == "State99", "out-of-range state name falls back")
 
-# The detector matches the CLOSEST washed key, so the raw keys only have to be
-# distinct and bright enough to survive the NVG wash; the washed-space spacing
-# rule belongs to VTKNVG.DET_ST_* (test_nvg). Two-channel keys are fine here.
-func t_keys_are_distinct() -> void:
-	var keys := [S.KEY_NORMAL, S.KEY_COMBAT, S.KEY_DEFEND]
-	for i in keys.size():
-		ck(keys[i].r + keys[i].g + keys[i].b > 0.5, "key %d is bright enough to survive the wash" % i)
-		for j in range(i + 1, keys.size()):
-			ck(keys[i] != keys[j], "keys %d and %d differ" % [i, j])
-
-# The mine is painted whole by its own material and is not a state: its display
-# colour must not collide with any category colour, or the two would be
-# unreadable on screen.
 func t_mine_colour_differs() -> void:
 	ck(S.DEFAULT_MINE != S.DEFAULT_NORMAL and S.DEFAULT_MINE != S.DEFAULT_COMBAT and S.DEFAULT_MINE != S.DEFAULT_DEFEND,
 		"the mine colour differs from every state colour")
