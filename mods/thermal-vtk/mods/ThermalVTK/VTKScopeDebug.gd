@@ -22,7 +22,6 @@ static func scope_snapshot(gd: Resource, players: Array, esp: Node, weapon) -> v
 	if cam == null:
 		Dbg.log("SCOPE", "snapshot scoped=%s pip=%s no active camera" % [str(scoped), str(pip)])
 		return
-	var fwd: Vector3 = -cam.global_transform.basis.z
 	Dbg.log("SCOPE", "snapshot scoped=%s pip=%s fov=%.1f" % [str(scoped), str(pip), cam.fov])
 	_snapshot_raywalk(cam, players)
 	_snapshot_entries(esp)

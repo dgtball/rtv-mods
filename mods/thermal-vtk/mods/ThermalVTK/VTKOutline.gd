@@ -21,7 +21,6 @@ const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 const NO_CONTOUR_META := "vtk_no_contour"
 
 var _items: Dictionary = {}
-var _recols: int = 0
 const SCOPE_RIM := 6.0
 var _scoped: bool = false
 var _clear_pool: Array = []
@@ -29,21 +28,6 @@ var _fill_log: Dictionary = {}
 
 func has(id: int) -> bool:
 	return _items.has(id)
-
-func shell_count() -> int:
-	var n: int = 0
-	for id in _items:
-		var e: Dictionary = _items[id]
-		for m in e.get("meshes", []):
-			var mi := m as MeshInstance3D
-			if mi != null and is_instance_valid(mi) and mi.material_overlay != null:
-				n += 1
-	return n
-
-func take_recols() -> int:
-	var n: int = _recols
-	_recols = 0
-	return n
 
 func _collect(node: Node, out: Array) -> void:
 	if node.has_meta(NO_CONTOUR_META):
@@ -111,17 +95,20 @@ func _material_for(xray: bool, fill: bool) -> Material:
 		return body
 	return _build_ring()
 
-func _set_material(id: int, mat: Material) -> void:
-	var entry: Dictionary = _items[id]
+func _set_material(entry: Dictionary, mat: Material) -> void:
 	entry["mat"] = mat
 	entry["ring"] = _ring_of(mat)
 	entry["p_key"] = null
 	entry["p_grow"] = null
 	entry["p_rim"] = null
 	entry["p_cool"] = null
-	for m in entry.get("meshes", []):
+	_apply_to(entry.get("meshes", []), mat)
+
+# The one overlay write. A null material takes the contour off the mesh.
+func _apply_to(meshes: Array, mat: Material) -> void:
+	for m in meshes:
 		var mi := m as MeshInstance3D
-		if mi != null:
+		if mi != null and is_instance_valid(mi):
 			mi.material_overlay = mat
 
 func apply(id: int, node: Node, opts: Dictionary) -> void:
@@ -143,10 +130,7 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 			"p_rim": null,
 			"p_cool": null,
 		}
-	for m in meshes:
-		var mi := m as MeshInstance3D
-		if mi != null:
-			mi.material_overlay = mat
+	_apply_to(meshes, mat)
 	# Seed the uniforms in the same frame: the first draw of a fresh bot must
 	# already carry its category, not the shader default.
 	refresh(id, opts)
@@ -163,7 +147,7 @@ func refresh(id: int, opts: Dictionary) -> void:
 	if bool(entry.get("xray", false)) != xray or bool(entry.get("fill_mode", false)) != fill:
 		entry["xray"] = xray
 		entry["fill_mode"] = fill
-		_set_material(id, _material_for(xray, fill))
+		_set_material(entry, _material_for(xray, fill))
 	var color: Color = opts.get("key", States.state_key(int(opts.get("cat", States.NORMAL))))
 	var grow: float = float(opts.get("grow", 0.006))
 	var cool: float = float(opts.get("cool", 0.0))
@@ -201,26 +185,8 @@ func refresh(id: int, opts: Dictionary) -> void:
 		ring_mat.set_shader_parameter("cool", cool)
 		entry["p_cool"] = cool
 
-func set_entry_xray(id: int, on: bool) -> void:
-	var entry: Dictionary = _items.get(id)
-	if entry == null:
-		return
-	if bool(entry.get("xray", false)) == on:
-		return
-	entry["xray"] = on
-	_set_material(id, _material_for(on, bool(entry.get("fill_mode", false))))
-
 func set_scoped(on: bool) -> void:
 	_scoped = on
-
-func set_entry_fill(id: int, on: bool) -> void:
-	var entry: Dictionary = _items.get(id)
-	if entry == null:
-		return
-	if bool(entry.get("fill_mode", false)) == on:
-		return
-	entry["fill_mode"] = on
-	_set_material(id, _material_for(bool(entry.get("xray", false)), on))
 
 func _recollect(id: int, entry: Dictionary) -> void:
 	var node: Node = entry.get("node")
@@ -235,30 +201,18 @@ func _recollect(id: int, entry: Dictionary) -> void:
 	if _same_meshes(entry.get("meshes", []), fresh):
 		return
 	entry["meshes"] = fresh
-	_recols += 1
-	var mat: Material = entry.get("mat")
-	for m in fresh:
-		var mi := m as MeshInstance3D
-		if mi != null:
-			mi.material_overlay = mat
-
-func _free_pairs(id: int) -> void:
-	var entry: Dictionary = _items[id]
-	for m in entry.get("meshes", []):
-		var mi := m as MeshInstance3D
-		if mi != null and is_instance_valid(mi):
-			mi.material_overlay = null
+	_apply_to(fresh, entry.get("mat"))
 
 func clear(id: int) -> void:
-	var entry: Dictionary = _items[id]
+	var entry: Dictionary = _items.get(id)
 	if entry == null:
 		return
-	_free_pairs(id)
+	_apply_to(entry.get("meshes", []), null)
 	_items.erase(id)
 
+# Same pool dance as clear_not_in: erasing while iterating _items skips entries.
 func clear_all() -> void:
-	for id in _items:
-		clear(id)
+	clear_not_in({})
 
 func clear_not_in(keep: Dictionary) -> void:
 	_clear_pool.clear()

@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.7.4] - 2026-11-14
+
+### Fixed
+- Mines that appear after the map has loaded are now highlighted instead of
+  being ignored until the next map change.
+- A highlighted NPC despawning no longer causes an error.
+
+### Changed
+- Minor performance improvements.
+
 ## [2.7.3] - 2026-11-14
 
 ### Added

@@ -65,7 +65,7 @@ func tick() -> void:
 		_resweep_cd -= 1
 		if _resweep_cd <= 0:
 			_resweep_cd = RESWEEP_FRAMES
-			_resweep(_mgr)
+			_patch_rig(_mgr)
 		return
 	if scene.name != "Menu":
 		_setup()
@@ -92,14 +92,10 @@ func _setup() -> void:
 func _on_child_added(node: Node) -> void:
 	_patch_rig.call_deferred(node)
 
+# Walk one rig. Called on every camera-manager child add, and periodically as a
+# meta-guarded re-walk that patches exactly what the first pass missed (a mesh
+# that landed without an add signal, or while the feature was detached).
 func _patch_rig(rig: Node) -> void:
-	if rig == null or not is_instance_valid(rig):
-		return
-	_patch_node(rig, null)
-
-# Periodic meta-guarded re-walk: patches exactly what the first pass missed
-# (a mesh that landed without an add signal, or while the feature detached).
-func _resweep(rig: Node) -> void:
 	if rig == null or not is_instance_valid(rig):
 		return
 	_patch_node(rig, null)
@@ -126,17 +122,8 @@ func _patch_mesh(mesh: MeshInstance3D, att_node: Node) -> void:
 		_dbg_layer_skip += 1
 		mesh.set_meta("VTK_OCC", true)
 		return
-	var hops := 0
-	var n: Node = mesh
-	var trail := ""
-	while n != null and hops < 16:
-		var mark: String = "E" if (att_node != null and n == att_node) or n.name == "Attachments" else ""
-		if Dbg.enabled:
-			trail += ("|" if hops > 0 else "") + str(n.name) + mark
-		n = n.get_parent()
-		hops += 1
 	if Dbg.enabled:
-		Dbg.log("WEAPON", "patch %s chain=%s" % [mesh.name, trail])
+		Dbg.log("WEAPON", "patch %s chain=%s" % [mesh.name, _chain(mesh, att_node)])
 	mesh.set_meta("VTK_OCC", true)
 	if _under_attachments(mesh, att_node):
 		_patch_mask_depth(mesh)
@@ -164,22 +151,29 @@ func _patch_mesh(mesh: MeshInstance3D, att_node: Node) -> void:
 			mesh.set_surface_override_material(i, new_mat)
 	_dbg_patched += count
 
-func _skip(mesh: MeshInstance3D, mat: Material, att_node: Node = null) -> bool:
+# Which part of the rig the mesh sits in. 0 = plain weapon, 1 = attachments
+# assembly, 2 = under a PIP display quad. One walk serves both the patch skip and
+# the attachment depth swap, so the two rules cannot drift apart.
+#
+# The PIP display quads are NODES named PIP; script members must not count - the
+# optic assemblies carry Optic.gd, whose signal is also called PIP, and that used
+# to gloss the whole Attachments subtree.
+func _ancestry(mesh: Node, att_node: Node) -> int:
 	var node: Node = mesh
+	var att := false
 	while node != null:
-		# The PIP display quads are NODES named PIP; script members must not
-		# count - the optic assemblies carry Optic.gd, whose signal is also
-		# called PIP, and that used to gloss the whole Attachments subtree.
 		if node.name == "PIP":
-			return true
-		if att_node != null and node == att_node:
-			return true
-		# Sights and lasers keep their vanilla materials: their alpha masks
-		# shape the scope picture, and patching them paints an opaque disc
-		# over it.
-		if node.name == "Attachments":
-			return true
+			return 2
+		if (att_node != null and node == att_node) or node.name == "Attachments":
+			att = true
 		node = node.get_parent()
+	return 1 if att else 0
+
+# Sights and lasers keep their vanilla materials: their alpha masks shape the
+# scope picture, and patching them paints an opaque disc over it.
+func _skip(mesh: MeshInstance3D, mat: Material, att_node: Node = null) -> bool:
+	if _ancestry(mesh, att_node) != 0:
+		return true
 	if mat is ShaderMaterial:
 		var sm: ShaderMaterial = mat as ShaderMaterial
 		if sm.shader != null:
@@ -192,21 +186,21 @@ func _skip(mesh: MeshInstance3D, mat: Material, att_node: Node = null) -> bool:
 # script exports as `attachments`, or (as a fallback) one literally named
 # "Attachments" - without a display quad named PIP above it: a PIP display
 # quad inside an assembly must not get the depth swap, the plain skip keeps
-# it untouched. Only the node NAME may match: script members (variables,
-# signals, methods) read false - the optic assemblies carry Optic.gd whose
-# signal is also called PIP.
+# it untouched.
 func _under_attachments(mesh: MeshInstance3D, att_node: Node) -> bool:
-	var node: Node = mesh
-	var att := false
-	while node != null:
-		if node.name == "PIP":
-			return false
-		if att_node != null and node == att_node:
-			att = true
-		if node.name == "Attachments":
-			att = true
-		node = node.get_parent()
-	return att
+	return _ancestry(mesh, att_node) == 1
+
+# Debug only: the node chain from the mesh up, marking the attachments assembly.
+func _chain(mesh: Node, att_node: Node) -> String:
+	var trail := ""
+	var n: Node = mesh
+	var hops := 0
+	while n != null and hops < 16:
+		var mark: String = "E" if (att_node != null and n == att_node) or n.name == "Attachments" else ""
+		trail += ("|" if hops > 0 else "") + str(n.name) + mark
+		n = n.get_parent()
+		hops += 1
+	return trail
 
 # Scope mode drives the one attachment swap: the Mask is the depth barrier
 # above the lens. Without PIP the main camera is the picture, so the Mask must

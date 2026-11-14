@@ -32,10 +32,6 @@ const NVG_SCRIPT_SUFFIX := "NVG.gd"
 const SHADER_RES := "res://mods/ThermalVTK/VTKNVG.gdshader"
 const KEY_GAIN_PARAM := &"vtk_key_gain"
 
-# Сколько кадров подряд пробовать поставить шейдер, если NVG-узел уже найден,
-# но его Overlay ещё не готов (ванильный _ready ждёт ~0.1 c). ~60 кадров.
-const INSTALL_RETRY_FRAMES := 60
-
 const TICK := 0.1
 
 # Detector key for mines. Fixed by design and kept in lockstep with the
@@ -100,7 +96,6 @@ var _shader: Shader = null
 var _nvg_root: Node = null
 var _nvg_mat_node: Node = null
 var _installed: bool = false
-var _install_retry: int = 0
 
 var _mat_mine: StandardMaterial3D = null
 # `_esp_on` is the layer switch (armed by ThermalVTK._apply_mode through
@@ -208,8 +203,6 @@ func _scan_node(n: Node) -> void:
 	if kind == 1 and (_nvg_root == null or not is_instance_valid(_nvg_root)):
 		_nvg_root = n
 		_try_install_shader()
-		if not _installed:
-			_install_retry = INSTALL_RETRY_FRAMES
 	elif kind == 2:
 		_register_mine(n)
 	for c in n.get_children():
@@ -262,12 +255,16 @@ func _deferred_check(node_id: int) -> void:
 	if kind == 1:
 		_nvg_root = n
 		_try_install_shader()
-		if not _installed:
-			_install_retry = INSTALL_RETRY_FRAMES
 		return
 	if kind == 2:
 		_register_mine(n)
 		return
+	# Ванильный NVG._ready асинхронный: Overlay и его ColorRect добавляются
+	# после самого узла NVG и приходят тем же node_added. Любой новый узел под
+	# найденным NVG-корнем — это и есть момент добрать установку; кадрового
+	# бюджета больше нет.
+	if not _installed and _nvg_root != null and is_instance_valid(_nvg_root) and _nvg_root.is_ancestor_of(n):
+		_try_install_shader()
 
 
 # The shader lives on a ColorRect under the NVG node's "Overlay" child. Vanilla
@@ -278,7 +275,8 @@ func _try_install_shader() -> void:
 	# /root/Map пересобирается на каждой смене карты: пропатченный NVG-узел
 	# освобождается, а на его месте появляется новый с ванильным шейдером.
 	# Ловим это событием (node_added / _reseed), а не проверкой каждого кадра;
-	# если Overlay ещё не готов (await-based _ready) — ограниченный ретрай.
+	# если Overlay ещё не готов (await-based _ready), добор придёт следующим
+	# node_added под NVG-корнем (см. _deferred_check).
 	if _shader == null:
 		_installed = false
 		return
@@ -362,20 +360,6 @@ func set_mine_color(c: Color) -> void:
 func mine_color() -> Color:
 	return _mine_color
 
-# Sample count for the overlay passes. The contour now draws through the main
-# 3D pass (VTKOutline), so MSAA lives on the owning viewport instead of a
-# dedicated mask SubViewport; the dial writes it straight through.
-var _msaa: int = Viewport.MSAA_DISABLED
-
-func set_msaa(msaa: int) -> void:
-	_msaa = msaa
-	var vp := get_viewport()
-	if vp != null:
-		vp.msaa_3d = msaa
-
-func msaa() -> int:
-	return _msaa
-
 # The contour asks for the screen through ThermalVTK._apply_mode: this arms the
 # layer switch. The per-frame demand below decides whether the substitution runs.
 func set_esp_layer(on: bool) -> void:
@@ -418,6 +402,7 @@ func nvg_active() -> bool:
 
 
 func _process(delta: float) -> void:
+	_drain_pending()
 	if get_tree().current_scene != _scene_ref:
 		_scene_ref = get_tree().current_scene
 		_mines.clear()
@@ -425,18 +410,9 @@ func _process(delta: float) -> void:
 		_script_kind.clear()
 		_nvg_root = null
 		_installed = false
-		_install_retry = 0
 		_reseed(_scene_ref)
 		_tick_cd = 0.0
 		_reset_daylight()
-	# Ограниченный ретрай: NVG-узел найден, но ванильный await-based _ready ещё
-	# не создал Overlay/материал. Ставим шейдер только по событию обнаружения,
-	# с коротким добором кадров, а не проверкой каждый кадр.
-	if _install_retry > 0:
-		_install_retry -= 1
-		_try_install_shader()
-		if _installed:
-			_install_retry = 0
 	var worn := _nvg_active()
 	var on := set_thermal and worn
 	# PIP off + aiming a magnifying scope is the only path that rotates colour
@@ -972,11 +948,6 @@ func apply_config(rec) -> void:
 	set_state_colors(rec.state_colors())
 	set_mine_color(rec.color_mine)
 	_dirty = true
-	_tick_cd = 0.0
-
-
-func set_mines_enabled(on: bool) -> void:
-	set_mines = on
 	_tick_cd = 0.0
 
 

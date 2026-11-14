@@ -178,7 +178,6 @@ func t_esp_apply_maps_fields() -> void:
 	ck(esp.p_decay == 44.0, "ESP maps corpse_decay")
 	ck(esp.p_dist == 35.0, "ESP maps outline_distance")
 	ck(esp.p_thickness == 0.009, "ESP maps outline_thickness")
-	ck(esp.p_brightness == 1.5, "ESP maps outline_brightness")
 	ck(esp.p_rim == 4.0, "ESP maps outline_rim")
 	ck(esp.p_trig == false, "ESP maps the x-ray toggle")
 	ck(esp.p_fire_d == 90.0 and esp.p_fire_s == 4.0, "ESP maps the fire window")

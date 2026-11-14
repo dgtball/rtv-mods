@@ -56,7 +56,6 @@ const W_FOG := 1.0
 # Vostok Toolkit maps its four seasons onto the same field (VTKSeasonDriver.gd:56
 # writes 2 for winter and 1 for everything else), so ThermalVTK stays correct
 # with and without the toolkit installed.
-const SEASON_SUMMER := 1
 const SEASON_WINTER := 2
 
 # Luminance weights, copied from VTKNVG.gdshader's rawLuminance dot product.

@@ -61,18 +61,7 @@ const STATE_NAMES: Array[String] = [
 	"Switch", "Group",
 ]
 
-const CATEGORY_NAMES: Array[String] = ["NORMAL", "COMBAT", "DEFEND"]
-
 static func state_name(state: int) -> String:
 	if state < 0 or state >= STATE_NAMES.size():
 		return "State" + str(state)
 	return STATE_NAMES[state]
-
-static func category_name(cat: int) -> String:
-	if cat < 0 or cat >= CATEGORY_NAMES.size():
-		return CATEGORY_NAMES[NORMAL]
-	return CATEGORY_NAMES[cat]
-
-# Two-line debug label: raw state on top, the category below.
-static func label_text(state: int, _nomad: bool) -> String:
-	return "%s\n%s" % [state_name(state), category_name(category_of(state))]

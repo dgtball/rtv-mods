@@ -76,7 +76,7 @@ func setup(nvg: Node, owner: Node) -> void:
 	_source_btn.add_item("Game light")
 	_source_btn.add_item("Measured frame")
 	_source_btn.selected = int(_nvg.get("set_daylight_source"))
-	_source_btn.item_selected.connect(_on_source_selected)
+	_source_btn.item_selected.connect(_apply_live.bind("set_daylight_source"))
 	box.add_child(_source_btn)
 	_readout = Label.new()
 	_readout.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -95,7 +95,7 @@ func setup(nvg: Node, owner: Node) -> void:
 	box.add_child(row)
 	_add_button(row, "Measure", _on_measure)
 	_add_button(row, "Reset", _on_reset)
-	_add_button(row, "Close", _on_close)
+	_add_button(row, "Close", close)
 	_measure_label = Label.new()
 	_measure_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_measure_label)
@@ -121,7 +121,7 @@ func _add_slider(box: Control, caption: String, mn: float, mx: float, step: floa
 	s.value_changed.connect(func(val: float) -> void:
 		l.text = "%s: %.2f" % [caption, val]
 	)
-	s.value_changed.connect(_on_lever.bind(field))
+	s.value_changed.connect(_apply_live.bind(field))
 	_rows[field] = {"slider": s, "label": l, "name": caption}
 
 func _add_button(row: Control, text: String, cb: Callable) -> void:
@@ -135,26 +135,17 @@ func _lever(field: String) -> float:
 		return 0.0
 	return float(_nvg.get(field))
 
-# Every lever change runs the same sequence: write the field, refresh the
-# daylight state at once (refresh_daylight_now carries its own guards, so
-# this is a harmless recompute for the uniform levers), then force a uniform
-# push so the non-daylight levers land too.
-func _on_lever(_value: float, field: String) -> void:
+# Every live control runs the same sequence: write the field, refresh the
+# daylight state at once (refresh_daylight_now carries its own guards, so this
+# is a harmless recompute for the uniform levers), then force a uniform push so
+# the non-daylight levers land too. The source picker takes the same path, so
+# switching the source answers the choice immediately; the measured-frame source
+# needs no seeding -- its ceiling is inert until the first probe lands, and
+# until then source A runs.
+func _apply_live(value: Variant, field: String) -> void:
 	if _nvg == null or not is_instance_valid(_nvg):
 		return
-	_nvg.set(field, _value)
-	_nvg.refresh_daylight_now()
-	_nvg.set("_dirty", true)
-	_nvg._apply_uniforms()
-
-# The source picker: switching the source applies it at once
-# (refresh_daylight_now), so the picture answers the choice immediately. The
-# measured-frame source needs no seeding -- its ceiling is inert until the
-# first probe lands, and until then source A runs.
-func _on_source_selected(idx: int) -> void:
-	if _nvg == null or not is_instance_valid(_nvg):
-		return
-	_nvg.set("set_daylight_source", idx)
+	_nvg.set(field, value)
 	_nvg.refresh_daylight_now()
 	_nvg.set("_dirty", true)
 	_nvg._apply_uniforms()
@@ -264,9 +255,6 @@ func _sync_sliders() -> void:
 		var v: float = _lever(field)
 		s.set_value_no_signal(clampf(v, s.min_value, s.max_value))
 		l.text = "%s: %.2f" % [row["name"], v]
-
-func _on_close() -> void:
-	close()
 
 # One probe frame, percentiles of it, and the PANEL line into the debug log:
 # the whole calibration instrument in one button press. The probe lives on

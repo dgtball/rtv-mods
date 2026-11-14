@@ -98,7 +98,6 @@ class FakeESP extends Node:
 	var p_decay: float = 30.0
 	var p_dist: float = 60.0
 	var p_thickness: float = 0.006
-	var p_brightness: float = 0.6
 	var p_rim: float = 2.0
 	var p_trig: bool = true
 	var p_fire_s: float = 5.0
@@ -144,7 +143,6 @@ class FakeESP extends Node:
 		p_nade_s = rec.nade_s
 		p_nade_d = rec.nade_d
 		p_thickness = rec.outline_thickness
-		p_brightness = rec.outline_brightness
 		p_rim = rec.outline_rim
 
 class FakeNVG extends Node:
@@ -156,7 +154,6 @@ class FakeNVG extends Node:
 	var set_mines: bool = true
 	var palette_mode: int = 0
 	var thermal_on: bool = false
-	var mines_on: bool = false
 	func apply_config(rec: Variant) -> void:
 		set_nvg_noise = rec.nvg_noise
 		set_nvg_white = rec.nvg_white
@@ -168,8 +165,6 @@ class FakeNVG extends Node:
 		palette_mode = v
 	func set_thermal_enabled(v: bool) -> void:
 		thermal_on = v
-	func set_mines_enabled(v: bool) -> void:
-		mines_on = v
 	func set_state_colors(v: Dictionary) -> void:
 		pass
 	func set_esp_layer(_on: bool) -> void:
@@ -191,7 +186,7 @@ func t_apply_reads_active_profile() -> void:
 	profile.save(PROFILE_PATH)
 	mod._config_path = PROFILE_PATH
 	mod._mcm_apply(ConfigFile.new())
-	ck(esp.p_brightness == 1.23, "the value comes from the active profile")
+	ck(nvg.set_state_brightness == 1.23, "the brightness comes from the active profile")
 	ck(esp.p_rim == 3.5, "the rim comes from the active profile")
 	ck(esp.p_decay == 90.0, "a missing ESP setting falls back to the registered default")
 	ck(nvg.set_glow_distance == 60.0, "a missing NVG setting falls back to the registered default")

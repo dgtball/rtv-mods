@@ -28,7 +28,6 @@ func _run() -> void:
 	t_pick_nearest_reuses_out()
 	t_pain_hit()
 	t_is_silent()
-	t_in_frustum()
 	print("")
 	if fails == 0:
 		print("Tracker tests passed")
@@ -167,24 +166,3 @@ func t_is_silent() -> void:
 	ck(T.is_silent({"silent": true}) == true, "dictionary silent flag")
 	ck(T.is_silent({"silent": false}) == false, "dictionary loud flag")
 	ck(T.is_silent({}) == false, "dictionary without the key is not silent")
-
-# `Camera3D.get_frustum()` returns planes with OUTWARD normals: a point is
-# inside while every `distance_to` is <= 0. A wall of the box x/y/z = +-5 with
-# an outward normal is `Plane(axis, 5.0)`.
-func _box_planes() -> Array:
-	var planes: Array = []
-	for axis in [Vector3.RIGHT, Vector3.UP, Vector3.BACK]:
-		planes.append(Plane(axis, 5.0))
-		planes.append(Plane(-axis, 5.0))
-	return planes
-
-# The mask gate asks "is this ring anywhere near the frame" with a body-sized
-# margin. An empty plane list means there is no camera: the caller must fail
-# open rather than hide every ring.
-func t_in_frustum() -> void:
-	var planes: Array = _box_planes()
-	ck(T.in_frustum(planes, Vector3.ZERO, 0.0) == true, "the box centre is inside")
-	ck(T.in_frustum(planes, Vector3(0.0, 0.0, 5.5), 0.0) == false, "a point past the wall is outside")
-	ck(T.in_frustum(planes, Vector3(0.0, 0.0, 5.5), 1.0) == true, "the margin keeps a point just past the wall")
-	ck(T.in_frustum(planes, Vector3(0.0, 0.0, 6.0), 0.9) == false, "a margin smaller than the overshoot still rejects")
-	ck(T.in_frustum([], Vector3(999.0, 0.0, 0.0), 0.0) == true, "no planes (no camera) keeps the gate open")

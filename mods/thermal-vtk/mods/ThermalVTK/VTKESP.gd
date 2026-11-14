@@ -24,9 +24,6 @@ const LOS_EVERY := 6
 # A stationary bot can flicker between combat and cover states. The colour
 # only follows a category that held for this long.
 const CAT_HOLD := 0.35
-# Movement speeds above this threshold reveal the bot at the far (sprint)
-# distance instead of the walking one (the ITH walk/run/sprint idea).
-const RUN_SPEED := 2.0
 const SPRINT_SPEED := 4.0
 # Trigger diagnostics: at most one line per entry per source per second. A
 # walking bot re-tags its window twice a second and a bot under sustained fire
@@ -51,7 +48,6 @@ var p_decay := 30.0
 var p_dist := 60.0
 var p_nomad_marker: bool = true
 var p_body_fill: bool = false
-var p_fill_grow: float = 0.004
 # NPC nametags: their own switch under Diagnostics, so the diagnostic overlay
 # can stay on without the log and without the NVG helmet.
 var p_npc_labels: bool = true
@@ -78,7 +74,6 @@ var p_pain_d := 15.0
 var p_nade_s := 6.0
 var p_nade_d := 60.0
 var p_thickness := 0.006
-var p_brightness := 0.6
 var p_rim := 2.0
 
 var _entries: Dictionary = {}
@@ -111,7 +106,6 @@ var _hook_wait_cd: float = 0.0
 var _hp_live := false
 var _overlay_layer: CanvasLayer = null
 var _overlay: Control = null
-var _gd_cache: Resource = null
 # Debug key calibration: when it is on, every NPC is painted with the
 # candidate key so its post-NVG colour can be measured with the probe.
 var p_cal_active: bool = false
@@ -201,7 +195,6 @@ func apply_config(rec) -> void:
 	p_nade_s = rec.nade_s
 	p_nade_d = rec.nade_d
 	p_thickness = rec.outline_thickness
-	p_brightness = rec.outline_brightness
 	p_rim = rec.outline_rim
 
 # Debug key calibration. The candidate key replaces the contour key of every
@@ -460,7 +453,6 @@ func _process(delta: float) -> void:
 		_weapon.set_scope_mode(false, false)
 		if not _pending.is_empty():
 			_pending.clear()
-		_overlay.clear()
 		if _overlay != null:
 			_overlay.clear()
 		if _hp_live:
@@ -805,11 +797,6 @@ func _overlay_sync(now: float) -> void:
 	else:
 		_overlay.set_frame(items, diamonds)
 
-func _opts_for(e: Dictionary, node: Node, now: float) -> Dictionary:
-	var opts: Dictionary = {}
-	_fill_opts(opts, e, now)
-	return opts
-
 func _fill_opts(opts: Dictionary, e: Dictionary, now: float) -> void:
 	var cool := Tracker.cool_factor(e, now, p_decay)
 	var win: Dictionary = e.get("win", Tracker.EMPTY_WINDOW)
@@ -891,8 +878,16 @@ func _subtree_rids(root: Node, out: Array[RID]) -> void:
 		_subtree_rids(c, out)
 
 func _player_pos() -> Variant:
+	# Same origin as the mine layer and vanilla (gameData.playerPosition, the
+	# controller body): the outline distance and the mine distance must agree.
+	# The group scan is the fallback for a frame where the resource is not read.
+	var gd := _gd_cached()
+	if gd != null:
+		var p = gd.get("playerPosition")
+		if p != null:
+			return p
 	var players := get_tree().get_nodes_in_group("Player")
-	for p in players:
-		if p is Node3D:
-			return (p as Node3D).global_position
+	for n in players:
+		if n is Node3D:
+			return (n as Node3D).global_position
 	return null

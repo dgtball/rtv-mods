@@ -4,6 +4,7 @@ extends RefCounted
 # default; turned on from the MCM "Debug log" option.
 
 const LOG_PATH := "user://MCM/thermal-vtk/debug.log"
+const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
 # The file is the only sink. Until 2.3.0 every line was also print()ed, which
 # put the same diagnostic stream into godot.log. Rotation then keeps a
 # long-lived install from growing the file without bound.
@@ -43,7 +44,7 @@ static func _open() -> void:
 		push_warning("[ThermalVTK] cannot open debug log %s err=%s" % [LOG_PATH, FileAccess.get_open_error()])
 		return
 	_file.seek_end()
-	_file.store_line("=== session start %s v%s ===" % [_now_str(), _version()])
+	_file.store_line("=== session start %s v%s ===" % [_now_str(), Paths.mod_version()])
 	_file.flush()
 
 static func log(tag: String, msg: String) -> void:
@@ -62,10 +63,3 @@ static func fmt(tag: String, msg: String) -> String:
 static func _now_str() -> String:
 	var dt := Time.get_datetime_dict_from_system()
 	return "%04d-%02d-%02d %02d:%02d:%02d" % [dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second]
-
-static func _version() -> String:
-	var vf := FileAccess.open("res://mods/ThermalVTK/version.txt", FileAccess.READ)
-	if vf == null:
-		return "?"
-	var v := vf.get_as_text().strip_edges()
-	return v if v != "" else "?"

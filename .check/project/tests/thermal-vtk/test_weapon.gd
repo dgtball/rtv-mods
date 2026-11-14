@@ -283,10 +283,10 @@ func t_late_optics_caught_by_resweep() -> void:
 	glass.set_surface_override_material(0, lens)
 	att.add_child(glass)
 
-	o._resweep(rig)
+	o._patch_rig(rig)
 	ck(glass.get_surface_override_material(0) == lens, "resweep: late optic keeps its vanilla material")
 	var body_patched: ShaderMaterial = body.get_surface_override_material(0)
-	o._resweep(rig)
+	o._patch_rig(rig)
 	ck(glass.get_surface_override_material(0) == lens, "resweep: late optic stays vanilla across passes")
 	ck(body.get_surface_override_material(0) == body_patched, "resweep: meta guard prevents duplicate materials")
 
@@ -338,7 +338,7 @@ func t_optic_script_signal_skipped_not_member() -> void:
 	quad.layers = 3
 	quad.set_surface_override_material(0, display)
 	acog.add_child(quad)
-	o._resweep(acog)
+	o._patch_rig(acog)
 	var qg: ShaderMaterial = quad.get_surface_override_material(0)
 	ck(o._under_attachments(quad, att) == false, "a node named PIP is treated as the display quad")
 	ck(qg == display, "the display quad keeps its vanilla material")
@@ -378,7 +378,7 @@ func t_mask_depth_mode() -> void:
 	late.layers = 3
 	late.set_surface_override_material(0, mask)
 	att.add_child(late)
-	o._resweep(rig)
+	o._patch_rig(rig)
 	var late_cur: Material = late.get_surface_override_material(0)
 	ck(late_cur != mask, "late mask follows the current no-PIP mode")
 	ck(late_cur is ShaderMaterial and (late_cur as ShaderMaterial).shader.code.contains("depth_draw_never"), "late mask is depthless")

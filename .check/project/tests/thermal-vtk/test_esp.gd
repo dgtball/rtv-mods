@@ -17,6 +17,13 @@ func ck(cond: bool, msg: String) -> void:
 		fails += 1
 		print("FAIL  ", msg)
 
+# The contour opts are built by _fill_opts into a caller-owned dictionary; the
+# test just reads the result.
+func opts_of(esp, e: Dictionary) -> Dictionary:
+	var opts: Dictionary = {}
+	esp._fill_opts(opts, e, 0.0)
+	return opts
+
 class FakeBot extends Node3D:
 	var dead := false
 	var mesh: Node = null
@@ -284,18 +291,15 @@ func t_opts_contour_key() -> void:
 	var esp = ESP.new()
 	esp.name = "VTKESP_opts"
 	root.add_child(esp)
-	var node := Node3D.new()
-	root.add_child(node)
-	var hostile := esp._opts_for({"cat": S.COMBAT, "nomad": false}, node, 0.0)
+	var hostile := opts_of(esp, {"cat": S.COMBAT, "nomad": false})
 	ck(hostile["key"] == S.KEY_COMBAT, "hostile combat keys combat")
 	ck(not hostile.has("state_key"), "the old detector key is gone")
 	ck(not hostile.has("nomad"), "nomad is not duplicated into the contour opts")
 	ck(not hostile.has("fill_alpha"), "fill alpha lives in the shader, not in opts")
 	ck(not hostile.has("fill_grow"), "fill grow lives in the shader, not in opts")
-	var normal := esp._opts_for({"cat": S.NORMAL, "nomad": true}, node, 0.0)
+	var normal := opts_of(esp, {"cat": S.NORMAL, "nomad": true})
 	ck(normal["key"] == S.KEY_NORMAL, "normal keys by its category")
 	esp.free()
-	node.free()
 
 # The debug calibration cycle paints the contour with one candidate key, so its
 # colour under the NVG can be measured with the probe. Everything else about the
@@ -304,32 +308,26 @@ func t_calibration_opts() -> void:
 	var esp = ESP.new()
 	esp.name = "VTKESP_cal"
 	root.add_child(esp)
-	var node := Node3D.new()
-	root.add_child(node)
-	var plain := esp._opts_for({"cat": S.COMBAT, "nomad": false}, node, 0.0)
+	var plain := opts_of(esp, {"cat": S.COMBAT, "nomad": false})
 	ck(plain["key"] == S.KEY_COMBAT, "no calibration: the key is the category key")
 	esp.set_calibration(true, 3)
-	var cal := esp._opts_for({"cat": S.COMBAT, "nomad": false}, node, 0.0)
+	var cal := opts_of(esp, {"cat": S.COMBAT, "nomad": false})
 	ck(cal["key"] == Cal.candidate(3), "calibration overrides the contour key")
 	ck(cal["cat"] == S.COMBAT, "calibration keeps the category")
 	ck(float(cal["cool"]) == float(plain["cool"]), "calibration keeps the corpse cooling")
 	esp.set_calibration(false, 0)
-	var back := esp._opts_for({"cat": S.COMBAT, "nomad": false}, node, 0.0)
+	var back := opts_of(esp, {"cat": S.COMBAT, "nomad": false})
 	ck(back["key"] == S.KEY_COMBAT, "calibration off restores the category key")
 	esp.free()
-	node.free()
 
 # The nomad marker paints its key through a shader uniform, so the
 # calibration has to rewrite that uniform on the live markers.
 func t_no_through_walls_opt() -> void:
 	var esp = ESP.new()
-	var node := Node3D.new()
-	root.add_child(node)
-	var opts: Dictionary = esp._opts_for({"cat": S.NORMAL, "nomad": false}, node, 0.0)
+	var opts := opts_of(esp, {"cat": S.NORMAL, "nomad": false})
 	ck(not opts.has("through_walls"), "through_walls opt removed")
 	ck(not opts.has("fill_style"), "fill_style opt removed")
 	esp.free()
-	node.free()
 
 # The ai-death-post hook is unreliable in game; _draw must also mark the entry
 # dead from the node's own `dead` flag, otherwise corpse cooling never starts.

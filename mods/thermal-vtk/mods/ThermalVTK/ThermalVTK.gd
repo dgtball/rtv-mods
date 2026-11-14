@@ -26,7 +26,6 @@ var _key_debug_probe: int = KEY_F7
 var _key_cal_cycle: int = KEY_F8
 var _key_live_panel: int = KEY_F9
 var _thermal_enabled: bool = false
-var _mines_enabled: bool = true
 var _outline_enabled: bool = true
 var _xray_enabled: bool = true
 var _nvg_worn: bool = false
@@ -284,7 +283,7 @@ func _register_mcm() -> void:
 		_apply_defaults()
 		return
 	var cfg := Settings.mcm_config()
-	cfg.set_value("Info", "version", _mod_version())
+	cfg.set_value("Info", "version", Paths.mod_version())
 	cfg.set_value("Info", "author", "CaptiveAI and opencode")
 	DirAccess.make_dir_recursive_absolute(CONFIG_DIR)
 	# The default file is the seed MCM copies a fresh profile from.
@@ -393,7 +392,6 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 	# in the MCM config: the hotkey writes them, and a second source of truth
 	# would fight the hotkey on every menu round-trip.
 	_thermal_enabled = bool(_read_state("thermal_enabled", false))
-	_mines_enabled = rec.thermal_mines
 	# The world palette is a runtime choice: it lives in our state file and is
 	# changed with the cycle hotkey, so there is no MCM dropdown for it.
 	var pal = _read_state("world_palette", null)
@@ -409,21 +407,7 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 
 
 func _apply_defaults() -> void:
-	# No MCM in this install: the runtime choices still come from our state
-	# file, so the hotkeys keep working.
-	_rec = Settings.read(ConfigFile.new())
-	_thermal_enabled = bool(_read_state("thermal_enabled", false))
-	var pal = _read_state("world_palette", null)
-	if _nvg != null and is_instance_valid(_nvg):
-		_nvg.set_palette_mode(int(pal) if pal != null else 0)
-		_nvg.set_thermal_enabled(_thermal_enabled)
-		_nvg.set_mines_enabled(_mines_enabled)
-	_apply_mode()
-
-func _mod_version() -> String:
-	var vf = FileAccess.open("res://mods/ThermalVTK/version.txt", FileAccess.READ)
-	if vf == null:
-		return "unknown"
-	var v := vf.get_as_text().strip_edges()
-	vf.close()
-	return v if v != "" else "unknown"
+	# No MCM in this install: the same apply path runs with an empty config, so
+	# the defaults reach every module and the hotkeys keep working from our own
+	# state file. _mcm_apply loads the profile itself when one is on disk.
+	_mcm_apply(ConfigFile.new())

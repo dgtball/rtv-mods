@@ -85,10 +85,8 @@ func _ready() -> void:
 	_cam = Camera3D.new()
 	_cam.name = "ProbeCamera"
 	# No environment here (see the header): the shared world's WorldEnvironment
-	# must reach the probe frame untouched.
-	# The contour lives in the main 3D pass now (material_overlay), so there is
-	# no shell layer to cull: the probe mirrors the game camera's mask exactly.
-	_cam.cull_mask = 0xFFFFFFFF
+	# must reach the probe frame untouched. The cull mask is mirrored from the
+	# game camera in _sync_camera.
 	_vp.add_child(_cam)
 	# `current` only takes effect once the camera is inside the viewport: set
 	# it after add_child, or the viewport renders with no camera at all.
