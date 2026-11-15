@@ -1,0 +1,11 @@
+[mod]
+name="Knife or Pistol"
+id="knife-or-pistol"
+version="1.0.0"
+
+[autoload]
+KnifeOrPistol="res://mods/KnifeOrPistol/KnifeOrPistol.gd"
+
+[hooks]
+res://Scripts/WeaponRig.gd = _ready
+res://Scripts/RigManager.gd = UpdateRig

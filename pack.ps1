@@ -25,7 +25,8 @@ $mods = @(
     @{ Slug = "vostok-toolkit"; Folder = "VTK";        Artifact = "VostokToolkit.vmz"; VersionFile = $true  },
     @{ Slug = "thermal-vtk";    Folder = "ThermalVTK"; Artifact = "ThermalVTK.vmz";   VersionFile = $true  },
     @{ Slug = "gimme-the-loot";  Folder = "RoadToLoot"; Artifact = "GimmeTheLoot.vmz";  VersionFile = $true  },
-    @{ Slug = "jcm-freeze";     Folder = "jcm-freeze"; Artifact = "Freeze.vmz";       VersionFile = $false }
+    @{ Slug = "jcm-freeze";     Folder = "jcm-freeze"; Artifact = "Freeze.vmz";       VersionFile = $false },
+    @{ Slug = "knife-or-pistol"; Folder = "KnifeOrPistol"; Artifact = "KnifeOrPistol.vmz"; VersionFile = $false }
 )
 
 if (-not $OutDir) { $OutDir = Join-Path $PSScriptRoot "dist" }
