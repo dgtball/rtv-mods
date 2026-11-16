@@ -1,7 +1,7 @@
 extends SceneTree
 
-const Filter = preload("res://mods/NomadManners/ClipFilter.gd")
-const Mod = preload("res://mods/NomadManners/NomadManners.gd")
+const Filter = preload("res://mods/StopSpitting/ClipFilter.gd")
+const Mod = preload("res://mods/StopSpitting/StopSpitting.gd")
 
 const SPIT_A := "Nomad_Random_11"
 const SPIT_B := "Nomad_Random_17"
@@ -47,10 +47,10 @@ func _init() -> void:
 	t_mod_contract()
 	print("")
 	if fails == 0:
-		print("NomadManners tests passed")
+		print("StopSpitting tests passed")
 		quit(0)
 	else:
-		print("NomadManners tests failed: ", fails)
+		print("StopSpitting tests failed: ", fails)
 		quit(1)
 
 

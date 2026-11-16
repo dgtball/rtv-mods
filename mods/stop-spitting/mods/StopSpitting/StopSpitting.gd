@@ -1,8 +1,8 @@
 extends Node
 
-const ClipFilter := preload("res://mods/NomadManners/ClipFilter.gd")
+const ClipFilter := preload("res://mods/StopSpitting/ClipFilter.gd")
 
-# Nomad Manners: stops the nomads from spitting.
+# Stop Spitting: stops the nomads from spitting.
 #
 # Every nomad variant (res://AI/Nomad/AI_Nomad_A/B/C.tres, an AIData resource)
 # points at the same four AudioEvent sets under res://Audio/NPC/Nomad/, and the
@@ -20,7 +20,7 @@ const ClipFilter := preload("res://mods/NomadManners/ClipFilter.gd")
 # covers them all. Nothing is hooked or replaced, no game resource is written to
 # disk, and the clips are put back if the mod is removed from the tree.
 
-const PREFIX := "[NomadManners] "
+const PREFIX := "[StopSpitting] "
 # Clip file names (without folder and extension) to remove, in any nomad's set.
 const REMOVED_CLIPS := ["Nomad_Random_11", "Nomad_Random_17"]
 # AIData property -> set id, for the log line.

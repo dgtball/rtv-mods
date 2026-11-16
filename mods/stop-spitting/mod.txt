@@ -1,0 +1,7 @@
+[mod]
+name="Stop Spitting"
+id="stop-spitting"
+version="1.0.0"
+
+[autoload]
+StopSpitting="res://mods/StopSpitting/StopSpitting.gd"

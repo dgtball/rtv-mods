@@ -1,6 +1,6 @@
 extends RefCounted
 
-# Pure helpers for Nomad Manners: which clips are the spits, and taking them out
+# Pure helpers for Stop Spitting: which clips are the spits, and taking them out
 # of a voice set's array. No nodes, no files, so this is headless-testable.
 
 # Clip file name without folder and without the ".wav" extension.

@@ -1,4 +1,4 @@
-# Nomad Manners
+# Stop Spitting
 
 **Version:** 1.0.0
 
@@ -18,7 +18,7 @@ exactly as the game ships it.
 
 ## Install
 
-1. Copy `NomadManners.vmz` into the game's `mods` folder.
+1. Copy `StopSpitting.vmz` into the game's `mods` folder.
 2. Enable the mod in the mod loader and start the game.
 
 ## How it works
@@ -35,5 +35,5 @@ come back if the mod is removed.
 ## Build (from the repo)
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File pack.ps1 -Mod nomad-manners
+powershell -ExecutionPolicy Bypass -File pack.ps1 -Mod stop-spitting
 ```
