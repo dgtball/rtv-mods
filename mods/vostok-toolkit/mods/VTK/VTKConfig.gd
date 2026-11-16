@@ -29,7 +29,7 @@ const DEFAULTS := {
 	"hud_offset_y": 90,
 	"hud_font_size": 16,
 	"npc_mines_enabled": true,
-	"npc_mine_radius": 6,
+	"npc_mine_radius": 2,
 	"mine_smoke_enabled": true,
 	"season_enabled": true,
 	"season_start": "summer",
@@ -41,10 +41,10 @@ const DEFAULTS := {
 # в UI: config.ini правится руками, а MCM можно обойти.
 const SEASON_MIN_DAYS := 1
 const SEASON_MAX_DAYS := 120
-# Те же числа, что в minRange/maxRange регистрации MCM: 3 м ещё задевает
-# стоящего рядом NPC, 10 м уже срабатывает от пробегающего.
-const MINE_MIN_RADIUS := 3
-const MINE_MAX_RADIUS := 10
+# Итого: 1–5 м, шаг 0.5. 1 м — только стоящий вплотную, 5 м — среагирует на
+# проходящего в коридоре.
+const MINE_MIN_RADIUS := 1
+const MINE_MAX_RADIUS := 5
 # Имя игрока в ленте: 15 символов хватает на видимую строку HUD, а больше
 # плашка не тянет. Печатный ASCII - по правилу репозитория мод не локализуется.
 const PLAYER_NAME_MAX := 15

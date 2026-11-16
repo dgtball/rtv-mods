@@ -227,7 +227,7 @@ func t_mine_settings_defaults_and_clamp() -> void:
 	var c: ConfigRec = ConfigRec.new()
 	c.read(ConfigFile.new())
 	ck(c.npc_mines_enabled and c.mine_smoke_enabled, "NPC-мины и дым включены по умолчанию")
-	ck(c.npc_mine_radius == 6, "радиус по умолчанию 6 м")
+	ck(c.npc_mine_radius == 2, "радиус по умолчанию 2 м")
 	var cfg := ConfigFile.new()
 	cfg.set_value("Int", "npc_mine_radius", {"value": 100})
 	cfg.set_value("Bool", "npc_mines_enabled", {"value": false})

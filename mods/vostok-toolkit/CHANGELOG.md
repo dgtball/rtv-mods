@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.8.0] - 2026-11-16
+
+### Changed
+
+- Mine trigger radius now runs from 1 to 5 m in half-metre steps, defaulting to
+  2 m (was 3–10 m, default 6 m).
+
 ## [5.7.1] - 2026-11-13
 
 ### Fixed
