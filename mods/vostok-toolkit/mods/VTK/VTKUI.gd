@@ -246,8 +246,6 @@ func _input(event: InputEvent) -> void:
 		if kc == 0:
 			kc = int(event.keycode)
 		var qname = LD.get_name_by_quick_key(kc)
-		if qname == "" and kc != int(event.keycode):
-			qname = LD.get_name_by_quick_key(int(event.keycode))
 		if qname != "":
 			LD.load_loadout(qname)
 

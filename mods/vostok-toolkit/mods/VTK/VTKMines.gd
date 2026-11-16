@@ -28,7 +28,7 @@ const SMOKE_LIFE_SEC := 26.0
 const SMOKE_RISE_SEC := 32.0
 
 var _enabled := false
-var _radius := 6
+var _radius := 1.5
 var _smoke_on := false
 var _smoke_pool: Array = []
 var _smoke_idx := 0
@@ -66,7 +66,7 @@ func set_enabled(v: bool) -> void:
 			tree.node_added.disconnect(_mines_on_node_added)
 		_mines_remove_detectors()
 
-func set_radius(r: int) -> void:
+func set_radius(r: float) -> void:
 	_radius = r
 	var tree := get_tree()
 	if tree == null:

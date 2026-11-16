@@ -27,7 +27,7 @@ var _show_kill_distance: bool = ConfigRec.DEFAULTS["show_kill_distance"]
 var _longshot_distance_meters: int = ConfigRec.DEFAULTS["longshot_distance_meters"]
 var _player_name: String = "Player"
 var _npc_mines_enabled: bool = ConfigRec.DEFAULTS["npc_mines_enabled"]
-var _npc_mine_radius: int = ConfigRec.DEFAULTS["npc_mine_radius"]
+var _npc_mine_radius: float = ConfigRec.DEFAULTS["npc_mine_radius"]
 var _mine_smoke_enabled: bool = ConfigRec.DEFAULTS["mine_smoke_enabled"]
 
 func _init(root: Node) -> void:
@@ -92,7 +92,7 @@ func apply_config(c: ConfigRec) -> void:
 	_apply_hud()
 	set_mines(c.npc_mines_enabled, c.npc_mine_radius, c.mine_smoke_enabled)
 
-func set_mines(enabled: bool, radius: int, smoke: bool) -> void:
+func set_mines(enabled: bool, radius: float, smoke: bool) -> void:
 	_npc_mines_enabled = enabled
 	_npc_mine_radius = radius
 	_mine_smoke_enabled = smoke

@@ -5,13 +5,18 @@
 ### Added
 
 - Kill feed has its own headshot icon, redrawn from your sketch.
-- The mine icon now shows a real mine: an upright body on a wide base instead of
-  a low blob that looked like a grenade.
+- The mine icon in the kill feed is now gold, matching the other kill icons.
 
 ### Changed
 
 - Mine trigger radius now runs from 1 to 5 m in half-metre steps, defaulting to
-  2 m (was 3–10 m, default 6 m).
+  1.5 m (was 3–10 m, default 6 m).
+
+### Fixed
+
+- The half-metre step for mine trigger radius now works in MCM.
+- Loadout hotkeys bound to the arrow keys no longer fire when you press a numpad
+  navigation key with Num Lock off.
 
 ## [5.7.1] - 2026-11-13
 

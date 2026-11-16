@@ -251,7 +251,7 @@ PRESENT = [
     "_make_facet_row",
     "_on_facet_input",
     "mine_detonated",
-    "MINE_SVG",
+    "MINE_PNG",
     "VTK_NPC_Detector",
     "func set_mines(",
     "arm_mine_blast",

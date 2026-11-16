@@ -42,7 +42,7 @@ func _run() -> void:
 	t_longest_kill_event()
 	t_feed_evict()
 	t_feed_hs_png()
-	t_feed_mine_svg()
+	t_feed_mine_png()
 	t_feed_norm_weapon()
 	t_feed_index_second_pass()
 	t_hud_anchor_layout()
@@ -231,13 +231,15 @@ func t_feed_hs_png() -> void:
 		ck(tex.get_height() > 0, "у HS_PNG есть высота")
 	ck(Feed.Surface.png_texture("не-base64") == null, "битая строка даёт null, а не падение")
 
-# Мина в ленте — своя SVG-иконка в палитре гранаты: файлов игры не трогаем,
-# иначе после апдейта иконка молча ушла бы в текстовый фолбэк.
-func t_feed_mine_svg() -> void:
+# Мина в ленте — растровая PNG-иконка в золоте #FFD669, как headshot:
+# декодируется в память без файлов игры.
+func t_feed_mine_png() -> void:
 	var Feed = preload("res://mods/VTK/VTKFeed.gd")
-	ck(Feed.MINE_SVG.contains("#6f7a5a"), "цвет корпуса мины совпадает с палитрой гранаты")
-	var tex = Feed.Surface.svg_texture(Feed.MINE_SVG)
-	ck(tex is Texture2D and tex.get_width() > 0, "MINE_SVG рендерится в текстуру")
+	var tex = Feed.Surface.png_texture(Feed.MINE_PNG)
+	ck(tex is Texture2D, "MINE_PNG декодируется в текстуру")
+	if tex is Texture2D:
+		ck(tex.get_width() >= 32, "MINE_PNG не мельче 32 px по ширине")
+		ck(tex.get_height() > 0, "у MINE_PNG есть высота")
 
 func t_feed_norm_weapon() -> void:
 	var Feed = preload("res://mods/VTK/VTKFeed.gd")

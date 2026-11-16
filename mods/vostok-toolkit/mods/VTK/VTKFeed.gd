@@ -1,4 +1,4 @@
-﻿extends Control
+extends Control
 const Paths = preload("res://mods/VTK/VTKPaths.gd")
 const Log = preload("res://mods/VTK/VTKLog.gd")
 const Hud = preload("res://mods/VTK/VTKHud.gd")
@@ -86,10 +86,9 @@ const GRENADE_SVG := "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" hei
 # лежит строкой base64 и декодируется в память: ни файла, ни load(), ни
 # import, поэтому иконка переживает любой апдейт игры.
 const HS_PNG := "iVBORw0KGgoAAAANSUhEUgAAACAAAAAcCAYAAAAAwr0iAAADXklEQVR42qXXS4hcVRAG4K8fM4kojOAQUFR0E42iKGQUo4igEQQVFZEYMJKNOITgIotsshNBFN0ouhE0EV+48I0oiM8EjcYHykRQfBHd6ETiI2jSt68L/wuHdqanezxw6L7nnlP1V9VfVee26rlZaKH277gQt+IqnIQO/sD3eBfP5FfeVcYbpS7tYuFYPIg3MZu1X6JkCudiC97CCzgryrvZ08zuwJzI+irsjN4NOK0EMIU3omASV+MybMbleDEH/8qZa7EX16MXIM3sDcyjWb8AJ+JuPIXjMdFFH4/G9TuwH69E4Q/5rRKSlfFMFY89i+ejpHFrf2DO4228HLn7MINPoVXPzd6UuPawMUIn89x4qYcz8FiA1vFca4zYf41NAXRnZBxu4448PIAPsCIWlVa0cVxcWCqvC7cPG7/i1Xi04dYRVF2szabbE/e1Ed6J4HZAVAlBa4DRQradeHKBzDiKr3Agz68Ve3XjbjgG52Mb7o3SBsTJ2BXvVIXScpyC14d4YQq744kncAIebhfuq+KeW8LYG7L2SNCeE+Z2B5S3s+/ipFanSL0yNQ+FsC/hEvyOXquem/0Z00Vsj8T6ldiDdVH0Rch6EFckBeuBkJyHz4qwLTm6+G4AwGTxfl2s+zbsP5z1h5LLG/L+PnyJH/O+XkRfJ8AaEldtfLzAoTqzIeGK5H1Jvon8fwfbA2B+CQBNmBtS66ZI3DaE3XUItjdWH8Q1uDTvzsT6ohi1hgD4b2Oo52ZPxVwsrBcpLgutD649jZvHbVDtFIfPizK6WAfrF/W9KpQ3bl29hIxFAcBHS8Su2dukYGug4Uj2jD2afD4wxpk6YNoDMt4rmN4bF0A1hvJWSutu/Jm0vTFNbOwQNACmR9hbxbpduTGVY18K0LI40EoZtUR7bdJrBlcWdWAaP+HvIixjAViFNQOkHEbYNelon+C5XOHmRzBgUaFT6Uz9MS6UNc7GdQnLnqIpjQ3gG9xT3HxGAVESd9tyrS9b6Xbcn7j2RiildUrvpvT3ZVlfxrUTS+4aITWrnHsfjxcdzv8BUEfQDmwtbkP9BbzRlOWZfLhUy3V/A6Bsj518nFyUm0t7AeFNFdyfL6ZlK2+ErcbpRRHp4MN8fGxMn+8X3jiUa9p6/DZCDxk6/gEjygZpONHjZgAAAABJRU5ErkJggg=="
-# Мина: настоящая в игре — POM-3 (Assets/POM-3), предмета-мины в базе нет,
-# поэтому рисунок свой: столб с крышкой и горизонтальная опора внизу, ноги
-# под 90° к столбу. Палитра как у гранаты, опора светлая — читается на плашке.
-const MINE_SVG := "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\"><rect x=\"12.6\" y=\"5.2\" width=\"6.8\" height=\"15.4\" rx=\"2.2\" fill=\"#6f7a5a\" stroke=\"#3d4433\" stroke-width=\"1.6\"/><rect x=\"14\" y=\"2\" width=\"4\" height=\"3.4\" rx=\"1.3\" fill=\"#c9c2b2\"/><rect x=\"4.6\" y=\"20.6\" width=\"22.8\" height=\"3.4\" rx=\"1.7\" fill=\"#c9c2b2\"/></svg>"
+# Мина: та же иконка, что прислал пользователь (dist/mine.png), перекрашена
+# в золото #FFD669, как headshot. PNG base64, декодируется в память.
+const MINE_PNG := "iVBORw0KGgoAAAANSUhEUgAAACAAAAAaCAYAAADWm14/AAADk0lEQVR4nK2XSYxNURCGv/vefU3Mc3QbYx5CEFZEiCAS00LCho2V2BM740IsSCwltmKKsGOBiMQCMUUTEjMxTzE83a/7SnX+4jh9X78mKjm5956h6j91/qpTN8kaNxSBFn6LfY8HpgJTgLHACGAw0BfoDhTIlwz4AnwEXgGPgXvALbW7QCW0lWSNG+ylB7AaWCbDZqgZ+AC8Ad4C76TYDHwDmgLgBroO6Ab0BHoDA4CBan2AEvAJuAmcAg6ZLgOwHNgl5eeAS0L6AvjB/5GuQD0wCZgNzBfILQbAdrcKOJ+zMJW7E6A1aObqPEk031um+aHbXRYCR8zAdmC9zvgi8DJYUKmyG2tdBBAdhXnrO1COOBVvqAGYCywFdjgHRgPzRLD7wCOd2QRgFjAZGKVz7anzzpOKztn48gC4DVyWzkxkNlJ/Bs5af5ITBeaNzSKP8eKtlN2Xdz5rp01yL3J3SRvoBQxRJA2Tnn4CZVw7ENgqpjJekrKNwDo9bwCvg8lLgHFqvcR4PwJz/1cBtjVHgavB2kHANGCPQO4X6GZX4OR6CDxTWDnRZgLHgeH8nZwXud+LnMaZ5/Kmew7nQNu7jJrbFsgrT4F9cmc5SkA2P5QwMlpF1MPAQa233HFGOt0WIQA/y1/ogBlyZSUynkUgWqPxVo0ZZ8YIfK6NQrQLX1jSmBEtlkxjxeA7rZIfygJf1BzPJ3+giSVTGja5o8yYSlGLlP1Qpkz0/VhzPKIyvR+Lckq7BFagYzFlaxXLdfKMhdMaRUqikLTUulPAS2qW67flHOsfkkQcaDceuHyOQuiaznYo8ESXi4UYCtGxYvt1OiFpjfEs2MGFoL+gBPVV124iXffUHLzr+GcAITH9uPyCaRZJy0GfX1z+XVPSzkySwpZoZx4JxQjsX0laYzzceRxmPZSOewcgXTrtibSG8XDn3uf3R73Y3qA+D73YaIdRUKhh3BQuAhYHRpql0O50FA2TBKpFYwZuhaLDOdRpDyR6Wh13MjBkCWmlakcrJqZLeUkJpxHYq74TQH+ts1ywtZonkpw84FlvE7BbLE/VrFAZGcwN6wGUIb+pqC0rednYRNWZ7UAUqrlGScXPv+3ulnEPv5AbFfXVyXhF756Gh0Xe7RBApqcVFcYBu1a94rExe5pyG/Pi07xjfc4dv3isz+qLK3kXkbs7FtuZKT2tfG/lmYVaVSJV2YQ1K3BMh/1f5HLgJ6ayECbydrPSAAAAAElFTkSuQmCC"
 var _counter_enabled: bool = false
 var _feed_enabled: bool = false
 var _streak_enabled: bool = false
@@ -459,7 +458,7 @@ func _add_icon(row: HBoxContainer, icon: String, ev: Dictionary) -> void:
 		row.add_child(skull_lbl)
 		return
 	if icon == "mine":
-		_add_tex(row, Surface.svg_texture(MINE_SVG))
+		_add_tex(row, Surface.png_texture(MINE_PNG))
 		return
 	if icon == "grenade":
 		_add_tex(row, Surface.svg_texture(GRENADE_SVG))

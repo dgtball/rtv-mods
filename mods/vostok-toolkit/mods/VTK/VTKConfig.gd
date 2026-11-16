@@ -29,7 +29,7 @@ const DEFAULTS := {
 	"hud_offset_y": 90,
 	"hud_font_size": 16,
 	"npc_mines_enabled": true,
-	"npc_mine_radius": 2,
+	"npc_mine_radius": 1.5,
 	"mine_smoke_enabled": true,
 	"season_enabled": true,
 	"season_start": "summer",
@@ -43,8 +43,8 @@ const SEASON_MIN_DAYS := 1
 const SEASON_MAX_DAYS := 120
 # Итого: 1–5 м, шаг 0.5. 1 м — только стоящий вплотную, 5 м — среагирует на
 # проходящего в коридоре.
-const MINE_MIN_RADIUS := 1
-const MINE_MAX_RADIUS := 5
+const MINE_MIN_RADIUS := 1.0
+const MINE_MAX_RADIUS := 5.0
 # Имя игрока в ленте: 15 символов хватает на видимую строку HUD, а больше
 # плашка не тянет. Печатный ASCII - по правилу репозитория мод не локализуется.
 const PLAYER_NAME_MAX := 15
@@ -65,7 +65,7 @@ var hud_offset_x: int = DEFAULTS["hud_offset_x"]
 var hud_offset_y: int = DEFAULTS["hud_offset_y"]
 var hud_font_size: int = DEFAULTS["hud_font_size"]
 var npc_mines_enabled: bool = DEFAULTS["npc_mines_enabled"]
-var npc_mine_radius: int = DEFAULTS["npc_mine_radius"]
+var npc_mine_radius: float = DEFAULTS["npc_mine_radius"]
 var mine_smoke_enabled: bool = DEFAULTS["mine_smoke_enabled"]
 var season_enabled: bool = DEFAULTS["season_enabled"]
 var season_start: String = DEFAULTS["season_start"]
@@ -98,7 +98,10 @@ func read(cfg: ConfigFile) -> void:
 	hud_offset_y = clampi(int(_val(cfg, "Int", "hud_offset_y", hud_offset_y)), -1000, 1000)
 	hud_font_size = clampi(int(_val(cfg, "Int", "hud_font_size", hud_font_size)), 12, 32)
 	npc_mines_enabled = bool(_val(cfg, "Bool", "npc_mines_enabled", npc_mines_enabled))
-	npc_mine_radius = clampi(int(_val(cfg, "Int", "npc_mine_radius", npc_mine_radius)), MINE_MIN_RADIUS, MINE_MAX_RADIUS)
+	var r = _val(cfg, "Float", "npc_mine_radius", null)
+	if r == null:
+		r = _val(cfg, "Int", "npc_mine_radius", npc_mine_radius)
+	npc_mine_radius = clampf(float(r), MINE_MIN_RADIUS, MINE_MAX_RADIUS)
 	mine_smoke_enabled = bool(_val(cfg, "Bool", "mine_smoke_enabled", mine_smoke_enabled))
 	season_enabled = bool(_val(cfg, "Bool", "season_enabled", season_enabled))
 	season_start = str(_val(cfg, "Dropdown", "season_start", season_start))
