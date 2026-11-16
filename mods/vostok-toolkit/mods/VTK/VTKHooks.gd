@@ -76,6 +76,11 @@ var _dyn_last_idx := -1
 var _season_poll: float = 0.0
 var _dyn_visuals := true
 var _scene_ref: Node = null
+# Вне зимы vanilla (ItemEffects) не размораживает еду, поэтому замёрзшая зимой
+# еда так и остаётся ледяной после смены сезона. В тёплое время года тикаем
+# разморозку сами, пока включены динамические сезоны.
+var _thaw_timer: float = 0.0
+const THAW_CYCLE := 5.0
 
 # Ironman respawn drops you somewhere random out of these instead of always
 # Highway, so a death run can't be re-learned as one fixed route.
@@ -114,6 +119,7 @@ func _process(delta: float) -> void:
 			_season_apply()
 		if _season_driver != null:
 			_season_driver.tick(delta)
+		_thaw_frozen_food(delta)
 
 func set_equip_enabled(on: bool) -> void:
 	_equip_on = on
@@ -121,6 +127,43 @@ func set_equip_enabled(on: bool) -> void:
 func set_player_name(v: String) -> void:
 	var name := v.strip_edges()
 	_player_name = name if name != "" else "Player"
+
+# Разморозка еды в тёплые сезоны: vanilla делает это только при season==2
+# (зима, в укрытии/у огня), поэтому после смены сезона на весну/лето/осень
+# замёрзшая еда навсегда оставалась "Frozen". Здесь та же механика, что Melt в
+# Interface.gd, но без привязки к укрытию — в тёплое время года еда оттаивает сама.
+func _thaw_frozen_food(delta: float) -> void:
+	if _dyn_last_idx < 0 or _dyn_last_idx == 3:
+		_thaw_timer = 0.0
+		return
+	_thaw_timer += delta
+	if _thaw_timer <= THAW_CYCLE:
+		return
+	_thaw_timer = 0.0
+	var iface = get_node_or_null(Paths.INTERFACE)
+	if iface == null or not is_instance_valid(iface):
+		return
+	var ig = iface.get("inventoryGrid")
+	if ig == null or not (ig is Node):
+		return
+	var meltables: Array = []
+	for child in ig.get_children():
+		if child == null or not is_instance_valid(child):
+			continue
+		var sd = child.get("slotData")
+		if sd == null:
+			continue
+		if str(sd.get("state")) == "Frozen":
+			meltables.append(child)
+	if meltables.is_empty():
+		return
+	var item = meltables.pick_random()
+	var sd = item.get("slotData")
+	if sd == null:
+		return
+	sd.set("state", "")
+	if item.has_method("UpdateDetails"):
+		item.call("UpdateDetails")
 
 const GAME_DATA_RES := Paths.GAME_DATA
 

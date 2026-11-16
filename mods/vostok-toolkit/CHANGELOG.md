@@ -1,5 +1,13 @@
 # Changelog
 
+## [5.7.3] - 2026-11-16
+
+### Fixed
+
+- Food that froze in winter now thaws after the season changes to spring, summer
+  or autumn while dynamic seasons are on, instead of staying frozen in your
+  inventory no matter where you are.
+
 ## [5.7.2] - 2026-11-16
 
 ### Added
