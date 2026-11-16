@@ -1,0 +1,7 @@
+[mod]
+name="Nomad Manners"
+id="nomad-manners"
+version="1.0.0"
+
+[autoload]
+NomadManners="res://mods/NomadManners/NomadManners.gd"

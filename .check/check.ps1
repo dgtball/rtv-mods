@@ -16,7 +16,8 @@ $mods = @(
     @{ Slug = "thermal-vtk";    Folder = "ThermalVTK";  Tests = "thermal-vtk" },
     @{ Slug = "gimme-the-loot"; Folder = "RoadToLoot";  Tests = "gimme-the-loot" },
     @{ Slug = "jcm-freeze";        Folder = "jcm-freeze";     Tests = $null },
-    @{ Slug = "knife-or-pistol";   Folder = "KnifeOrPistol"; Tests = "knife-or-pistol" }
+    @{ Slug = "knife-or-pistol";   Folder = "KnifeOrPistol"; Tests = "knife-or-pistol" },
+    @{ Slug = "nomad-manners";     Folder = "NomadManners"; Tests = "nomad-manners" }
 )
 
 if (-not $Godot) {
@@ -130,6 +131,8 @@ $tests = [ordered]@{
         "res://tests/gimme-the-loot/test_rtl_config.gd")
     "knife-or-pistol" = @(
         "res://tests/knife-or-pistol/test_rules.gd")
+    "nomad-manners" = @(
+        "res://tests/nomad-manners/test_filter.gd")
 }
 $tests = @($tests.Values | ForEach-Object { $_ })
 
