@@ -68,6 +68,22 @@ static func svg_texture(svg: String) -> Texture2D:
 	_textures[svg] = tex
 	return tex
 
+# Растровая иконка из строки base64: файла нет, load() не нужен, картинка
+# живёт в памяти скрипта. Так рисуется headshot — он линеарный, и SVG-контур
+# его разваливал. Кэш общий с svg_texture: ключ — сама строка.
+static func png_texture(b64: String) -> Texture2D:
+	if _textures.has(b64):
+		return _textures[b64]
+	var bytes := Marshalls.base64_to_raw(b64)
+	if bytes.is_empty():
+		return null
+	var image := Image.new()
+	if image.load_png_from_buffer(bytes) != OK:
+		return null
+	var tex := ImageTexture.create_from_image(image)
+	_textures[b64] = tex
+	return tex
+
 # Стиль вкладки без плашки: заполненная подложка читается кнопкой, а вкладку
 # узнают по золотой нижней грани. Отсюда прозрачный фон, нулевые поля и
 # border_width_bottom как единственный признак активности. Кэш по флагу:

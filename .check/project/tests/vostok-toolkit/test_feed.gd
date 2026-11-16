@@ -41,7 +41,7 @@ func _run() -> void:
 	t_feed_fade()
 	t_longest_kill_event()
 	t_feed_evict()
-	t_feed_hs_svg()
+	t_feed_hs_png()
 	t_feed_mine_svg()
 	t_feed_norm_weapon()
 	t_feed_index_second_pass()
@@ -219,13 +219,17 @@ func t_feed_evict() -> void:
 	ck(rows.size() == Feed.MAX_ROWS, "размер ограничен MAX_ROWS")
 	ck(int(rows[0]["id"]) == Feed.MAX_ROWS + 1, "свежая строка сверху (индекс 0)")
 
-# HS теперь SVG из макета, а не webp-файл: текстура обязана рендериться
-# без файлов игры, иначе лента снова уйдёт в текстовый фолбэк "HS".
-func t_feed_hs_svg() -> void:
+# HS — растровая иконка из строки base64, а не вектор: текстура обязана
+# декодироваться в память без файлов игры, иначе лента снова уйдёт в
+# текстовый фолбэк "HS".
+func t_feed_hs_png() -> void:
 	var Feed = preload("res://mods/VTK/VTKFeed.gd")
-	ck(Feed.HS_SVG.contains("#FFD669"), "цвет HS-SVG совпадает с HS_GOLD")
-	var tex = Feed.Surface.svg_texture(Feed.HS_SVG)
-	ck(tex is Texture2D and tex.get_width() > 0, "HS-SVG рендерится в текстуру")
+	var tex = Feed.Surface.png_texture(Feed.HS_PNG)
+	ck(tex is Texture2D, "HS_PNG декодируется в текстуру")
+	if tex is Texture2D:
+		ck(tex.get_width() >= 32, "HS_PNG не мельче 32 px по ширине")
+		ck(tex.get_height() > 0, "у HS_PNG есть высота")
+	ck(Feed.Surface.png_texture("не-base64") == null, "битая строка даёт null, а не падение")
 
 # Мина в ленте — своя SVG-иконка в палитре гранаты: файлов игры не трогаем,
 # иначе после апдейта иконка молча ушла бы в текстовый фолбэк.

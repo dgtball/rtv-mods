@@ -2,6 +2,12 @@
 
 ## [5.8.0] - 2026-11-16
 
+### Added
+
+- Kill feed has its own headshot icon, redrawn from your sketch.
+- The mine icon now shows a real mine: an upright body on a wide base instead of
+  a low blob that looked like a grenade.
+
 ### Changed
 
 - Mine trigger radius now runs from 1 to 5 m in half-metre steps, defaulting to

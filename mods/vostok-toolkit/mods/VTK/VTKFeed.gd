@@ -81,9 +81,15 @@ static func streak_after_event(current: int, best: int, ev: Dictionary) -> Dicti
 static func streak_reset(best: int) -> Dictionary:
 	return {"current": 0, "best": best}
 const GRENADE_SVG := "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\"><ellipse cx=\"16\" cy=\"20\" rx=\"9\" ry=\"10\" fill=\"#6f7a5a\" stroke=\"#3d4433\" stroke-width=\"2\"/><rect x=\"13\" y=\"6\" width=\"6\" height=\"5\" rx=\"1\" fill=\"#8a8f7a\" stroke=\"#3d4433\" stroke-width=\"1.5\"/><path d=\"M19 8 q7 1 7 7\" fill=\"none\" stroke=\"#c9c2b2\" stroke-width=\"2\"/><path d=\"M26 15 l0 4\" fill=\"none\" stroke=\"#c9c2b2\" stroke-width=\"2\"/></svg>"
-const HS_SVG := "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\"><circle cx=\"16\" cy=\"16\" r=\"11\" fill=\"none\" stroke=\"#FFD669\" stroke-width=\"2.5\"/><circle cx=\"16\" cy=\"16\" r=\"3.5\" fill=\"#FFD669\"/><path d=\"M16 1v7M16 24v7M1 16h7M24 16h7\" fill=\"none\" stroke=\"#FFD669\" stroke-width=\"2.5\"/></svg>"
-# Мина: приземистый корпус в палитре гранаты и взрыватель с усиками сверху.
-const MINE_SVG := "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\"><ellipse cx=\"16\" cy=\"20\" rx=\"11\" ry=\"7\" fill=\"#6f7a5a\" stroke=\"#3d4433\" stroke-width=\"2\"/><rect x=\"13\" y=\"10\" width=\"6\" height=\"6\" rx=\"1\" fill=\"#8a8f7a\" stroke=\"#3d4433\" stroke-width=\"1.5\"/><path d=\"M16 10 v-4 M10 12 l-3 -3 M22 12 l3 -3\" fill=\"none\" stroke=\"#c9c2b2\" stroke-width=\"2\"/><path d=\"M9 20 h14\" fill=\"none\" stroke=\"#3d4433\" stroke-width=\"1.5\"/></svg>"
+# Headshot — картинка, а не вектор: рисунок линеарный, контуром в SVG он
+# разваливается. 32 px по ширине с альфой, золото вписано в пиксели. PNG
+# лежит строкой base64 и декодируется в память: ни файла, ни load(), ни
+# import, поэтому иконка переживает любой апдейт игры.
+const HS_PNG := "iVBORw0KGgoAAAANSUhEUgAAACAAAAAcCAYAAAAAwr0iAAADXklEQVR42qXXS4hcVRAG4K8fM4kojOAQUFR0E42iKGQUo4igEQQVFZEYMJKNOITgIotsshNBFN0ouhE0EV+48I0oiM8EjcYHykRQfBHd6ETiI2jSt68L/wuHdqanezxw6L7nnlP1V9VfVee26rlZaKH277gQt+IqnIQO/sD3eBfP5FfeVcYbpS7tYuFYPIg3MZu1X6JkCudiC97CCzgryrvZ08zuwJzI+irsjN4NOK0EMIU3omASV+MybMbleDEH/8qZa7EX16MXIM3sDcyjWb8AJ+JuPIXjMdFFH4/G9TuwH69E4Q/5rRKSlfFMFY89i+ejpHFrf2DO4228HLn7MINPoVXPzd6UuPawMUIn89x4qYcz8FiA1vFca4zYf41NAXRnZBxu4448PIAPsCIWlVa0cVxcWCqvC7cPG7/i1Xi04dYRVF2szabbE/e1Ed6J4HZAVAlBa4DRQradeHKBzDiKr3Agz68Ve3XjbjgG52Mb7o3SBsTJ2BXvVIXScpyC14d4YQq744kncAIebhfuq+KeW8LYG7L2SNCeE+Z2B5S3s+/ipFanSL0yNQ+FsC/hEvyOXquem/0Z00Vsj8T6ldiDdVH0Rch6EFckBeuBkJyHz4qwLTm6+G4AwGTxfl2s+zbsP5z1h5LLG/L+PnyJH/O+XkRfJ8AaEldtfLzAoTqzIeGK5H1Jvon8fwfbA2B+CQBNmBtS66ZI3DaE3XUItjdWH8Q1uDTvzsT6ohi1hgD4b2Oo52ZPxVwsrBcpLgutD649jZvHbVDtFIfPizK6WAfrF/W9KpQ3bl29hIxFAcBHS8Su2dukYGug4Uj2jD2afD4wxpk6YNoDMt4rmN4bF0A1hvJWSutu/Jm0vTFNbOwQNACmR9hbxbpduTGVY18K0LI40EoZtUR7bdJrBlcWdWAaP+HvIixjAViFNQOkHEbYNelon+C5XOHmRzBgUaFT6Uz9MS6UNc7GdQnLnqIpjQ3gG9xT3HxGAVESd9tyrS9b6Xbcn7j2RiildUrvpvT3ZVlfxrUTS+4aITWrnHsfjxcdzv8BUEfQDmwtbkP9BbzRlOWZfLhUy3V/A6Bsj518nFyUm0t7AeFNFdyfL6ZlK2+ErcbpRRHp4MN8fGxMn+8X3jiUa9p6/DZCDxk6/gEjygZpONHjZgAAAABJRU5ErkJggg=="
+# Мина: настоящая в игре — POM-3 (Assets/POM-3), предмета-мины в базе нет,
+# поэтому рисунок свой: столб с крышкой и горизонтальная опора внизу, ноги
+# под 90° к столбу. Палитра как у гранаты, опора светлая — читается на плашке.
+const MINE_SVG := "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\"><rect x=\"12.6\" y=\"5.2\" width=\"6.8\" height=\"15.4\" rx=\"2.2\" fill=\"#6f7a5a\" stroke=\"#3d4433\" stroke-width=\"1.6\"/><rect x=\"14\" y=\"2\" width=\"4\" height=\"3.4\" rx=\"1.3\" fill=\"#c9c2b2\"/><rect x=\"4.6\" y=\"20.6\" width=\"22.8\" height=\"3.4\" rx=\"1.7\" fill=\"#c9c2b2\"/></svg>"
 var _counter_enabled: bool = false
 var _feed_enabled: bool = false
 var _streak_enabled: bool = false
@@ -482,7 +488,7 @@ func _add_tex(row: HBoxContainer, tex: Texture2D, width_mul: float = 1.0) -> voi
 	iv.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(iv)
 func _hs_texture() -> Texture2D:
-	return Surface.svg_texture(HS_SVG)
+	return Surface.png_texture(HS_PNG)
 func _weapon_texture(weapon: String) -> Texture2D:
 	if weapon == "":
 		return null
