@@ -6,11 +6,14 @@ const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 const SceneProbe = preload("res://mods/ThermalVTK/VTKSceneProbe.gd")
 
-# Owns the NVG overlay shader, plus mine highlighting and ESP key substitution.
+# Owns the NVG overlay shader, contour ESP key substitution (transitional), and
+# mine ESP buffer rendering.
 #
-# ESP/mine visuals emit fixed detection keys in the 3D pass; the NVG shader
-# detects washed keys in screen space and outputs configured display colours so
-# highlights remain correct through the thermal post-process.
+# Contour ESP visuals currently emit fixed detection keys in the 3D pass; the
+# NVG shader detects washed keys in screen space and substitutes display colours.
+# Mine ESP renders as direct-colour shell meshes into the shared NVG ESP buffer
+# (layer 20) and is composited over the palettized background, never as a
+# key-substitution material_override on source meshes.
 
 const GAME_DATA_RES := Paths.GAME_DATA
 const NVG_SCRIPT_SUFFIX := "NVG.gd"
@@ -20,13 +23,15 @@ const KEY_GAIN_PARAM := &"vtk_key_gain"
 const TICK := 0.1
 const ESP_BUFFER_LAYER := 20
 const ESP_BUFFER_LAYER_BIT := 1 << 19
+const MINE_SHELL_META := "vtk_mine_shell"
+const NO_CONTOUR_META := "vtk_no_contour"
 
-# Detector key for mines. Fixed by design and kept in lockstep with the
-# shader's mineKey uniform and the unshaded overlay material that emits it.
+# Legacy mine detector key/uniform values kept for transitional shader/runtime
+# compatibility (mine rendering no longer emits/substitutes this key).
 const MINE_KEY := Color(0.0, 0.0, 1.0)
+const DET_MINE := Color(0.50, 0.06, 0.94)
 # Detection targets, NOT the emitted keys. The vanilla NVG world processing
 # washes bright keys before the screen shader sees them.
-const DET_MINE := Color(0.50, 0.06, 0.94)
 const DET_ST_NORMAL := Color(1.00, 0.21, 0.16)
 const DET_ST_COMBAT := Color(0.82, 1.00, 1.00)
 const DET_ST_DEFEND := Color(1.00, 0.34, 1.00)
@@ -62,7 +67,7 @@ var set_vrcets_strength: float = 0.58
 var set_vrcets_red_hold: float = 0.72
 
 var _state_colors: Dictionary = {}
-# Display colour substituted for the detected mine key (MCM "Mine" colour).
+# Direct display colour of mine ESP buffer shells (MCM "Mine" colour).
 var _mine_color: Color = States.DEFAULT_MINE
 var _game_data: Resource = null
 var _shader: Shader = null
@@ -80,6 +85,7 @@ var _esp_demand: bool = false
 
 var _mines: Dictionary = {}
 var _mine_watch: Dictionary = {}
+var _mine_painted: int = 0
 var _dirty: bool = true
 var _script_kind: Dictionary = {}
 const MINE_RETRY_LIMIT := 50
@@ -159,8 +165,8 @@ func _ready() -> void:
 	if ResourceLoader.exists(SHADER_RES):
 		_shader = load(SHADER_RES) as Shader
 
-	# Key material emits the detector pixel for mines.
-	_mat_mine = _key_material(MINE_KEY)
+	# Direct mine display material for ESP buffer shells (no key emission).
+	_mat_mine = _mine_display_material(_mine_color)
 	_register_key_gain()
 
 	get_tree().node_added.connect(_on_node_added)
@@ -209,6 +215,21 @@ func _key_set(m: StandardMaterial3D, c: Color) -> void:
 	m.emission_energy_multiplier = _key_gain
 
 
+func _mine_display_material(c: Color) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.albedo_color = c
+	m.emission_enabled = false
+	return m
+
+
+func _refresh_mine_material() -> void:
+	if _mat_mine == null:
+		_mat_mine = _mine_display_material(_mine_color)
+		return
+	_mat_mine.albedo_color = _mine_color
+
+
 # The global is a render-global uniform: every shader that declares
 # `global uniform float vtk_key_gain` reads this value without a per-frame
 # push from GDScript. Registered once per process.
@@ -226,7 +247,6 @@ func _push_key_gain() -> void:
 		return
 	_key_gain = gain
 	RenderingServer.global_shader_parameter_set("vtk_key_gain", _key_gain)
-	_key_set(_mat_mine, MINE_KEY)
 	Dbg.log("DAY", "key_gain=%.3f factor=%.3f exp=%.3f" % [_key_gain, _day_factor, _last_exposure])
 
 
@@ -310,7 +330,7 @@ func _try_install_shader() -> void:
 
 func _apply_uniforms() -> void:
 	_dirty = false
-	_key_set(_mat_mine, MINE_KEY)
+	_refresh_mine_material()
 	if not _installed or _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
 		return
 	var nvg_mat = _nvg_mat_node.get("material")
@@ -341,11 +361,11 @@ func _apply_uniforms() -> void:
 	_push_esp_composite()
 
 
-# Display colour of the mine key. Stored even before the overlay material is
-# installed: _apply_uniforms pushes it on every install, so a value set here
-# survives a map change that rebuilds the overlay.
+# Direct display colour of mine ESP buffer shells. Stored even before the
+# overlay material is installed and applied to the shared mine shell material.
 func set_mine_color(c: Color) -> void:
 	_mine_color = c
+	_refresh_mine_material()
 	if _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
 		return
 	var mat = _nvg_mat_node.get("material")
@@ -405,13 +425,16 @@ func esp_buffer_layer() -> int:
 	return ESP_BUFFER_LAYER
 
 func esp_composite_active() -> bool:
-	return _esp_render_on()
+	return _esp_render_on() or _mine_buffer_wanted()
 
 func esp_buffer_viewport() -> SubViewport:
 	return _esp_vp
 
 func _esp_render_on() -> bool:
 	return _esp_on and _esp_demand
+
+func _mine_buffer_wanted() -> bool:
+	return set_thermal and _nvg_active() and set_mines
 
 func _ensure_esp_buffer() -> bool:
 	if _esp_vp != null and is_instance_valid(_esp_vp):
@@ -537,8 +560,7 @@ func _process(delta: float) -> void:
 	_drain_pending()
 	if get_tree().current_scene != _scene_ref:
 		_scene_ref = get_tree().current_scene
-		_mines.clear()
-		_mine_watch.clear()
+		_clear_mine_state()
 		_script_kind.clear()
 		_nvg_root = null
 		_installed = false
@@ -861,7 +883,6 @@ func _reset_daylight() -> void:
 	_day_factor = 1.0
 	_key_gain = 1.0
 	RenderingServer.global_shader_parameter_set("vtk_key_gain", _key_gain)
-	_key_set(_mat_mine, MINE_KEY)
 	_push_day_mix()
 	_dirty = true
 
@@ -959,7 +980,7 @@ func _off_frame_upkeep() -> void:
 		if e == null or not is_instance_valid(e.get("node")):
 			drop.append(id)
 	for id in drop:
-		_mines.erase(id)
+		_remove_mine(id)
 
 
 func _clear_paint() -> void:
@@ -967,10 +988,9 @@ func _clear_paint() -> void:
 		var e = _mines.get(id)
 		if e == null:
 			continue
-		e["painted"] = false
-		for m in e.get("meshes", []):
-			if is_instance_valid(m):
-				(m as GeometryInstance3D).material_override = null
+		_set_mine_painted(e, false)
+		_clear_source_overrides(e)
+	_mine_painted = 0
 
 
 func _player_pos() -> Vector3:
@@ -992,14 +1012,13 @@ func _register_mine(node: Node) -> void:
 	# Always sweep the whole mine node: that covers the shell LODs and the
 	# interior, and the Area3D is skipped automatically because it isn't
 	# geometry.
-	var visual: Node = node
 	var meshes: Array = []
-	_collect_meshes(visual, meshes)
+	_collect_meshes(node, meshes)
 	if meshes.is_empty():
 		_mine_watch[id] = {"node": node, "tries": 0}
 		return
 	_mine_watch.erase(id)
-	_mines[id] = {"node": node, "meshes": meshes}
+	_mines[id] = _build_mine_entry(node, meshes)
 
 
 func _retry_mines() -> void:
@@ -1015,7 +1034,7 @@ func _retry_mines() -> void:
 		var meshes: Array = []
 		_collect_meshes(n, meshes)
 		if not meshes.is_empty():
-			_mines[id] = {"node": n, "meshes": meshes}
+			_mines[id] = _build_mine_entry(n, meshes)
 			drop.append(id)
 			continue
 		var tries := int(w.get("tries", 0)) + 1
@@ -1024,6 +1043,121 @@ func _retry_mines() -> void:
 			drop.append(id)
 	for id in drop:
 		_mine_watch.erase(id)
+
+
+func _build_mine_entry(node: Node, meshes: Array) -> Dictionary:
+	var entry := {"node": node, "meshes": meshes, "shells": [], "painted": false}
+	_clear_source_overrides(entry)
+	_rebuild_mine_shells(entry)
+	return entry
+
+
+func _clear_source_overrides(e: Dictionary) -> void:
+	for m in e.get("meshes", []):
+		if is_instance_valid(m):
+			(m as GeometryInstance3D).material_override = null
+
+
+func _mine_shells(entry: Dictionary) -> Array:
+	var s = entry.get("shells", [])
+	return s if s is Array else []
+
+
+func _sync_mine_shell(shell: MeshInstance3D, src: MeshInstance3D) -> void:
+	if not is_instance_valid(src) or not src.is_inside_tree():
+		return
+	if not is_instance_valid(shell) or not shell.is_inside_tree():
+		return
+	shell.global_transform = src.global_transform
+	shell.visible = src.visible
+	shell.layers = ESP_BUFFER_LAYER_BIT
+
+
+func _make_mine_shell(src: MeshInstance3D) -> MeshInstance3D:
+	var shell := MeshInstance3D.new()
+	shell.set_meta(NO_CONTOUR_META, true)
+	shell.set_meta(MINE_SHELL_META, true)
+	shell.top_level = true
+	shell.mesh = src.mesh
+	shell.skin = src.skin
+	shell.skeleton = src.skeleton
+	shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	shell.material_override = _mat_mine
+	shell.visible = false
+	src.add_sibling(shell)
+	_sync_mine_shell(shell, src)
+	shell.visible = false
+	return shell
+
+
+func _rebuild_mine_shells(entry: Dictionary) -> void:
+	_free_mine_shells(entry)
+	var shells: Array = []
+	for m in entry.get("meshes", []):
+		var src := m as MeshInstance3D
+		if src == null or not is_instance_valid(src):
+			continue
+		shells.append(_make_mine_shell(src))
+	entry["shells"] = shells
+	_apply_mine_paint(entry, bool(entry.get("painted", false)))
+
+
+func _free_mine_shells(entry: Dictionary) -> void:
+	for s in _mine_shells(entry):
+		var shell := s as MeshInstance3D
+		if shell != null and is_instance_valid(shell):
+			shell.queue_free()
+	entry["shells"] = []
+
+
+func _set_mine_painted(entry: Dictionary, show: bool) -> void:
+	if bool(entry.get("painted", false)) == show:
+		if show:
+			_apply_mine_paint(entry, true)
+		return
+	entry["painted"] = show
+	if show:
+		_mine_painted += 1
+	else:
+		_mine_painted = maxi(_mine_painted - 1, 0)
+	_apply_mine_paint(entry, show)
+
+
+func _apply_mine_paint(entry: Dictionary, show: bool) -> void:
+	var meshes: Array = entry.get("meshes", [])
+	var shells: Array = _mine_shells(entry)
+	for i in shells.size():
+		var shell := shells[i] as MeshInstance3D
+		if shell == null or not is_instance_valid(shell):
+			continue
+		if i < meshes.size():
+			var src := meshes[i] as MeshInstance3D
+			if src != null and is_instance_valid(src):
+				_sync_mine_shell(shell, src)
+		shell.material_override = _mat_mine
+		shell.visible = show
+
+
+func _remove_mine(id: int) -> void:
+	var e = _mines.get(id)
+	if e != null:
+		if bool(e.get("painted", false)):
+			_mine_painted = maxi(_mine_painted - 1, 0)
+		_clear_source_overrides(e)
+		_free_mine_shells(e)
+	_mines.erase(id)
+
+
+func _clear_mine_state() -> void:
+	for id in _mines.keys():
+		var e = _mines.get(id)
+		if e == null:
+			continue
+		_clear_source_overrides(e)
+		_free_mine_shells(e)
+	_mines.clear()
+	_mine_watch.clear()
+	_mine_painted = 0
 
 
 func _script_kind_for(n: Node) -> int:
@@ -1045,7 +1179,8 @@ func _script_kind_for(n: Node) -> int:
 
 func _collect_meshes(node: Node, out: Array) -> void:
 	# GeometryInstance3D rather than MeshInstance3D: some visuals are MultiMesh
-	# or CSG, and material_override lives on the base class.
+	# or CSG. Shell rendering uses MeshInstance3D copies; sources never receive
+	# a key-substitution override.
 	if node is GeometryInstance3D:
 		out.append(node)
 	for child in node.get_children():
@@ -1057,20 +1192,14 @@ func _update_mine(id: int, thermal_on: bool, ppos: Vector3) -> void:
 	if e == null:
 		return
 	if not is_instance_valid(e["node"]):
-		_mines.erase(id)
+		_remove_mine(id)
 		return
 	# Mines read as scenery past the shared outline distance.
 	var node = e["node"]
 	var dist := ppos.distance_to(node.global_position)
 	var show := thermal_on and set_mines and dist <= maxf(set_glow_distance, 1.0)
-	# material_override writes mark the instance dirty every frame. The paint
-	# only changes on a range crossing, so skip the write while it holds.
-	if bool(e.get("painted", false)) == show:
-		return
-	e["painted"] = show
-	for mesh in e["meshes"]:
-		if is_instance_valid(mesh):
-			mesh.material_override = _mat_mine if show else null
+	_set_mine_painted(e, show)
+	_clear_source_overrides(e)
 
 
 func set_thermal_enabled(on: bool) -> void:
@@ -1120,6 +1249,7 @@ func set_vrcets_tuning(strength: float, red_hold: float) -> void:
 
 
 func _exit_tree() -> void:
+	_clear_mine_state()
 	_restore_main_cam_mask()
 
 # Hide the NVG overlay for a single frame. The overlay paints the thermal
