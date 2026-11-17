@@ -500,7 +500,13 @@ func _sync_esp_buffer(active: bool) -> void:
 		_esp_main_cam = cam
 		_esp_main_cam_mask = cam.cull_mask
 		_esp_main_cam_mask_saved = true
-	_esp_main_cam.cull_mask = _esp_main_cam_mask & ~ESP_BUFFER_LAYER_BIT
+	else:
+		var want := _esp_main_cam_mask & ~ESP_BUFFER_LAYER_BIT
+		if cam.cull_mask != want:
+			# External code changed the camera mask while compositing: adopt the
+			# new mask as the restorable state, but keep layer 20 excluded.
+			_esp_main_cam_mask = cam.cull_mask
+	cam.cull_mask = _esp_main_cam_mask & ~ESP_BUFFER_LAYER_BIT
 
 func _push_esp_composite() -> void:
 	if _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
