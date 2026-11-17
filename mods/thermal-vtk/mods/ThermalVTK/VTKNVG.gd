@@ -6,22 +6,28 @@ const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 const SceneProbe = preload("res://mods/ThermalVTK/VTKSceneProbe.gd")
 
-# Owns the NVG overlay shader and the direct-material mine highlight layer.
+# Owns the NVG overlay shader, plus mine highlighting and ESP key substitution.
 #
-# The NVG shader handles thermal/NVG output only (palette, daylight, noise,
-# white/tint). ESP contour rendering and mine highlighting are direct 3D
-# materials: contour overlays live in VTKOutline/VTKESP, mine highlights are
-# applied here as direct display-colour material_override on mine meshes.
-#
-# Mine discovery is event-driven (SceneTree.node_added + batched drain) rather
-# than a full scene walk, and per-mine work is a cached reference swap -- no
-# material allocation after startup except colour refresh.
+# ESP/mine visuals emit fixed detection keys in the 3D pass; the NVG shader
+# detects washed keys in screen space and outputs configured display colours so
+# highlights remain correct through the thermal post-process.
 
 const GAME_DATA_RES := Paths.GAME_DATA
 const NVG_SCRIPT_SUFFIX := "NVG.gd"
 const SHADER_RES := "res://mods/ThermalVTK/VTKNVG.gdshader"
+const KEY_GAIN_PARAM := &"vtk_key_gain"
 
 const TICK := 0.1
+
+# Detector key for mines. Fixed by design and kept in lockstep with the
+# shader's mineKey uniform and the unshaded overlay material that emits it.
+const MINE_KEY := Color(0.0, 0.0, 1.0)
+# Detection targets, NOT the emitted keys. The vanilla NVG world processing
+# washes bright keys before the screen shader sees them.
+const DET_MINE := Color(0.50, 0.06, 0.94)
+const DET_ST_NORMAL := Color(1.00, 0.21, 0.16)
+const DET_ST_COMBAT := Color(0.82, 1.00, 1.00)
+const DET_ST_DEFEND := Color(1.00, 0.34, 1.00)
 
 # settings
 var set_nvg_noise: float = 0.0
@@ -46,8 +52,13 @@ var set_frame_level: float = Daylight.DAY_LEVEL
 var set_frame_cadence: float = Daylight.FRAME_CADENCE
 # Time acceleration of the day/night cycle (F9 "Time scale" lever; testing).
 var set_time_scale: float = 1.0
+# Brightness of ESP state display colours in NVG substitution.
+var set_state_brightness: float = 0.6
+var set_vrcets_strength: float = 0.58
+var set_vrcets_red_hold: float = 0.72
 
-# Display colour for direct mine highlights (MCM "Mine" colour).
+var _state_colors: Dictionary = {}
+# Display colour substituted for the detected mine key (MCM "Mine" colour).
 var _mine_color: Color = States.DEFAULT_MINE
 var _game_data: Resource = null
 var _shader: Shader = null
@@ -55,8 +66,13 @@ var _nvg_root: Node = null
 var _nvg_mat_node: Node = null
 var _installed: bool = false
 
-# Direct mine highlight material: unshaded display colour, reused across mines.
 var _mat_mine: StandardMaterial3D = null
+# `_esp_on` is the layer switch (armed by ThermalVTK._apply_mode through
+# set_esp_layer); `_esp_demand` is whether a contour is actually on screen this
+# frame (ThermalVTK pushes it from VTKESP.wants_contour). The shader substitutes
+# when both hold.
+var _esp_on: bool = false
+var _esp_demand: bool = false
 
 var _mines: Dictionary = {}
 var _mine_watch: Dictionary = {}
@@ -68,12 +84,16 @@ var _tick_cd: float = 0.0
 var _scene_ref: Node = null
 # прошлое значение on, нужно ровно для перехода on->off (снять покраску один раз).
 var _was_on: bool = false
+# PIP off + magnifying scope rotates colour channels, so the overlay detector
+# matches a key's orbit; pushed only on change (see _process).
+var _scope_rotate: bool = false
 
 # Daylight compensation. `_last_exposure` is the value WE last wrote; if the
 # environment reads something else, the vanilla ResetCheck has written it and
 # that value becomes the new vanilla baseline.
 var _day_factor: float = 1.0
 var _day_mix: float = 0.0
+var _key_gain: float = 1.0
 # Source A: the scene level folded from the game's light state (see _snapshot)
 # and the RAW factor it produced -- no strength here, strength is applied once
 # in _target_factor. _factor_a is kept current under every source so the panel
@@ -104,6 +124,10 @@ var _snow_trim: float = 1.0
 var _day_trim: float = 1.0
 var _vanilla_exposure: float = 3.0
 var _last_exposure: float = -1.0
+# Process-wide, not per instance: the global lives in RenderingServer, so a
+# rebuilt VTKNVG must not add it twice. Static because there is no usable
+# existence probe in a shipping build.
+static var _key_gain_registered: bool = false
 var _was_worn: bool = false
 var _sim: Node = null
 var _world: Node = null
@@ -121,7 +145,9 @@ func _ready() -> void:
 	if ResourceLoader.exists(SHADER_RES):
 		_shader = load(SHADER_RES) as Shader
 
-	_mat_mine = _mine_material(_mine_color)
+	# Key material emits the detector pixel for mines.
+	_mat_mine = _key_material(MINE_KEY)
+	_register_key_gain()
 
 	get_tree().node_added.connect(_on_node_added)
 	_scene_ref = get_tree().current_scene
@@ -147,7 +173,7 @@ func _scan_node(n: Node) -> void:
 		_scan_node(c)
 
 
-func _mine_material(c: Color) -> StandardMaterial3D:
+func _key_material(c: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.albedo_color = c
@@ -157,13 +183,37 @@ func _mine_material(c: Color) -> StandardMaterial3D:
 	return m
 
 
-func _sync_mine_material() -> void:
-	if _mat_mine == null:
-		_mat_mine = _mine_material(_mine_color)
+# Repaint an existing key material. Must mirror _key_material exactly, otherwise
+# the emitted pixel stops matching the shader key and the category disappears.
+# The daylight gain lives here too: the key is scaled BEFORE the tonemap, and
+# the reduced exposure divides it back, so the detector sees the same pixel.
+func _key_set(m: StandardMaterial3D, c: Color) -> void:
+	if m == null:
 		return
-	_mat_mine.albedo_color = _mine_color
-	_mat_mine.emission = _mine_color
-	_mat_mine.emission_energy_multiplier = 1.0
+	m.albedo_color = Color(c.r * _key_gain, c.g * _key_gain, c.b * _key_gain, c.a)
+	m.emission = c
+	m.emission_energy_multiplier = _key_gain
+
+
+# The global is a render-global uniform: every shader that declares
+# `global uniform float vtk_key_gain` reads this value without a per-frame
+# push from GDScript. Registered once per process.
+func _register_key_gain() -> void:
+	if _key_gain_registered:
+		RenderingServer.global_shader_parameter_set("vtk_key_gain", _key_gain)
+		return
+	_key_gain_registered = true
+	RenderingServer.global_shader_parameter_add("vtk_key_gain", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, _key_gain)
+
+
+func _push_key_gain() -> void:
+	var gain := Daylight.key_gain(_day_factor)
+	if is_equal_approx(gain, _key_gain):
+		return
+	_key_gain = gain
+	RenderingServer.global_shader_parameter_set("vtk_key_gain", _key_gain)
+	_key_set(_mat_mine, MINE_KEY)
+	Dbg.log("DAY", "key_gain=%.3f factor=%.3f exp=%.3f" % [_key_gain, _day_factor, _last_exposure])
 
 
 func _on_node_added(node: Node) -> void:
@@ -246,6 +296,7 @@ func _try_install_shader() -> void:
 
 func _apply_uniforms() -> void:
 	_dirty = false
+	_key_set(_mat_mine, MINE_KEY)
 	if not _installed or _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
 		return
 	var nvg_mat = _nvg_mat_node.get("material")
@@ -258,15 +309,73 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("worldPaletteMode", set_palette)
 	nvg_mat.set_shader_parameter("highlightKnee", set_highlight_knee)
 	nvg_mat.set_shader_parameter("nvgWhite", set_nvg_white)
+	nvg_mat.set_shader_parameter("vrcetsStrength", set_vrcets_strength)
+	nvg_mat.set_shader_parameter("vrcetsRedHold", set_vrcets_red_hold)
+	nvg_mat.set_shader_parameter("mineKey", DET_MINE)
+	_push_esp_on()
+	nvg_mat.set_shader_parameter("stNormalColor", _state_colors.get("state_normal", States.DEFAULT_NORMAL))
+	nvg_mat.set_shader_parameter("stCombatColor", _state_colors.get("state_combat", States.DEFAULT_COMBAT))
+	nvg_mat.set_shader_parameter("stDefendColor", _state_colors.get("state_defend", States.DEFAULT_DEFEND))
+	nvg_mat.set_shader_parameter("mineColor", _mine_color)
+	nvg_mat.set_shader_parameter("stateBright", set_state_brightness)
+	nvg_mat.set_shader_parameter("stNormalKey", DET_ST_NORMAL)
+	nvg_mat.set_shader_parameter("stCombatKey", DET_ST_COMBAT)
+	nvg_mat.set_shader_parameter("stDefendKey", DET_ST_DEFEND)
+	nvg_mat.set_shader_parameter("scopeRotate", _scope_rotate)
 
 
-# Display colour for direct mine highlights.
+# Display colour of the mine key. Stored even before the overlay material is
+# installed: _apply_uniforms pushes it on every install, so a value set here
+# survives a map change that rebuilds the overlay.
 func set_mine_color(c: Color) -> void:
 	_mine_color = c
-	_sync_mine_material()
+	if _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
+		return
+	var mat = _nvg_mat_node.get("material")
+	if mat is ShaderMaterial:
+		(mat as ShaderMaterial).set_shader_parameter("mineColor", _mine_color)
 
 func mine_color() -> Color:
 	return _mine_color
+
+# The contour asks for the screen through ThermalVTK._apply_mode: this arms the
+# layer switch. The per-frame demand below decides whether the substitution runs.
+func set_esp_layer(on: bool) -> void:
+	if _esp_on == on:
+		return
+	_esp_on = on
+	_push_esp_on()
+
+# A contour is on screen this frame (ThermalVTK polls VTKESP.wants_contour). Turning
+# the layer off here also turns the shader substitution off, so the last frame
+# can never linger on screen.
+func set_esp_demand(on: bool) -> void:
+	if _esp_demand == on:
+		return
+	_esp_demand = on
+	_push_esp_on()
+
+func _push_esp_on() -> void:
+	if _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
+		return
+	var mat = _nvg_mat_node.get("material")
+	if mat is ShaderMaterial:
+		(mat as ShaderMaterial).set_shader_parameter("espOn", _esp_render_on())
+
+
+func set_state_colors(colors: Dictionary) -> void:
+	_state_colors = colors
+	_dirty = true
+
+func set_esp_brightness(v: float) -> void:
+	if is_equal_approx(set_state_brightness, v):
+		return
+	set_state_brightness = v
+	_dirty = true
+
+
+func _esp_render_on() -> bool:
+	return _esp_on and _esp_demand
 
 
 func _nvg_active() -> bool:
@@ -294,6 +403,21 @@ func _process(delta: float) -> void:
 		_reset_daylight()
 	var worn := _nvg_active()
 	var on := set_thermal and worn
+	# PIP off + aiming a magnifying scope is the only path that rotates colour
+	# channels; flag the overlay then so it matches whole key orbits.
+	var want := false
+	if _game_data != null and _game_data.has_method("get"):
+		want = bool(_game_data.get("isScoped"))
+		if want:
+			var pip = _game_data.get("PIP")
+			if pip == null or bool(pip):
+				want = false
+	if want != _scope_rotate:
+		_scope_rotate = want
+		if _installed and _nvg_mat_node != null and is_instance_valid(_nvg_mat_node):
+			var sm = _nvg_mat_node.get("material")
+			if sm is ShaderMaterial:
+				(sm as ShaderMaterial).set_shader_parameter("scopeRotate", _scope_rotate)
 	if worn != _was_worn:
 		_was_worn = worn
 		_dirty = true
@@ -313,7 +437,6 @@ func _process(delta: float) -> void:
 	_was_on = on
 
 	if not on:
-		# Покой при off: только дешёвый присмотр (см. _off_frame_upkeep).
 		_off_frame_upkeep()
 
 	if _tick_cd > 0.0:
@@ -327,12 +450,6 @@ func _process(delta: float) -> void:
 	_retry_mines()
 
 
-# Fold the game's own light state into one scalar (see VTKDaylight.estimate_light).
-# The only place in the daylight path that reads the tree and the environment:
-# everything downstream works on the number. Reads the World node through
-# _environment(), which resolves _world; a missing world returns {} and the
-# estimate is 0, i.e. vanilla exposure. Object.get() takes exactly one argument,
-# so every read is a plain get() with the default spelled out here.
 func _snapshot() -> Dictionary:
 	var env := _environment()
 	if env == null or _world == null:
@@ -368,8 +485,6 @@ func _snapshot() -> Dictionary:
 	return snap
 
 
-# sun/moon share one shape: colour, energy and cull mask. A culled light has
-# mask 0 and is dropped by estimate_light; a missing light contributes nothing.
 func _snapshot_light(snap: Dictionary, prefix: String, light) -> void:
 	if light == null:
 		return
@@ -378,21 +493,12 @@ func _snapshot_light(snap: Dictionary, prefix: String, light) -> void:
 	snap[prefix + "_mask"] = light.get("light_cull_mask")
 
 
-# Night gate input: the game itself culls the sun (World.TOD sets
-# sunLight.light_cull_mask = 0 outside 06:00-18:00 and lights the moon), so the
-# mask is exact at dusk and dawn where the TOD bands lag. Maps without a sun
-# fall back to "the moon is lit"; with neither light the gate stays silent and
-# source A alone decides.
 func _compute_sun_down(snap: Dictionary) -> bool:
 	if bool(snap.get("sun_present", false)):
 		return int(snap.get("sun_mask", 0)) == 0
 	return int(snap.get("moon_mask", 0)) != 0
 
 
-# Recompute source A and the frame ceiling from the cached snapshot and the
-# CURRENT smoothed factor. The ceiling is inert without a measurement (probe
-# off or nothing read): then it mirrors source A so the readout shows the
-# value the picture actually uses.
 func _refresh_daylight_state() -> void:
 	_factor_a = Daylight.factor_for_light(_light_est, set_day_target, set_day_floor)
 	if _frame_l > 0.0:
@@ -403,15 +509,11 @@ func _refresh_daylight_state() -> void:
 		_ceiling = _factor_a
 
 
-# The factor the picture wants: the looser of source A (the game's light
-# state) and the frame ceiling, with the night gate and strength applied. At
-# night the gate returns 1.0 before strength, so the picture is vanilla.
 func _target_factor() -> float:
 	var raw := maxf(_factor_a, _ceiling)
 	return Daylight.strength_factor(Daylight.night_gate(raw, _sun_down), set_strength)
 
 
-# 24 in-game hours per 2.4 real hours (owner measurement): 1440 / 8640.
 const SIM_MINUTES_PER_REAL_SEC := 1.0 / 6.0
 
 
@@ -436,10 +538,6 @@ static func minutes_to_hhmm(total: float) -> Dictionary:
 	return {"time": float(h * 100) + m, "day_inc": day_inc}
 
 
-# Time control of the day/night cycle (F9 "Time scale" lever). 1.0 = normal,
-# >1 accelerates by advancing Simulation.time, 0 freezes the clock (best-effort:
-# re-applies the latched time/day, so weather and other time-driven systems may
-# behave oddly). Engine.time_scale stays at 1.0 so physics/audio run normally.
 func _apply_time_scale(delta: float) -> void:
 	Engine.time_scale = 1.0
 	var scale := clampf(set_time_scale, 0.0, 10.0)
@@ -449,8 +547,6 @@ func _apply_time_scale(delta: float) -> void:
 	if sim == null or not is_instance_valid(sim):
 		return
 	if scale <= 0.0:
-		# Best-effort freeze for debug captures: keep writing back the latched
-		# time/day so the game clock does not advance while the lever is at 0.
 		if not has_meta("_vtk_time_frozen"):
 			set_meta("_vtk_time_frozen", true)
 			set_meta("_vtk_frozen_time", sim.get("time"))
@@ -473,9 +569,6 @@ func _apply_time_scale(delta: float) -> void:
 		sim.set("day", int(sim.get("day")) + day_inc)
 
 
-# Lazily create the frame probe and wire its signal. The probe is a child of
-# this node (which the ThermalVTK autoload parents under its own tree), so it
-# survives a map change along with the rest of the mod.
 func _ensure_probe() -> Node:
 	if _probe != null and is_instance_valid(_probe):
 		return _probe
@@ -485,9 +578,6 @@ func _ensure_probe() -> Node:
 	return _probe
 
 
-# One auto measurement landed: it is the input of the frame ceiling. An empty
-# dictionary means there was nothing to measure (no camera, no frame), so the
-# last frame is kept.
 func _on_probe_measured(stats: Dictionary) -> void:
 	if stats.is_empty():
 		return
@@ -496,14 +586,8 @@ func _on_probe_measured(stats: Dictionary) -> void:
 	_adapt_probe(measured)
 
 
-# Adaptive auto-probe cadence (source B): while the measured frame level holds
-# still the interval doubles (a quiet scene no longer pays a GPU sync per base
-# beat), and a frame change restarts it at the base. The decision itself is pure
-# (Daylight.adaptive_interval); this keeps the stable-run state.
 func _adapt_probe(measured: float) -> void:
 	if _frame_l_prev <= 0.0 or absf(measured - _frame_l_prev) > Daylight.PROBE_STABLE_TOL:
-		# First measurement, or a frame that really moved: (re)start the run at
-		# the base cadence.
 		_probe_stable = 1
 		_probe_interval = set_frame_cadence
 	else:
@@ -514,11 +598,6 @@ func _adapt_probe(measured: float) -> void:
 	_frame_l_prev = measured
 
 
-# Arm the probe only while the ceiling can matter: at night the gate throws it
-# away, so measuring then is a pure waste of the GPU sync, and with the thermal
-# overlay off the compensation is not running, so the ceiling is inert too. The
-# first measurement after arming lands after one cadence; until then the
-# ceiling is inert and source A runs.
 func _sync_probe() -> void:
 	var want := set_daylight and set_thermal and not _sun_down and _installed and _nvg_active()
 	if not want:
@@ -528,8 +607,6 @@ func _sync_probe() -> void:
 	_ensure_probe().set_auto(_probe_interval)
 
 
-# The F9 panel's Measure button: one synchronous-request measurement of the
-# picture camera's frame. Ownership of the probe lives here (see _ensure_probe).
 func measure_frame() -> Dictionary:
 	var probe := _ensure_probe()
 	if probe == null:
@@ -537,9 +614,6 @@ func measure_frame() -> Dictionary:
 	return await probe.measure(get_viewport())
 
 
-# Write the compensated exposure every frame. The vanilla ResetCheck runs in
-# _physics_process and re-applies the device power on its own cadence; _process
-# runs after physics, so this value is the one the frame is rendered with.
 func _daylight_tick(delta: float) -> void:
 	_apply_time_scale(delta)
 	if not set_daylight or not _installed:
@@ -549,15 +623,10 @@ func _daylight_tick(delta: float) -> void:
 		return
 	var cur := env.tonemap_exposure
 	if _last_exposure < 0.0 or absf(cur - _last_exposure) > 0.002:
-		# The vanilla NVG only ever writes 2.0/2.5/3.0 while worn. A 1.0 here
-		# means its _ready has not run Activate() yet (save load): keep the
-		# last baseline instead of dropping the exposure for one frame.
 		if cur >= 1.9:
 			_vanilla_exposure = cur
 	_sim_cd -= delta
 	if _sim_cd <= 0.0:
-		# The season, the indoor flag and the light state do not change between
-		# physics ticks: one tree read per 0.25 s is plenty for all of them.
 		_sim_cd = 0.25
 		_sim_season = int(_sim_value("season", 1))
 		_sim_indoor = _game_flag("indoor")
@@ -575,26 +644,18 @@ func _daylight_tick(delta: float) -> void:
 	_push_daylight_trims(_day_mix)
 
 
-# The tail of _daylight_tick: whatever factor sits in _day_factor, write the
-# exposure and the shader mix. Shared with refresh_daylight_now so the tick and
-# the panel lever can never compute different things. `cur` is the environment
-# exposure as the caller read it before applying.
 func _daylight_apply(env: Environment, cur: float) -> void:
 	var want := _vanilla_exposure * _day_factor
 	if absf(want - cur) > 0.002:
 		env.tonemap_exposure = want
 	_last_exposure = want
+	_push_key_gain()
 	var mix := Daylight.day_mix(_day_factor)
 	if absf(mix - _day_mix) > 0.001:
 		_day_mix = mix
 		_push_day_mix()
 
 
-# Snow and day trims from one place: the tick pushes them with the fresh day
-# mix, the panel refresh reuses the same call. Reads the CACHED sim flags --
-# the tick refreshes them on the sim cadence before calling here, so this
-# adds no tree lookups. `_sim_indoor`/`_sim_shelter` stay cached for the panel
-# and the [DAY] line only: the snow trim deliberately ignores them.
 func _push_daylight_trims(mix: float) -> void:
 	var snow: float = Daylight.snow_trim(_sim_season, mix, Daylight.SNOW_TRIM_NIGHT, Daylight.SNOW_TRIM_DAY, _day_factor)
 	if absf(snow - _snow_trim) > 0.001:
@@ -606,11 +667,6 @@ func _push_daylight_trims(mix: float) -> void:
 		_dirty = true
 
 
-# Live-panel lever: recompute the daylight state and apply it right now,
-# skipping the one-pole smoothing, so a dragged slider answers instantly.
-# Guards match the tick, plus _nvg_active(): with the helmet off the vanilla
-# Deactivate has already restored the exposure, and writing here would
-# fight it.
 func refresh_daylight_now() -> void:
 	Engine.time_scale = 1.0
 	if not set_daylight or not _installed or not _nvg_active():
@@ -626,8 +682,6 @@ func refresh_daylight_now() -> void:
 	_apply_uniforms()
 
 
-# Called on NVG off / map change. No environment write: vanilla Deactivate()
-# already restores 1.0, and a map change frees the old environment.
 func _reset_daylight() -> void:
 	_last_exposure = -1.0
 	_day_factor = 1.0
@@ -647,8 +701,6 @@ func _reset_daylight() -> void:
 	_sim = null
 	_world = null
 	_env = null
-	# The instrument levers do not survive a helmet-off or a map change: the
-	# panel is a measurement tool, not a persisted setting.
 	set_day_target = Daylight.TARGET
 	set_day_floor = Daylight.FLOOR
 	set_day_trim = Daylight.DAY_TRIM
@@ -660,12 +712,14 @@ func _reset_daylight() -> void:
 		remove_meta("_vtk_time_frozen")
 		remove_meta("_vtk_frozen_time")
 		remove_meta("_vtk_frozen_day")
+	_day_factor = 1.0
+	_key_gain = 1.0
+	RenderingServer.global_shader_parameter_set("vtk_key_gain", _key_gain)
+	_key_set(_mat_mine, MINE_KEY)
 	_push_day_mix()
 	_dirty = true
 
 
-# MCM toggle off while NVG is worn: hand the exposure back immediately instead
-# of waiting for the next vanilla ResetCheck (up to ~0.17 s of dark picture).
 func _restore_exposure() -> void:
 	if _last_exposure >= 0.0:
 		var env := _environment()
@@ -682,9 +736,6 @@ func _push_day_mix() -> void:
 		(mat as ShaderMaterial).set_shader_parameter("dayMix", _day_mix)
 
 
-# The vanilla script reaches the environment through Map/World.environment.
-# Resolve it lazily and re-read the resource pointer: a map change may replace
-# it while the World node itself survives.
 func _environment() -> Environment:
 	if _world == null or not is_instance_valid(_world):
 		_world = get_node_or_null(Paths.WORLD)
@@ -713,8 +764,6 @@ func _sim_value(key: String, fallback) -> Variant:
 	return fallback if v == null else v
 
 
-# Debug/state snapshot for the live panel: simulation time, day, season and any
-# weather-like fields exposed by the game. Read-only and best-effort.
 func debug_sim_state() -> Dictionary:
 	var sim := _sim_time_node()
 	var out := {
@@ -732,8 +781,6 @@ func debug_sim_state() -> Dictionary:
 		var s = sim.get("season")
 		if s != null:
 			out["season"] = int(s)
-	# Weather: probe likely property names on Simulation and World. Values are
-	# kept as-is when present so the debug log shows whatever the game exposes.
 	var weather := {}
 	var probes := ["weather", "currentWeather", "weatherState", "overcast", "fog", "rain", "snow", "precipitation", "storm", "wind", "clouds"]
 	for src in [sim, _world]:
@@ -757,9 +804,6 @@ func _game_flag(name: String) -> bool:
 	return bool(_game_data.get(name))
 
 
-# Покой при выключенном тепловизоре. Регистрация (node_added) продолжает идти
-# и при off, поэтому мёртвые записи мин всё равно надо чистить, иначе _mines рос бы
-# без границы.
 func _off_frame_upkeep() -> void:
 	if _mines.is_empty():
 		return
@@ -772,8 +816,6 @@ func _off_frame_upkeep() -> void:
 		_mines.erase(id)
 
 
-# Снимает покраску на переходе on->off ровно один раз: material_override в null
-# на меши мин. Дальше кадр при off мешей не обходит вовсе.
 func _clear_paint() -> void:
 	for id in _mines.keys():
 		var e = _mines.get(id)
@@ -801,22 +843,13 @@ func _register_mine(node: Node) -> void:
 	# survive a re-register while the visual is still building.
 	if _mine_watch.has(id):
 		return
-	# The visual usually lives under an exported "mine" Node3D, but not every
-	# mine has one -- fall back to the node itself so those still get picked up.
-	# The exported "mine" points at the INNER detail (the tiny orange piece that
-	# pops out on detonation), NOT the visible shell: a mine node holds LOD0/LOD1
-	# (the shell you actually see) plus Mine (interior) plus Area. Sweeping from
-	# the exported property alone highlighted only the interior, so the shell
-	# stayed invisible while still being the thing you want spotted. So we always
-	# sweep the whole mine node: that covers the shell LODs and the interior, and
-	# the Area3D is skipped automatically because it isn't geometry.
+	# Always sweep the whole mine node: that covers the shell LODs and the
+	# interior, and the Area3D is skipped automatically because it isn't
+	# geometry.
 	var visual: Node = node
 	var meshes: Array = []
 	_collect_meshes(visual, meshes)
 	if meshes.is_empty():
-		# A freshly spawned mine can still be building its visual (own _ready, a
-		# timer, an async load), so an empty sweep is not proof there is nothing
-		# to paint. Park it and retry on later ticks instead of dropping it.
 		_mine_watch[id] = {"node": node, "tries": 0}
 		return
 	_mine_watch.erase(id)
@@ -911,8 +944,6 @@ func apply_config(rec) -> void:
 	set_daylight = rec.daylight_compensation
 	if was_daylight and not set_daylight:
 		_restore_exposure()
-	# The daylight strength slider used to be declared in MCM and read into
-	# the record but never mapped here, so it sat dead.
 	set_strength = rec.daylight_strength
 	set_nvg_noise = rec.nvg_noise
 	set_nvg_white = rec.nvg_white
@@ -921,6 +952,10 @@ func apply_config(rec) -> void:
 	set_glow_distance = rec.outline_distance
 	set_mines = rec.thermal_mines
 	set_mine_color(rec.color_mine)
+	set_state_colors(rec.state_colors())
+	set_state_brightness = rec.outline_brightness
+	set_vrcets_strength = rec.vrcets_thermal_strength
+	set_vrcets_red_hold = rec.vrcets_red_hold
 	_dirty = true
 	_tick_cd = 0.0
 
