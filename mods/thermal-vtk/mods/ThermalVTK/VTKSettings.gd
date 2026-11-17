@@ -8,7 +8,7 @@ const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 # consume through apply_config(). A setting exists once here, or not at all:
 # the triple bookkeeping that previously lived in the registration literals,
 # the _mcm_apply fallbacks and the module fields was the recipe for silent
-# divergence (nvg_noise 0.0 vs 4.0, outline_rim 2.0 vs 1.0).
+# divergence (nvg_noise 0.0 vs 4.0, outline_thickness 0.006 vs 0.008).
 
 class Rec:
 	# Hotkeys (0 = unbound; KEY_* fallbacks).
@@ -18,10 +18,10 @@ class Rec:
 	var key_live_panel: int = KEY_F9
 	# Toggles.
 	var debug_log: bool = false
-	var npc_labels: bool = false
+	var npc_labels: bool = true
 	var outline_enabled: bool = true
-	var body_fill: bool = false
-	var outline_xray: bool = true
+	var body_fill: bool = true
+	var outline_xray: bool = false
 	var thermal_mines: bool = true
 	var nomad_marker: bool = true
 	var daylight_compensation: bool = true
@@ -32,14 +32,15 @@ class Rec:
 	# Daylight highlight rolloff knee (1.0 = off).
 	var daylight_strength: float = 1.0
 	var highlight_knee: float = 0.55
+	# VRCETS-style world thermal tuning (used by VRCETS palette modes).
+	var vrcets_thermal_strength: float = 0.58
+	var vrcets_red_hold: float = 0.72
 	# NPC outlines.
-	var corpse_decay: float = 90.0
+	var corpse_decay: float = 70.0
 	var outline_distance: float = 60.0
-	var outline_thickness: float = 0.006
-	var outline_brightness: float = 0.6
-	var outline_rim: float = 2.0
-	var fill_alpha: float = 0.4
-	var thermal_mix: float = 1.0
+	var outline_thickness: float = 0.0005
+	var outline_brightness: float = 0.7
+	var fill_alpha: float = 0.6
 	# X-ray Triggers: reveal window ranges ("_d") and durations ("_s").
 	var fire_d: float = 80.0
 	var fire_s: float = 2.0
@@ -62,7 +63,7 @@ class Rec:
 	var color_combat: Color = States.DEFAULT_COMBAT
 	var color_defend: Color = States.DEFAULT_DEFEND
 	# Display colour of the mine ESP (mines are filled whole, not outlined).
-	var color_mine: Color = States.DEFAULT_MINE
+	var color_mine: Color = Color8(9, 46, 246)
 
 	func state_colors() -> Dictionary:
 		return {
@@ -81,10 +82,10 @@ const DESCRIPTORS: Array[Dictionary] = [
 	# The outline_xray toggle gates only the wall flash: trigger windows
 	# (tags and the debug label countdown) run regardless of it.
 	{"sect": "Bool", "key": "outline_enabled", "name": "NPC ESP", "def": true, "cat": "01. ThermalVision", "pos": 3, "tip": "Draw state-coloured body outlines over NPCs while thermal vision is on. Off = full-screen thermal only."},
-	{"sect": "Bool", "key": "body_fill", "name": "Full body fill", "def": false, "cat": "01. ThermalVision", "pos": 4, "tip": "Paint the whole NPC silhouette instead of a ring. The rim is still drawn around the fill, and walls still clip it."},
-	{"sect": "Bool", "key": "outline_xray", "name": "X-ray Triggers", "def": true, "cat": "01. ThermalVision", "pos": 5, "tip": "While on, the NPC ring lights up through walls only while a sound event is live: gunfire, shouts, idle chatter, footsteps, reloads, pain cries or grenade throws. Between events the outline stays a normal ring behind walls. The reveal timers themselves show on the debug labels regardless of this toggle."},
+	{"sect": "Bool", "key": "body_fill", "name": "Full body fill", "def": true, "cat": "01. ThermalVision", "pos": 4, "tip": "Paint the whole NPC silhouette instead of a ring. Walls still clip it."},
+	{"sect": "Bool", "key": "outline_xray", "name": "X-ray Triggers", "def": false, "cat": "01. ThermalVision", "pos": 5, "tip": "While on, the NPC ring lights up through walls only while a sound event is live: gunfire, shouts, idle chatter, footsteps, reloads, pain cries or grenade throws. Between events the outline stays a normal ring behind walls. The reveal timers themselves show on the debug labels regardless of this toggle."},
 	{"sect": "Bool", "key": "thermal_mines", "name": "Mine ESP", "def": true, "cat": "01. ThermalVision", "pos": 6, "tip": "Highlight mines while thermal vision is on."},
-	{"sect": "Color", "key": "mine_color", "name": "Mine", "def": States.DEFAULT_MINE, "cat": "01. ThermalVision", "pos": 7, "tip": "Colour the thermal layer paints over a mine. Mines are filled whole, not outlined."},
+	{"sect": "Color", "key": "mine_color", "name": "Mine", "def": Color8(9, 46, 246), "cat": "01. ThermalVision", "pos": 7, "tip": "Colour the thermal layer paints over a mine. Mines are filled whole, not outlined."},
 	{"sect": "Bool", "key": "nomad_marker", "name": "Nomads marker", "def": true, "cat": "01. ThermalVision", "pos": 2, "tip": "Draw a small triangle over friendly nomads while thermal vision is on. Obeys the Distance setting. Independent of the debug log."},
 	{"sect": "Float", "key": "nvg_noise", "name": "NVG noise", "def": 0.0, "min": 0.0, "max": 60.0, "step": 0.5, "cat": "01. ThermalVision", "pos": 8, "tip": "Grain amount over the NVG image. Lower is cleaner. Vanilla is fixed at 10."},
 	{"sect": "Float", "key": "nvg_white", "name": "NVG brightness", "def": 1.0, "min": 0.05, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 9, "tip": "Brightness of the NVG image. 1 = full brightness; lower darkens the whole overlay."},
@@ -92,11 +93,12 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Bool", "key": "daylight_compensation", "name": "Daylight compensation", "def": true, "cat": "01. ThermalVision", "pos": 11, "tip": "In bright daylight, lower the game's exposure so snow and sky keep detail instead of washing out. At night the unmodified night-vision exposure is kept, so the picture matches vanilla. Dark places seen in daylight stay readable."},
 	{"sect": "Float", "key": "daylight_strength", "name": "Daylight strength", "def": 1.0, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 12, "tip": "How much daylight compensation is applied at all. 0 = vanilla NVG exposure, 1 = full compensation."},
 	{"sect": "Float", "key": "thermal_highlight_knee", "name": "Highlight softness", "def": 0.55, "min": 0.3, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 13, "tip": "In daylight, background pixels brighter than this (snow, sky, clouds) bend into a softer highlight and keep their detail instead of washing out. Lower = stronger trim. Night is unaffected; 1.0 disables it."},
+	{"sect": "Float", "key": "vrcets_thermal_strength", "name": "VRCETS palette strength", "def": 0.58, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 14, "tip": "Blend strength for VRCETS world palettes (Auto/Blue/Red). Higher pushes the background closer to the VRCETS thermal look."},
+	{"sect": "Float", "key": "vrcets_red_hold", "name": "VRCETS red hold", "def": 0.72, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 15, "tip": "How strongly hot/red highlights are held in VRCETS palettes. Higher preserves hotter reds on bright/warm sources."},
 	{"sect": "Float", "key": "outline_distance", "name": "Distance", "def": 60.0, "min": 0.0, "max": 300.0, "step": 10.0, "cat": "02. NPC", "pos": 0, "tip": "Maximum distance for an outline. Outlines are hidden past this range."},
-	{"sect": "Float", "key": "outline_rim", "name": "Rim", "def": 2.0, "min": 0.0, "max": 6.0, "step": 0.5, "cat": "02. NPC", "pos": 1, "tip": "Edge sharpness of the outline. 1.0 is a linear falloff; higher values tighten the band toward the silhouette."},
-	{"sect": "Float", "key": "outline_thickness", "name": "Thickness", "def": 0.006, "min": 0.0005, "max": 0.02, "step": 0.0005, "cat": "02. NPC", "pos": 2, "tip": "How far the outline band grows beyond the body."},
-	{"sect": "Float", "key": "outline_brightness", "name": "Brightness", "def": 0.6, "min": 0.1, "max": 3.0, "step": 0.1, "cat": "02. NPC", "pos": 3, "tip": "Brightness multiplier on the outline colour."},
-	{"sect": "Float", "key": "corpse_decay", "name": "Cooling time", "def": 90.0, "min": 0.0, "max": 180.0, "step": 1.0, "cat": "02. NPC", "pos": 4, "tip": "Seconds a dead NPC's outline takes to cool from warm to cold."},
+	{"sect": "Float", "key": "outline_thickness", "name": "Thickness", "def": 0.0005, "min": 0.0005, "max": 0.02, "step": 0.0005, "cat": "02. NPC", "pos": 2, "tip": "Outline/rim thickness in direct mode."},
+	{"sect": "Float", "key": "outline_brightness", "name": "Brightness", "def": 0.7, "min": 0.1, "max": 3.0, "step": 0.1, "cat": "02. NPC", "pos": 3, "tip": "Brightness multiplier on the outline/fill colour."},
+	{"sect": "Float", "key": "corpse_decay", "name": "Cooling time", "def": 70.0, "min": 0.0, "max": 180.0, "step": 1.0, "cat": "02. NPC", "pos": 4, "tip": "Seconds a dead NPC's outline takes to cool from warm to cold."},
 	{"sect": "Float", "key": "trigger_fire_dist", "name": "Gunfire distance", "def": 80.0, "min": 0.0, "max": 300.0, "step": 5.0, "cat": "03. X-ray Triggers", "pos": 0, "tip": "Reveal range for a gun-shot."},
 	{"sect": "Float", "key": "trigger_voice_dist", "name": "Combat voice distance", "def": 5.0, "min": 0.0, "max": 60.0, "step": 1.0, "cat": "03. X-ray Triggers", "pos": 1, "tip": "Reveal range for a combat shout."},
 	{"sect": "Float", "key": "trigger_idle_dist", "name": "Voice distance", "def": 5.0, "min": 0.0, "max": 30.0, "step": 1.0, "cat": "03. X-ray Triggers", "pos": 2, "tip": "Reveal range for a calm bot's chatter (the periodic voice cycle)."},
@@ -116,11 +118,10 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Color", "key": "state_combat", "name": "In combat", "def": States.DEFAULT_COMBAT, "cat": "02. NPC", "pos": 6, "tip": "Colour for NPCs in combat, hunting, attacking or throwing grenades."},
 	{"sect": "Color", "key": "state_defend", "name": "Defending", "def": States.DEFAULT_DEFEND, "cat": "02. NPC", "pos": 7, "tip": "Colour for NPCs taking cover, defending, ambushing or lurking."},
 	{"sect": "Bool", "key": "debug_log", "name": "Debug log", "def": false, "cat": "04. Diagnostics", "pos": 0, "tip": "Write a diagnostic log of the contour ESP to user://MCM/thermal-vtk/debug.log. For troubleshooting; leave off for normal play."},
-	{"sect": "Bool", "key": "npc_labels", "name": "NPC labels (debug)", "def": false, "cat": "04. Diagnostics", "pos": 1, "tip": "Draw NPC nametags, health bars and trigger timers while the debug log is on. Works without thermal vision or the NVG helmet, so states can be checked in plain daylight."},
+	{"sect": "Bool", "key": "npc_labels", "name": "NPC labels (debug)", "def": true, "cat": "04. Diagnostics", "pos": 1, "tip": "Draw NPC nametags, health bars and trigger timers while the debug log is on. Works without thermal vision or the NVG helmet, so states can be checked in plain daylight."},
 	{"sect": "Keycode", "key": "key_esp_panel", "name": "Hotkey: ESP panel", "def": KEY_F8, "cat": "04. Diagnostics", "pos": 21, "tip": "Debug tool: opens the live ESP tuning panel; the game pauses while it is open. Turn the debug log on first -- without it the key stays free for the game. The panel saves nothing: slider values live until the helmet comes off or the map changes."},
 	{"sect": "Keycode", "key": "key_live_panel", "name": "Hotkey: NVG panel", "def": KEY_F9, "cat": "04. Diagnostics", "pos": 22, "tip": "Debug tool: opens the live daylight/NVG tuning panel; the game pauses while it is open. Turn the debug log on first -- without it the key stays free for the game. The panel saves nothing: slider values live until the helmet comes off."},
-	{"sect": "Float", "key": "fill_alpha", "name": "Fill alpha", "def": 0.4, "min": 0.05, "max": 1.0, "step": 0.05, "cat": "02. NPC", "pos": 8, "tip": "Opacity of the full-body fill when 'Full body fill' is on."},
-	{"sect": "Float", "key": "thermal_mix", "name": "thermal-mix", "def": 1.0, "min": 0.0, "max": 2.0, "step": 0.05, "cat": "02. NPC", "pos": 9, "tip": "Separate multiplier on full-body tint opacity/intensity under NVG. 1.0 is neutral; it does not blend with the thermal palette."},
+	{"sect": "Float", "key": "fill_alpha", "name": "Fill brightness", "def": 0.6, "min": 0.05, "max": 1.0, "step": 0.05, "cat": "02. NPC", "pos": 8, "tip": "Brightness/transparency of the full-body fill and contour visibility in direct mode."},
 ]
 
 # The seed MCM copies a fresh profile from: every entry the mod declares, with
@@ -174,13 +175,13 @@ static func read(cfg: ConfigFile) -> Rec:
 	rec.world = float(_val(cfg, "Float", "thermal_world", rec.world))
 	rec.daylight_strength = float(_val(cfg, "Float", "daylight_strength", rec.daylight_strength))
 	rec.highlight_knee = float(_val(cfg, "Float", "thermal_highlight_knee", rec.highlight_knee))
+	rec.vrcets_thermal_strength = float(_val(cfg, "Float", "vrcets_thermal_strength", rec.vrcets_thermal_strength))
+	rec.vrcets_red_hold = float(_val(cfg, "Float", "vrcets_red_hold", rec.vrcets_red_hold))
 	rec.corpse_decay = float(_val(cfg, "Float", "corpse_decay", rec.corpse_decay))
 	rec.outline_distance = float(_val(cfg, "Float", "outline_distance", rec.outline_distance))
 	rec.outline_thickness = float(_val(cfg, "Float", "outline_thickness", rec.outline_thickness))
 	rec.outline_brightness = float(_val(cfg, "Float", "outline_brightness", rec.outline_brightness))
-	rec.outline_rim = float(_val(cfg, "Float", "outline_rim", rec.outline_rim))
 	rec.fill_alpha = float(_val(cfg, "Float", "fill_alpha", rec.fill_alpha))
-	rec.thermal_mix = float(_val(cfg, "Float", "thermal_mix", rec.thermal_mix))
 	rec.fire_d = float(_val(cfg, "Float", "trigger_fire_dist", rec.fire_d))
 	rec.fire_s = float(_val(cfg, "Float", "trigger_fire_time", rec.fire_s))
 	rec.voice_d = float(_val(cfg, "Float", "trigger_voice_dist", rec.voice_d))
