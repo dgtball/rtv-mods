@@ -13,7 +13,7 @@ const CONFIG_FILE := "user://MCM/thermal-vtk/config.ini"
 const STATE_FILE := "user://MCM/thermal-vtk/thermal_state.cfg"
 const MOD_CONFIG_FILE := "user://mod_config.cfg"
 const MCM_HELPERS := "res://ModConfigurationMenu/Scripts/Doink Oink/MCM_Helpers.tres"
-const PALETTE_COUNT := 4
+const PALETTE_COUNT := 7
 
 var _nvg: Node = null
 var _esp: Node = null
@@ -93,7 +93,7 @@ func _toggle_thermal() -> void:
 		Color.GREEN if _thermal_enabled else Color(0.7, 0.7, 0.7))
 	_save_state("thermal_enabled", _thermal_enabled)
 
-const PALETTE_NAMES: Array[String] = ["Classic", "Amber", "Forest", "Ice"]
+const PALETTE_NAMES: Array[String] = ["Classic", "Amber", "Forest", "Ice", "VRCETS Auto", "VRCETS Blue", "VRCETS Red"]
 
 func _cycle_palette() -> void:
 	# The world palette only shows while thermal vision is on, and thermal
@@ -172,12 +172,61 @@ func _free_esp_panel() -> void:
 
 func _apply_mode() -> void:
 	if _esp != null and is_instance_valid(_esp):
-		# The ESP only shows while the thermal vision actually runs: the goggles
-		# alone (vanilla NVG) do not carry it. The thermal switch owns that.
-		var on := _nvg_active() and _thermal_enabled
-		var contour: bool = on and _outline_enabled
-		var xray: bool = on and _xray_enabled
+		# Debug/diagnostic mode: contour and X-ray layers are decoupled from NVG
+		# helmet and thermal toggle so ESP geometry can be tested independently.
+		var contour: bool = _outline_enabled
+		var xray: bool = _xray_enabled
 		_esp.set_layers(contour, xray)
+		_sync_nvg_esp()
+
+
+# Debug/panel preview: keep contour bound to MCM outline enablement, but let the
+# panel drive the X-ray trigger layer at runtime (without persisting to MCM).
+func _set_esp_layers_for_preview(xray_triggers: bool) -> void:
+	if _esp == null or not is_instance_valid(_esp):
+		return
+	var contour: bool = _outline_enabled
+	var xray: bool = xray_triggers
+	_esp.set_layers(contour, xray)
+	_sync_nvg_esp()
+
+func _sync_nvg_esp() -> void:
+	if _nvg == null or not is_instance_valid(_nvg) or _esp == null or not is_instance_valid(_esp):
+		return
+	var contour: bool = _esp.contour_layer if "contour_layer" in _esp else _outline_enabled
+	var xray: bool = _esp.xray_layer if "xray_layer" in _esp else _xray_enabled
+	var esp_active: bool = contour or xray
+	var nvg_on: bool = _nvg_active()
+	# NVG compositor path: render ESP into the NVG buffer and composite over the
+	# palettized background while NVG is worn; NVG-off uses direct overlays.
+	var use_buffer: bool = nvg_on
+	var layer_bit: int = 1 << 19
+	if _nvg.has_method("esp_buffer_layer"):
+		layer_bit = 1 << int(_nvg.esp_buffer_layer())
+	if _esp.has_method("set_render_to_buffer"):
+		_esp.set_render_to_buffer(use_buffer, layer_bit)
+	# Contour rendering is now direct in buffer/overlay paths; keep key emission
+	# off for contour substitution (Task 6 removes remaining key paths).
+	if "p_use_nvg_keys" in _esp:
+		_esp.p_use_nvg_keys = false
+	if _nvg.has_method("set_esp_layer"):
+		_nvg.set_esp_layer(esp_active)
+	# Composite/demand follows current ESP content so buffer rendering/cull-mask
+	# work is only active when content is wanted.
+	var demand: bool = esp_active and bool(_esp.call("wants_contour")) if _esp.has_method("wants_contour") else esp_active
+	if _nvg.has_method("set_esp_demand"):
+		_nvg.set_esp_demand(demand)
+	if _nvg.has_method("set_esp_brightness"):
+		var bright: float = clampf(float(_esp.p_brightness), 0.05, 4.0)
+		_nvg.set_esp_brightness(bright)
+	if _nvg.has_method("set_esp_fill"):
+		_nvg.set_esp_fill(float(_esp.p_fill_alpha), bool(_esp.p_body_fill))
+	if _nvg.has_method("set_state_colors"):
+		_nvg.set_state_colors({
+			"state_normal": _esp.p_color_normal,
+			"state_combat": _esp.p_color_combat,
+			"state_defend": _esp.p_color_defend,
+		})
 
 func _nvg_active() -> bool:
 	if _nvg == null or not is_instance_valid(_nvg):
@@ -192,6 +241,9 @@ func _process(_delta: float) -> void:
 	if worn != _nvg_worn:
 		_nvg_worn = worn
 		_apply_mode()
+	# Keep NVG substitution in sync with live ESP state (demand, fill, runtime
+	# panel tweaks) every frame.
+	_sync_nvg_esp()
 
 # Toast channel exposed by the game's /root/Loader (loader.Message).
 func _notify(text: String, color: Color) -> void:

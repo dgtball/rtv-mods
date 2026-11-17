@@ -28,6 +28,13 @@ const SPRINT_SPEED := 4.0
 # one cry, not one per frame. The reveal stays up for p_pain_s anyway, so the
 # player sees the same window; only the re-tagging is debounced.
 const PAIN_MIN_GAP := 0.4
+# Ring band width in screen pixels. A world-space band shrinks to sub-pixel at
+# range, where MSAA resolves it to key*coverage + background*(1-coverage) and
+# the NVG detector stops matching the key, so the outline blinked out on moving
+# NPCs. 2.5 px keeps an opaque core after the resolve.
+const OUTLINE_BAND_PX := 2.5
+const OUTLINE_BAND_MIN := 0.002
+const OUTLINE_BAND_MAX := 0.5
 # The overlay runs in the main 3D pass, so the shells need no dedicated camera
 # and no reach clip: the depth test of the source mesh does the clipping
 # (walls, weapon, sight glass), and the demand below only says whether any
@@ -37,24 +44,34 @@ const PAIN_MIN_GAP := 0.4
 # contour layer gates rings and the marker, the x-ray layer gates reveals.
 var contour_layer: bool = false
 var xray_layer: bool = false
+# When NVG overlay is active, emit detection keys so NVG shader can substitute
+# display colors after thermal/palette/tint processing (avoids color distortion).
+# Retained for transitional/runtime compatibility; buffer-composite contour
+# rendering uses direct display opts.
+var p_use_nvg_keys: bool = false
+# NVG buffer compositor target: when true, contours render as shell instances on
+# the ESP buffer layer for NVG compositing; when false, contours render as direct
+# overlays in the main pass (NVG-off parity path).
+var _render_to_buffer: bool = false
+var _buffer_layer_bit: int = 1 << 19
 # MCM-driven params.
-var p_decay := 30.0
+var p_decay := 70.0
 var p_dist := 60.0
 var p_nomad_marker: bool = true
-var p_body_fill: bool = false
-var p_fill_alpha: float = 0.4
+var p_body_fill: bool = true
+var p_fill_alpha: float = 0.6
 # NPC nametags: their own switch under Diagnostics, so the diagnostic overlay
 # can stay on without the log and without the NVG helmet.
-var p_npc_labels: bool = false
+var p_npc_labels: bool = true
 var p_color_normal: Color = States.DEFAULT_NORMAL
 var p_color_combat: Color = States.DEFAULT_COMBAT
 var p_color_defend: Color = States.DEFAULT_DEFEND
-var p_brightness: float = 0.6
-var p_thermal_mix: float = 1.0
+var p_brightness: float = 0.7
+
 # The X-ray Triggers toggle state: on = a live trigger window swaps that bot's
 # ring to the x-ray shader (through walls). Off = windows are still tagged,
 # but the ring never lights up through the wall; labels read them regardless.
-var p_trig := true
+var p_trig := false
 var p_fire_s := 5.0
 var p_fire_d := 100.0
 var p_voice_s := 5.0
@@ -70,8 +87,7 @@ var p_pain_s := 3.0
 var p_pain_d := 15.0
 var p_nade_s := 6.0
 var p_nade_d := 60.0
-var p_thickness := 0.006
-var p_rim := 2.0
+var p_thickness := 0.0005
 
 var _entries: Dictionary = {}
 var _ids_frame: Array = []
@@ -146,15 +162,26 @@ func set_layers(contour: bool, xray: bool) -> void:
 func _any_layer() -> bool:
 	return contour_layer or xray_layer
 
-# Demand gate helper: reports whether any outline or live reveal is currently
-# wanted. Kept for test/introspection use after the NVG key-substitution path
-# was removed; it never mutates state.
+# NVG compositor wiring: render contours into the ESP buffer (shells on the
+# reserved buffer layer) when the NVG composite path is active, otherwise keep
+# the direct overlay path for NVG-off parity.
+func set_render_to_buffer(enabled: bool, layer_bit: int = 1 << 19) -> void:
+	_render_to_buffer = enabled
+	_buffer_layer_bit = layer_bit
+	_outline.set_buffer_mode(enabled, layer_bit)
+
+func render_to_buffer() -> bool:
+	return _render_to_buffer
+
+# Content demand helper: reports whether any outline or live reveal is currently
+# wanted this frame (i.e. ESP buffer/main-pass content is needed). Used by NVG
+# compositor wiring and kept for test/introspection; it never mutates state.
 func wants_contour() -> bool:
 	return _any_layer() and not _want.is_empty()
 
 # Live panel helper: reapply current opts to all outlined entries so changes
-# (rim/thickness/fill/colors/distance effects via opts) show immediately while
-# the game is paused.
+# (thickness/fill/colors/distance effects via opts) show immediately while the
+# game is paused.
 func refresh_outlines_now() -> void:
 	var now := _now()
 	# Refresh every currently drawn outline with fresh opts. Distance filtering
@@ -187,7 +214,6 @@ func apply_config(rec) -> void:
 	p_color_combat = rec.color_combat
 	p_color_defend = rec.color_defend
 	p_brightness = rec.outline_brightness
-	p_thermal_mix = float(rec.thermal_mix)
 	p_trig = rec.outline_xray
 	p_fire_s = rec.fire_s
 	p_fire_d = rec.fire_d
@@ -205,7 +231,6 @@ func apply_config(rec) -> void:
 	p_nade_s = rec.nade_s
 	p_nade_d = rec.nade_d
 	p_thickness = rec.outline_thickness
-	p_rim = rec.outline_rim
 
 # ---------------------------------------------------------------------------
 # Discovery
@@ -458,7 +483,6 @@ func _process(delta: float) -> void:
 	_weapon.tick()
 	var scoped := _scoped_now()
 	var pip := _pip_now()
-	_outline.set_scoped(scoped)
 	_weapon.set_scope_mode(scoped and _any_layer(), pip)
 	_scope_probe(delta)
 	_frame += 1
@@ -805,13 +829,39 @@ func _fill_opts(opts: Dictionary, e: Dictionary, now: float) -> void:
 	elif cat == States.DEFEND:
 		color = p_color_defend
 	opts["color"] = color
-	opts["brightness"] = p_brightness
+	# Buffer-composite rendering uses direct display materials (color/alpha in the
+	# ESP buffer). NVG-off direct overlays also use display colors. Key emission
+	# is retained only for transitional NVG substitution paths (Task 6 removes it).
+	var direct := _render_to_buffer or not p_use_nvg_keys
+	opts["direct"] = direct
+	opts["key"] = States.state_key(cat)
+	var bright: float = p_brightness
+	if p_body_fill:
+		bright = minf(bright, 1.0)
+	opts["brightness"] = bright
+	opts["fill_alpha"] = p_fill_alpha
 	opts["cool"] = cool
-	opts["rim"] = p_rim
 	opts["grow"] = p_thickness
+	opts["band"] = _band_for(float(e.get("dist", 0.0)))
 	opts["xray"] = xray
 	opts["fill"] = p_body_fill
-	opts["alpha"] = clampf(p_fill_alpha * p_thermal_mix, 0.0, 1.0)
+
+# World-space width of a screen-sized band at `dist`. The band is the only part
+# of the contour that is actually visible in outline mode, so it has to stay
+# wide enough in pixels to survive the MSAA resolve.
+func _band_for(dist: float) -> float:
+	var height := 1080.0
+	var vp := get_viewport()
+	if vp != null:
+		var h := float(vp.get_visible_rect().size.y)
+		if h > 1.0:
+			height = h
+	var tan_half := 0.7
+	var cam := _camera()
+	if cam != null:
+		tan_half = maxf(tan(deg_to_rad(cam.fov) * 0.5), 0.05)
+	var d := maxf(dist, 0.1)
+	return clampf(OUTLINE_BAND_PX * (2.0 * d * tan_half) / height, OUTLINE_BAND_MIN, OUTLINE_BAND_MAX)
 
 func _nomad_los(e: Dictionary, anchor_world: Vector3) -> bool:
 	if los_probe.is_valid():

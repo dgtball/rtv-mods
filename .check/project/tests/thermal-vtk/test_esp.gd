@@ -297,7 +297,7 @@ func t_opts_contour_key() -> void:
 	root.add_child(esp)
 	var hostile := opts_of(esp, {"cat": S.COMBAT, "nomad": false})
 	ck(hostile.get("color") == S.DEFAULT_COMBAT, "hostile combat uses combat display color")
-	ck(hostile.get("key") == S.state_key(S.COMBAT), "detector key is emitted for NVG substitution")
+	ck(hostile.get("key") == S.state_key(S.COMBAT), "state key is emitted for contour opts")
 	ck(not hostile.has("state_key"), "the old detector key name is gone")
 	ck(not hostile.has("nomad"), "nomad is not duplicated into the contour opts")
 	for k in ["key", "color", "brightness", "grow", "band", "cool", "xray", "fill"]:
@@ -305,12 +305,23 @@ func t_opts_contour_key() -> void:
 	ck(not hostile.has("alpha"), "the contour opts carry no alpha to blend the key with")
 	ck(not hostile.has("rim"), "the ring has no rim falloff")
 	ck(not hostile.has("fill_grow"), "fill grow lives in the shader, not in opts")
+	# NVG-off/direct path remains the default when not rendering to buffer.
+	ck(bool(hostile.get("direct", false)), "default contour opts are direct (overlay path)")
 	var normal := opts_of(esp, {"cat": S.NORMAL, "nomad": true})
 	ck(normal.get("color") == S.DEFAULT_NORMAL, "normal uses normal display color")
 	ck(normal.get("key") == S.state_key(S.NORMAL), "normal emits normal key")
 	var defend := opts_of(esp, {"cat": S.DEFEND, "nomad": false})
 	ck(defend.get("color") == S.DEFAULT_DEFEND, "defend uses defend display color")
 	ck(defend.get("key") == S.state_key(S.DEFEND), "defend emits defend key")
+	# Buffer-composite contour rendering uses direct display opts (no key
+	# substitution) while preserving display colors/brightness/fill alpha.
+	esp.set_render_to_buffer(true, 1 << 19)
+	var buf := opts_of(esp, {"cat": S.COMBAT, "nomad": false})
+	ck(bool(buf.get("direct", false)), "buffer mode contour opts are direct")
+	ck(buf.get("color") == S.DEFAULT_COMBAT, "buffer mode keeps combat display color")
+	ck(absf(float(buf.get("fill_alpha", -1.0)) - float(esp.p_fill_alpha)) < 0.001, "buffer mode keeps fill_alpha")
+	ck(absf(float(buf.get("brightness", -1.0)) - float(esp.p_brightness)) < 0.001, "buffer mode keeps brightness")
+	ck(esp._outline.buffer_mode(), "buffer mode targets outline buffer rendering")
 	esp.free()
 
 # The fill flag and configured fill alpha/brightness travel in opts.
@@ -617,11 +628,10 @@ func t_layers_drive_marker() -> void:
 	ck(not esp.contour_layer and not esp.xray_layer, "both layers can be off")
 	esp.free()
 
-# The NVG substitution now reads the frame itself, but it is still only armed
-# while a contour is wanted: no NPC in range and no live reveal means the shader
-# must not even enter the branch. The shells stay built either way (only
-# clear_not_in frees one), so a closed gate can never read as "nothing wanted"
-# and re-apply the outline every frame.
+# ESP content demand: contours/reveals wanted this frame drive NVG buffer
+# compositing and rendering. No NPC in range and no live reveal means no ESP
+# content is needed. The want set is released by draw/clear_not_in, not by the
+# demand going false.
 func t_wants_contour() -> void:
 	var scene := Node3D.new()
 	scene.name = "Map_wants_contour"
@@ -641,26 +651,26 @@ func t_wants_contour() -> void:
 	esp.p_dist = 5.0
 	esp.set_layers(true, false)
 	esp._draw(Vector3.ZERO)
-	ck(not esp.wants_contour(), "an empty range demands no substitution")
+	ck(not esp.wants_contour(), "an empty range demands no ESP content")
 	bot.global_position = Vector3(0.0, 0.0, -2.0)
 	esp._draw(Vector3.ZERO)
-	ck(esp.wants_contour(), "a contour in range demands the substitution")
+	ck(esp.wants_contour(), "a contour in range demands ESP content")
 	bot.global_position = Vector3(0.0, 0.0, -50.0)
 	esp._draw(Vector3.ZERO)
-	ck(not esp.wants_contour(), "a contour outside Distance does not demand it")
-	# The gate never touches the want set: the shell is freed by clear_not_in,
+	ck(not esp.wants_contour(), "a contour outside Distance does not demand ESP content")
+	# The gate never touches the want set: the outline is freed by clear_not_in,
 	# not by the demand going false.
 	ck(not esp._outline.has(bot.get_instance_id()), "the far contour is released by the draw")
 	esp.p_dist = 60.0
 	esp._draw(Vector3.ZERO)
-	ck(esp.wants_contour(), "a contour inside Distance demands it again")
-	# X-ray alone: a live reveal keeps the substitution alive even though the
+	ck(esp.wants_contour(), "a contour inside Distance demands ESP content again")
+	# X-ray alone: a live reveal keeps ESP content wanted even though the
 	# contour layer is off.
 	esp.set_layers(false, true)
 	esp.p_trig = true
 	Tracker.tag_trig(esp._entries[bot.get_instance_id()], "fire", 100.0, esp._now() + 60.0, 60.0)
 	esp._draw(Vector3.ZERO)
-	ck(esp.wants_contour(), "a live reveal demands the substitution")
+	ck(esp.wants_contour(), "a live reveal demands ESP content")
 	esp.set_layers(false, false)
 	ck(not esp.wants_contour(), "layers off demands nothing")
 	esp.free()
