@@ -49,6 +49,8 @@ uniform vec3 stNormalColor : source_color = vec3(1.0, 0.72, 0.28);
 uniform vec3 stCombatColor : source_color = vec3(0.95, 0.18, 0.15);
 uniform vec3 stDefendColor : source_color = vec3(0.62, 0.30, 0.95);
 uniform float stateBright : hint_range(0.1, 4.0, 0.05) = 0.6;
+uniform float espFillAlpha : hint_range(0.0, 1.0, 0.01) = 0.6;
+uniform bool espBodyFill = true;
 
 uniform vec3 mineColor : source_color = vec3(1.0, 0.2, 0.85);
 
@@ -232,6 +234,7 @@ void fragment()
 	vec4 noiseEffect = vec4(mod((mod(x, 13.0)) * (mod(x, 123.0)), 0.01) - 0.005) * noise;
 
 	vec4 color;
+	bool substituted = false;
 	if (thermalMode) {
 		float rawLuminance = dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114));
 		float luminance = clamp(hiShoulder(rawLuminance * thermalDarken, highlightKnee, dayMix), 0.0, 1.0);
@@ -253,12 +256,19 @@ void fragment()
 			// fill strength is folded into stateBright, not into a dither.
 			if (dCore == dMine) {
 				color = vec4(mineColor, pixelColor.a);
+				substituted = true;
 			} else if (dCore == dStC) {
-				color = vec4(stCombatColor * stateBright, pixelColor.a);
+				vec3 sc = stCombatColor * stateBright;
+				color = espBodyFill ? vec4(mix(backgroundColor, sc, clamp(espFillAlpha, 0.0, 1.0)), pixelColor.a) : vec4(sc, pixelColor.a);
+				substituted = true;
 			} else if (dCore == dStD) {
-				color = vec4(stDefendColor * stateBright, pixelColor.a);
+				vec3 sc = stDefendColor * stateBright;
+				color = espBodyFill ? vec4(mix(backgroundColor, sc, clamp(espFillAlpha, 0.0, 1.0)), pixelColor.a) : vec4(sc, pixelColor.a);
+				substituted = true;
 			} else if (dCore == dStN) {
-				color = vec4(stNormalColor * stateBright, pixelColor.a);
+				vec3 sc = stNormalColor * stateBright;
+				color = espBodyFill ? vec4(mix(backgroundColor, sc, clamp(espFillAlpha, 0.0, 1.0)), pixelColor.a) : vec4(sc, pixelColor.a);
+				substituted = true;
 			} else {
 				color = vec4(backgroundColor, pixelColor.a);
 			}
@@ -266,6 +276,7 @@ void fragment()
 			color = vec4(backgroundColor, pixelColor.a);
 		}
 	} else {
+		vec3 bgColor = pixelColor.rgb * tint.rgb;
 		color = pixelColor * tint;
 		if (dayMix > 0.0) {
 			float tintLum = max(dot(color.rgb, vec3(0.299, 0.587, 0.114)), 0.0001);
@@ -273,27 +284,38 @@ void fragment()
 			float liftedLum = 1.0 - pow(1.0 - min(tintLum, 1.0), 1.6);
 			color.rgb *= mix(1.0, liftedLum / tintLum, dayMix);
 		}
+		bgColor = color.rgb;
 		// Debug/diagnostic: also substitute ESP state keys outside thermal mode so
 		// contour/fill can be validated without NVG thermal enabled.
 		if (dCore < DET_TOL_CORE) {
 			if (dCore == dMine) {
 				color = vec4(mineColor, pixelColor.a);
+				substituted = true;
 			} else if (dCore == dStC) {
-				color = vec4(stCombatColor * stateBright, pixelColor.a);
+				vec3 sc = stCombatColor * stateBright;
+				color = espBodyFill ? vec4(mix(bgColor, sc, clamp(espFillAlpha, 0.0, 1.0)), pixelColor.a) : vec4(sc, pixelColor.a);
+				substituted = true;
 			} else if (dCore == dStD) {
-				color = vec4(stDefendColor * stateBright, pixelColor.a);
+				vec3 sc = stDefendColor * stateBright;
+				color = espBodyFill ? vec4(mix(bgColor, sc, clamp(espFillAlpha, 0.0, 1.0)), pixelColor.a) : vec4(sc, pixelColor.a);
+				substituted = true;
 			} else if (dCore == dStN) {
-				color = vec4(stNormalColor * stateBright, pixelColor.a);
+				vec3 sc = stNormalColor * stateBright;
+				color = espBodyFill ? vec4(mix(bgColor, sc, clamp(espFillAlpha, 0.0, 1.0)), pixelColor.a) : vec4(sc, pixelColor.a);
+				substituted = true;
 			}
 		} else {
 			float dMineEmit = orbitDist(pixelColor.rgb, mineEmit);
 			if (dMine < 0.15 || dMineEmit < DET_TOL_CORE) {
 				color = vec4(mineColor, pixelColor.a);
+				substituted = true;
 			}
 		}
 	}
-	color.rgb *= nvgWhite;
-	color += noiseEffect;
+	if (!substituted) {
+		color.rgb *= nvgWhite;
+		color += noiseEffect;
+	}
 	color.rgb *= (1.0 + goggleOutlines);
 	COLOR = mix(vec4(0.0, 0.0, 0.0, 1.0), color, goggleMask);
 }

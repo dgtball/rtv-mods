@@ -45,8 +45,9 @@ func _run() -> void:
 	t_distance_crops()
 	t_label_suffix_independent()
 	t_opts_contour_key()
-	t_fill_opts_carry_alpha()
+	t_fill_opts_carry_fill_flag()
 	t_opts_brightness_thermal_mix()
+	t_band_tracks_distance()
 	t_fullbody_xray_no_ring()
 	t_no_through_walls_opt()
 	t_dead_node_marks_entry()
@@ -267,6 +268,7 @@ func t_label_suffix_independent() -> void:
 	ck(resp._entries.size() == 1, "residue bot discovered")
 	resp.p_trig = true
 	resp.p_dist = 5.0
+	resp.p_body_fill = false
 	rbot.global_position = Vector3(0.0, 0.0, -50.0)
 	var rid := rbot.get_instance_id()
 	var rnow := float(Time.get_ticks_msec()) / 1000.0
@@ -295,20 +297,24 @@ func t_opts_contour_key() -> void:
 	root.add_child(esp)
 	var hostile := opts_of(esp, {"cat": S.COMBAT, "nomad": false})
 	ck(hostile.get("color") == S.DEFAULT_COMBAT, "hostile combat uses combat display color")
-	ck(not hostile.has("key"), "detector key is not emitted")
-	ck(not hostile.has("state_key"), "the old detector key is gone")
+	ck(hostile.get("key") == S.state_key(S.COMBAT), "detector key is emitted for NVG substitution")
+	ck(not hostile.has("state_key"), "the old detector key name is gone")
 	ck(not hostile.has("nomad"), "nomad is not duplicated into the contour opts")
-	for k in ["color", "brightness", "alpha", "grow", "rim", "cool", "xray", "fill"]:
+	for k in ["key", "color", "brightness", "grow", "band", "cool", "xray", "fill"]:
 		ck(hostile.has(k), "contour opts include %s" % k)
+	ck(not hostile.has("alpha"), "the contour opts carry no alpha to blend the key with")
+	ck(not hostile.has("rim"), "the ring has no rim falloff")
 	ck(not hostile.has("fill_grow"), "fill grow lives in the shader, not in opts")
 	var normal := opts_of(esp, {"cat": S.NORMAL, "nomad": true})
 	ck(normal.get("color") == S.DEFAULT_NORMAL, "normal uses normal display color")
+	ck(normal.get("key") == S.state_key(S.NORMAL), "normal emits normal key")
 	var defend := opts_of(esp, {"cat": S.DEFEND, "nomad": false})
 	ck(defend.get("color") == S.DEFAULT_DEFEND, "defend uses defend display color")
+	ck(defend.get("key") == S.state_key(S.DEFEND), "defend emits defend key")
 	esp.free()
 
-# Full-body fill carries the configured effective alpha into the contour opts.
-func t_fill_opts_carry_alpha() -> void:
+# The fill flag and configured fill alpha/brightness travel in opts.
+func t_fill_opts_carry_fill_flag() -> void:
 	var esp = ESP.new()
 	esp.name = "VTKESP_fill"
 	root.add_child(esp)
@@ -317,8 +323,10 @@ func t_fill_opts_carry_alpha() -> void:
 	var opts := opts_of(esp, {"cat": S.COMBAT, "nomad": false})
 	ck(opts.get("color") == S.DEFAULT_COMBAT, "fill opts keep the display color")
 	ck(bool(opts.get("fill", false)) == true, "fill opts carry the fill flag")
-	ck(absf(float(opts.get("alpha", 0.0)) - 0.55) < 0.001, "fill opts carry effective alpha")
-	ck(absf(float(opts.get("brightness", -1.0)) - 0.6) < 0.001, "fill opts carry brightness")
+	ck(not opts.has("alpha"), "fill opts carry no alpha field")
+	ck(absf(float(opts.get("fill_alpha", -1.0)) - 0.55) < 0.001, "fill opts carry fill_alpha")
+	ck(opts.has("brightness"), "fill opts carry brightness")
+	ck(esp.get("p_thermal_mix") == null, "ESP has no thermal mix field")
 	esp.free()
 
 func t_opts_brightness_thermal_mix() -> void:
@@ -326,14 +334,35 @@ func t_opts_brightness_thermal_mix() -> void:
 	esp.name = "VTKESP_mix"
 	root.add_child(esp)
 	esp.p_fill_alpha = 0.5
-	esp.p_thermal_mix = 0.5
 	esp.p_brightness = 1.2
+	esp.p_body_fill = false
 	var opts := opts_of(esp, {"cat": S.NORMAL, "nomad": false})
-	ck(absf(float(opts.get("alpha", 0.0)) - 0.25) < 0.001, "alpha multiplies fill_alpha by thermal_mix")
+	ck(not opts.has("alpha"), "fill strength is not a per-entry alpha")
+	ck(absf(float(opts.get("fill_alpha", -1.0)) - 0.5) < 0.001, "fill_alpha comes from ESP field")
 	ck(absf(float(opts.get("brightness", 0.0)) - 1.2) < 0.001, "brightness comes from ESP field")
-	esp.p_thermal_mix = 3.0
+	esp.p_fill_alpha = 0.8
 	opts = opts_of(esp, {"cat": S.NORMAL, "nomad": false})
-	ck(absf(float(opts.get("alpha", 0.0)) - 1.0) < 0.001, "alpha clamps to 1.0")
+	ck(absf(float(opts.get("fill_alpha", -1.0)) - 0.8) < 0.001, "fill_alpha tracks ESP field")
+	esp.p_body_fill = true
+	opts = opts_of(esp, {"cat": S.NORMAL, "nomad": false})
+	ck(absf(float(opts.get("brightness", 0.0)) - 1.0) < 0.001, "body fill caps brightness at 1.0")
+	esp.free()
+
+# The ring band has to stay a couple of pixels wide at any range: a fixed
+# world-space band collapses to the MSAA stencil fringe and the detector loses
+# the key while the NPC moves.
+func t_band_tracks_distance() -> void:
+	var esp = ESP.new()
+	root.add_child(esp)
+	var near := esp._band_for(5.0)
+	var far := esp._band_for(60.0)
+	ck(near >= ESP.OUTLINE_BAND_MIN, "a near band keeps its floor")
+	ck(far > near, "the band grows with distance to keep its pixel width")
+	ck(esp._band_for(1000.0) <= ESP.OUTLINE_BAND_MAX, "the band is capped")
+	ck(esp._band_for(0.0) >= ESP.OUTLINE_BAND_MIN, "zero distance stays finite")
+	var opts := opts_of(esp, {"cat": S.NORMAL, "dist": 30.0})
+	ck(absf(float(opts.get("band", 0.0)) - esp._band_for(30.0)) < 0.000001, "the opts carry the band for the contour")
+	ck(absf(float(opts.get("grow", 0.0)) - esp.p_thickness) < 0.000001, "the opts carry the configured ring offset")
 	esp.free()
 
 func t_fullbody_xray_no_ring() -> void:
@@ -344,15 +373,16 @@ func t_fullbody_xray_no_ring() -> void:
 	var mesh := MeshInstance3D.new()
 	mesh.mesh = BoxMesh.new()
 	bot.add_child(mesh)
-	bot.global_position = Vector3(0.0, 0.0, -3.0)
 	scene.add_child(bot)
 	root.add_child(scene)
 	current_scene = scene
+	bot.global_position = Vector3(0.0, 0.0, -3.0)
 	var esp = ESP.new()
 	esp.name = "VTKESP_fill_xray"
 	root.add_child(esp)
 	esp.set_layers(true, true)
 	esp.p_body_fill = true
+	esp.p_trig = true
 	esp.p_dist = 60.0
 	var id := bot.get_instance_id()
 	var now := esp._now()
@@ -443,14 +473,15 @@ func t_xray_window_skips_cap() -> void:
 		var m := MeshInstance3D.new()
 		m.mesh = BoxMesh.new()
 		b.add_child(m)
-		b.global_position = Vector3(0.0, 0.0, -float(i + 1))
 		scene.add_child(b)
+		b.global_position = Vector3(0.0, 0.0, -float(i + 1))
 		ids.append(b.get_instance_id())
 	var esp = ESP.new()
 	esp.name = "VTKESP_xray_cap"
 	root.add_child(esp)
 	esp.set_layers(true, true)
 	esp.set_layers(true, true)
+	esp.p_trig = true
 	esp.p_dist = 100.0
 	var far: FakeBot = scene.get_child(25)
 	Tracker.tag_trig(esp._entries[far.get_instance_id()], "fire", 100.0, esp._now() + 60.0, 60.0)
@@ -501,10 +532,10 @@ func t_candidate_pool_reused() -> void:
 		m.mesh = BoxMesh.new()
 		b.add_child(m)
 		scene.add_child(b)
-	near.global_position = Vector3(0.0, 0.0, -1.0)
-	far.global_position = Vector3(0.0, 0.0, -9.0)
 	root.add_child(scene)
 	current_scene = scene
+	near.global_position = Vector3(0.0, 0.0, -1.0)
+	far.global_position = Vector3(0.0, 0.0, -9.0)
 	var esp = ESP.new()
 	esp.name = "VTKESP_pool"
 	root.add_child(esp)
@@ -548,14 +579,16 @@ func t_xray_layer_without_contour() -> void:
 	var mesh := MeshInstance3D.new()
 	mesh.mesh = BoxMesh.new()
 	bot.add_child(mesh)
-	bot.global_position = Vector3(0.0, 0.0, -40.0)
 	scene.add_child(bot)
 	root.add_child(scene)
 	current_scene = scene
+	bot.global_position = Vector3(0.0, 0.0, -40.0)
 	var esp = ESP.new()
 	esp.name = "VTKESP_xray_layer"
 	root.add_child(esp)
 	esp.p_dist = 5.0
+	esp.p_body_fill = false
+	esp.p_trig = true
 	esp.set_layers(false, true)
 	var id := bot.get_instance_id()
 	var now := esp._now()

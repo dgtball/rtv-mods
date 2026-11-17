@@ -54,6 +54,8 @@ var set_frame_cadence: float = Daylight.FRAME_CADENCE
 var set_time_scale: float = 1.0
 # Brightness of ESP state display colours in NVG substitution.
 var set_state_brightness: float = 0.6
+var set_esp_fill_alpha: float = 0.6
+var set_esp_body_fill: bool = true
 var set_vrcets_strength: float = 0.58
 var set_vrcets_red_hold: float = 0.72
 
@@ -116,6 +118,7 @@ var _probe_stable: int = 0
 var _sim_cd: float = 0.0
 var _sim_season: int = 1
 var _sim_indoor: bool = false
+
 var _sim_shelter: bool = false
 # Winter snow trim on the background (see VTKDaylight.snow_trim). Not part of
 # the keys: substitution reads the washed pixel before the palette.
@@ -321,6 +324,8 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("stNormalKey", DET_ST_NORMAL)
 	nvg_mat.set_shader_parameter("stCombatKey", DET_ST_COMBAT)
 	nvg_mat.set_shader_parameter("stDefendKey", DET_ST_DEFEND)
+	nvg_mat.set_shader_parameter("espFillAlpha", set_esp_fill_alpha)
+	nvg_mat.set_shader_parameter("espBodyFill", set_esp_body_fill)
 	nvg_mat.set_shader_parameter("scopeRotate", _scope_rotate)
 
 
@@ -371,6 +376,15 @@ func set_esp_brightness(v: float) -> void:
 	if is_equal_approx(set_state_brightness, v):
 		return
 	set_state_brightness = v
+	_dirty = true
+
+
+func set_esp_fill(alpha: float, body_fill: bool) -> void:
+	var a := clampf(alpha, 0.0, 1.0)
+	if is_equal_approx(set_esp_fill_alpha, a) and set_esp_body_fill == body_fill:
+		return
+	set_esp_fill_alpha = a
+	set_esp_body_fill = body_fill
 	_dirty = true
 
 
@@ -962,6 +976,13 @@ func apply_config(rec) -> void:
 
 func set_palette_mode(mode: int) -> void:
 	set_palette = mode
+	_dirty = true
+	_tick_cd = 0.0
+
+
+func set_vrcets_tuning(strength: float, red_hold: float) -> void:
+	set_vrcets_strength = clampf(strength, 0.0, 1.0)
+	set_vrcets_red_hold = clampf(red_hold, 0.0, 1.0)
 	_dirty = true
 	_tick_cd = 0.0
 

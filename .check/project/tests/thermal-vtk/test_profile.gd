@@ -22,6 +22,7 @@ func _run() -> void:
 	t_active_profile_name()
 	t_merge_refreshes_labels_keeps_values()
 	t_apply_reads_active_profile()
+	t_fill_strength_folds_into_brightness()
 	t_apply_mode_splits_layers()
 	_cleanup()
 	print("")
@@ -69,26 +70,26 @@ func t_active_profile_name() -> void:
 func t_merge_refreshes_labels_keeps_values() -> void:
 	var mod = ThermalMod.new()
 	var stale := ConfigFile.new()
-	stale.set_value("Float", "outline_rim", {"name": "Outline rim", "default": 1.0, "value": 1.7, "minRange": 0.0, "maxRange": 6.0, "step": 0.1, "category": "02. Contour ESP", "menu_pos": 2, "tooltip": "old"})
+	stale.set_value("Float", "outline_brightness", {"name": "Outline brightness", "default": 0.4, "value": 1.7, "minRange": 0.1, "maxRange": 3.0, "step": 0.1, "category": "02. Contour ESP", "menu_pos": 2, "tooltip": "old"})
 	stale.set_value("Bool", "thermal_enabled", {"name": "Thermal vision", "default": false, "value": true, "category": "01. ThermalVision", "menu_pos": 4, "tooltip": "old"})
 	stale.set_value("Keycode", "key_thermal_toggle", {"name": "Hotkey: Toggle thermal vision", "default": 0, "default_type": "Keycode", "type": "Key", "value": 4194436, "shiftPressed": true, "altPressed": false, "controlPressed": false, "metaPressed": false, "category": "01. ThermalVision", "menu_pos": 0, "tooltip": "old"})
 	stale.save(PROFILE_PATH)
 
 	var reg := ConfigFile.new()
-	reg.set_value("Float", "outline_rim", {"name": "Rim", "default": 2.0, "value": 2.0, "minRange": 0.0, "maxRange": 6.0, "step": 0.5, "category": "02. ESP", "menu_pos": 2, "tooltip": "new"})
+	reg.set_value("Float", "outline_brightness", {"name": "Brightness", "default": 0.6, "value": 0.6, "minRange": 0.1, "maxRange": 3.0, "step": 0.1, "category": "02. ESP", "menu_pos": 2, "tooltip": "new"})
 	reg.set_value("Keycode", "key_thermal_toggle", {"name": "Hotkey: Toggle thermal vision", "default": 0, "default_type": "Keycode", "type": "Key", "value": 0, "category": "01. ThermalVision", "menu_pos": 0, "tooltip": "new"})
 	mod._sync_config(reg, PROFILE_PATH)
 
 	var out := ConfigFile.new()
 	out.load(PROFILE_PATH)
 	ck(not out.has_section_key("Bool", "thermal_enabled"), "a removed setting is dropped from the profile")
-	ck(out.has_section_key("Float", "outline_rim"), "the renamed setting stays")
-	var rim = out.get_value("Float", "outline_rim", {})
-	ck(rim.get("name") == "Rim", "the label comes from the code")
-	ck(rim.get("category") == "02. ESP", "the category comes from the code")
-	ck(rim.get("default") == 2.0, "the default comes from the code")
-	ck(rim.get("step") == 0.5, "the step comes from the code")
-	ck(rim.get("value") == 1.7, "the player's value survives the merge")
+	ck(out.has_section_key("Float", "outline_brightness"), "the renamed setting stays")
+	var bright = out.get_value("Float", "outline_brightness", {})
+	ck(bright.get("name") == "Brightness", "the label comes from the code")
+	ck(bright.get("category") == "02. ESP", "the category comes from the code")
+	ck(bright.get("default") == 0.6, "the default comes from the code")
+	ck(bright.get("step") == 0.1, "the step comes from the code")
+	ck(bright.get("value") == 1.7, "the player's value survives the merge")
 	var kc = out.get_value("Keycode", "key_thermal_toggle", {})
 	ck(kc.get("value") == 4194436, "the player's hotkey survives the merge")
 	ck(kc.get("shiftPressed") == true, "the player's modifier flags survive the merge")
@@ -98,9 +99,12 @@ class FakeESP extends Node:
 	var p_decay: float = 30.0
 	var p_dist: float = 60.0
 	var p_thickness: float = 0.006
-	var p_rim: float = 2.0
 	var p_body_fill: bool = false
-	var p_fill_alpha: float = 0.4
+	var p_fill_alpha: float = 1.0
+	var p_brightness: float = 0.6
+	var p_color_normal: Color = Color(0.9, 0.9, 0.9)
+	var p_color_combat: Color = Color(1.0, 0.2, 0.2)
+	var p_color_defend: Color = Color(0.6, 0.3, 0.95)
 	var p_trig: bool = true
 	var p_fire_s: float = 5.0
 	var p_fire_d: float = 100.0
@@ -130,6 +134,7 @@ class FakeESP extends Node:
 		p_dist = rec.outline_distance
 		p_body_fill = rec.body_fill
 		p_fill_alpha = rec.fill_alpha
+		p_brightness = rec.outline_brightness
 		p_trig = rec.outline_xray
 		p_fire_s = rec.fire_s
 		p_fire_d = rec.fire_d
@@ -147,7 +152,6 @@ class FakeESP extends Node:
 		p_nade_s = rec.nade_s
 		p_nade_d = rec.nade_d
 		p_thickness = rec.outline_thickness
-		p_rim = rec.outline_rim
 
 class FakeNVG extends Node:
 	var set_nvg_noise: float = 10.0
@@ -157,6 +161,9 @@ class FakeNVG extends Node:
 	var set_mines: bool = true
 	var palette_mode: int = 0
 	var thermal_on: bool = false
+	var esp_brightness: float = 0.6
+	var esp_fill_alpha: float = -1.0
+	var esp_body_fill: Variant = null
 	func apply_config(rec: Variant) -> void:
 		set_nvg_noise = rec.nvg_noise
 		set_nvg_white = rec.nvg_white
@@ -167,6 +174,17 @@ class FakeNVG extends Node:
 		palette_mode = v
 	func set_thermal_enabled(v: bool) -> void:
 		thermal_on = v
+	func set_esp_layer(_on: bool) -> void:
+		pass
+	func set_esp_demand(_on: bool) -> void:
+		pass
+	func set_esp_brightness(v: float) -> void:
+		esp_brightness = v
+	func set_esp_fill(alpha: float, body_fill: bool) -> void:
+		esp_fill_alpha = alpha
+		esp_body_fill = body_fill
+	func set_state_colors(_colors: Dictionary) -> void:
+		pass
 	func nvg_active() -> bool:
 		return true
 
@@ -179,15 +197,44 @@ func t_apply_reads_active_profile() -> void:
 	mod._esp = esp
 	mod._nvg = nvg
 	var profile := ConfigFile.new()
-	profile.set_value("Float", "outline_brightness", {"name": "Brightness", "default": 0.6, "value": 1.23, "tooltip": "x"})
-	profile.set_value("Float", "outline_rim", {"name": "Rim", "default": 2.0, "value": 3.5, "tooltip": "x"})
+	profile.set_value("Float", "outline_brightness", {"name": "Brightness", "default": 0.7, "value": 1.23, "tooltip": "x"})
 	profile.save(PROFILE_PATH)
 	mod._config_path = PROFILE_PATH
 	mod._mcm_apply(ConfigFile.new())
-	ck(esp.p_rim == 3.5, "the rim comes from the active profile")
-	ck(esp.p_decay == 90.0, "a missing ESP setting falls back to the registered default")
+	ck(absf(esp.p_brightness - 1.23) < 0.001, "the brightness comes from the active profile")
+	ck(esp.get("p_thermal_mix") == null, "ESP has no thermal mix field")
+	ck(esp.p_decay == 70.0, "a missing ESP setting falls back to the registered default")
 	ck(nvg.set_glow_distance == 60.0, "a missing NVG setting falls back to the registered default")
 	ck(nvg.set_nvg_noise == 0.0, "a missing noise default reaches the NVG side")
+	mod.free()
+	esp.free()
+	nvg.free()
+
+# Brightness is passed through as configured; fill alpha/body mode are pushed
+# separately to NVG when supported (current ThermalVTK behavior).
+func t_fill_strength_folds_into_brightness() -> void:
+	var mod = ThermalMod.new()
+	var esp := FakeESP.new()
+	var nvg := FakeNVG.new()
+	mod._esp = esp
+	mod._nvg = nvg
+	mod._thermal_enabled = true
+	mod._outline_enabled = true
+	mod._xray_enabled = false
+	esp.p_brightness = 2.0
+	esp.p_body_fill = false
+	esp.p_fill_alpha = 0.5
+	mod._sync_nvg_esp()
+	ck(absf(nvg.esp_brightness - 2.0) < 0.001, "outline mode keeps the plain brightness")
+	ck(absf(nvg.esp_fill_alpha - 0.5) < 0.001, "fill alpha is passed to NVG")
+	ck(nvg.esp_body_fill == false, "body fill mode is passed to NVG")
+	esp.p_body_fill = true
+	esp.p_fill_alpha = 0.35
+	esp.p_brightness = 1.7
+	mod._sync_nvg_esp()
+	ck(absf(nvg.esp_brightness - 1.7) < 0.001, "fill mode passes brightness through")
+	ck(absf(nvg.esp_fill_alpha - 0.35) < 0.001, "fill alpha updates on sync")
+	ck(nvg.esp_body_fill == true, "body fill mode updates on sync")
 	mod.free()
 	esp.free()
 	nvg.free()

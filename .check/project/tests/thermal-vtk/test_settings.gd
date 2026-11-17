@@ -7,6 +7,7 @@ extends SceneTree
 # fast instead of silently keeping the old value.
 
 const Settings = preload("res://mods/ThermalVTK/VTKSettings.gd")
+const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const ESP = preload("res://mods/ThermalVTK/VTKESP.gd")
 const NVG = preload("res://mods/ThermalVTK/VTKNVG.gd")
 
@@ -41,7 +42,7 @@ func _run() -> void:
 
 func t_read_reads_values() -> void:
 	var cfg := ConfigFile.new()
-	cfg.set_value("Float", "outline_rim", {"name": "Rim", "value": 3.5})
+	cfg.set_value("Float", "outline_brightness", {"name": "Brightness", "value": 2.5})
 	cfg.set_value("Float", "corpse_decay", {"name": "Cooling time", "value": 44.0})
 	cfg.set_value("Bool", "outline_xray", {"name": "X-ray Triggers", "value": false})
 	cfg.set_value("Bool", "daylight_compensation", {"name": "Daylight compensation", "value": false})
@@ -49,7 +50,7 @@ func t_read_reads_values() -> void:
 	cfg.set_value("Keycode", "key_live_panel", {"name": "Live panel", "value": KEY_F5})
 	cfg.set_value("Color", "state_combat", {"name": "In combat", "value": Color(0.0, 1.0, 0.0)})
 	var rec = Settings.read(cfg)
-	ck(rec.outline_rim == 3.5, "read takes the value payload from the profile")
+	ck(absf(rec.outline_brightness - 2.5) < 0.001, "read takes the value payload from the profile")
 	ck(rec.corpse_decay == 44.0, "read takes the cooling time from the profile")
 	ck(rec.outline_xray == false, "read takes the x-ray toggle from the profile")
 	ck(rec.daylight_compensation == false, "read takes the daylight toggle from the profile")
@@ -59,7 +60,8 @@ func t_read_reads_values() -> void:
 
 func t_read_defaults() -> void:
 	var rec = Settings.read(ConfigFile.new())
-	ck(rec.outline_rim == 2.0, "missing rim falls back to the registered default")
+	ck(rec.get("outline_rim") == null, "the removed Rim setting has no record field")
+	ck(rec.get("thermal_mix") == null, "the removed thermal mix has no record field")
 	# The reveal radii follow the outline-semantics: 0 = the source is off.
 	for k in ["fire", "voice", "idle", "move", "run", "reload", "pain", "nade"]:
 		var rk = ("trigger_%s_dist" % k)
@@ -73,8 +75,9 @@ func t_read_defaults() -> void:
 	ck(rec.nvg_noise == 0.0, "missing noise falls back to the registered default")
 	ck(rec.nvg_white == 1.0, "missing NVG brightness falls back to the registered default")
 	ck(rec.world == 1.70, "missing world brightness falls back to the registered default")
-	ck(rec.outline_thickness == 0.006, "missing thickness falls back to the registered default")
-	ck(rec.outline_brightness == 0.6, "missing brightness falls back to the registered default")
+	ck(absf(rec.outline_thickness - 0.0005) < 0.000001, "missing thickness falls back to the registered default")
+	ck(absf(rec.outline_brightness - 0.7) < 0.001, "missing brightness falls back to the registered default")
+	ck(absf(rec.fill_alpha - 0.6) < 0.001, "missing fill alpha falls back to the registered default")
 	ck(rec.fire_d == 80.0 and rec.fire_s == 2.0, "trigger defaults: fire 80 m / 2 s")
 	ck(rec.idle_d == 5.0 and rec.idle_s == 1.0, "trigger defaults: idle voice 5 m / 1 s")
 	ck(rec.move_d == 5.0 and rec.move_s == 1.0, "trigger defaults: walk 5 m / 1 s")
@@ -83,46 +86,55 @@ func t_read_defaults() -> void:
 	ck(rec.reload_d == 2.0 and rec.reload_s == 1.0, "trigger defaults: reload 2 m / 1 s")
 	ck(rec.pain_d == 10.0 and rec.pain_s == 2.0, "trigger defaults: pain 10 m / 2 s")
 	ck(rec.nade_d == 50.0 and rec.nade_s == 2.0, "trigger defaults: grenade 50 m / 2 s")
-	ck(rec.corpse_decay == 90.0, "cooling time default 90 s")
-	ck(rec.outline_enabled and rec.outline_xray and rec.thermal_mines and rec.nomad_marker, "toggles default on")
+	ck(rec.corpse_decay == 70.0, "cooling time default 70 s")
+	ck(rec.outline_enabled and rec.body_fill and rec.thermal_mines and rec.nomad_marker, "toggles default on")
+	ck(rec.outline_xray == false, "x-ray trigger default off")
 	ck(rec.daylight_compensation, "daylight compensation defaults on")
 	ck(rec.debug_log == false, "debug log defaults off")
+	ck(rec.npc_labels == true, "npc labels default on")
 	ck(rec.key_thermal_toggle == 0, "thermal hotkey defaults unbound")
 	ck(rec.key_palette_cycle == KEY_F6 and rec.key_esp_panel == KEY_F8, "diagnostic hotkeys default to the F keys")
 	ck(rec.key_live_panel == KEY_F9, "live panel key defaults to F9")
-	ck(absf(rec.fill_alpha - 0.4) < 0.001, "fill alpha defaults to 0.4")
-	ck(rec.thermal_mix == 1.0, "missing thermal-mix falls back to 1.0")
-	ck(rec.color_normal == Color(0.98, 0.96, 0, 1), "normal colour default")
-	ck(rec.color_defend == Color(0.11, 0.6, 0.96, 1), "defend colour default")
-	ck(rec.color_mine == Color(1.0, 0.2, 0.85, 1), "mine colour default")
+	ck(absf(rec.daylight_strength - 1.0) < 0.001, "daylight strength defaults to 1.0")
+	ck(absf(rec.highlight_knee - 0.55) < 0.001, "highlight knee defaults to 0.55")
+	ck(absf(rec.vrcets_thermal_strength - 0.58) < 0.001, "vrcets thermal strength default")
+	ck(absf(rec.vrcets_red_hold - 0.72) < 0.001, "vrcets red hold default")
+	ck(rec.color_normal == States.DEFAULT_NORMAL, "normal colour default")
+	ck(rec.color_combat == States.DEFAULT_COMBAT, "combat colour default")
+	ck(rec.color_defend == States.DEFAULT_DEFEND, "defend colour default")
+	ck(rec.color_mine == Color8(9, 46, 246), "mine colour default")
 
 # Hand-written scalars (a bare value instead of the {..: ..} entry) must still
 # land: the profile file is player-writable.
 func t_read_coerces_scalars() -> void:
 	var cfg := ConfigFile.new()
-	cfg.set_value("Float", "outline_rim", 2.5)
+	cfg.set_value("Float", "outline_thickness", 0.0125)
 	cfg.set_value("Bool", "thermal_mines", false)
 	cfg.set_value("Keycode", "key_palette_cycle", KEY_F1)
 	cfg.set_value("Color", "state_normal", Color(0.1, 0.2, 0.3))
 	var rec = Settings.read(cfg)
-	ck(rec.outline_rim == 2.5, "a bare float value still reads")
+	ck(absf(rec.outline_thickness - 0.0125) < 0.001, "a bare float value still reads")
 	ck(rec.thermal_mines == false, "a bare bool value still reads")
 	ck(rec.key_palette_cycle == KEY_F1, "a bare hotkey still reads")
 	ck(rec.color_normal == Color(0.1, 0.2, 0.3), "a bare colour still reads")
 
 func t_mcm_config_shape() -> void:
 	var cfg = Settings.mcm_config()
-	ck(cfg.has_section_key("Float", "outline_rim"), "the rim is declared")
+	ck(cfg.has_section_key("Float", "outline_brightness"), "the brightness is declared")
 	ck(cfg.has_section_key("Float", "fill_alpha"), "fill alpha is declared")
-	ck(cfg.has_section_key("Float", "thermal_mix"), "thermal-mix is declared")
+	ck(not cfg.has_section_key("Float", "thermal_mix"), "thermal mix is not declared")
 	ck(cfg.has_section_key("Keycode", "key_thermal_toggle"), "the thermal hotkey is declared")
 	ck(cfg.has_section_key("Keycode", "key_esp_panel"), "the ESP panel hotkey is declared")
+	ck(cfg.has_section_key("Keycode", "key_live_panel"), "the live panel hotkey is declared")
 	ck(cfg.has_section_key("Color", "state_defend"), "the defend colour is declared")
 	ck(cfg.has_section_key("Color", "mine_color"), "the mine colour is declared")
-	var rim = cfg.get_value("Float", "outline_rim", {})
-	ck(rim.get("name") == "Rim", "the registration carries the label")
-	ck(float(rim.get("default")) == 2.0, "the registration carries the default")
-	ck(float(rim.get("minRange")) == 0.0 and float(rim.get("maxRange")) == 6.0 and float(rim.get("step")) == 0.5, "the registration carries the float range")
+	var bright = cfg.get_value("Float", "outline_brightness", {})
+	ck(bright.get("name") == "Brightness", "the registration carries the label")
+	ck(absf(float(bright.get("default")) - 0.7) < 0.001, "the registration carries the default")
+	ck(float(bright.get("minRange")) == 0.1 and float(bright.get("maxRange")) == 3.0 and float(bright.get("step")) == 0.1, "the registration carries the float range")
+	var fill = cfg.get_value("Float", "fill_alpha", {})
+	ck(absf(float(fill.get("default")) - 0.6) < 0.001, "fill alpha default is registered")
+	ck(float(fill.get("minRange")) == 0.05 and float(fill.get("maxRange")) == 1.0, "fill alpha range is registered")
 	var tint = cfg.get_value("Color", "state_defend", {})
 	ck(bool(tint.get("allowAlpha")) == false, "colour entries forbid alpha")
 	var key = cfg.get_value("Keycode", "key_thermal_toggle", {})
@@ -145,7 +157,7 @@ func t_defaults_consistency() -> void:
 		ck(entry.get("default") == def, "registered default equals the descriptor default for %s" % key)
 		ck(entry.get("value") == def, "registered value equals the descriptor default for %s" % key)
 	# Spot-check the record side of the same contract.
-	ck(rec.outline_rim == float(Settings.mcm_config().get_value("Float", "outline_rim", {}).get("default")), "the record and the registration share the rim default")
+	ck(absf(rec.outline_brightness - float(Settings.mcm_config().get_value("Float", "outline_brightness", {}).get("default"))) < 0.001, "the record and the registration share the brightness default")
 
 # The Distance slider hides the outline past the setting, it does not fade it.
 func t_distance_tooltip_is_honest() -> void:
@@ -161,10 +173,8 @@ func t_esp_apply_maps_fields() -> void:
 	rec.outline_distance = 35.0
 	rec.outline_thickness = 0.009
 	rec.outline_brightness = 1.5
-	rec.outline_rim = 4.0
 	rec.body_fill = true
 	rec.fill_alpha = 0.35
-	rec.thermal_mix = 0.5
 	rec.outline_xray = false
 	rec.fire_d = 90.0
 	rec.fire_s = 4.0
@@ -186,10 +196,10 @@ func t_esp_apply_maps_fields() -> void:
 	ck(esp.p_decay == 44.0, "ESP maps corpse_decay")
 	ck(esp.p_dist == 35.0, "ESP maps outline_distance")
 	ck(esp.p_thickness == 0.009, "ESP maps outline_thickness")
-	ck(esp.p_rim == 4.0, "ESP maps outline_rim")
+	ck(absf(esp.p_brightness - 1.5) < 0.001, "ESP maps outline_brightness")
 	ck(esp.p_body_fill == true, "ESP maps body_fill")
 	ck(absf(esp.p_fill_alpha - 0.35) < 0.001, "ESP maps fill_alpha")
-	ck(absf(esp.p_thermal_mix - 0.5) < 0.001, "ESP maps thermal-mix")
+	ck(esp.get("p_thermal_mix") == null, "ESP has no thermal mix field")
 	ck(esp.p_trig == false, "ESP maps the x-ray toggle")
 	ck(esp.p_fire_d == 90.0 and esp.p_fire_s == 4.0, "ESP maps the fire window")
 	ck(esp.p_voice_d == 18.0 and esp.p_voice_s == 4.0, "ESP maps the voice window")
@@ -211,6 +221,9 @@ func t_nvg_apply_maps_fields() -> void:
 	rec.thermal_mines = false
 	rec.daylight_compensation = false
 	rec.daylight_strength = 0.5
+	rec.highlight_knee = 0.4
+	rec.vrcets_thermal_strength = 0.33
+	rec.vrcets_red_hold = 0.44
 	rec.color_combat = Color(0.0, 1.0, 0.0)
 	rec.color_mine = Color(0.25, 0.5, 0.75)
 	var nvg = NVG.new()
@@ -218,9 +231,13 @@ func t_nvg_apply_maps_fields() -> void:
 	ck(nvg.set_nvg_noise == 12.5, "NVG maps nvg_noise")
 	ck(nvg.set_nvg_white == 0.5, "NVG maps nvg_white")
 	ck(nvg.set_world == 2.5, "NVG maps world brightness")
+	ck(absf(nvg.set_state_brightness - 1.5) < 0.001, "NVG maps outline brightness")
 	ck(nvg.set_glow_distance == 80.0, "NVG maps the glow distance")
 	ck(nvg.set_mines == false, "NVG maps the mines toggle")
 	ck(nvg.set_daylight == false, "NVG maps the daylight toggle")
 	ck(nvg.set_strength == 0.5, "NVG maps daylight strength")
+	ck(absf(nvg.set_highlight_knee - 0.4) < 0.001, "NVG maps highlight knee")
+	ck(absf(nvg.set_vrcets_strength - 0.33) < 0.001, "NVG maps vrcets strength")
+	ck(absf(nvg.set_vrcets_red_hold - 0.44) < 0.001, "NVG maps vrcets red hold")
 	ck(nvg.mine_color() == Color(0.25, 0.5, 0.75), "NVG maps the mine colour")
 	nvg.free()
