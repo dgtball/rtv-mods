@@ -300,11 +300,12 @@ func t_opts_contour_key() -> void:
 	ck(hostile.get("key") == S.state_key(S.COMBAT), "state key is emitted for contour opts")
 	ck(not hostile.has("state_key"), "the old detector key name is gone")
 	ck(not hostile.has("nomad"), "nomad is not duplicated into the contour opts")
-	for k in ["key", "color", "brightness", "grow", "band", "cool", "xray", "fill"]:
+	for k in ["key", "color", "brightness", "grow", "cool", "xray", "fill"]:
 		ck(hostile.has(k), "contour opts include %s" % k)
 	ck(not hostile.has("alpha"), "the contour opts carry no alpha to blend the key with")
 	ck(not hostile.has("rim"), "the ring has no rim falloff")
 	ck(not hostile.has("fill_grow"), "fill grow lives in the shader, not in opts")
+	ck(not hostile.has("band"), "contour opts omit screen-space band heuristic")
 	# NVG-off/direct path remains the default when not rendering to buffer.
 	ck(bool(hostile.get("direct", false)), "default contour opts are direct (overlay path)")
 	var normal := opts_of(esp, {"cat": S.NORMAL, "nomad": true})
@@ -359,21 +360,15 @@ func t_opts_brightness_thermal_mix() -> void:
 	ck(absf(float(opts.get("brightness", 0.0)) - 1.0) < 0.001, "body fill caps brightness at 1.0")
 	esp.free()
 
-# The ring band has to stay a couple of pixels wide at any range: a fixed
-# world-space band collapses to the MSAA stencil fringe and the detector loses
-# the key while the NPC moves.
+# Contour opts carry the configured outline thickness as grow; screen-space band
+# heuristics are not emitted (VTKOutline handles band sizing from grow).
 func t_band_tracks_distance() -> void:
 	var esp = ESP.new()
 	root.add_child(esp)
-	var near := esp._band_for(5.0)
-	var far := esp._band_for(60.0)
-	ck(near >= ESP.OUTLINE_BAND_MIN, "a near band keeps its floor")
-	ck(far > near, "the band grows with distance to keep its pixel width")
-	ck(esp._band_for(1000.0) <= ESP.OUTLINE_BAND_MAX, "the band is capped")
-	ck(esp._band_for(0.0) >= ESP.OUTLINE_BAND_MIN, "zero distance stays finite")
+	esp.p_thickness = 0.012
 	var opts := opts_of(esp, {"cat": S.NORMAL, "dist": 30.0})
-	ck(absf(float(opts.get("band", 0.0)) - esp._band_for(30.0)) < 0.000001, "the opts carry the band for the contour")
-	ck(absf(float(opts.get("grow", 0.0)) - esp.p_thickness) < 0.000001, "the opts carry the configured ring offset")
+	ck(absf(float(opts.get("grow", 0.0)) - 0.012) < 0.000001, "the opts carry the configured ring offset")
+	ck(not opts.has("band"), "contour opts omit screen-space band heuristic")
 	esp.free()
 
 func t_fullbody_xray_no_ring() -> void:

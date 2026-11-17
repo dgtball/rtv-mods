@@ -172,10 +172,11 @@ func _free_esp_panel() -> void:
 
 func _apply_mode() -> void:
 	if _esp != null and is_instance_valid(_esp):
-		# Debug/diagnostic mode: contour and X-ray layers are decoupled from NVG
-		# helmet and thermal toggle so ESP geometry can be tested independently.
-		var contour: bool = _outline_enabled
-		var xray: bool = _xray_enabled
+		# The ESP only shows while the thermal vision actually runs: the goggles
+		# alone (vanilla NVG) do not carry it. The thermal switch owns that.
+		var on := _nvg_active() and _thermal_enabled
+		var contour: bool = on and _outline_enabled
+		var xray: bool = on and _xray_enabled
 		_esp.set_layers(contour, xray)
 		_sync_nvg_esp()
 
@@ -185,8 +186,9 @@ func _apply_mode() -> void:
 func _set_esp_layers_for_preview(xray_triggers: bool) -> void:
 	if _esp == null or not is_instance_valid(_esp):
 		return
-	var contour: bool = _outline_enabled
-	var xray: bool = xray_triggers
+	var on := _nvg_active() and _thermal_enabled
+	var contour: bool = on and _outline_enabled
+	var xray: bool = on and xray_triggers
 	_esp.set_layers(contour, xray)
 	_sync_nvg_esp()
 
