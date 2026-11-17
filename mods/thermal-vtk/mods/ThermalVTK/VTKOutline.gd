@@ -84,7 +84,9 @@ func _set_material(entry: Dictionary, mat: Material) -> void:
 	entry["p_color"] = null
 	entry["p_brightness"] = null
 	entry["p_alpha"] = null
+	entry["p_ring_alpha"] = null
 	entry["p_grow"] = null
+	entry["p_band"] = null
 	entry["p_cool"] = null
 	entry["p_rim"] = null
 	if _buffer_mode:
@@ -174,7 +176,9 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 		"p_color": null,
 		"p_brightness": null,
 		"p_alpha": null,
+		"p_ring_alpha": null,
 		"p_grow": null,
+		"p_band": null,
 		"p_cool": null,
 		"p_rim": null,
 	}
@@ -203,6 +207,7 @@ func refresh(id: int, opts: Dictionary) -> void:
 	var brightness: float = float(opts.get("brightness", 1.0))
 	var fill_alpha: float = clampf(float(opts.get("fill_alpha", opts.get("alpha", 0.4))), 0.0, 1.0)
 	var grow: float = float(opts.get("grow", 0.006))
+	var band: float = maxf(float(opts.get("band", 0.0)), 0.0)
 	var cool: float = float(opts.get("cool", 0.0))
 	var rim: float = float(opts.get("rim", 2.0))
 	var body_mat: ShaderMaterial = entry.get("mat") as ShaderMaterial
@@ -222,11 +227,17 @@ func refresh(id: int, opts: Dictionary) -> void:
 			ring_mat.set_shader_parameter("brightness", brightness)
 		entry["p_brightness"] = brightness
 	var p_grow = entry.get("p_grow")
-	if p_grow == null or not is_equal_approx(float(p_grow), grow):
-		body_mat.set_shader_parameter("grow", grow)
-		if ring_mat != null:
-			ring_mat.set_shader_parameter("grow", grow)
+	var p_band = entry.get("p_band")
+	if p_grow == null or not is_equal_approx(float(p_grow), grow) or p_band == null or not is_equal_approx(float(p_band), band):
+		var body_grow: float = maxf(grow, band)
+		if fill:
+			body_mat.set_shader_parameter("grow", body_grow)
+		else:
+			body_mat.set_shader_parameter("grow", body_grow)
+			if ring_mat != null:
+				ring_mat.set_shader_parameter("grow", body_grow + band)
 		entry["p_grow"] = grow
+		entry["p_band"] = band
 	var p_cool = entry.get("p_cool")
 	if p_cool == null or not is_equal_approx(float(p_cool), cool):
 		body_mat.set_shader_parameter("cool", cool)
@@ -240,7 +251,7 @@ func refresh(id: int, opts: Dictionary) -> void:
 			entry["p_rim"] = rim
 	# Direct display: fill = translucent body alpha, outline = mask body + ring alpha.
 	var body_alpha: float = fill_alpha if fill else 0.0
-	var ring_alpha: float = fill_alpha if fill else maxf(fill_alpha, 0.0)
+	var ring_alpha: float = fill_alpha if not fill else 0.0
 	var p_alpha = entry.get("p_alpha")
 	if p_alpha == null or not is_equal_approx(float(p_alpha), body_alpha):
 		body_mat.set_shader_parameter("alpha", body_alpha)

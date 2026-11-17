@@ -21,6 +21,7 @@ func _run() -> void:
 	t_collect_all_geometry()
 	t_collect_skips_mod_geometry()
 	t_overlay_outline_chain_and_uniforms()
+	t_ring_band_widens_grow()
 	t_overlay_fill_single_body_no_ring()
 	t_overlay_xray_preserves_shape()
 	t_toggle_xray_restores_los()
@@ -111,6 +112,31 @@ func t_overlay_outline_chain_and_uniforms() -> void:
 	ck(is_equal_approx(float(ring.get_shader_parameter("cool")), 0.3), "outline ring cool set")
 	o.clear(1)
 	root.free()
+
+func t_ring_band_widens_grow() -> void:
+	var root_node := Node3D.new()
+	root.add_child(root_node)
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	root_node.add_child(mesh)
+	var o = Outline.new()
+	var opts := {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.025, "cool": 0.0}
+	o.apply(21, root_node, opts)
+	var body: ShaderMaterial = o._items[21]["mat"]
+	var ring: ShaderMaterial = body.next_pass as ShaderMaterial
+	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.025), "mask grow accounts for band depth step")
+	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.05), "ring inflates by mask grow plus band")
+	o.refresh(21, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.05, "cool": 0.0})
+	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.05), "band-only change updates mask grow")
+	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.1), "band-only change updates ring grow")
+	o.refresh(21, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.03, "band": 0.01, "cool": 0.0})
+	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.03), "configured grow wins over thinner band on mask")
+	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.04), "ring keeps visible band width")
+	o.refresh(21, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.0, "cool": 0.0})
+	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.01), "zero band leaves mask at grow")
+	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.01), "zero band collapses ring offset to grow")
+	o.clear(21)
+	root_node.free()
 
 func t_overlay_fill_single_body_no_ring() -> void:
 	var root := Node3D.new()
