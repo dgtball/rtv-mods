@@ -1,27 +1,44 @@
 ﻿extends RefCounted
-# Owns direct-color contour materials per NPC and renders them on the NPC's own
-# meshes through `material_overlay` in the main 3D pass.
+# Owns ESP contour rendering per NPC in two modes:
+# - NVG-off/overlay mode (direct parity): applies direct display materials as
+#   `material_overlay` on the source meshes in the main 3D pass.
+# - NVG-on buffer mode: renders shell MeshInstance3D copies (same parent, mesh/
+#   skin/skeleton copied) on the ESP buffer layer with direct display materials,
+#   keeping source meshes free of ESP overlays so ESP is absent from screen_texture.
 #
-# Shape and depth mode are independent:
-#   outline (fill=false): body shader (stencil write, mask-only, alpha 0) with a
-#          next_pass ring shader (stencil read, visible band outside the body)
-#   full-body (fill=true): body shader only (visible tint), no ring
-#   xray=true preserves shape and only swaps LOS shaders for depth_test_disabled
-#          XRAY variants.
+# Direct display semantics (both modes): outline = mask+ring band with translucent
+# ring alpha driven by fill_alpha, fill = translucent body alpha (fill_alpha),
+# xray swaps depth_test_disabled variants; color/brightness/cool/grow follow opts.
 
 const Shaders = preload("res://mods/ThermalVTK/VTKShaders.gd")
 
 # Nodes the mod adds under a bot's subtree (the nomad marker, the debug label,
-# the overlays themselves) carry this meta: the sweep must skip them.
+# shells, etc.) carry this meta: the sweep must skip them.
 const NO_CONTOUR_META := "vtk_no_contour"
+const SHELL_META := "vtk_esp_shell"
 
 var _items: Dictionary = {}
-const SCOPE_RIM := 6.0
-var _scoped: bool = false
 var _clear_pool: Array = []
+var _buffer_mode: bool = false
+var _buffer_layer_bit: int = 1 << 19
 
 func has(id: int) -> bool:
 	return _items.has(id)
+
+func buffer_mode() -> bool:
+	return _buffer_mode
+
+func set_buffer_mode(enabled: bool, layer_bit: int = 1 << 19) -> void:
+	if _buffer_mode == enabled and _buffer_layer_bit == layer_bit:
+		return
+	_buffer_mode = enabled
+	_buffer_layer_bit = layer_bit
+	if enabled:
+		for id in _items:
+			_enter_buffer(id, _items[id])
+	else:
+		for id in _items:
+			_leave_buffer(id, _items[id])
 
 func _collect(node: Node, out: Array) -> void:
 	if node.has_meta(NO_CONTOUR_META):
@@ -46,58 +63,109 @@ func _same_meshes(old: Array, fresh: Array) -> bool:
 			return false
 	return true
 
-func _build_body(los: bool) -> ShaderMaterial:
-	var mat := ShaderMaterial.new()
-	mat.shader = Shaders.body_los() if los else Shaders.body_xray()
-	return mat
-
-func _build_ring(los: bool) -> ShaderMaterial:
-	var mat := ShaderMaterial.new()
-	mat.shader = Shaders.ring_los() if los else Shaders.ring_xray()
-	return mat
-
-func _material_for(fill: bool, xray: bool) -> ShaderMaterial:
-	var los: bool = not xray
-	var body := _build_body(los)
+func _material_for(fill: bool, xray: bool) -> Material:
+	var body_mat := ShaderMaterial.new()
+	body_mat.shader = Shaders.body_xray() if xray else Shaders.body_los()
 	if not fill:
-		body.next_pass = _build_ring(los)
-	return body
+		var ring_mat := ShaderMaterial.new()
+		ring_mat.shader = Shaders.ring_xray() if xray else Shaders.ring_los()
+		body_mat.next_pass = ring_mat
+	return body_mat
 
-# Visible ring pass when present (outline chain), else null for full-body.
 func _ring_of(mat: Material) -> ShaderMaterial:
 	var body := mat as ShaderMaterial
 	if body == null:
 		return null
 	return body.next_pass as ShaderMaterial
 
-func _set_material(entry: Dictionary, mat: ShaderMaterial) -> void:
+func _set_material(entry: Dictionary, mat: Material) -> void:
 	entry["mat"] = mat
 	entry["ring"] = _ring_of(mat)
 	entry["p_color"] = null
 	entry["p_brightness"] = null
+	entry["p_alpha"] = null
 	entry["p_grow"] = null
-	entry["p_rim"] = null
 	entry["p_cool"] = null
-	entry["p_alpha_body"] = null
-	entry["p_alpha_ring"] = null
-	_apply_to(entry.get("meshes", []), mat)
+	entry["p_rim"] = null
+	if _buffer_mode:
+		_apply_shell_materials(entry)
+	else:
+		_apply_to(entry.get("meshes", []), mat)
 
-# The one overlay write. A null material takes the contour off the mesh.
+# Overlay-mode write. A null material takes the contour off the source mesh.
 func _apply_to(meshes: Array, mat: Material) -> void:
 	for m in meshes:
 		var mi := m as MeshInstance3D
 		if mi != null and is_instance_valid(mi):
 			mi.material_overlay = mat
 
+func _shells(entry: Dictionary) -> Array:
+	var s = entry.get("shells", [])
+	return s if s is Array else []
+
+func _sync_shell(shell: MeshInstance3D, src: MeshInstance3D) -> void:
+	shell.global_transform = src.global_transform
+	shell.visible = src.visible
+	shell.layers = _buffer_layer_bit
+
+func _make_shell(src: MeshInstance3D) -> MeshInstance3D:
+	var shell := MeshInstance3D.new()
+	shell.set_meta(NO_CONTOUR_META, true)
+	shell.set_meta(SHELL_META, true)
+	shell.top_level = true
+	shell.mesh = src.mesh
+	shell.skin = src.skin
+	shell.skeleton = src.skeleton
+	shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	src.add_sibling(shell)
+	_sync_shell(shell, src)
+	return shell
+
+func _apply_shell_materials(entry: Dictionary) -> void:
+	var mat: Material = entry.get("mat")
+	for s in _shells(entry):
+		var shell := s as MeshInstance3D
+		if shell != null and is_instance_valid(shell):
+			shell.material_override = mat
+
+func _free_shells(entry: Dictionary) -> void:
+	for s in _shells(entry):
+		var shell := s as MeshInstance3D
+		if shell != null and is_instance_valid(shell):
+			shell.queue_free()
+	entry["shells"] = []
+
+func _enter_buffer(id: int, entry: Dictionary) -> void:
+	_apply_to(entry.get("meshes", []), null)
+	_rebuild_shells(entry)
+
+func _leave_buffer(id: int, entry: Dictionary) -> void:
+	_free_shells(entry)
+	_apply_to(entry.get("meshes", []), entry.get("mat"))
+
+func _rebuild_shells(entry: Dictionary) -> void:
+	_free_shells(entry)
+	if not _buffer_mode:
+		return
+	var shells: Array = []
+	for m in entry.get("meshes", []):
+		var src := m as MeshInstance3D
+		if src == null or not is_instance_valid(src):
+			continue
+		shells.append(_make_shell(src))
+	entry["shells"] = shells
+	_apply_shell_materials(entry)
+
 func apply(id: int, node: Node, opts: Dictionary) -> void:
 	var meshes: Array = []
 	_collect(node, meshes)
 	var xray: bool = bool(opts.get("xray", false))
 	var fill: bool = bool(opts.get("fill", false))
-	var mat := _material_for(fill, xray)
+	var mat: Material = _material_for(fill, xray)
 	_items[id] = {
 		"node": node,
 		"meshes": meshes,
+		"shells": [],
 		"mat": mat,
 		"ring": _ring_of(mat),
 		"fill_mode": fill,
@@ -105,15 +173,17 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 		"child_count": _child_count(node),
 		"p_color": null,
 		"p_brightness": null,
+		"p_alpha": null,
 		"p_grow": null,
-		"p_rim": null,
 		"p_cool": null,
-		"p_alpha_body": null,
-		"p_alpha_ring": null,
+		"p_rim": null,
 	}
-	_apply_to(meshes, mat)
+	if _buffer_mode:
+		_rebuild_shells(_items[id])
+	else:
+		_apply_to(meshes, mat)
 	# Seed the uniforms in the same frame: the first draw of a fresh bot must
-	# already carry its category, not the shader default.
+	# already carry its display state, not the shader default.
 	refresh(id, opts)
 
 func refresh(id: int, opts: Dictionary) -> void:
@@ -129,54 +199,68 @@ func refresh(id: int, opts: Dictionary) -> void:
 		entry["xray"] = xray
 		entry["fill_mode"] = fill
 		_set_material(entry, _material_for(fill, xray))
-	var color: Color = opts.get("color", Color(1.0, 0.0, 0.0, 1.0))
+	var display: Color = opts.get("color", Color(1.0, 0.0, 0.0, 1.0))
 	var brightness: float = float(opts.get("brightness", 1.0))
-	var alpha: float = float(opts.get("alpha", 0.4))
+	var fill_alpha: float = clampf(float(opts.get("fill_alpha", opts.get("alpha", 0.4))), 0.0, 1.0)
 	var grow: float = float(opts.get("grow", 0.006))
 	var cool: float = float(opts.get("cool", 0.0))
-	var rim_user: float = float(opts.get("rim", 1.0))
+	var rim: float = float(opts.get("rim", 2.0))
 	var body_mat: ShaderMaterial = entry.get("mat") as ShaderMaterial
 	var ring_mat: ShaderMaterial = entry.get("ring") as ShaderMaterial
 	if body_mat == null:
 		return
-	var body_alpha: float = 0.0 if not fill else alpha
-	if entry.get("p_color") == null or entry.get("p_color") != color:
-		body_mat.set_shader_parameter("outline_color", color)
+	var p_color = entry.get("p_color")
+	if p_color == null or p_color != display:
+		body_mat.set_shader_parameter("outline_color", display)
 		if ring_mat != null:
-			ring_mat.set_shader_parameter("outline_color", color)
-		entry["p_color"] = color
-	if entry.get("p_brightness") == null or not is_equal_approx(float(entry.get("p_brightness")), brightness):
+			ring_mat.set_shader_parameter("outline_color", display)
+		entry["p_color"] = display
+	var p_brightness = entry.get("p_brightness")
+	if p_brightness == null or not is_equal_approx(float(p_brightness), brightness):
 		body_mat.set_shader_parameter("brightness", brightness)
 		if ring_mat != null:
 			ring_mat.set_shader_parameter("brightness", brightness)
 		entry["p_brightness"] = brightness
-	if entry.get("p_grow") == null or not is_equal_approx(float(entry.get("p_grow")), grow):
+	var p_grow = entry.get("p_grow")
+	if p_grow == null or not is_equal_approx(float(p_grow), grow):
 		body_mat.set_shader_parameter("grow", grow)
 		if ring_mat != null:
 			ring_mat.set_shader_parameter("grow", grow)
 		entry["p_grow"] = grow
-	if entry.get("p_cool") == null or not is_equal_approx(float(entry.get("p_cool")), cool):
+	var p_cool = entry.get("p_cool")
+	if p_cool == null or not is_equal_approx(float(p_cool), cool):
 		body_mat.set_shader_parameter("cool", cool)
 		if ring_mat != null:
 			ring_mat.set_shader_parameter("cool", cool)
 		entry["p_cool"] = cool
-	if entry.get("p_alpha_body") == null or not is_equal_approx(float(entry.get("p_alpha_body")), body_alpha):
-		body_mat.set_shader_parameter("alpha", body_alpha)
-		entry["p_alpha_body"] = body_alpha
 	if ring_mat != null:
-		var rim: float = SCOPE_RIM if (_scoped and rim_user > 0.01) else rim_user
-		if entry.get("p_rim") == null or not is_equal_approx(float(entry.get("p_rim")), rim):
+		var p_rim = entry.get("p_rim")
+		if p_rim == null or not is_equal_approx(float(p_rim), rim):
 			ring_mat.set_shader_parameter("rim_power", rim)
 			entry["p_rim"] = rim
-		if entry.get("p_alpha_ring") == null or not is_equal_approx(float(entry.get("p_alpha_ring")), alpha):
-			ring_mat.set_shader_parameter("alpha", alpha)
-			entry["p_alpha_ring"] = alpha
-	else:
-		entry["p_rim"] = null
-		entry["p_alpha_ring"] = null
-
-func set_scoped(on: bool) -> void:
-	_scoped = on
+	# Direct display: fill = translucent body alpha, outline = mask body + ring alpha.
+	var body_alpha: float = fill_alpha if fill else 0.0
+	var ring_alpha: float = fill_alpha if fill else maxf(fill_alpha, 0.0)
+	var p_alpha = entry.get("p_alpha")
+	if p_alpha == null or not is_equal_approx(float(p_alpha), body_alpha):
+		body_mat.set_shader_parameter("alpha", body_alpha)
+		entry["p_alpha"] = body_alpha
+	if ring_mat != null:
+		var p_ring_alpha = entry.get("p_ring_alpha")
+		if p_ring_alpha == null or not is_equal_approx(float(p_ring_alpha), ring_alpha):
+			ring_mat.set_shader_parameter("alpha", ring_alpha)
+			entry["p_ring_alpha"] = ring_alpha
+	if _buffer_mode:
+		var meshes: Array = entry.get("meshes", [])
+		var shells: Array = _shells(entry)
+		for i in shells.size():
+			var shell := shells[i] as MeshInstance3D
+			if shell == null or not is_instance_valid(shell):
+				continue
+			if i < meshes.size():
+				var src := meshes[i] as MeshInstance3D
+				if src != null and is_instance_valid(src):
+					_sync_shell(shell, src)
 
 func _recollect(id: int, entry: Dictionary) -> void:
 	var node: Node = entry.get("node")
@@ -184,23 +268,25 @@ func _recollect(id: int, entry: Dictionary) -> void:
 		return
 	var fresh: Array = []
 	_collect(node, fresh)
-	# The count is re-sampled either way: a non-geometry child (audio player,
-	# identifier) moves it on most AI steps, and re-sweeping on every one of
-	# those is exactly what this guard exists to absorb.
 	entry["child_count"] = _child_count(node)
 	if _same_meshes(entry.get("meshes", []), fresh):
+		if _buffer_mode:
+			_apply_shell_materials(entry)
 		return
 	entry["meshes"] = fresh
-	_apply_to(fresh, entry.get("mat"))
+	if _buffer_mode:
+		_rebuild_shells(entry)
+	else:
+		_apply_to(fresh, entry.get("mat"))
 
 func clear(id: int) -> void:
 	var entry: Dictionary = _items.get(id)
 	if entry == null:
 		return
 	_apply_to(entry.get("meshes", []), null)
+	_free_shells(entry)
 	_items.erase(id)
 
-# Same pool dance as clear_not_in: erasing while iterating _items skips entries.
 func clear_all() -> void:
 	clear_not_in({})
 
@@ -211,3 +297,4 @@ func clear_not_in(keep: Dictionary) -> void:
 			_clear_pool.append(id)
 	for id in _clear_pool:
 		clear(id)
+

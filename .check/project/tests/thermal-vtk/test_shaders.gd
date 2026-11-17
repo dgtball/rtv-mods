@@ -60,16 +60,15 @@ func t_esp_shaders_compile() -> void:
 		var sh: Shader = pair[1]
 		ck(sh != null and FileAccess.file_exists(pair[2]), "esp %s shader resolves" % pair[0])
 		var names := _uniform_names(sh)
-		ck(names.has("key_color"), "esp %s shader exposes key_color" % pair[0])
+		ck(names.has("outline_color"), "esp %s shader exposes outline_color" % pair[0])
+		ck(names.has("brightness"), "esp %s shader exposes brightness" % pair[0])
+		ck(names.has("alpha"), "esp %s shader exposes alpha" % pair[0])
 		ck(names.has("grow"), "esp %s shader exposes grow" % pair[0])
-		ck(not names.has("density"), "esp %s shader has no dither density" % pair[0])
+		ck(names.has("cool"), "esp %s shader exposes cool" % pair[0])
 	for body in [Sh.body_los(), Sh.body_xray()]:
-		ck(_uniform_names(body).has("alpha"), "body shader keeps the mask/fill alpha switch")
-		ck(not _uniform_names(body).has("cool"), "the corpse fade belongs to the ring")
+		ck(not _uniform_names(body).has("rim_power"), "body shader has no rim falloff")
 	for ring in [Sh.ring_los(), Sh.ring_xray()]:
-		ck(_uniform_names(ring).has("cool"), "ring shader carries the corpse fade")
-		ck(not _uniform_names(ring).has("alpha"), "ring shader has no alpha to blend the key with")
-		ck(not _uniform_names(ring).has("rim_power"), "ring shader has no rim falloff")
+		ck(_uniform_names(ring).has("rim_power"), "ring shader exposes rim_power")
 
 func t_body_contracts() -> void:
 	var los := FileAccess.get_file_as_string(BODY_LOS_RES)
@@ -77,13 +76,8 @@ func t_body_contracts() -> void:
 	for src in [los, xray]:
 		ck(src.contains("stencil_mode write, 1"), "body shader writes stencil")
 		ck(src.contains("depth_draw_never"), "body shader never writes depth")
-		ck(src.contains("global uniform float vtk_key_gain"), "body shader scales detection key")
-		ck(src.contains("key_color * vtk_key_gain"), "body shader emits detection key")
-		ck(not src.contains("screen_dither"), "the fill is solid, not dithered")
-		ck(not src.contains("discard"), "the fill never drops pixels")
-		ck(src.contains("ALPHA = 1.0"), "body key reaches the framebuffer opaque")
-		ck(not src.contains("ALPHA = alpha"), "body never blends the key by alpha")
-		ck(not src.contains("ALPHA = rim"), "body never blends the key by a falloff")
+		ck(src.contains("outline_color * brightness"), "body shader emits display color")
+		ck(src.contains("ALPHA = alpha * (1.0 - cool)"), "body shader applies alpha and cool")
 	ck(not los.contains("depth_test_disabled"), "los body keeps depth test")
 	ck(xray.contains("depth_test_disabled"), "xray body disables depth test")
 
@@ -93,33 +87,24 @@ func t_ring_contracts() -> void:
 	for src in [los, xray]:
 		ck(src.contains("stencil_mode read, compare_not_equal, 1"), "ring shader reads stencil")
 		ck(src.contains("depth_draw_never"), "ring shader never writes depth")
-		ck(not src.contains("uniform float rim_power"), "ring shader dropped the rim falloff")
-		ck(not src.contains("RING_FLOOR"), "the band no longer needs a dithered floor")
-		ck(not src.contains("uniform float density"), "the band is solid, not a dither density")
-		ck(src.contains("global uniform float vtk_key_gain"), "ring shader scales detection key")
-		ck(src.contains("key_color * vtk_key_gain"), "ring shader emits detection key")
-		ck(src.contains("screen_dither"), "only the corpse fade dithers")
-		ck(src.contains("ALPHA = 1.0"), "ring key reaches the framebuffer opaque")
-		ck(not src.contains("ALPHA = rim"), "rim falloff never becomes alpha")
+		ck(src.contains("outline_color * brightness"), "ring shader emits display color")
+		ck(src.contains("rim_power"), "ring shader supports rim falloff")
+		ck(src.contains("ALPHA = rim * alpha * (1.0 - cool)"), "ring shader applies rim, alpha and cool")
 	ck(not los.contains("depth_test_disabled"), "los ring keeps depth test")
 	ck(xray.contains("depth_test_disabled"), "xray ring disables depth test")
 
-# The band is only real if the ring inflates further than the mask. The mask
-# clears the depth buffer by at least a screen-sized step (a coincident mask
-# loses the depth test at range and the ring floods the body), and the ring adds
-# the band on top of that offset.
+# Buffer/direct rendering paths use direct display materials on source overlays
+# (NVG-off) or shell meshes (NVG-on buffer). Outline keeps the stencil/ring
+# chain and display uniforms in both modes.
 func t_band_contract() -> void:
-	var esp := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKESP.gd")
-	ck(esp.contains("OUTLINE_BAND_PX"), "VTKESP sizes the band in screen pixels")
-	ck(esp.contains("func _band_for"), "VTKESP converts distance into a world band width")
-	ck(esp.contains("opts[\"band\"]"), "the contour opts carry the band")
 	var outline := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKOutline.gd")
-	ck(outline.contains("body_grow + band"), "the ring inflates by the mask offset plus band")
-	ck(outline.contains("maxf(grow, band)"), "the mask clears the depth step by at least the band")
-	ck(outline.contains("set_shader_parameter(\"grow\", body_grow)"), "the mask carries that offset")
-	ck(not outline.contains("set_shader_parameter(\"grow\", 0.0)"), "the mask is never coincident with the mesh")
-	ck(not outline.contains("set_shader_parameter(\"density\""), "fill strength is no longer a dither density")
-	ck(not outline.contains("set_shader_parameter(\"rim_power\""), "the ring no longer takes a rim falloff")
+	ck(outline.contains("func set_buffer_mode"), "VTKOutline exposes buffer mode control")
+	ck(outline.contains("SHELL_META"), "VTKOutline marks shell geometry")
+	ck(outline.contains("1 << 19"), "VTKOutline defaults to ESP buffer layer 20")
+	ck(outline.contains("material_overlay"), "VTKOutline keeps NVG-off overlay path")
+	ck(outline.contains("outline_color"), "VTKOutline drives direct display color")
+	ck(outline.contains("brightness"), "VTKOutline drives direct display brightness")
+	ck(outline.contains("fill_alpha"), "VTKOutline drives direct display alpha")
 
 func t_nvg_esp_detection_branch() -> void:
 	var code := FileAccess.get_file_as_string(NVG_SHADER_RES)
@@ -146,10 +131,10 @@ func t_nvg_esp_detection_branch() -> void:
 func t_palette_modes() -> void:
 	var code := FileAccess.get_file_as_string(NVG_SHADER_RES)
 	var n := 0
-	for i in [1, 2, 3, 4, 5]:
+	for i in [1, 2, 3, 4, 5, 6]:
 		if code.contains("worldPaletteMode == %d" % i):
 			n += 1
-	ck(n == 3, "only modes 1..3 remain (got %d)" % n)
+	ck(n == 6, "palette modes 1..6 are present (got %d)" % n)
 
 func t_nvg_shader_compiles() -> void:
 	var sh = load(NVG_SHADER_RES)
