@@ -1,11 +1,10 @@
 shader_type canvas_item;
 
 // NVG / thermal overlay. Replaces the vanilla NVG ColorRect shader (see
-// VTKNVG.gd for why the swap is safe). The whole frame is read back through
-// the false-colour thermal palette in thermal mode, or tinted NVG output in
-// the plain NVG branch. ESP/mine highlighting is rendered as direct overlays
-// in the main 3D pass; this shader no longer detects or substitutes key
-// colours.
+// VTKNVG.gd for why the swap is safe). The thermal palette is applied to the
+// background; contour/mine pixels emit fixed detection keys in the 3D pass and
+// are detected here (against measured washed values) so NVG can output the
+// configured display colours correctly through the post-process.
 
 // filter_linear, not filter_linear_mipmap: the screen is sampled 1:1 through
 // SCREEN_UV, so mip 0 is the only one ever read. Requesting mipmaps makes the
@@ -20,10 +19,12 @@ uniform float goggleAspect : hint_range(0.0, 2.0, 0.1) = 1.6;
 uniform float goggleOutline : hint_range(0.0, 0.1, 0.01) = 0.05;
 
 uniform bool thermalMode = false;
+uniform bool scopeRotate = false;
 uniform float thermalDarken : hint_range(1.0, 4.0, 0.01) = 1.70;
 // 0 at night, 1 at full daylight. Daylight compensation lowers the exposure
 // (keeping snow/sky below the tonemap ceiling); this curve then lifts the now
-// darker background into the palette so the image stays readable.
+// darker background into the palette so the image stays readable. Applied to
+// the background only: detector keys are substituted before the palette.
 uniform float dayMix : hint_range(0.0, 1.0, 0.01) = 0.0;
 // Highlight rolloff knee for daylight: background brighter than this (snow,
 // sky, cloud decks) bends into a soft shoulder below white before the palette,
@@ -34,6 +35,22 @@ uniform int worldPaletteMode = 0;
 // Final image brightness while NVG is on. Applied to the composited overlay, so
 // unlike the old Environment.tonemap_white poke it is actually visible.
 uniform float nvgWhite : hint_range(0.05, 1.0, 0.05) = 1.0;
+uniform float vrcetsStrength : hint_range(0.0, 1.0, 0.01) = 0.58;
+uniform float vrcetsRedHold : hint_range(0.0, 1.0, 0.01) = 0.72;
+
+uniform vec3 mineKey : source_color = vec3(0.0, 0.0, 1.0);
+
+uniform bool espOn = false;
+
+uniform vec3 stNormalKey : source_color = vec3(1.0, 0.21, 0.16);
+uniform vec3 stCombatKey : source_color = vec3(0.82, 1.0, 1.0);
+uniform vec3 stDefendKey : source_color = vec3(1.0, 0.34, 1.0);
+uniform vec3 stNormalColor : source_color = vec3(1.0, 0.72, 0.28);
+uniform vec3 stCombatColor : source_color = vec3(0.95, 0.18, 0.15);
+uniform vec3 stDefendColor : source_color = vec3(0.62, 0.30, 0.95);
+uniform float stateBright : hint_range(0.1, 4.0, 0.05) = 0.6;
+
+uniform vec3 mineColor : source_color = vec3(1.0, 0.2, 0.85);
 
 float Goggles(vec2 uv)
 {
@@ -44,10 +61,64 @@ float Goggles(vec2 uv)
 	return min(G1Distance, G2Distance);
 }
 
-// 0 = Classic (else), 1 = Amber, 2 = Forest, 3 = Ice.
+// 0 = Classic (else), 1 = Amber, 2 = Forest, 3 = Ice,
+// 4 = VRCETS Auto, 5 = VRCETS Blue/Day, 6 = VRCETS Red.
+vec3 vrcets_night_palette(float v) {
+	vec3 cold = vec3(0.02, 0.08, 0.34);
+	vec3 cool = vec3(0.04, 0.18, 0.62);
+	vec3 mid = vec3(0.42, 0.05, 0.18);
+	vec3 warm = vec3(0.92, 0.11, 0.03);
+	vec3 hot = vec3(1.0, 0.48, 0.08);
+	vec3 color = mix(cold, cool, smoothstep(0.05, 0.32, v));
+	color = mix(color, mid, smoothstep(0.22, 0.55, v));
+	color = mix(color, warm, smoothstep(0.42, 0.76, v));
+	color = mix(color, hot, smoothstep(0.68, 1.0, v));
+	return color;
+}
+
+vec3 vrcets_day_palette(float v) {
+	vec3 cold = vec3(0.025, 0.075, 0.24);
+	vec3 cool = vec3(0.045, 0.17, 0.46);
+	vec3 neutral = vec3(0.10, 0.24, 0.38);
+	vec3 warm = vec3(0.34, 0.16, 0.07);
+	vec3 hot = vec3(0.92, 0.16, 0.035);
+	vec3 color = mix(cold, cool, smoothstep(0.04, 0.35, v));
+	color = mix(color, neutral, smoothstep(0.30, 0.76, v));
+	color = mix(color, warm, smoothstep(0.84, 0.96, v));
+	color = mix(color, hot, smoothstep(0.965, 1.0, v));
+	return color;
+}
+
+vec3 vrcets_red_palette(float v) {
+	vec3 cold = vec3(0.05, 0.015, 0.11);
+	vec3 mid = vec3(0.34, 0.035, 0.10);
+	vec3 warm = vec3(0.92, 0.10, 0.025);
+	vec3 hot = vec3(1.0, 0.40, 0.06);
+	vec3 color = mix(cold, mid, smoothstep(0.05, 0.42, v));
+	color = mix(color, warm, smoothstep(0.28, 0.80, v));
+	color = mix(color, hot, smoothstep(0.72, 1.0, v));
+	return color;
+}
+
+float vrcets_red_heat(vec3 src) {
+	float rh = smoothstep(0.10, 0.55, src.r) * (1.0 - smoothstep(src.r * 0.58, src.r * 0.94, max(src.g, src.b)));
+	return clamp(rh, 0.0, 1.0);
+}
+
+vec3 vrcets_held_heat(float luma) {
+	return mix(vec3(0.95, 0.08, 0.025), vec3(1.0, 0.32, 0.04), clamp(luma, 0.0, 1.0));
+}
+
 vec3 ThermalPalette(float t)
 {
 	t = clamp(t, 0.0, 1.0);
+	if (worldPaletteMode == 4) {
+		return mix(vrcets_night_palette(t), vrcets_day_palette(t), clamp(dayMix, 0.0, 1.0));
+	} else if (worldPaletteMode == 5) {
+		return vrcets_day_palette(t);
+	} else if (worldPaletteMode == 6) {
+		return vrcets_red_palette(t);
+	}
 	vec3 c0;
 	vec3 c1;
 	vec3 c2;
@@ -95,10 +166,6 @@ vec3 ThermalPalette(float t)
 // clamped, snow and sky are both exactly 1.0 and the gradient between them is
 // already lost. strength = dayMix: at night the knee sits above 1.0 and the
 // curve is a no-op.
-// Shape: a milder uniform rescale above the knee (distance fog keeps its
-// gradient), then an exponential tail caps the truly hot pixels just below
-// white. Slope at the knee is not C1, but NVG noise hides a crease of this
-// size; the distance contrast is worth it.
 float hiShoulder(float x, float knee, float strength)
 {
 	float k = mix(1.0, knee, strength);
@@ -114,11 +181,50 @@ float hiShoulder(float x, float knee, float strength)
 	return top + (cap - top) * (1.0 - exp(-(x - 1.0) * slope / (cap - top)));
 }
 
+// PIP off + magnifying scope: the lens path can rotate colour channels on
+// screen, so a key shows up as one of its cyclic rotations. Match the orbit
+// when that can happen, plain distance otherwise.
+float orbitDist(vec3 c, vec3 k)
+{
+	if (!scopeRotate) {
+		return distance(c, k);
+	}
+	float d = distance(c, k);
+	d = min(d, distance(c, k.brg));
+	d = min(d, distance(c, k.gbr));
+	return d;
+}
 
+const float DET_TOL_CORE = 0.34;
 
 void fragment()
 {
 	vec4 pixelColor = texture(screen_texture, SCREEN_UV);
+	vec3 mineEmit = vec3(0.0, 0.0, 1.0);
+	vec3 stNEmit = vec3(1.0, 0.0, 0.0);
+	vec3 stCEmit = vec3(0.0, 1.0, 1.0);
+	vec3 stDEmit = vec3(1.0, 0.0, 1.0);
+	float dMine = min(orbitDist(pixelColor.rgb, mineKey), orbitDist(pixelColor.rgb, mineEmit));
+	float dStN = min(orbitDist(pixelColor.rgb, stNormalKey), orbitDist(pixelColor.rgb, stNEmit));
+	float dStC = min(orbitDist(pixelColor.rgb, stCombatKey), orbitDist(pixelColor.rgb, stCEmit));
+	float dStD = min(orbitDist(pixelColor.rgb, stDefendKey), orbitDist(pixelColor.rgb, stDEmit));
+	// Keep state-key detection enabled whenever keys are present in the frame;
+	// demand/layer visibility is controlled by 3D outline materials. This avoids
+	// contour flicker when per-frame demand toggles. Mine detection remains
+	// independent below.
+	float washSpread = max(pixelColor.r, max(pixelColor.g, pixelColor.b))
+		- min(pixelColor.r, min(pixelColor.g, pixelColor.b));
+	if (washSpread < 0.04) {
+		dStC = 99.0;
+	}
+	// Bright near-white scene highlights (sun/cloud glare) can false-match washed
+	// state keys and get substituted, making sky/background react to stateBright.
+	if (pixelColor.r > 0.88 && pixelColor.g > 0.88 && pixelColor.b > 0.88) {
+		dStN = 99.0;
+		dStC = 99.0;
+		dStD = 99.0;
+	}
+	float dCore = min(dMine, min(dStN, min(dStC, dStD)));
 	float goggleMask = smoothstep(goggleSize + vignette, goggleSize, Goggles(UV));
 	float goggleRim = abs(Goggles(UV) - goggleSize);
 	float goggleOutlines = 1.0 - smoothstep(0.0, goggleOutline, goggleRim);
@@ -128,28 +234,62 @@ void fragment()
 	vec4 color;
 	if (thermalMode) {
 		float rawLuminance = dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114));
-		// Shoulder BEFORE the clamp: the top of the range bends down while the
-		// gradient still exists; the clamp afterwards sees values that stop at
-		// the shoulder top, so snow, sky and truly hot pixels stay distinct.
 		float luminance = clamp(hiShoulder(rawLuminance * thermalDarken, highlightKnee, dayMix), 0.0, 1.0);
-		// Soft lift: full strength maps 0.1 -> 0.15, 0.5 -> 0.67, 1.0 -> 1.0.
 		if (dayMix > 0.0) {
 			float lifted = 1.0 - pow(1.0 - luminance, 1.6);
 			luminance = mix(luminance, lifted, dayMix);
 		}
 		vec3 backgroundColor = ThermalPalette(luminance) * 0.7;
-		color = vec4(backgroundColor, pixelColor.a);
+		if (worldPaletteMode >= 4) {
+			float rh = vrcets_red_heat(pixelColor.rgb) * vrcetsRedHold;
+			backgroundColor = mix(backgroundColor, vrcets_held_heat(clamp(rawLuminance, 0.0, 1.0)), clamp(rh, 0.0, 1.0));
+			// Blend toward thermal palette like VRCETS world palette (background only).
+			backgroundColor = mix(pixelColor.rgb, backgroundColor, clamp(vrcetsStrength, 0.0, 1.0));
+		}
+		if (dCore < DET_TOL_CORE) {
+			// Substituted pixels arrive as an opaque key, so the thermal
+			// background underneath is already gone: mixing a reconstructed
+			// palette colour back in only muddies the chosen hue. Full-body
+			// fill strength is folded into stateBright, not into a dither.
+			if (dCore == dMine) {
+				color = vec4(mineColor, pixelColor.a);
+			} else if (dCore == dStC) {
+				color = vec4(stCombatColor * stateBright, pixelColor.a);
+			} else if (dCore == dStD) {
+				color = vec4(stDefendColor * stateBright, pixelColor.a);
+			} else if (dCore == dStN) {
+				color = vec4(stNormalColor * stateBright, pixelColor.a);
+			} else {
+				color = vec4(backgroundColor, pixelColor.a);
+			}
+		} else {
+			color = vec4(backgroundColor, pixelColor.a);
+		}
 	} else {
 		color = pixelColor * tint;
-		// The plain NVG branch runs without the thermal palette, so the same
-		// daylight trim needs its own soft lift to keep daylight readable.
 		if (dayMix > 0.0) {
 			float tintLum = max(dot(color.rgb, vec3(0.299, 0.587, 0.114)), 0.0001);
-			// Same order as the thermal branch: bend the highlights into the
-			// shoulder first, then lift the middle back up.
 			tintLum = hiShoulder(tintLum, highlightKnee, dayMix);
 			float liftedLum = 1.0 - pow(1.0 - min(tintLum, 1.0), 1.6);
 			color.rgb *= mix(1.0, liftedLum / tintLum, dayMix);
+		}
+		// Debug/diagnostic: also substitute ESP state keys outside thermal mode so
+		// contour/fill can be validated without NVG thermal enabled.
+		if (dCore < DET_TOL_CORE) {
+			if (dCore == dMine) {
+				color = vec4(mineColor, pixelColor.a);
+			} else if (dCore == dStC) {
+				color = vec4(stCombatColor * stateBright, pixelColor.a);
+			} else if (dCore == dStD) {
+				color = vec4(stDefendColor * stateBright, pixelColor.a);
+			} else if (dCore == dStN) {
+				color = vec4(stNormalColor * stateBright, pixelColor.a);
+			}
+		} else {
+			float dMineEmit = orbitDist(pixelColor.rgb, mineEmit);
+			if (dMine < 0.15 || dMineEmit < DET_TOL_CORE) {
+				color = vec4(mineColor, pixelColor.a);
+			}
 		}
 	}
 	color.rgb *= nvgWhite;
