@@ -22,7 +22,7 @@ func _run() -> void:
 	t_active_profile_name()
 	t_merge_refreshes_labels_keeps_values()
 	t_apply_reads_active_profile()
-	t_fill_strength_folds_into_brightness()
+	t_sync_nvg_esp_gates_demand()
 	t_apply_mode_splits_layers()
 	_cleanup()
 	print("")
@@ -124,10 +124,13 @@ class FakeESP extends Node:
 	var contour_layer: bool = false
 	var xray_layer: bool = false
 	var marker_visible: bool = false
+	var _wants_contour: bool = false
 	func set_layers(contour: bool, xray: bool) -> void:
 		contour_layer = contour
 		xray_layer = xray
 		marker_visible = contour
+	func wants_contour() -> bool:
+		return _wants_contour
 	# Mirrors the real module's field map: this is the seam the rewrite left.
 	func apply_config(rec: Variant) -> void:
 		p_decay = rec.corpse_decay
@@ -161,9 +164,8 @@ class FakeNVG extends Node:
 	var set_mines: bool = true
 	var palette_mode: int = 0
 	var thermal_on: bool = false
-	var esp_brightness: float = 0.6
-	var esp_fill_alpha: float = -1.0
-	var esp_body_fill: Variant = null
+	var esp_layer_calls: Array = []
+	var esp_demand_calls: Array = []
 	func apply_config(rec: Variant) -> void:
 		set_nvg_noise = rec.nvg_noise
 		set_nvg_white = rec.nvg_white
@@ -174,17 +176,10 @@ class FakeNVG extends Node:
 		palette_mode = v
 	func set_thermal_enabled(v: bool) -> void:
 		thermal_on = v
-	func set_esp_layer(_on: bool) -> void:
-		pass
-	func set_esp_demand(_on: bool) -> void:
-		pass
-	func set_esp_brightness(v: float) -> void:
-		esp_brightness = v
-	func set_esp_fill(alpha: float, body_fill: bool) -> void:
-		esp_fill_alpha = alpha
-		esp_body_fill = body_fill
-	func set_state_colors(_colors: Dictionary) -> void:
-		pass
+	func set_esp_layer(on: bool) -> void:
+		esp_layer_calls.append(on)
+	func set_esp_demand(on: bool) -> void:
+		esp_demand_calls.append(on)
 	func nvg_active() -> bool:
 		return true
 
@@ -210,9 +205,9 @@ func t_apply_reads_active_profile() -> void:
 	esp.free()
 	nvg.free()
 
-# Brightness is passed through as configured; fill alpha/body mode are pushed
-# separately to NVG when supported (current ThermalVTK behavior).
-func t_fill_strength_folds_into_brightness() -> void:
+# ThermalVTK sync keeps NVG ESP layer/demand gates aligned with live ESP content.
+# Substitution-only NVG APIs are gone from the compositor contract.
+func t_sync_nvg_esp_gates_demand() -> void:
 	var mod = ThermalMod.new()
 	var esp := FakeESP.new()
 	var nvg := FakeNVG.new()
@@ -221,20 +216,19 @@ func t_fill_strength_folds_into_brightness() -> void:
 	mod._thermal_enabled = true
 	mod._outline_enabled = true
 	mod._xray_enabled = false
-	esp.p_brightness = 2.0
-	esp.p_body_fill = false
-	esp.p_fill_alpha = 0.5
+	esp.contour_layer = true
+	esp.xray_layer = false
+	esp._wants_contour = false
 	mod._sync_nvg_esp()
-	ck(absf(nvg.esp_brightness - 2.0) < 0.001, "outline mode keeps the plain brightness")
-	ck(absf(nvg.esp_fill_alpha - 0.5) < 0.001, "fill alpha is passed to NVG")
-	ck(nvg.esp_body_fill == false, "body fill mode is passed to NVG")
-	esp.p_body_fill = true
-	esp.p_fill_alpha = 0.35
-	esp.p_brightness = 1.7
+	ck(nvg.esp_layer_calls.size() >= 1 and bool(nvg.esp_layer_calls[nvg.esp_layer_calls.size() - 1]) == true, "active ESP layer arms NVG ESP layer")
+	ck(nvg.esp_demand_calls.size() >= 1 and bool(nvg.esp_demand_calls[nvg.esp_demand_calls.size() - 1]) == false, "no wanted contour means no NVG ESP demand")
+	esp._wants_contour = true
 	mod._sync_nvg_esp()
-	ck(absf(nvg.esp_brightness - 1.7) < 0.001, "fill mode passes brightness through")
-	ck(absf(nvg.esp_fill_alpha - 0.35) < 0.001, "fill alpha updates on sync")
-	ck(nvg.esp_body_fill == true, "body fill mode updates on sync")
+	ck(bool(nvg.esp_demand_calls[nvg.esp_demand_calls.size() - 1]) == true, "wanted contour drives NVG ESP demand")
+	mod._thermal_enabled = false
+	mod._apply_mode()
+	ck(bool(nvg.esp_layer_calls[nvg.esp_layer_calls.size() - 1]) == false, "inactive thermal path disarms NVG ESP layer")
+	ck(bool(nvg.esp_demand_calls[nvg.esp_demand_calls.size() - 1]) == false, "inactive thermal path clears NVG ESP demand")
 	mod.free()
 	esp.free()
 	nvg.free()

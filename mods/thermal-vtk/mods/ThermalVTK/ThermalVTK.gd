@@ -207,10 +207,6 @@ func _sync_nvg_esp() -> void:
 		layer_bit = 1 << int(_nvg.esp_buffer_layer())
 	if _esp.has_method("set_render_to_buffer"):
 		_esp.set_render_to_buffer(use_buffer, layer_bit)
-	# Contour rendering is now direct in buffer/overlay paths; keep key emission
-	# off for contour substitution (Task 6 removes remaining key paths).
-	if "p_use_nvg_keys" in _esp:
-		_esp.p_use_nvg_keys = false
 	if _nvg.has_method("set_esp_layer"):
 		_nvg.set_esp_layer(esp_active)
 	# Composite/demand follows current ESP content so buffer rendering/cull-mask
@@ -218,17 +214,6 @@ func _sync_nvg_esp() -> void:
 	var demand: bool = esp_active and bool(_esp.call("wants_contour")) if _esp.has_method("wants_contour") else esp_active
 	if _nvg.has_method("set_esp_demand"):
 		_nvg.set_esp_demand(demand)
-	if _nvg.has_method("set_esp_brightness"):
-		var bright: float = clampf(float(_esp.p_brightness), 0.05, 4.0)
-		_nvg.set_esp_brightness(bright)
-	if _nvg.has_method("set_esp_fill"):
-		_nvg.set_esp_fill(float(_esp.p_fill_alpha), bool(_esp.p_body_fill))
-	if _nvg.has_method("set_state_colors"):
-		_nvg.set_state_colors({
-			"state_normal": _esp.p_color_normal,
-			"state_combat": _esp.p_color_combat,
-			"state_defend": _esp.p_color_defend,
-		})
 
 func _nvg_active() -> bool:
 	if _nvg == null or not is_instance_valid(_nvg):

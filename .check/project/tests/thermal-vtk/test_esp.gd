@@ -297,28 +297,24 @@ func t_opts_contour_key() -> void:
 	root.add_child(esp)
 	var hostile := opts_of(esp, {"cat": S.COMBAT, "nomad": false})
 	ck(hostile.get("color") == S.DEFAULT_COMBAT, "hostile combat uses combat display color")
-	ck(hostile.get("key") == S.state_key(S.COMBAT), "state key is emitted for contour opts")
+	ck(not hostile.has("key"), "contour opts carry no key")
+	ck(not hostile.has("direct"), "contour opts carry no direct flag")
 	ck(not hostile.has("state_key"), "the old detector key name is gone")
 	ck(not hostile.has("nomad"), "nomad is not duplicated into the contour opts")
-	for k in ["key", "color", "brightness", "grow", "cool", "xray", "fill"]:
+	for k in ["cat", "color", "brightness", "fill_alpha", "grow", "cool", "xray", "fill"]:
 		ck(hostile.has(k), "contour opts include %s" % k)
 	ck(not hostile.has("alpha"), "the contour opts carry no alpha to blend the key with")
 	ck(not hostile.has("rim"), "the ring has no rim falloff")
 	ck(not hostile.has("fill_grow"), "fill grow lives in the shader, not in opts")
 	ck(not hostile.has("band"), "contour opts omit screen-space band heuristic")
-	# NVG-off/direct path remains the default when not rendering to buffer.
-	ck(bool(hostile.get("direct", false)), "default contour opts are direct (overlay path)")
 	var normal := opts_of(esp, {"cat": S.NORMAL, "nomad": true})
 	ck(normal.get("color") == S.DEFAULT_NORMAL, "normal uses normal display color")
-	ck(normal.get("key") == S.state_key(S.NORMAL), "normal emits normal key")
 	var defend := opts_of(esp, {"cat": S.DEFEND, "nomad": false})
 	ck(defend.get("color") == S.DEFAULT_DEFEND, "defend uses defend display color")
-	ck(defend.get("key") == S.state_key(S.DEFEND), "defend emits defend key")
-	# Buffer-composite contour rendering uses direct display opts (no key
-	# substitution) while preserving display colors/brightness/fill alpha.
+	# Buffer-composite contour rendering uses the same direct display opts.
 	esp.set_render_to_buffer(true, 1 << 19)
 	var buf := opts_of(esp, {"cat": S.COMBAT, "nomad": false})
-	ck(bool(buf.get("direct", false)), "buffer mode contour opts are direct")
+	ck(not buf.has("key"), "buffer mode contour opts carry no key")
 	ck(buf.get("color") == S.DEFAULT_COMBAT, "buffer mode keeps combat display color")
 	ck(absf(float(buf.get("fill_alpha", -1.0)) - float(esp.p_fill_alpha)) < 0.001, "buffer mode keeps fill_alpha")
 	ck(absf(float(buf.get("brightness", -1.0)) - float(esp.p_brightness)) < 0.001, "buffer mode keeps brightness")

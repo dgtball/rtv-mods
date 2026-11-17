@@ -37,11 +37,6 @@ const PAIN_MIN_GAP := 0.4
 # contour layer gates rings and the marker, the x-ray layer gates reveals.
 var contour_layer: bool = false
 var xray_layer: bool = false
-# When NVG overlay is active, emit detection keys so NVG shader can substitute
-# display colors after thermal/palette/tint processing (avoids color distortion).
-# Retained for transitional/runtime compatibility; buffer-composite contour
-# rendering uses direct display opts.
-var p_use_nvg_keys: bool = false
 # NVG buffer compositor target: when true, contours render as shell instances on
 # the ESP buffer layer for NVG compositing; when false, contours render as direct
 # overlays in the main pass (NVG-off parity path).
@@ -822,12 +817,6 @@ func _fill_opts(opts: Dictionary, e: Dictionary, now: float) -> void:
 	elif cat == States.DEFEND:
 		color = p_color_defend
 	opts["color"] = color
-	# Buffer-composite rendering uses direct display materials (color/alpha in the
-	# ESP buffer). NVG-off direct overlays also use display colors. Key emission
-	# is retained only for transitional NVG substitution paths (Task 6 removes it).
-	var direct := _render_to_buffer or not p_use_nvg_keys
-	opts["direct"] = direct
-	opts["key"] = States.state_key(cat)
 	var bright: float = p_brightness
 	if p_body_fill:
 		bright = minf(bright, 1.0)

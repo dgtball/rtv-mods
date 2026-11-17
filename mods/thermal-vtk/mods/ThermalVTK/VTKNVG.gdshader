@@ -2,9 +2,8 @@ shader_type canvas_item;
 
 // NVG / thermal overlay. Replaces the vanilla NVG ColorRect shader (see
 // VTKNVG.gd for why the swap is safe). The thermal palette is applied to the
-// background; contour/mine pixels emit fixed detection keys in the 3D pass and
-// are detected here (against measured washed values) so NVG can output the
-// configured display colours correctly through the post-process.
+// background; contours and mines are rendered into a separate ESP buffer and
+// composited here with their own display colours/alpha.
 
 // filter_linear, not filter_linear_mipmap: the screen is sampled 1:1 through
 // SCREEN_UV, so mip 0 is the only one ever read. Requesting mipmaps makes the
@@ -24,12 +23,10 @@ uniform float goggleAspect : hint_range(0.0, 2.0, 0.1) = 1.6;
 uniform float goggleOutline : hint_range(0.0, 0.1, 0.01) = 0.05;
 
 uniform bool thermalMode = false;
-uniform bool scopeRotate = false;
 uniform float thermalDarken : hint_range(1.0, 4.0, 0.01) = 1.70;
 // 0 at night, 1 at full daylight. Daylight compensation lowers the exposure
 // (keeping snow/sky below the tonemap ceiling); this curve then lifts the now
-// darker background into the palette so the image stays readable. Applied to
-// the background only: detector keys are substituted before the palette.
+// darker background into the palette so the image stays readable.
 uniform float dayMix : hint_range(0.0, 1.0, 0.01) = 0.0;
 // Highlight rolloff knee for daylight: background brighter than this (snow,
 // sky, cloud decks) bends into a soft shoulder below white before the palette,
@@ -42,22 +39,6 @@ uniform int worldPaletteMode = 0;
 uniform float nvgWhite : hint_range(0.05, 1.0, 0.05) = 1.0;
 uniform float vrcetsStrength : hint_range(0.0, 1.0, 0.01) = 0.58;
 uniform float vrcetsRedHold : hint_range(0.0, 1.0, 0.01) = 0.72;
-
-uniform vec3 mineKey : source_color = vec3(0.0, 0.0, 1.0);
-
-uniform bool espOn = false;
-
-uniform vec3 stNormalKey : source_color = vec3(1.0, 0.21, 0.16);
-uniform vec3 stCombatKey : source_color = vec3(0.82, 1.0, 1.0);
-uniform vec3 stDefendKey : source_color = vec3(1.0, 0.34, 1.0);
-uniform vec3 stNormalColor : source_color = vec3(1.0, 0.72, 0.28);
-uniform vec3 stCombatColor : source_color = vec3(0.95, 0.18, 0.15);
-uniform vec3 stDefendColor : source_color = vec3(0.62, 0.30, 0.95);
-uniform float stateBright : hint_range(0.1, 4.0, 0.05) = 0.6;
-uniform float espFillAlpha : hint_range(0.0, 1.0, 0.01) = 0.6;
-uniform bool espBodyFill = true;
-
-uniform vec3 mineColor : source_color = vec3(1.0, 0.2, 0.85);
 
 float Goggles(vec2 uv)
 {
@@ -188,50 +169,9 @@ float hiShoulder(float x, float knee, float strength)
 	return top + (cap - top) * (1.0 - exp(-(x - 1.0) * slope / (cap - top)));
 }
 
-// PIP off + magnifying scope: the lens path can rotate colour channels on
-// screen, so a key shows up as one of its cyclic rotations. Match the orbit
-// when that can happen, plain distance otherwise.
-float orbitDist(vec3 c, vec3 k)
-{
-	if (!scopeRotate) {
-		return distance(c, k);
-	}
-	float d = distance(c, k);
-	d = min(d, distance(c, k.brg));
-	d = min(d, distance(c, k.gbr));
-	return d;
-}
-
-const float DET_TOL_CORE = 0.34;
-
 void fragment()
 {
 	vec4 pixelColor = texture(screen_texture, SCREEN_UV);
-	vec3 mineEmit = vec3(0.0, 0.0, 1.0);
-	vec3 stNEmit = vec3(1.0, 0.0, 0.0);
-	vec3 stCEmit = vec3(0.0, 1.0, 1.0);
-	vec3 stDEmit = vec3(1.0, 0.0, 1.0);
-	float dMine = min(orbitDist(pixelColor.rgb, mineKey), orbitDist(pixelColor.rgb, mineEmit));
-	float dStN = min(orbitDist(pixelColor.rgb, stNormalKey), orbitDist(pixelColor.rgb, stNEmit));
-	float dStC = min(orbitDist(pixelColor.rgb, stCombatKey), orbitDist(pixelColor.rgb, stCEmit));
-	float dStD = min(orbitDist(pixelColor.rgb, stDefendKey), orbitDist(pixelColor.rgb, stDEmit));
-	// Keep state-key detection enabled whenever keys are present in the frame;
-	// demand/layer visibility is controlled by 3D outline materials. This avoids
-	// contour flicker when per-frame demand toggles. Mine detection remains
-	// independent below.
-	float washSpread = max(pixelColor.r, max(pixelColor.g, pixelColor.b))
-		- min(pixelColor.r, min(pixelColor.g, pixelColor.b));
-	if (washSpread < 0.04) {
-		dStC = 99.0;
-	}
-	// Bright near-white scene highlights (sun/cloud glare) can false-match washed
-	// state keys and get substituted, making sky/background react to stateBright.
-	if (pixelColor.r > 0.88 && pixelColor.g > 0.88 && pixelColor.b > 0.88) {
-		dStN = 99.0;
-		dStC = 99.0;
-		dStD = 99.0;
-	}
-	float dCore = min(dMine, min(dStN, min(dStC, dStD)));
 	float goggleMask = smoothstep(goggleSize + vignette, goggleSize, Goggles(UV));
 	float goggleRim = abs(Goggles(UV) - goggleSize);
 	float goggleOutlines = 1.0 - smoothstep(0.0, goggleOutline, goggleRim);
@@ -239,7 +179,7 @@ void fragment()
 	vec4 noiseEffect = vec4(mod((mod(x, 13.0)) * (mod(x, 123.0)), 0.01) - 0.005) * noise;
 
 	vec4 color;
-	bool substituted = false;
+	bool composited = false;
 	if (thermalMode) {
 		float rawLuminance = dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114));
 		float luminance = clamp(hiShoulder(rawLuminance * thermalDarken, highlightKnee, dayMix), 0.0, 1.0);
@@ -254,34 +194,8 @@ void fragment()
 			// Blend toward thermal palette like VRCETS world palette (background only).
 			backgroundColor = mix(pixelColor.rgb, backgroundColor, clamp(vrcetsStrength, 0.0, 1.0));
 		}
-		if (dCore < DET_TOL_CORE) {
-			// Substituted pixels arrive as an opaque key, so the thermal
-			// background underneath is already gone: mixing a reconstructed
-			// palette colour back in only muddies the chosen hue. Full-body
-			// fill strength is folded into stateBright, not into a dither.
-			if (dCore == dMine) {
-				color = vec4(mineColor, pixelColor.a);
-				substituted = true;
-			} else if (dCore == dStC) {
-				vec3 sc = stCombatColor * stateBright;
-				color = espBodyFill ? vec4(mix(backgroundColor, sc, clamp(espFillAlpha, 0.0, 1.0)), pixelColor.a) : vec4(sc, pixelColor.a);
-				substituted = true;
-			} else if (dCore == dStD) {
-				vec3 sc = stDefendColor * stateBright;
-				color = espBodyFill ? vec4(mix(backgroundColor, sc, clamp(espFillAlpha, 0.0, 1.0)), pixelColor.a) : vec4(sc, pixelColor.a);
-				substituted = true;
-			} else if (dCore == dStN) {
-				vec3 sc = stNormalColor * stateBright;
-				color = espBodyFill ? vec4(mix(backgroundColor, sc, clamp(espFillAlpha, 0.0, 1.0)), pixelColor.a) : vec4(sc, pixelColor.a);
-				substituted = true;
-			} else {
-				color = vec4(backgroundColor, pixelColor.a);
-			}
-		} else {
-			color = vec4(backgroundColor, pixelColor.a);
-		}
+		color = vec4(backgroundColor, pixelColor.a);
 	} else {
-		vec3 bgColor = pixelColor.rgb * tint.rgb;
 		color = pixelColor * tint;
 		if (dayMix > 0.0) {
 			float tintLum = max(dot(color.rgb, vec3(0.299, 0.587, 0.114)), 0.0001);
@@ -289,45 +203,18 @@ void fragment()
 			float liftedLum = 1.0 - pow(1.0 - min(tintLum, 1.0), 1.6);
 			color.rgb *= mix(1.0, liftedLum / tintLum, dayMix);
 		}
-		bgColor = color.rgb;
-		// Debug/diagnostic: also substitute ESP state keys outside thermal mode so
-		// contour/fill can be validated without NVG thermal enabled.
-		if (dCore < DET_TOL_CORE) {
-			if (dCore == dMine) {
-				color = vec4(mineColor, pixelColor.a);
-				substituted = true;
-			} else if (dCore == dStC) {
-				vec3 sc = stCombatColor * stateBright;
-				color = espBodyFill ? vec4(mix(bgColor, sc, clamp(espFillAlpha, 0.0, 1.0)), pixelColor.a) : vec4(sc, pixelColor.a);
-				substituted = true;
-			} else if (dCore == dStD) {
-				vec3 sc = stDefendColor * stateBright;
-				color = espBodyFill ? vec4(mix(bgColor, sc, clamp(espFillAlpha, 0.0, 1.0)), pixelColor.a) : vec4(sc, pixelColor.a);
-				substituted = true;
-			} else if (dCore == dStN) {
-				vec3 sc = stNormalColor * stateBright;
-				color = espBodyFill ? vec4(mix(bgColor, sc, clamp(espFillAlpha, 0.0, 1.0)), pixelColor.a) : vec4(sc, pixelColor.a);
-				substituted = true;
-			}
-		} else {
-			float dMineEmit = orbitDist(pixelColor.rgb, mineEmit);
-			if (dMine < 0.15 || dMineEmit < DET_TOL_CORE) {
-				color = vec4(mineColor, pixelColor.a);
-				substituted = true;
-			}
-		}
 	}
 	if (espComposite) {
 		vec4 esp = texture(espTex, SCREEN_UV);
 		if (esp.a > 0.001) {
 			// ESP pixels keep their own display colour/alpha: composite over the
-			// palettized background without passing them through palette, nvgWhite
-			// or noise.
+			// palettized/tinted background without passing them through palette,
+			// nvgWhite or noise.
 			color.rgb = mix(color.rgb, esp.rgb, clamp(esp.a, 0.0, 1.0));
-			substituted = true;
+			composited = true;
 		}
 	}
-	if (!substituted) {
+	if (!composited) {
 		color.rgb *= nvgWhite;
 		color += noiseEffect;
 	}

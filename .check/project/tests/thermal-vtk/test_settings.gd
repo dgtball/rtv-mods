@@ -231,7 +231,6 @@ func t_nvg_apply_maps_fields() -> void:
 	ck(nvg.set_nvg_noise == 12.5, "NVG maps nvg_noise")
 	ck(nvg.set_nvg_white == 0.5, "NVG maps nvg_white")
 	ck(nvg.set_world == 2.5, "NVG maps world brightness")
-	ck(absf(nvg.set_state_brightness - 1.5) < 0.001, "NVG maps outline brightness")
 	ck(nvg.set_glow_distance == 80.0, "NVG maps the glow distance")
 	ck(nvg.set_mines == false, "NVG maps the mines toggle")
 	ck(nvg.set_daylight == false, "NVG maps the daylight toggle")

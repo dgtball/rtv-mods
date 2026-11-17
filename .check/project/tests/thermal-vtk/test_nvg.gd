@@ -1,7 +1,6 @@
 extends SceneTree
 
 const NVG = preload("res://mods/ThermalVTK/VTKNVG.gd")
-const S = preload("res://mods/ThermalVTK/VTKStates.gd")
 
 var fails := 0
 
@@ -20,8 +19,8 @@ func _run() -> void:
 	t_mine_retry_is_bounded()
 	t_off_upkeep_clears_dead_mines()
 	t_esp_compositor_gate()
-	t_mine_colour_and_keys_reach_material()
-	t_mine_highlight_emits_key_material()
+	t_mine_color_stored_and_applied()
+	t_mine_highlight_uses_buffer_shells()
 	t_script_kind_cache()
 	print("")
 	if fails == 0:
@@ -36,7 +35,7 @@ func _run() -> void:
 func t_dirty_batches_setters() -> void:
 	var nvg = NVG.new()
 	root.add_child(nvg)
-	nvg.set_state_colors({"state_normal": Color.RED})
+	nvg.set_palette_mode(2)
 	ck(nvg._dirty, "a setter marks the uniforms dirty")
 	nvg._apply_uniforms()
 	ck(not nvg._dirty, "a push clears the flag")
@@ -65,7 +64,7 @@ func t_off_upkeep_clears_dead_mines() -> void:
 	root.add_child(nvg)
 	var mine := Node3D.new()
 	root.add_child(mine)
-	nvg._mines[mine.get_instance_id()] = {"node": mine, "meshes": []}
+	nvg._mines[mine.get_instance_id()] = {"node": mine, "meshes": [], "shells": [], "painted": false}
 	mine.free()
 	nvg._off_frame_upkeep()
 	ck(nvg._mines.is_empty(), "a freed mine is dropped while thermal is off")
@@ -73,9 +72,9 @@ func t_off_upkeep_clears_dead_mines() -> void:
 	ck(nvg._mines.is_empty(), "the early return keeps the next pass cheap")
 	nvg.free()
 
-# The ESP buffer compositor is gated like the old substitution demand: the
-# layer switch arms it, per-frame demand enables it, and either going off must
-# clear the composite flag so no stale buffer frame lingers.
+# The ESP buffer compositor is gated by layer + content demand. Mines needing the
+# buffer also activate compositing. Toggling demand/layer must not leave a stale
+# composite frame or main-camera layer-20 exclusion.
 func t_esp_compositor_gate() -> void:
 	var nvg = NVG.new()
 	root.add_child(nvg)
@@ -87,14 +86,11 @@ func t_esp_compositor_gate() -> void:
 	root.add_child(rect)
 	nvg._nvg_mat_node = rect
 	nvg._installed = true
-	# Transitional: substitution demand (espOn) still follows the same gate.
 	nvg.set_esp_layer(true)
-	ck(mat.get_shader_parameter("espOn") == false, "layers armed without demand leave the substitution off")
-	ck(not nvg.esp_composite_active(), "demand gates compositing")
+	ck(not nvg.esp_composite_active(), "layer armed without demand leaves compositing off")
 	ck(mat.get_shader_parameter("espComposite") == false, "composite flag stays off without demand")
 	nvg.set_esp_demand(true)
 	ck(nvg.esp_composite_active(), "demand enables compositing")
-	ck(mat.get_shader_parameter("espOn") == true, "demand enables substitution (transitional)")
 	ck(mat.get_shader_parameter("espComposite") == true, "overlay material receives composite enable")
 	ck(mat.get_shader_parameter("espTex") != null, "overlay material receives ESP buffer texture")
 	var cam: Camera3D = root.get_camera_3d()
@@ -103,40 +99,31 @@ func t_esp_compositor_gate() -> void:
 	nvg.set_esp_demand(false)
 	ck(not nvg.esp_composite_active(), "demand off stops compositing")
 	ck(mat.get_shader_parameter("espComposite") == false, "overlay material clears composite flag on demand off")
-	ck(mat.get_shader_parameter("espOn") == false, "overlay material clears substitution on demand off")
 	if cam != null:
 		ck((cam.cull_mask & NVG.ESP_BUFFER_LAYER_BIT) != 0, "main camera layer 20 is restored when compositing stops")
 	nvg.set_esp_layer(false)
+	ck(not nvg.esp_composite_active(), "layer off keeps compositing off")
 	nvg._nvg_mat_node = null
 	nvg._installed = false
 	nvg.free()
 	rect.free()
 
-# The mine display colour and the measured detector targets live on the overlay
-# material, and the overlay is rebuilt on every map load: a value set once must
-# survive that rebuild.
-func t_mine_colour_and_keys_reach_material() -> void:
+# Mine display colour is stored and applied to the shared mine shell material even
+# before/after overlay install changes.
+func t_mine_color_stored_and_applied() -> void:
 	var nvg = NVG.new()
 	root.add_child(nvg)
 	nvg.set_mine_color(Color(0.2, 0.4, 0.9))
-	ck(nvg.mine_color() == Color(0.2, 0.4, 0.9), "mine colour is stored without a material")
-	var rect := ColorRect.new()
-	var mat := ShaderMaterial.new()
-	mat.shader = load("res://mods/ThermalVTK/VTKNVG.gdshader")
-	rect.material = mat
-	nvg._nvg_mat_node = rect
-	nvg._installed = true
-	nvg._apply_uniforms()
-	ck(mat.get_shader_parameter("mineColor") == Color(0.2, 0.4, 0.9), "mine colour reaches the overlay material")
-	ck(mat.get_shader_parameter("stNormalKey") == NVG.DET_ST_NORMAL, "the washed normal key reaches the overlay material")
-	ck(mat.get_shader_parameter("stCombatKey") == NVG.DET_ST_COMBAT, "the washed combat key reaches the overlay material")
-	ck(mat.get_shader_parameter("stDefendKey") == NVG.DET_ST_DEFEND, "the washed defend key reaches the overlay material")
-	ck(mat.get_shader_parameter("mineKey") == NVG.DET_MINE, "the washed mine key reaches the overlay material")
-	nvg._nvg_mat_node = null
-	rect.free()
+	ck(nvg.mine_color() == Color(0.2, 0.4, 0.9), "mine colour is stored")
+	var sm := nvg._mat_mine as StandardMaterial3D
+	ck(sm != null and sm.albedo_color == Color(0.2, 0.4, 0.9), "mine shell material uses mine colour")
+	nvg.set_mine_color(Color(0.1, 0.8, 0.3))
+	sm = nvg._mat_mine as StandardMaterial3D
+	ck(nvg.mine_color() == Color(0.1, 0.8, 0.3), "mine colour updates")
+	ck(sm != null and sm.albedo_color == Color(0.1, 0.8, 0.3), "mine shell material follows colour updates")
 	nvg.free()
 
-func t_mine_highlight_emits_key_material() -> void:
+func t_mine_highlight_uses_buffer_shells() -> void:
 	var nvg = NVG.new()
 	root.add_child(nvg)
 	nvg.set_mine_color(Color(0.2, 0.4, 0.9))
@@ -156,18 +143,16 @@ func t_mine_highlight_emits_key_material() -> void:
 	ck(shells.size() == 1, "mine buffer shell is created for source mesh")
 	var shell: MeshInstance3D = shells[0] if shells.size() == 1 else null
 	nvg._update_mine(id, true, Vector3.ZERO)
-	ck(mesh.material_override == null, "in-range mine leaves source mesh without key override")
+	ck(mesh.material_override == null, "in-range mine leaves source mesh without override")
 	ck(shell != null and is_instance_valid(shell) and shell.visible, "in-range mine shows buffer shell")
 	ck(shell != null and shell.layers == NVG.ESP_BUFFER_LAYER_BIT, "mine shell renders on ESP buffer layer")
 	ck(shell != null and bool(shell.get_meta(NVG.MINE_SHELL_META, false)), "mine shell is tagged for mine buffer rendering")
 	ck(shell != null and shell.material_override == nvg._mat_mine, "mine shell uses direct mine display material")
-	var sm := nvg._mat_mine as StandardMaterial3D
-	ck(sm != null and sm.albedo_color == Color(0.2, 0.4, 0.9), "mine display material uses mine color")
 	nvg._update_mine(id, true, Vector3(1000.0, 0.0, 0.0))
 	ck(mesh.material_override == null, "out-of-range mine keeps source mesh clear")
 	ck(shell != null and is_instance_valid(shell) and not shell.visible, "out-of-range mine hides buffer shell")
 	nvg._update_mine(id, true, Vector3.ZERO)
-	ck(mesh.material_override == null, "mine re-entry does not leak key override to source mesh")
+	ck(mesh.material_override == null, "mine re-entry does not touch source mesh override")
 	ck(shell != null and is_instance_valid(shell) and shell.visible, "mine repaints buffer shell on re-entry")
 	nvg.free()
 	mine.free()

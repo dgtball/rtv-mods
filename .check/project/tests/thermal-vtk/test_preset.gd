@@ -21,7 +21,7 @@ func _init() -> void:
 
 func _run() -> void:
 	t_fill_keys_present()
-	t_rim_and_decay_defaults()
+	t_thickness_and_decay_defaults()
 	t_single_state_source()
 	t_mcm_labels()
 	print("")
@@ -45,25 +45,25 @@ func t_fill_keys_present() -> void:
 	ck(not set_src.contains("PRESET_FILL_ALPHA"), "PRESET_FILL_ALPHA is gone")
 	ck(not FileAccess.get_file_as_string(SRC).contains("_apply_style_preset"), "the fill preset is gone")
 
-# The outline no longer offers a style dropdown: it always draws the ring.
-# The rim defaults to 2.0 in steps of 0.5, and the cooling time to 30 s over
-# a 0..180 window. The descriptor table is the single registration source.
+# The outline no longer offers a style dropdown: it always draws a solid ring.
+# Thickness and cooling time live in the descriptor table as the single source.
 func _descr(key: String) -> Dictionary:
 	for r in Settings.DESCRIPTORS:
 		if r["key"] == key:
 			return r
 	return {}
 
-func t_rim_and_decay_defaults() -> void:
+func t_thickness_and_decay_defaults() -> void:
 	var src := FileAccess.get_file_as_string(SRC)
 	var set_src := FileAccess.get_file_as_string(SET_SRC)
 	ck(not (src + set_src).contains("outline_style"), "MCM drops the outline_style dropdown")
-	var rim := _descr("outline_rim")
-	ck(float(rim.get("def", -1.0)) == 2.0 and float(rim.get("step", -1.0)) == 0.5
-		and float(rim.get("max", -1.0)) == 6.0, "outline_rim is 2.0 in 0.5 steps up to 6.0")
+	ck(_descr("outline_rim").is_empty(), "the Rim setting is gone")
+	var thick := _descr("outline_thickness")
+	ck(absf(float(thick.get("def", -1.0)) - 0.0005) < 0.000001 and absf(float(thick.get("step", -1.0)) - 0.0005) < 0.000001
+		and absf(float(thick.get("max", -1.0)) - 0.02) < 0.000001, "outline_thickness default/step/max match settings")
 	var decay := _descr("corpse_decay")
-	ck(float(decay.get("def", -1.0)) == 90.0 and float(decay.get("max", -1.0)) == 180.0,
-		"corpse_decay defaults to 90 s and tops out at 180 s")
+	ck(absf(float(decay.get("def", -1.0)) - 70.0) < 0.001 and absf(float(decay.get("max", -1.0)) - 180.0) < 0.001,
+		"corpse_decay default/max match settings")
 
 # The thermal toggle and the world palette live in our own state file only.
 # A second source of truth (an MCM checkbox or dropdown) fought the hotkey on
@@ -91,7 +91,7 @@ func t_mcm_labels() -> void:
 	ck(set_src.contains('"Nomads marker"'), "the nomad entry is called Nomads marker")
 	ck(set_src.contains('"Highlight softness"'), "the highlight entry is called Highlight softness")
 	ck(set_src.contains('"Daylight strength"'), "the strength entry exists")
-	ck((src + set_src).contains("Rim"), "the rim entry lost the Outline prefix")
+	ck((src + set_src).contains("Rim") == false, "the removed rim entry leaves no label behind")
 	ck((src + set_src).contains("\"Thickness\""), "the thickness entry lost the Outline prefix")
 	ck(set_src.contains("\"Brightness\""), "the brightness entry lost the Outline prefix")
 	ck((src + set_src).contains("Cooling time"), "the cooling entry is called Cooling time")

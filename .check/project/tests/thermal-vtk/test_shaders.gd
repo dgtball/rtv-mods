@@ -1,7 +1,6 @@
 extends SceneTree
 
 const Sh = preload("res://mods/ThermalVTK/VTKShaders.gd")
-const S = preload("res://mods/ThermalVTK/VTKStates.gd")
 const NVG = preload("res://mods/ThermalVTK/VTKNVG.gd")
 const NVG_SHADER_RES := "res://mods/ThermalVTK/VTKNVG.gdshader"
 const BODY_LOS_RES := "res://mods/ThermalVTK/VTKEspBody.gdshader"
@@ -26,12 +25,10 @@ func _run() -> void:
 	t_body_contracts()
 	t_ring_contracts()
 	t_band_contract()
-	t_nvg_esp_detection_branch()
+	t_nvg_compositor_contract()
 	t_palette_modes()
 	t_nvg_shader_compiles()
-	t_key_path_present()
-	t_states_state_keys()
-	t_detector_keys_are_spaced()
+	t_runtime_contract()
 	t_daylight_contract()
 	print("")
 	if fails == 0:
@@ -106,7 +103,9 @@ func t_band_contract() -> void:
 	ck(outline.contains("brightness"), "VTKOutline drives direct display brightness")
 	ck(outline.contains("fill_alpha"), "VTKOutline drives direct display alpha")
 
-func t_nvg_esp_detection_branch() -> void:
+# Buffer-composited ESP: NVG overlay palettizes/tints the background and composites
+# the ESP buffer on top. No screen-space key detection/substitution remains.
+func t_nvg_compositor_contract() -> void:
 	var code := FileAccess.get_file_as_string(NVG_SHADER_RES)
 	ck(code.contains("uniform sampler2D screen_texture"), "overlay declares the screen sampler")
 	ck(code.contains("texture(screen_texture, SCREEN_UV)"), "overlay samples the frame itself")
@@ -114,19 +113,9 @@ func t_nvg_esp_detection_branch() -> void:
 	ck(code.contains("uniform bool espComposite"), "overlay declares ESP composite flag")
 	ck(code.contains("texture(espTex, SCREEN_UV)"), "overlay samples ESP buffer")
 	ck(code.contains("espComposite"), "overlay composites ESP buffer when enabled")
-	ck(code.contains("uniform bool espOn"), "overlay declares espOn")
-	# Fill opacity is a 3D dither now: substituted pixels must be the flat chosen
-	# colour, never a mix with a reconstructed thermal background. That mix is
-	# what turned the fill muddy.
-	ck(not code.contains("uniform bool espFill"), "the overlay has no espFill blend switch")
-	ck(not code.contains("uniform float fillAlpha"), "the overlay has no fill alpha to dilute the hue")
-	ck(not code.contains("mix(backgroundColor, flatCol"), "substituted pixels keep the flat chosen colour")
-	for u in ["stNormalKey", "stCombatKey", "stDefendKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineKey", "mineColor", "stateBright", "scopeRotate"]:
-		ck(code.contains("uniform") and code.contains(u), "overlay declares %s" % u)
-	ck(code.contains("orbitDist"), "overlay declares orbitDist")
-	ck(code.contains("DET_TOL_CORE"), "overlay uses detection tolerance")
-	ck(code.contains("dCore"), "overlay computes nearest key distance")
-	ck(code.contains("dMine"), "overlay detects mine key")
+	ck(code.contains("composited = true"), "composited ESP pixels bypass palette/noise/white adjustments")
+	for bad in ["uniform bool espOn", "stNormalKey", "stCombatKey", "stDefendKey", "mineKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineColor", "stateBright", "scopeRotate", "espFillAlpha", "espBodyFill", "orbitDist", "DET_TOL_CORE", "dCore", "dMine"]:
+		ck(not code.contains(bad), "overlay has no substitution token %s" % bad)
 
 func t_palette_modes() -> void:
 	var code := FileAccess.get_file_as_string(NVG_SHADER_RES)
@@ -143,50 +132,28 @@ func t_nvg_shader_compiles() -> void:
 		return
 	var names := _uniform_names(sh)
 	ck(names.size() > 0, "NVG shader compiled (uniform list not empty)")
-	for u in ["mineColor", "scopeRotate", "dayMix", "espOn", "espTex", "espComposite", "stNormalColor", "stNormalKey", "stCombatKey", "stDefendKey", "mineKey", "stateBright"]:
+	for u in ["espTex", "espComposite", "dayMix", "thermalMode", "thermalDarken", "worldPaletteMode", "highlightKnee", "nvgWhite", "vrcetsStrength", "vrcetsRedHold", "noise", "tint"]:
 		ck(names.has(u), "compiled shader exposes %s" % u)
+	for bad in ["espOn", "stNormalKey", "stCombatKey", "stDefendKey", "mineKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineColor", "stateBright", "scopeRotate", "espFillAlpha", "espBodyFill"]:
+		ck(not names.has(bad), "compiled shader does not expose substitution uniform %s" % bad)
 
-func t_key_path_present() -> void:
+func t_runtime_contract() -> void:
 	var owner := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKNVG.gd")
-	ck(owner.contains("MINE_KEY"), "VTKNVG still emits the raw mine key")
-	ck(owner.contains("DET_ST_NORMAL"), "VTKNVG carries measured state keys")
-	ck(owner.contains("set_esp_layer"), "VTKNVG owns contour layer switch")
-	ck(owner.contains("set_esp_demand"), "VTKNVG owns ESP demand gate")
-	ck(owner.contains("func set_esp_fill"), "VTKNVG owns ESP fill plumbing (preserved)")
+	ck(owner.contains("set_esp_layer"), "VTKNVG owns ESP layer gate")
+	ck(owner.contains("set_esp_demand"), "VTKNVG owns ESP content demand gate")
 	ck(owner.contains("func esp_buffer_layer"), "VTKNVG exposes ESP buffer layer")
 	ck(owner.contains("func esp_composite_active"), "VTKNVG exposes ESP composite state")
-	ck(owner.contains("set_state_colors"), "VTKNVG owns state-colour plumbing")
+	ck(owner.contains("func esp_buffer_viewport"), "VTKNVG exposes ESP buffer viewport")
 	ck(owner.contains("func set_mine_color"), "VTKNVG owns mine display colour")
+	for bad in ["MINE_KEY", "DET_ST_NORMAL", "DET_ST_COMBAT", "DET_ST_DEFEND", "DET_MINE", "set_esp_fill", "set_state_colors", "set_esp_brightness", "set_esp_on", "vtk_key_gain"]:
+		ck(not owner.contains(bad), "VTKNVG has no substitution token %s" % bad)
 	var store := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKShaders.gd")
 	ck(store.contains("func body_los"), "shader store exposes body_los")
 	ck(store.contains("func body_xray"), "shader store exposes body_xray")
 	ck(store.contains("func ring_los"), "shader store exposes ring_los")
 	ck(store.contains("func ring_xray"), "shader store exposes ring_xray")
-
-func t_states_state_keys() -> void:
-	var keys := [S.state_key(S.NORMAL), S.state_key(S.COMBAT), S.state_key(S.DEFEND)]
-	ck(keys[0] == S.KEY_NORMAL and keys[1] == S.KEY_COMBAT and keys[2] == S.KEY_DEFEND, "state_key maps the categories")
-	ck(S.state_key(99) == S.KEY_NORMAL, "unknown category falls back to normal")
-	for k in keys:
-		ck(k.r + k.g + k.b > 0.5, "key %s is bright enough to reach the screen" % str(k))
-	for i in keys.size():
-		for j in range(i + 1, keys.size()):
-			ck(keys[i] != keys[j], "state keys %d and %d differ" % [i, j])
-
-func t_detector_keys_are_spaced() -> void:
-	var keys := {
-		"mine": NVG.DET_MINE,
-		"normal": NVG.DET_ST_NORMAL,
-		"combat": NVG.DET_ST_COMBAT,
-		"defend": NVG.DET_ST_DEFEND,
-	}
-	var names: Array = keys.keys()
-	for i in names.size():
-		for j in range(i + 1, names.size()):
-			var a: Color = keys[names[i]]
-			var b: Color = keys[names[j]]
-			var d: float = Vector3(a.r - b.r, a.g - b.g, a.b - b.b).length()
-			ck(d > 0.34, "washed %s and %s keys are farther than the detector radius (%.2f)" % [names[i], names[j], d])
+	for bad in ["body_los_key", "body_xray_key", "ring_los_key", "ring_xray_key", "Key.gdshader", "_key_cache"]:
+		ck(not store.contains(bad), "shader store has no key-variant token %s" % bad)
 
 func t_daylight_contract() -> void:
 	var nvg := FileAccess.get_file_as_string(NVG_SHADER_RES)
