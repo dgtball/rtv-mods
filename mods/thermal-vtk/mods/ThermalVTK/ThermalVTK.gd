@@ -13,7 +13,7 @@ const CONFIG_FILE := "user://MCM/thermal-vtk/config.ini"
 const STATE_FILE := "user://MCM/thermal-vtk/thermal_state.cfg"
 const MOD_CONFIG_FILE := "user://mod_config.cfg"
 const MCM_HELPERS := "res://ModConfigurationMenu/Scripts/Doink Oink/MCM_Helpers.tres"
-const PALETTE_COUNT := 7
+const PALETTE_COUNT := 4
 
 var _nvg: Node = null
 var _esp: Node = null
@@ -93,7 +93,7 @@ func _toggle_thermal() -> void:
 		Color.GREEN if _thermal_enabled else Color(0.7, 0.7, 0.7))
 	_save_state("thermal_enabled", _thermal_enabled)
 
-const PALETTE_NAMES: Array[String] = ["Classic", "Amber", "Forest", "Ice", "VRCETS Auto", "VRCETS Blue", "VRCETS Red"]
+const PALETTE_NAMES: Array[String] = ["Classic", "Amber", "Forest", "Ice"]
 
 func _cycle_palette() -> void:
 	# The world palette only shows while thermal vision is on, and thermal
@@ -201,19 +201,17 @@ func _sync_nvg_esp() -> void:
 	var nvg_on: bool = _nvg_active()
 	# NVG compositor path: render ESP into the NVG buffer and composite over the
 	# palettized background while NVG is worn; NVG-off uses direct overlays.
-	var use_buffer: bool = nvg_on
+	# DIAGNOSTIC 2.10.7: buffer/composite path disabled to isolate native crash.
+	var use_buffer: bool = false
 	var layer_bit: int = 1 << 19
 	if _nvg.has_method("esp_buffer_layer"):
-		layer_bit = 1 << int(_nvg.esp_buffer_layer())
+		layer_bit = 1 << (int(_nvg.esp_buffer_layer()) - 1)
 	if _esp.has_method("set_render_to_buffer"):
 		_esp.set_render_to_buffer(use_buffer, layer_bit)
 	if _nvg.has_method("set_esp_layer"):
-		_nvg.set_esp_layer(esp_active)
-	# Composite/demand follows current ESP content so buffer rendering/cull-mask
-	# work is only active when content is wanted.
-	var demand: bool = esp_active and bool(_esp.call("wants_contour")) if _esp.has_method("wants_contour") else esp_active
+		_nvg.set_esp_layer(false)
 	if _nvg.has_method("set_esp_demand"):
-		_nvg.set_esp_demand(demand)
+		_nvg.set_esp_demand(false)
 
 func _nvg_active() -> bool:
 	if _nvg == null or not is_instance_valid(_nvg):
@@ -387,7 +385,10 @@ func _mcm_apply(cfg: ConfigFile) -> void:
 	# changed with the cycle hotkey, so there is no MCM dropdown for it.
 	var pal = _read_state("world_palette", null)
 	_nvg.apply_config(rec)
-	_nvg.set_palette_mode(int(pal) if pal != null else 0)
+	var mode: int = int(pal) if pal != null else 0
+	if PALETTE_COUNT > 0:
+		mode = posmod(mode, PALETTE_COUNT)
+	_nvg.set_palette_mode(mode)
 	_nvg.set_thermal_enabled(_thermal_enabled)
 	_ensure_esp()
 	if _esp != null and is_instance_valid(_esp):

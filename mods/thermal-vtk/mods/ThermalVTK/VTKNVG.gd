@@ -307,7 +307,8 @@ func esp_buffer_layer() -> int:
 	return ESP_BUFFER_LAYER
 
 func esp_composite_active() -> bool:
-	return _esp_content_active() or _mine_buffer_wanted()
+	# DIAGNOSTIC 2.10.7: buffer/composite disabled to isolate native crash.
+	return false
 
 func esp_buffer_viewport() -> SubViewport:
 	return _esp_vp
@@ -1098,7 +1099,7 @@ func apply_config(rec) -> void:
 
 
 func set_palette_mode(mode: int) -> void:
-	set_palette = mode
+	set_palette = posmod(mode, 4)
 	_dirty = true
 	_tick_cd = 0.0
 
