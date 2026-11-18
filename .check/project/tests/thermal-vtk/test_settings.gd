@@ -97,8 +97,8 @@ func t_read_defaults() -> void:
 	ck(rec.key_live_panel == KEY_F9, "live panel key defaults to F9")
 	ck(absf(rec.daylight_strength - 1.0) < 0.001, "daylight strength defaults to 1.0")
 	ck(absf(rec.highlight_knee - 0.55) < 0.001, "highlight knee defaults to 0.55")
-	ck(absf(rec.vrcets_thermal_strength - 0.58) < 0.001, "vrcets thermal strength default")
-	ck(absf(rec.vrcets_red_hold - 0.72) < 0.001, "vrcets red hold default")
+	ck(absf(rec.palette_strength - 0.58) < 0.001, "palette strength default")
+	ck(absf(rec.red_hold - 0.72) < 0.001, "red hold default")
 	ck(rec.color_normal == States.DEFAULT_NORMAL, "normal colour default")
 	ck(rec.color_combat == States.DEFAULT_COMBAT, "combat colour default")
 	ck(rec.color_defend == States.DEFAULT_DEFEND, "defend colour default")
@@ -222,8 +222,8 @@ func t_nvg_apply_maps_fields() -> void:
 	rec.daylight_compensation = false
 	rec.daylight_strength = 0.5
 	rec.highlight_knee = 0.4
-	rec.vrcets_thermal_strength = 0.33
-	rec.vrcets_red_hold = 0.44
+	rec.palette_strength = 0.33
+	rec.red_hold = 0.44
 	rec.color_combat = Color(0.0, 1.0, 0.0)
 	rec.color_mine = Color(0.25, 0.5, 0.75)
 	var nvg = NVG.new()
@@ -236,7 +236,7 @@ func t_nvg_apply_maps_fields() -> void:
 	ck(nvg.set_daylight == false, "NVG maps the daylight toggle")
 	ck(nvg.set_strength == 0.5, "NVG maps daylight strength")
 	ck(absf(nvg.set_highlight_knee - 0.4) < 0.001, "NVG maps highlight knee")
-	ck(absf(nvg.set_vrcets_strength - 0.33) < 0.001, "NVG maps vrcets strength")
-	ck(absf(nvg.set_vrcets_red_hold - 0.44) < 0.001, "NVG maps vrcets red hold")
+	ck(absf(nvg.set_palette_strength - 0.33) < 0.001, "NVG maps palette strength")
+	ck(absf(nvg.set_red_hold - 0.44) < 0.001, "NVG maps red hold")
 	ck(nvg.mine_color() == Color(0.25, 0.5, 0.75), "NVG maps the mine colour")
 	nvg.free()

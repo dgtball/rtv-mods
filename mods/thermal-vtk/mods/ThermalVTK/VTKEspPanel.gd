@@ -25,15 +25,14 @@ var _saved: Dictionary = {}
 var _prev_mouse_mode: int = Input.MOUSE_MODE_VISIBLE
 var _prev_paused: bool = false
 var _prev_esp_process_mode: int = Node.PROCESS_MODE_INHERIT
+var _prev_owner_process_mode: int = Node.PROCESS_MODE_INHERIT
 
 # Widgets
 var _esp_enabled: CheckBox = null
 var _fill_mode: OptionButton = null
-var _rim: HSlider = null
 var _thickness: HSlider = null
 var _brightness: HSlider = null
 var _fill_alpha: HSlider = null
-var _thermal_mix: HSlider = null
 var _distance: HSlider = null
 var _cooling: HSlider = null
 var _xray: CheckBox = null
@@ -43,6 +42,8 @@ var _c_normal: ColorPickerButton = null
 var _c_combat: ColorPickerButton = null
 var _c_defend: ColorPickerButton = null
 var _c_mine: ColorPickerButton = null
+var _palette_strength: HSlider = null
+var _red_hold: HSlider = null
 
 var _suppress: bool = false
 
@@ -71,8 +72,13 @@ func open() -> void:
 	_prev_mouse_mode = Input.mouse_mode
 	_prev_paused = get_tree().paused
 	_prev_esp_process_mode = _esp.process_mode
-	# Keep ESP processing while paused so outline/material changes apply live.
+	if _owner != null and is_instance_valid(_owner):
+		_prev_owner_process_mode = _owner.process_mode
+	# Keep ESP/owner processing while paused so material and NVG-substitution
+	# changes (brightness/colors) apply live.
 	_esp.process_mode = Node.PROCESS_MODE_ALWAYS
+	if _owner != null and is_instance_valid(_owner):
+		_owner.process_mode = Node.PROCESS_MODE_ALWAYS
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	visible = true
@@ -87,6 +93,8 @@ func close() -> void:
 	_open = false
 	if _esp != null and is_instance_valid(_esp):
 		_esp.process_mode = _prev_esp_process_mode
+	if _owner != null and is_instance_valid(_owner):
+		_owner.process_mode = _prev_owner_process_mode
 	get_tree().paused = _prev_paused
 	Input.mouse_mode = _prev_mouse_mode
 	# Apply once more on close so the live scene reflects final values.
@@ -98,11 +106,9 @@ func _snapshot() -> void:
 		return
 	_saved = {
 		"body_fill": bool(_esp.p_body_fill),
-		"rim": float(_esp.p_rim),
 		"thickness": float(_esp.p_thickness),
 		"brightness": float(_esp.p_brightness),
 		"fill_alpha": float(_esp.p_fill_alpha),
-		"thermal_mix": float(_esp.p_thermal_mix),
 		"dist": float(_esp.p_dist),
 		"decay": float(_esp.p_decay),
 		"trig": bool(_esp.p_trig),
@@ -117,16 +123,20 @@ func _snapshot() -> void:
 		_saved["c_mine"] = Color(_nvg.mine_color())
 	else:
 		_saved["c_mine"] = States.DEFAULT_MINE
+	if _nvg != null and is_instance_valid(_nvg):
+		_saved["palette_strength"] = float(_nvg.get("set_palette_strength")) if _nvg.get("set_palette_strength") != null else 0.58
+		_saved["red_hold"] = float(_nvg.get("set_red_hold")) if _nvg.get("set_red_hold") != null else 0.72
+	else:
+		_saved["palette_strength"] = 0.58
+		_saved["red_hold"] = 0.72
 
 func _restore_snapshot() -> void:
 	if _esp == null or not is_instance_valid(_esp):
 		return
 	_esp.p_body_fill = bool(_saved.get("body_fill", false))
-	_esp.p_rim = float(_saved.get("rim", 2.0))
 	_esp.p_thickness = float(_saved.get("thickness", 0.006))
 	_esp.p_brightness = float(_saved.get("brightness", 0.6))
 	_esp.p_fill_alpha = float(_saved.get("fill_alpha", 0.4))
-	_esp.p_thermal_mix = float(_saved.get("thermal_mix", 1.0))
 	_esp.p_dist = float(_saved.get("dist", 60.0))
 	_esp.p_decay = float(_saved.get("decay", 90.0))
 	_esp.p_trig = bool(_saved.get("trig", true))
@@ -136,6 +146,12 @@ func _restore_snapshot() -> void:
 	_esp.p_color_combat = Color(_saved.get("c_combat", States.DEFAULT_COMBAT))
 	_esp.p_color_defend = Color(_saved.get("c_defend", States.DEFAULT_DEFEND))
 	_apply_mine_color(Color(_saved.get("c_mine", States.DEFAULT_MINE)))
+	if _nvg != null and is_instance_valid(_nvg):
+		if _nvg.has_method("set_palette_tuning"):
+			_nvg.set_palette_tuning(float(_saved.get("palette_strength", 0.58)), float(_saved.get("red_hold", 0.72)))
+		else:
+			_nvg.set("set_palette_strength", float(_saved.get("palette_strength", 0.58)))
+			_nvg.set("set_red_hold", float(_saved.get("red_hold", 0.72)))
 	_sync_from_runtime()
 	if _esp_enabled != null:
 		_esp_enabled.button_pressed = bool(_saved.get("esp_preview_on", true))
@@ -149,11 +165,9 @@ func _sync_from_runtime() -> void:
 	if _esp_enabled != null:
 		_esp_enabled.button_pressed = bool(_esp.contour_layer or _esp.xray_layer)
 	_fill_mode.selected = 1 if bool(_esp.p_body_fill) else 0
-	_rim.value = float(_esp.p_rim)
 	_thickness.value = float(_esp.p_thickness)
 	_brightness.value = float(_esp.p_brightness)
 	_fill_alpha.value = float(_esp.p_fill_alpha)
-	_thermal_mix.value = float(_esp.p_thermal_mix)
 	_distance.value = float(_esp.p_dist)
 	_cooling.value = float(_esp.p_decay)
 	_xray.button_pressed = bool(_esp.p_trig)
@@ -166,6 +180,18 @@ func _sync_from_runtime() -> void:
 		_c_mine.color = Color(_nvg.mine_color())
 	else:
 		_c_mine.color = States.DEFAULT_MINE
+	if _palette_strength != null:
+		if _nvg != null and is_instance_valid(_nvg):
+			var vs = _nvg.get("set_palette_strength")
+			_palette_strength.value = float(vs) if vs != null else 0.58
+		else:
+			_palette_strength.value = 0.58
+	if _red_hold != null:
+		if _nvg != null and is_instance_valid(_nvg):
+			var vh = _nvg.get("set_red_hold")
+			_red_hold.value = float(vh) if vh != null else 0.72
+		else:
+			_red_hold.value = 0.72
 	_suppress = false
 
 func _apply_mine_color(c: Color) -> void:
@@ -176,11 +202,9 @@ func _on_changed(_v = null) -> void:
 	if _suppress or _esp == null or not is_instance_valid(_esp):
 		return
 	_esp.p_body_fill = (_fill_mode.selected == 1)
-	_esp.p_rim = float(_rim.value)
 	_esp.p_thickness = float(_thickness.value)
 	_esp.p_brightness = float(_brightness.value)
 	_esp.p_fill_alpha = float(_fill_alpha.value)
-	_esp.p_thermal_mix = float(_thermal_mix.value)
 	_esp.p_dist = float(_distance.value)
 	_esp.p_decay = float(_cooling.value)
 	_esp.p_trig = bool(_xray.button_pressed)
@@ -190,6 +214,14 @@ func _on_changed(_v = null) -> void:
 	_esp.p_color_combat = Color(_c_combat.color)
 	_esp.p_color_defend = Color(_c_defend.color)
 	_apply_mine_color(Color(_c_mine.color) if _c_mine != null else States.DEFAULT_MINE)
+	if _nvg != null and is_instance_valid(_nvg):
+		var vs := float(_palette_strength.value) if _palette_strength != null else 0.58
+		var vh := float(_red_hold.value) if _red_hold != null else 0.72
+		if _nvg.has_method("set_palette_tuning"):
+			_nvg.set_palette_tuning(vs, vh)
+		else:
+			_nvg.set("set_palette_strength", vs)
+			_nvg.set("set_red_hold", vh)
 	_refresh_status()
 	_apply_live()
 
@@ -198,11 +230,15 @@ func _apply_live() -> void:
 		return
 	# Runtime preview toggle: allow disabling ESP layers to compare with
 	# another mod, without touching saved MCM settings.
-	if _esp_enabled != null and not bool(_esp_enabled.button_pressed):
+	var preview_on := _esp_enabled == null or bool(_esp_enabled.button_pressed)
+	if not preview_on:
 		_esp.set_layers(false, false)
+	elif _owner != null and is_instance_valid(_owner) and _owner.has_method("_set_esp_layers_for_preview"):
+		_owner._set_esp_layers_for_preview(_xray == null or bool(_xray.button_pressed))
+	elif _owner != null and is_instance_valid(_owner) and _owner.has_method("_apply_mode"):
+		_owner._apply_mode()
 	else:
-		if _owner != null and is_instance_valid(_owner) and _owner.has_method("_apply_mode"):
-			_owner._apply_mode()
+		_esp.set_layers(true, _xray == null or bool(_xray.button_pressed))
 	if _esp.has_method("refresh_outlines_now"):
 		_esp.refresh_outlines_now()
 
@@ -211,14 +247,18 @@ func _refresh_status() -> void:
 		return
 	var mode := "FILL" if _fill_mode != null and _fill_mode.selected == 1 else "OUTLINE"
 	var esp_on := _esp_enabled == null or bool(_esp_enabled.button_pressed)
-	_status.text = "ESP: %s  |  Mode: %s  |  Rim %.2f  Thickness %.4f  Bright %.2f  Alpha %.2f  Mix %.2f  Dist %.0f  Cool %.0f" % [
+	# Both sliders only reach the fill body: in outline mode the contour is the
+	# ring and brightness comes from the plain Brightness slider. Greying them
+	# out stops "it does nothing" reports from an outline session.
+	var fill_on := _fill_mode != null and _fill_mode.selected == 1
+	if _fill_alpha != null:
+		_fill_alpha.editable = true
+	_status.text = "ESP: %s  |  Mode: %s  |  Thickness %.4f  Bright %.2f  Fill %.2f  Dist %.0f  Cool %.0f" % [
 		"ON" if esp_on else "OFF",
 		mode,
-		_rim.value if _rim != null else 0.0,
 		_thickness.value if _thickness != null else 0.0,
 		_brightness.value if _brightness != null else 0.0,
 		_fill_alpha.value if _fill_alpha != null else 0.0,
-		_thermal_mix.value if _thermal_mix != null else 1.0,
 		_distance.value if _distance != null else 0.0,
 		_cooling.value if _cooling != null else 0.0,
 	]
@@ -264,18 +304,17 @@ func _build_ui() -> void:
 
 	_esp_enabled = _add_check(v, "ESP enabled (preview)", true)
 	_fill_mode = _add_option(v, "Mode", ["Outline", "FILL (flat body)"])
-	_rim = _add_slider(v, "Rim", 0.0, 6.0, 0.5, 2.0)
-	_thickness = _add_slider(v, "Thickness (grow)", 0.0005, 0.02, 0.0005, 0.006)
-	_brightness = _add_slider(v, "Brightness", 0.1, 3.0, 0.1, 0.6)
-	_fill_alpha = _add_slider(v, "Fill alpha", 0.05, 1.0, 0.05, 0.4)
-	_thermal_mix = _add_slider(v, "thermal-mix", 0.0, 2.0, 0.05, 1.0)
+	_thickness = _add_slider(v, "Thickness (rim/offset)", 0.0005, 0.02, 0.0005, 0.0005)
+	_brightness = _add_slider(v, "Brightness", 0.1, 3.0, 0.1, 0.7)
+	_fill_alpha = _add_slider(v, "fill_alpha", 0.05, 1.0, 0.05, 0.6)
 	_distance = _add_slider(v, "Distance", 0.0, 300.0, 10.0, 60.0)
-	_cooling = _add_slider(v, "Cooling time (s)", 0.0, 180.0, 1.0, 90.0)
+	_cooling = _add_slider(v, "Cooling time (s)", 0.0, 180.0, 1.0, 70.0)
 
 	v.add_child(HSeparator.new())
-	_xray = _add_check(v, "X-ray triggers", true)
+	_xray = _add_check(v, "X-ray triggers", false)
 	_nomad = _add_check(v, "Nomad marker", true)
-	_labels = _add_check(v, "NPC labels (debug)", false)
+	_labels = _add_check(v, "NPC labels (debug)", true)
+	_fill_mode.selected = 1
 
 	v.add_child(HSeparator.new())
 	var cl := Label.new()
@@ -284,7 +323,14 @@ func _build_ui() -> void:
 	_c_normal = _add_color(v, "Normal", States.DEFAULT_NORMAL)
 	_c_combat = _add_color(v, "Combat", States.DEFAULT_COMBAT)
 	_c_defend = _add_color(v, "Defend", States.DEFAULT_DEFEND)
-	_c_mine = _add_color(v, "Mine", States.DEFAULT_MINE)
+	_c_mine = _add_color(v, "Mine", Color8(9, 46, 246))
+
+	v.add_child(HSeparator.new())
+	var wl := Label.new()
+	wl.text = "World palette (NVG, runtime only)"
+	v.add_child(wl)
+	_palette_strength = _add_slider(v, "Strength", 0.0, 1.0, 0.05, 0.58)
+	_red_hold = _add_slider(v, "Red hold", 0.0, 1.0, 0.05, 0.72)
 
 	v.add_child(HSeparator.new())
 	var row := HBoxContainer.new()
@@ -380,11 +426,9 @@ func _log_snapshot() -> void:
 	var parts: Array[String] = []
 	parts.append("mode=%s" % mode)
 	parts.append("esp_enabled=%s" % str(esp_on))
-	parts.append("rim=%.3f" % float(_rim.value))
 	parts.append("thickness=%.4f" % float(_thickness.value))
 	parts.append("brightness=%.3f" % bright)
 	parts.append("fill_alpha=%.3f" % float(_fill_alpha.value))
-	parts.append("thermal_mix=%.3f" % float(_thermal_mix.value))
 	parts.append("distance=%.1f" % float(_distance.value))
 	parts.append("cooling=%.1f" % float(_cooling.value))
 	parts.append("xray=%s" % str(bool(_xray.button_pressed)))
@@ -394,6 +438,10 @@ func _log_snapshot() -> void:
 	parts.append("combat=%s" % _color_hex(_c_combat.color))
 	parts.append("defend=%s" % _color_hex(_c_defend.color))
 	parts.append("mine=%s" % _color_hex(mine_c))
+	if _palette_strength != null:
+		parts.append("palette_strength=%.3f" % float(_palette_strength.value))
+	if _red_hold != null:
+		parts.append("red_hold=%.3f" % float(_red_hold.value))
 	VTKDebug.log("ESP_PANEL", "snapshot " + " ".join(parts))
 
 func _unhandled_input(event: InputEvent) -> void:

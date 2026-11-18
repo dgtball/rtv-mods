@@ -32,9 +32,9 @@ class Rec:
 	# Daylight highlight rolloff knee (1.0 = off).
 	var daylight_strength: float = 1.0
 	var highlight_knee: float = 0.55
-	# VRCETS-style world thermal tuning (used by VRCETS palette modes).
-	var vrcets_thermal_strength: float = 0.58
-	var vrcets_red_hold: float = 0.72
+	# World thermal palette tuning.
+	var palette_strength: float = 0.58
+	var red_hold: float = 0.72
 	# NPC outlines.
 	var corpse_decay: float = 70.0
 	var outline_distance: float = 60.0
@@ -93,8 +93,8 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Bool", "key": "daylight_compensation", "name": "Daylight compensation", "def": true, "cat": "01. ThermalVision", "pos": 11, "tip": "In bright daylight, lower the game's exposure so snow and sky keep detail instead of washing out. At night the unmodified night-vision exposure is kept, so the picture matches vanilla. Dark places seen in daylight stay readable."},
 	{"sect": "Float", "key": "daylight_strength", "name": "Daylight strength", "def": 1.0, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 12, "tip": "How much daylight compensation is applied at all. 0 = vanilla NVG exposure, 1 = full compensation."},
 	{"sect": "Float", "key": "thermal_highlight_knee", "name": "Highlight softness", "def": 0.55, "min": 0.3, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 13, "tip": "In daylight, background pixels brighter than this (snow, sky, clouds) bend into a softer highlight and keep their detail instead of washing out. Lower = stronger trim. Night is unaffected; 1.0 disables it."},
-	{"sect": "Float", "key": "vrcets_thermal_strength", "name": "VRCETS palette strength", "def": 0.58, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 14, "tip": "Blend strength for VRCETS world palettes. Higher pushes the background closer to the VRCETS thermal look."},
-	{"sect": "Float", "key": "vrcets_red_hold", "name": "VRCETS red hold", "def": 0.72, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 15, "tip": "How strongly hot/red highlights are held in VRCETS palettes. Higher preserves hotter reds on bright/warm sources."},
+	{"sect": "Float", "key": "palette_strength", "name": "Strength", "def": 0.58, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 14, "tip": "Blend strength for world thermal palettes. Higher pushes the background closer to the thermal look."},
+	{"sect": "Float", "key": "red_hold", "name": "Red hold", "def": 0.72, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 15, "tip": "How strongly hot/red highlights are held in thermal palettes. Higher preserves hotter reds on bright/warm sources."},
 	{"sect": "Float", "key": "outline_distance", "name": "Distance", "def": 60.0, "min": 0.0, "max": 300.0, "step": 10.0, "cat": "02. NPC", "pos": 0, "tip": "Maximum distance for an outline. Outlines are hidden past this range."},
 	{"sect": "Float", "key": "outline_thickness", "name": "Thickness", "def": 0.0005, "min": 0.0005, "max": 0.02, "step": 0.0005, "cat": "02. NPC", "pos": 2, "tip": "Outline/rim thickness in direct mode."},
 	{"sect": "Float", "key": "outline_brightness", "name": "Brightness", "def": 0.7, "min": 0.1, "max": 3.0, "step": 0.1, "cat": "02. NPC", "pos": 3, "tip": "Brightness multiplier on the outline/fill colour."},
@@ -175,8 +175,14 @@ static func read(cfg: ConfigFile) -> Rec:
 	rec.world = float(_val(cfg, "Float", "thermal_world", rec.world))
 	rec.daylight_strength = float(_val(cfg, "Float", "daylight_strength", rec.daylight_strength))
 	rec.highlight_knee = float(_val(cfg, "Float", "thermal_highlight_knee", rec.highlight_knee))
-	rec.vrcets_thermal_strength = float(_val(cfg, "Float", "vrcets_thermal_strength", rec.vrcets_thermal_strength))
-	rec.vrcets_red_hold = float(_val(cfg, "Float", "vrcets_red_hold", rec.vrcets_red_hold))
+	var pstr = _val(cfg, "Float", "palette_strength", null)
+	if pstr == null:
+		pstr = _val(cfg, "Float", "vrcets_thermal_strength", rec.palette_strength)
+	rec.palette_strength = float(pstr)
+	var rhold = _val(cfg, "Float", "red_hold", null)
+	if rhold == null:
+		rhold = _val(cfg, "Float", "vrcets_red_hold", rec.red_hold)
+	rec.red_hold = float(rhold)
 	rec.corpse_decay = float(_val(cfg, "Float", "corpse_decay", rec.corpse_decay))
 	rec.outline_distance = float(_val(cfg, "Float", "outline_distance", rec.outline_distance))
 	rec.outline_thickness = float(_val(cfg, "Float", "outline_thickness", rec.outline_thickness))

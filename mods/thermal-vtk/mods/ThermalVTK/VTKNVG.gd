@@ -46,8 +46,8 @@ var set_frame_level: float = Daylight.DAY_LEVEL
 var set_frame_cadence: float = Daylight.FRAME_CADENCE
 # Time acceleration of the day/night cycle (F9 "Time scale" lever; testing).
 var set_time_scale: float = 1.0
-var set_vrcets_strength: float = 0.58
-var set_vrcets_red_hold: float = 0.72
+var set_palette_strength: float = 0.58
+var set_red_hold: float = 0.72
 
 # Direct display colour of mine ESP buffer shells (MCM "Mine" colour).
 var _mine_color: Color = States.DEFAULT_MINE
@@ -274,8 +274,8 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("worldPaletteMode", set_palette)
 	nvg_mat.set_shader_parameter("highlightKnee", set_highlight_knee)
 	nvg_mat.set_shader_parameter("nvgWhite", set_nvg_white)
-	nvg_mat.set_shader_parameter("vrcetsStrength", set_vrcets_strength)
-	nvg_mat.set_shader_parameter("vrcetsRedHold", set_vrcets_red_hold)
+	nvg_mat.set_shader_parameter("paletteStrength", set_palette_strength)
+	nvg_mat.set_shader_parameter("redHold", set_red_hold)
 	_push_esp_composite()
 
 
@@ -460,8 +460,10 @@ func _process(delta: float) -> void:
 			_reset_daylight()
 	if worn:
 		_daylight_tick(delta)
-	_sync_probe()
-	_push_esp_composite()
+	if worn or set_daylight or (_probe != null and is_instance_valid(_probe)):
+		_sync_probe()
+	if _installed or worn or _esp_layer_armed or _esp_content_demand or (_esp_vp != null and is_instance_valid(_esp_vp)) or _esp_main_cam_mask_saved:
+		_push_esp_composite()
 	# Player position, fetched once per frame.
 	var ppos := _player_pos()
 
@@ -1092,8 +1094,8 @@ func apply_config(rec) -> void:
 	set_glow_distance = rec.outline_distance
 	set_mines = rec.thermal_mines
 	set_mine_color(rec.color_mine)
-	set_vrcets_strength = rec.vrcets_thermal_strength
-	set_vrcets_red_hold = rec.vrcets_red_hold
+	set_palette_strength = rec.palette_strength
+	set_red_hold = rec.red_hold
 	_dirty = true
 	_tick_cd = 0.0
 
@@ -1104,9 +1106,9 @@ func set_palette_mode(mode: int) -> void:
 	_tick_cd = 0.0
 
 
-func set_vrcets_tuning(strength: float, red_hold: float) -> void:
-	set_vrcets_strength = clampf(strength, 0.0, 1.0)
-	set_vrcets_red_hold = clampf(red_hold, 0.0, 1.0)
+func set_palette_tuning(strength: float, hold: float) -> void:
+	set_palette_strength = clampf(strength, 0.0, 1.0)
+	set_red_hold = clampf(hold, 0.0, 1.0)
 	_dirty = true
 	_tick_cd = 0.0
 

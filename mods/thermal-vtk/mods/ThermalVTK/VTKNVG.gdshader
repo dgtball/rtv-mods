@@ -37,8 +37,8 @@ uniform int worldPaletteMode = 0;
 // Final image brightness while NVG is on. Applied to the composited overlay, so
 // unlike the old Environment.tonemap_white poke it is actually visible.
 uniform float nvgWhite : hint_range(0.05, 1.0, 0.05) = 1.0;
-uniform float vrcetsStrength : hint_range(0.0, 1.0, 0.01) = 0.58;
-uniform float vrcetsRedHold : hint_range(0.0, 1.0, 0.01) = 0.72;
+uniform float paletteStrength : hint_range(0.0, 1.0, 0.01) = 0.58;
+uniform float redHold : hint_range(0.0, 1.0, 0.01) = 0.72;
 
 float Goggles(vec2 uv)
 {
@@ -49,8 +49,8 @@ float Goggles(vec2 uv)
 	return min(G1Distance, G2Distance);
 }
 
-// 0 = Classic (VRCETS Red), 1 = Amber, 2 = Forest, 3 = Ice (VRCETS Blue/Day).
-vec3 vrcets_day_palette(float v) {
+// 0 = Classic (red), 1 = Amber, 2 = Forest, 3 = Ice (blue).
+vec3 day_palette(float v) {
 	vec3 cold = vec3(0.025, 0.075, 0.24);
 	vec3 cool = vec3(0.045, 0.17, 0.46);
 	vec3 neutral = vec3(0.10, 0.24, 0.38);
@@ -63,7 +63,7 @@ vec3 vrcets_day_palette(float v) {
 	return color;
 }
 
-vec3 vrcets_red_palette(float v) {
+vec3 red_palette(float v) {
 	vec3 cold = vec3(0.05, 0.015, 0.11);
 	vec3 mid = vec3(0.34, 0.035, 0.10);
 	vec3 warm = vec3(0.92, 0.10, 0.025);
@@ -74,12 +74,12 @@ vec3 vrcets_red_palette(float v) {
 	return color;
 }
 
-vec3 vrcets_amber_palette(float v) {
-	vec3 cold = vec3(0.04, 0.02, 0.00);
-	vec3 cool = vec3(0.22, 0.10, 0.01);
-	vec3 mid = vec3(0.55, 0.28, 0.03);
-	vec3 warm = vec3(0.88, 0.52, 0.08);
-	vec3 hot = vec3(1.00, 0.82, 0.24);
+vec3 amber_palette(float v) {
+	vec3 cold = vec3(0.10, 0.05, 0.01);
+	vec3 cool = vec3(0.30, 0.14, 0.02);
+	vec3 mid = vec3(0.62, 0.32, 0.04);
+	vec3 warm = vec3(0.92, 0.56, 0.10);
+	vec3 hot = vec3(1.00, 0.84, 0.26);
 	vec3 color = mix(cold, cool, smoothstep(0.04, 0.35, v));
 	color = mix(color, mid, smoothstep(0.30, 0.60, v));
 	color = mix(color, warm, smoothstep(0.55, 0.82, v));
@@ -87,11 +87,11 @@ vec3 vrcets_amber_palette(float v) {
 	return color;
 }
 
-vec3 vrcets_forest_palette(float v) {
-	vec3 cold = vec3(0.00, 0.03, 0.02);
-	vec3 cool = vec3(0.02, 0.14, 0.08);
-	vec3 mid = vec3(0.06, 0.36, 0.16);
-	vec3 warm = vec3(0.22, 0.62, 0.22);
+vec3 forest_palette(float v) {
+	vec3 cold = vec3(0.01, 0.08, 0.04);
+	vec3 cool = vec3(0.03, 0.22, 0.10);
+	vec3 mid = vec3(0.08, 0.42, 0.18);
+	vec3 warm = vec3(0.28, 0.68, 0.26);
 	vec3 hot = vec3(0.72, 0.96, 0.46);
 	vec3 color = mix(cold, cool, smoothstep(0.04, 0.35, v));
 	color = mix(color, mid, smoothstep(0.30, 0.60, v));
@@ -100,12 +100,12 @@ vec3 vrcets_forest_palette(float v) {
 	return color;
 }
 
-float vrcets_red_heat(vec3 src) {
+float red_heat(vec3 src) {
 	float rh = smoothstep(0.10, 0.55, src.r) * (1.0 - smoothstep(src.r * 0.58, src.r * 0.94, max(src.g, src.b)));
 	return clamp(rh, 0.0, 1.0);
 }
 
-vec3 vrcets_held_heat(float luma) {
+vec3 held_heat(float luma) {
 	return mix(vec3(0.95, 0.08, 0.025), vec3(1.0, 0.32, 0.04), clamp(luma, 0.0, 1.0));
 }
 
@@ -113,13 +113,13 @@ vec3 ThermalPalette(float t)
 {
 	t = clamp(t, 0.0, 1.0);
 	if (worldPaletteMode == 1) {
-		return vrcets_amber_palette(t);
+		return amber_palette(t);
 	} else if (worldPaletteMode == 2) {
-		return vrcets_forest_palette(t);
+		return forest_palette(t);
 	} else if (worldPaletteMode == 3) {
-		return vrcets_day_palette(t);
+		return day_palette(t);
 	}
-	return vrcets_red_palette(t);
+	return red_palette(t);
 }
 
 // C1 highlight shoulder for daylight: luminance above the knee bends down
@@ -162,10 +162,10 @@ void fragment()
 			luminance = mix(luminance, lifted, dayMix);
 		}
 		vec3 backgroundColor = ThermalPalette(luminance) * 0.7;
-		float rh = vrcets_red_heat(pixelColor.rgb) * vrcetsRedHold;
-		backgroundColor = mix(backgroundColor, vrcets_held_heat(clamp(rawLuminance, 0.0, 1.0)), clamp(rh, 0.0, 1.0));
+		float rh = red_heat(pixelColor.rgb) * redHold;
+		backgroundColor = mix(backgroundColor, held_heat(clamp(rawLuminance, 0.0, 1.0)), clamp(rh, 0.0, 1.0));
 		// Blend toward thermal palette (background only).
-		backgroundColor = mix(pixelColor.rgb, backgroundColor, clamp(vrcetsStrength, 0.0, 1.0));
+		backgroundColor = mix(pixelColor.rgb, backgroundColor, clamp(paletteStrength, 0.0, 1.0));
 		color = vec4(backgroundColor, pixelColor.a);
 	} else {
 		color = pixelColor * tint;

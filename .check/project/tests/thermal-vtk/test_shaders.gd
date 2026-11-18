@@ -126,12 +126,13 @@ func t_palette_modes() -> void:
 	ck(n == 3, "palette modes 1..3 are present (got %d)" % n)
 	for i in [4, 5, 6]:
 		ck(not code.contains("worldPaletteMode == %d" % i), "palette mode %d removed" % i)
-	ck(code.contains("vrcets_amber_palette"), "amber VRCETS palette function present")
-	ck(code.contains("vrcets_forest_palette"), "forest VRCETS palette function present")
-	ck(code.contains("vrcets_red_palette"), "red/classic VRCETS palette function present")
-	ck(code.contains("vrcets_day_palette"), "blue/ice VRCETS palette function present")
+	ck(code.contains("amber_palette"), "amber palette function present")
+	ck(code.contains("forest_palette"), "forest palette function present")
+	ck(code.contains("red_palette"), "red/classic palette function present")
+	ck(code.contains("day_palette"), "blue/ice palette function present")
 	ck(not code.contains("vrcets_night_palette"), "unused night/auto palette removed")
-	ck(not code.contains("worldPaletteMode >= 4"), "VRCETS path no longer gated to modes >= 4")
+	ck(not code.contains("vrcets"), "shader has no vrcets identifiers")
+	ck(not code.contains("worldPaletteMode >= 4"), "palette path no longer gated to modes >= 4")
 
 func t_nvg_shader_compiles() -> void:
 	var sh = load(NVG_SHADER_RES)
@@ -140,7 +141,7 @@ func t_nvg_shader_compiles() -> void:
 		return
 	var names := _uniform_names(sh)
 	ck(names.size() > 0, "NVG shader compiled (uniform list not empty)")
-	for u in ["espTex", "espComposite", "dayMix", "thermalMode", "thermalDarken", "worldPaletteMode", "highlightKnee", "nvgWhite", "vrcetsStrength", "vrcetsRedHold", "noise", "tint"]:
+	for u in ["espTex", "espComposite", "dayMix", "thermalMode", "thermalDarken", "worldPaletteMode", "highlightKnee", "nvgWhite", "paletteStrength", "redHold", "noise", "tint"]:
 		ck(names.has(u), "compiled shader exposes %s" % u)
 	for bad in ["espOn", "stNormalKey", "stCombatKey", "stDefendKey", "mineKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineColor", "stateBright", "scopeRotate", "espFillAlpha", "espBodyFill"]:
 		ck(not names.has(bad), "compiled shader does not expose substitution uniform %s" % bad)
