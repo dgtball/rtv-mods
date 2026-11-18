@@ -92,6 +92,18 @@ func _init() -> void:
 	ck(t.size() == 2, "totals: two stats")
 	ck(Rows.totals([{"value": 1.0}, "nope", null]).is_empty(), "totals ignores garbage")
 
+	# --- строки новых статов ---
+	res = Rows.build([
+		{"stat": "never_jam", "value": 1.0, "unit": "flag"},
+		{"stat": "unbreakable", "value": 1.0, "unit": "flag"},
+		{"stat": "battery_save", "value": 0.8, "unit": "pct"},
+	], [], COLOR)
+	ck(_stats(res["rows"]) == ["never_jam", "unbreakable", "battery_save"],
+		"new stats have rows in ROW_ORDER order: " + str(_stats(res["rows"])))
+	ck(str(res["rows"][0]["value"]) == "Yes", "never_jam row reads Yes")
+	ck(str(res["rows"][1]["value"]) == "Yes", "unbreakable row reads Yes")
+	ck(str(res["rows"][2]["label"]) == "Battery Save:", "battery_save label")
+
 	print("")
 	if fails > 0:
 		print("FAILED: %d" % fails)

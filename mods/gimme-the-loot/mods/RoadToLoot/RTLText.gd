@@ -6,6 +6,10 @@ const STAT_LABELS := {
 	"low_hp_damage": "Low HP Damage",
 	"fire_rate": "Fire Rate",
 	"max_hp": "Max HP",
+	"wear": "Wear Resistance",
+	"never_jam": "Never Jam",
+	"unbreakable": "Unbreakable",
+	"battery_save": "Battery Save",
 }
 
 # Меньше — лучше: минус читается как бонус, плюс сбивал бы с толку.
@@ -19,6 +23,8 @@ static func stat_sign(stat: String) -> String:
 	return "-" if NEGATIVE_STATS.has(stat) else "+"
 
 static func stat_value(stat: String, value: float, unit: String) -> String:
+	if unit == "flag":
+		return "Yes"
 	var prefix := stat_sign(stat)
 	match unit:
 		"pct":

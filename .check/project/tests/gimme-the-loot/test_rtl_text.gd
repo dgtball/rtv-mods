@@ -38,7 +38,7 @@ func _init() -> void:
 	ck(Text.stat_value("sway", 1.2, "mult") == "x1.2", "mult unit")
 
 	# --- каждая запись пула даёт читаемую пару подпись/значение ---
-	for cat in ["weapon", "clothing"]:
+	for cat in Pool.CATEGORIES:
 		for e in Pool.entries(cat):
 			var stat: String = str(e["stat"])
 			var unit: String = str(e["unit"])
@@ -62,6 +62,16 @@ func _init() -> void:
 	# Целое произведение не должно просесть на отсечении: 15 * 1.2 == 18.0 ровно.
 	ck(Text.merged_value("insulation", 0.20, 15.0) == "+18",
 		"insulation exact product: " + Text.merged_value("insulation", 0.20, 15.0))
+
+	# --- новые ярлыки ---
+	ck(Text.stat_label("wear") == "Wear Resistance:", "wear is a resistance now")
+	ck(Text.stat_label("never_jam") == "Never Jam:", "label never_jam")
+	ck(Text.stat_label("unbreakable") == "Unbreakable:", "label unbreakable")
+	ck(Text.stat_label("battery_save") == "Battery Save:", "label battery_save")
+
+	# --- flag: флаг читается как Yes, без знака ---
+	ck(Text.stat_value("never_jam", 1.0, "flag") == "Yes", "flag value is Yes")
+	ck(Text.stat_value("unbreakable", 1.0, "flag") == "Yes", "unbreakable flag value is Yes")
 
 	# Страж от дрейфа: у каждой записи MERGED свой формат, а не generic-фолбэк.
 	var fallback: String = str(int(round(10.0 + 0.5)))

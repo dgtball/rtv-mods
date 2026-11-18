@@ -114,6 +114,17 @@ func _init() -> void:
 	ck(not Store.adopt(null, src), "adopt(null, src) returns false")
 	ck(Store.adopt(fresh, null), "adopt on an already-rolled target works with no source")
 
+	# --- affix_ref: живая ссылка, запись на месте ---
+	var live := Object.new()
+	Store.stamp(live, 3, [{"stat": "unbreakable", "value": 1.0, "unit": "flag", "base": 73.0}])
+	var ref: Array = Store.affix_ref(live)
+	ck(ref.size() == 1, "affix_ref returns the affix list")
+	ref[0]["base"] = 55.0
+	ck(absf(float(Store.affixes(live)[0].get("base", 0.0)) - 55.0) < 0.001,
+		"affix_ref writes through to the stored roll")
+	ck(Store.affix_ref(null).is_empty(), "affix_ref(null) is empty")
+	ck(Store.affix_ref(Object.new()).is_empty(), "affix_ref without a roll is empty")
+
 	print("")
 	if fails > 0:
 		print("FAILED: %d" % fails)

@@ -26,6 +26,20 @@ static func affixes(slotData) -> Array:
 static func has_tier(slotData) -> bool:
 	return tier(slotData) > 0
 
+# Живая ссылка без копии: unbreakable пишет замороженную базу внутрь словаря
+# аффикса. Чтение остаётся на affixes() — там копия, чтобы вызывающий не мог
+# случайно испортить ролл.
+static func affix_ref(slotData) -> Array:
+	if slotData == null:
+		return []
+	if "loot_affixes" in slotData and slotData.loot_affixes is Array:
+		return slotData.loot_affixes
+	if slotData.has_meta("rtl_loot_affixes"):
+		var m = slotData.get_meta("rtl_loot_affixes")
+		if m is Array:
+			return m
+	return []
+
 # True once RTL has written a roll onto this slot -- including a Common roll,
 # which is tier 0 and therefore invisible to has_tier(). The world-loot path
 # needs this: a force-table calls SpawnItems() once per item and reaches the
