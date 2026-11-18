@@ -72,9 +72,9 @@ func t_off_upkeep_clears_dead_mines() -> void:
 	ck(nvg._mines.is_empty(), "the early return keeps the next pass cheap")
 	nvg.free()
 
-# The ESP buffer compositor is gated by layer + content demand. Mines needing the
-# buffer also activate compositing. Toggling demand/layer must not leave a stale
-# composite frame or main-camera layer-20 exclusion.
+# DIAGNOSTIC 2.10.7 (preserved in 2.10.9 palette build): ESP buffer/compositor
+# is force-disabled to isolate native crashes. Gating API still exists but must
+# not activate compositing or buffer-driven camera exclusion.
 func t_esp_compositor_gate() -> void:
 	var nvg = NVG.new()
 	root.add_child(nvg)
@@ -87,22 +87,19 @@ func t_esp_compositor_gate() -> void:
 	nvg._nvg_mat_node = rect
 	nvg._installed = true
 	nvg.set_esp_layer(true)
-	ck(not nvg.esp_composite_active(), "layer armed without demand leaves compositing off")
-	ck(mat.get_shader_parameter("espComposite") == false, "composite flag stays off without demand")
+	ck(not nvg.esp_composite_active(), "diagnostic: layer armed without demand leaves compositing off")
+	ck(mat.get_shader_parameter("espComposite") == false, "diagnostic: composite flag stays off without demand")
 	nvg.set_esp_demand(true)
-	ck(nvg.esp_composite_active(), "demand enables compositing")
-	ck(mat.get_shader_parameter("espComposite") == true, "overlay material receives composite enable")
-	ck(mat.get_shader_parameter("espTex") != null, "overlay material receives ESP buffer texture")
+	ck(not nvg.esp_composite_active(), "diagnostic: demand does not enable compositing")
+	ck(mat.get_shader_parameter("espComposite") == false, "diagnostic: overlay material keeps composite disabled")
 	var cam: Camera3D = root.get_camera_3d()
 	if cam != null:
-		ck((cam.cull_mask & NVG.ESP_BUFFER_LAYER_BIT) == 0, "main camera excludes layer 20 while compositing")
+		ck((cam.cull_mask & NVG.ESP_BUFFER_LAYER_BIT) != 0, "diagnostic: main camera layer 20 mask unchanged when compositor is disabled")
 	nvg.set_esp_demand(false)
-	ck(not nvg.esp_composite_active(), "demand off stops compositing")
-	ck(mat.get_shader_parameter("espComposite") == false, "overlay material clears composite flag on demand off")
-	if cam != null:
-		ck((cam.cull_mask & NVG.ESP_BUFFER_LAYER_BIT) != 0, "main camera layer 20 is restored when compositing stops")
+	ck(not nvg.esp_composite_active(), "diagnostic: demand off keeps compositing off")
+	ck(mat.get_shader_parameter("espComposite") == false, "diagnostic: overlay material remains non-composite")
 	nvg.set_esp_layer(false)
-	ck(not nvg.esp_composite_active(), "layer off keeps compositing off")
+	ck(not nvg.esp_composite_active(), "diagnostic: layer off keeps compositing off")
 	nvg._nvg_mat_node = null
 	nvg._installed = false
 	nvg.free()

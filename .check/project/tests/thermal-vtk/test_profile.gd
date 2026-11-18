@@ -205,8 +205,8 @@ func t_apply_reads_active_profile() -> void:
 	esp.free()
 	nvg.free()
 
-# ThermalVTK sync keeps NVG ESP layer/demand gates aligned with live ESP content.
-# Substitution-only NVG APIs are gone from the compositor contract.
+# DIAGNOSTIC 2.10.7 (preserved in 2.10.9 palette build): ThermalVTK sync keeps
+# NVG ESP layer/demand gates disabled to isolate native crashes.
 func t_sync_nvg_esp_gates_demand() -> void:
 	var mod = ThermalMod.new()
 	var esp := FakeESP.new()
@@ -218,17 +218,17 @@ func t_sync_nvg_esp_gates_demand() -> void:
 	mod._xray_enabled = false
 	esp.contour_layer = true
 	esp.xray_layer = false
-	esp._wants_contour = false
-	mod._sync_nvg_esp()
-	ck(nvg.esp_layer_calls.size() >= 1 and bool(nvg.esp_layer_calls[nvg.esp_layer_calls.size() - 1]) == true, "active ESP layer arms NVG ESP layer")
-	ck(nvg.esp_demand_calls.size() >= 1 and bool(nvg.esp_demand_calls[nvg.esp_demand_calls.size() - 1]) == false, "no wanted contour means no NVG ESP demand")
 	esp._wants_contour = true
 	mod._sync_nvg_esp()
-	ck(bool(nvg.esp_demand_calls[nvg.esp_demand_calls.size() - 1]) == true, "wanted contour drives NVG ESP demand")
+	ck(nvg.esp_layer_calls.size() >= 1 and bool(nvg.esp_layer_calls[nvg.esp_layer_calls.size() - 1]) == false, "diagnostic: sync keeps NVG ESP layer disabled")
+	ck(nvg.esp_demand_calls.size() >= 1 and bool(nvg.esp_demand_calls[nvg.esp_demand_calls.size() - 1]) == false, "diagnostic: sync keeps NVG ESP demand disabled")
+	esp._wants_contour = false
+	mod._sync_nvg_esp()
+	ck(bool(nvg.esp_demand_calls[nvg.esp_demand_calls.size() - 1]) == false, "diagnostic: demand remains disabled without contour")
 	mod._thermal_enabled = false
 	mod._apply_mode()
-	ck(bool(nvg.esp_layer_calls[nvg.esp_layer_calls.size() - 1]) == false, "inactive thermal path disarms NVG ESP layer")
-	ck(bool(nvg.esp_demand_calls[nvg.esp_demand_calls.size() - 1]) == false, "inactive thermal path clears NVG ESP demand")
+	ck(bool(nvg.esp_layer_calls[nvg.esp_layer_calls.size() - 1]) == false, "diagnostic: inactive thermal path keeps NVG ESP layer disabled")
+	ck(bool(nvg.esp_demand_calls[nvg.esp_demand_calls.size() - 1]) == false, "diagnostic: inactive thermal path keeps NVG ESP demand disabled")
 	mod.free()
 	esp.free()
 	nvg.free()
