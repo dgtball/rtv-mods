@@ -11,6 +11,10 @@ const BORDER_TAG := "rtl_border"
 const ROW_NAME := "_rtl_stat"
 const ROW_TAG := "rtl_stat"
 const ROW_VALUE_MIN_W := 40.0
+# Vanilla paints some tooltip values itself (Condition/Health/Energy) and leaves
+# the rest at their scene colour, so the roll must hand back the colour it found
+# instead of a hardcoded white. The original is captured once per label.
+const META_BASE_MOD := "rtl_base_modulate"
 const COLORS_DEFAULT := {1: Color(0.35, 0.6, 1.0), 2: Color(0.7, 0.4, 1.0), 3: Color(1.0, 0.8, 0.2)}
 const COLORS_CONTRAST := {1: Color(0.1, 0.75, 1.0), 2: Color(1.0, 0.2, 0.9), 3: Color(1.0, 0.95, 0.1)}
 
@@ -269,6 +273,8 @@ func _apply_merges(parent, item, tier: int) -> Array:
 		if base <= 0.0:
 			continue
 		var value = row.get_child(0)
+		if not value.has_meta(META_BASE_MOD):
+			value.set_meta(META_BASE_MOD, value.modulate)
 		value.text = Text.merged_value(stat, float(by_stat[stat]), base)
 		value.modulate = color
 		_merged_values.append(value)
@@ -284,7 +290,7 @@ func _clear_merges() -> void:
 func _clear_merges_values() -> void:
 	for v in _merged_values:
 		if is_instance_valid(v):
-			v.modulate = Color(1, 1, 1, 1)
+			v.modulate = v.get_meta(META_BASE_MOD) if v.has_meta(META_BASE_MOD) else Color(1, 1, 1, 1)
 	_merged_values.clear()
 
 func _sync_rows(parent, item, tier: int, item_id: int, merged: Array) -> void:

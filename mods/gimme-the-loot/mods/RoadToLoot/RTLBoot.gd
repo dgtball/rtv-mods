@@ -118,10 +118,8 @@ static func build_config() -> ConfigFile:
 	var dev := OS.is_debug_build() or FileAccess.file_exists("user://rtl_dev")
 	var cfg_path := "user://MCM/gimme-the-loot/config.ini"
 	var existing := ConfigFile.new()
-	if existing.load(cfg_path) == OK and existing.has_section_key("Bool", "debug_enabled"):
-		var v = existing.get_value("Bool", "debug_enabled", {})
-		if v is Dictionary and v.has("value") and bool(v["value"]):
-			dev = true
+	if existing.load(cfg_path) == OK and debug_flag_wanted(existing):
+		dev = true
 	Log.ensure_dir()
 	Log.line("MCM build_config dev=" + str(dev) + " path=" + cfg_path)
 	if dev:
@@ -144,15 +142,40 @@ static func mod_version() -> String:
 	vf.close()
 	return v if v != "" else "unknown"
 
+# A hand-edited config.ini may hold either MCM's dictionary form
+# (`debug_enabled={"value": true}`) or a plain bool, which is what people
+# actually type. Both must switch the debug section on, otherwise the plain
+# line is dropped by the next save and debug can never be enabled from the file.
+static func debug_flag_wanted(cfg: ConfigFile) -> bool:
+	if cfg == null:
+		return false
+	for section in cfg.get_sections():
+		if not cfg.has_section_key(section, "debug_enabled"):
+			continue
+		var v = cfg.get_value(section, "debug_enabled", null)
+		if v is Dictionary:
+			if v.has("value"):
+				return bool(v["value"])
+			continue
+		if v is bool:
+			return v
+	return false
+
 static func merge_user_values(cfg: ConfigFile, existing: ConfigFile) -> void:
 	for section in cfg.get_sections():
 		for key in cfg.get_section_keys(section):
 			var new_v = cfg.get_value(section, key)
-			if existing.has_section_key(section, key) and new_v is Dictionary:
-				var old_v = existing.get_value(section, key)
-				if old_v is Dictionary and old_v.has("value"):
-					new_v["value"] = old_v["value"]
-					cfg.set_value(section, key, new_v)
+			if not (new_v is Dictionary) or not existing.has_section_key(section, key):
+				continue
+			var old_v = existing.get_value(section, key)
+			if old_v is Dictionary and old_v.has("value"):
+				new_v["value"] = old_v["value"]
+			elif old_v is bool or old_v is int or old_v is float or old_v is String:
+				# Hand-edited plain value: keep it instead of resetting the key.
+				new_v["value"] = old_v
+			else:
+				continue
+			cfg.set_value(section, key, new_v)
 
 func apply_config(cfg: ConfigFile) -> void:
 	if cfg == null or cfg.get_sections().is_empty():
