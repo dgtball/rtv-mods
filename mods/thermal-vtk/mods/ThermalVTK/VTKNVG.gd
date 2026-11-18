@@ -263,9 +263,13 @@ func _apply_uniforms() -> void:
 	_dirty = false
 	_refresh_mine_material()
 	if not _installed or _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
+		if _nvg_mat_node != null and not is_instance_valid(_nvg_mat_node):
+			_nvg_mat_node = null
+			_installed = false
 		return
 	var nvg_mat = _nvg_mat_node.get("material")
 	if nvg_mat == null or not (nvg_mat is ShaderMaterial):
+		_installed = false
 		return
 	nvg_mat.set_shader_parameter("noise", set_nvg_noise)
 	nvg_mat.set_shader_parameter("thermalMode", set_thermal and _nvg_active())
@@ -416,6 +420,9 @@ func _sync_esp_buffer(active: bool) -> void:
 
 func _push_esp_composite() -> void:
 	if _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
+		if _nvg_mat_node != null and not is_instance_valid(_nvg_mat_node):
+			_nvg_mat_node = null
+			_installed = false
 		return
 	var mat = _nvg_mat_node.get("material")
 	if not (mat is ShaderMaterial):
@@ -457,6 +464,10 @@ func _process(delta: float) -> void:
 		_was_worn = worn
 		_dirty = true
 		if not worn:
+			# NVG overlay can be torn down by the game on unequip; avoid touching it.
+			if _nvg_mat_node != null and not is_instance_valid(_nvg_mat_node):
+				_nvg_mat_node = null
+				_installed = false
 			_reset_daylight()
 	if worn:
 		_daylight_tick(delta)
@@ -763,7 +774,10 @@ func _restore_exposure() -> void:
 
 
 func _push_day_mix() -> void:
-	if not _installed or _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
+	if not _nvg_active() or not _installed or _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
+		if _nvg_mat_node != null and not is_instance_valid(_nvg_mat_node):
+			_nvg_mat_node = null
+			_installed = false
 		return
 	var mat = _nvg_mat_node.get("material")
 	if mat is ShaderMaterial:
