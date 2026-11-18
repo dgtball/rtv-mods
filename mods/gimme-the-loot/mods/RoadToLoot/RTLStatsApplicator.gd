@@ -1,7 +1,8 @@
 extends Node
 
-# Applies RTL affix stats to the player and to the equipped weapon. Only pre/post
-# hooks are used, never replace hooks, so Evolve and other mods keep their seams.
+# Applies RTL affix stats to the player, the equipped weapon and the gadget
+# slots. Pre/post hooks carry the effect; the only replace hooks are noise,
+# max HP and WeaponRig.Malfunction, each owned separately.
 # The module is created and parented by RTLBoot, and registers itself in setup().
 
 const Stats = preload("res://mods/RoadToLoot/RTLStats.gd")
@@ -21,6 +22,10 @@ const META_SPRINT := "rtl_sprint_applied"
 const META_FIRE_RATE := "rtl_fire_rate_applied"
 const META_WEAPON_BASE := "rtl_weapon_base"
 const META_SHOT_PRE := "rtl_shot_pre"
+const META_BATTERY_PRE := "rtl_battery_pre"
+
+# Слоты, которые носят unbreakable: основное и вторичное оружие, разгрузка, шлем.
+const DURABLE_SLOTS := [1, 2, 7, 8]
 
 const RECOIL_FIELDS := ["horizontalRecoil", "verticalRecoil", "kick"]
 
@@ -29,6 +34,7 @@ var _totals: Dictionary = {}
 var _dirty := true
 var _vitality_owned := false
 var _noise_owned := false
+var _never_jam_owned := false
 
 # Total of every clothing affix currently worn. Called from RTLBoot when the
 # loader or the drop path changes the equipment; the interface post hook keeps
@@ -61,6 +67,23 @@ func setup(lib) -> void:
 	_lib.hook("weaponrig-fireevent-pre", Callable(self, "on_fireevent_pre"), 1000)
 	_lib.hook("weaponrig-fireevent-post", Callable(self, "on_fireevent_post"), 1000)
 	_lib.hook("weaponrig-fireinput-post", Callable(self, "on_fireinput_post"), 1000)
+	_lib.hook("flashlight-consumption-pre", Callable(self, "on_consumption_pre"), 1000)
+	_lib.hook("flashlight-consumption-post", Callable(self, "on_consumption_post"), 1000)
+	_lib.hook("nvg-consumption-pre", Callable(self, "on_consumption_pre"), 1000)
+	_lib.hook("nvg-consumption-post", Callable(self, "on_consumption_post"), 1000)
+	_lib.hook("interface-casetteconsumption-pre", Callable(self, "on_consumption_pre"), 1000)
+	_lib.hook("interface-casetteconsumption-post", Callable(self, "on_consumption_post"), 1000)
+	_never_jam_owned = (_lib.hook("weaponrig-malfunction", Callable(self, "_hook_weaponrig_malfunction"), -999) != -1)
+
+# Статы, чей replace-хук не достался RTL: метод уже занят другим модом, и ролл
+# был бы пустышкой. RTLBoot передаёт этот список в Roll.build_affixes.
+func blocked_stats() -> Array:
+	var out: Array = []
+	if not _noise_owned:
+		out.append("noise")
+	if not _never_jam_owned:
+		out.append("never_jam")
+	return out
 
 # --- totals ---------------------------------------------------------------
 
@@ -81,7 +104,10 @@ static func totals_from_equipment(equipment) -> Dictionary:
 		if slot_data == null or not ("itemData" in slot_data):
 			continue
 		var item_data = slot_data.itemData
-		if item_data == null or Category.of_item(item_data) != Category.CLOTHING:
+		if item_data == null:
+			continue
+		var cat: String = Category.of_item(item_data)
+		if cat != Category.CLOTHING and cat != Category.GADGET:
 			continue
 		rows.append({
 			"item_data": {"insulation": _num(item_data.get("insulation"), 0.0)},
@@ -291,12 +317,19 @@ func on_fireevent_pre() -> void:
 		return
 	var totals := Stats.weapon_totals({"loot_affixes": Store.affixes(slot_data)})
 	var ammo_chance := Stats.ammo_save_chance(totals)
-	var wear_chance := clampf(float(totals.get("wear", 0.0)), 0.0, 0.9)
+	var wear_chance := clampf(float(totals.get("wear", 0.0)), 0.0, 1.0)
 	if ammo_chance > 0.0 or wear_chance > 0.0:
 		var amt = slot_data.get("amount")
 		var cham = slot_data.get("chamber")
 		if amt != null and cham != null:
-			rig.set_meta(META_SHOT_PRE, {"amount": int(amt), "chamber": bool(cham), "chance": ammo_chance})
+			var cond = slot_data.get("condition")
+			rig.set_meta(META_SHOT_PRE, {
+				"amount": int(amt),
+				"chamber": bool(cham),
+				"chance": ammo_chance,
+				"wear": wear_chance,
+				"condition": float(cond) if cond != null else -1.0,
+			})
 	var base: Dictionary = {}
 	var damage_factor := Stats.damage_factor(totals, Stats.is_low_hp(_health(rig)))
 	if absf(damage_factor - 1.0) > 0.00001 and "damage" in data:
@@ -335,14 +368,18 @@ func on_fireevent_post() -> void:
 	if slot_data == null or not (pre is Dictionary):
 		return
 	var wtot := Stats.weapon_totals({"loot_affixes": Store.affixes(slot_data)})
-	var chance := clampf(float(wtot.get("wear", 0.0)), 0.0, 0.9)
+	var wear := clampf(float(wtot.get("wear", 0.0)), 0.0, 1.0)
 	var amt = slot_data.get("amount")
 	var cham = slot_data.get("chamber")
 	var spent := false
 	if amt != null and cham != null:
 		spent = Stats.shot_spent_round(int(pre.get("amount", 0)), int(amt), bool(pre.get("chamber", false)), bool(cham))
-	if spent and chance > 0.0 and randf() < chance and "condition" in slot_data and int(slot_data.condition) > 0:
-		slot_data.condition -= 1
+	# wear — шанс не потерять единицу прочности, которую ваниль только что списала.
+	if spent and wear > 0.0 and "condition" in slot_data:
+		var before := float(pre.get("condition", -1.0))
+		var after := float(slot_data.condition)
+		if before >= 0.0 and after < before and randf() < wear:
+			slot_data.condition = before
 	_ammo_save(rig, slot_data, pre)
 
 func _ammo_save(rig, slot_data, pre) -> void:
@@ -363,6 +400,63 @@ func _ammo_save(rig, slot_data, pre) -> void:
 		rig.UpdateBullets()
 	if rig.has_method("UpdateHUD"):
 		rig.UpdateHUD()
+
+# --- battery_save (flashlight, NVG, cassette player) -----------------------
+
+# Слот батарейки у каждого вызывающего свой: Flashlight/NVG держат его полем,
+# кассетный плеер лежит 21-м ребёнком equipmentUI.
+func _gadget_slot(instance) -> Variant:
+	if instance == null:
+		return null
+	if "lightSlot" in instance:
+		return instance.get("lightSlot")
+	if "NVGSlot" in instance:
+		return instance.get("NVGSlot")
+	var ui = null
+	if "equipmentUI" in instance:
+		ui = instance.get("equipmentUI")
+	else:
+		var iface = _iface()
+		if iface != null:
+			ui = iface.get("equipmentUI")
+	if ui == null or not (ui is Object) or not ui.has_method("get_child"):
+		return null
+	if ui.get_child_count() <= 20:
+		return null
+	return ui.get_child(20)
+
+func _gadget_slot_data(instance) -> Variant:
+	var slot = _gadget_slot(instance)
+	if slot == null or not (slot is Node) or slot.get_child_count() == 0:
+		return null
+	var item = slot.get_child(0)
+	if item == null or not ("slotData" in item):
+		return null
+	return item.slotData
+
+func on_consumption_pre(_delta) -> void:
+	var instance = _caller()
+	var sd = _gadget_slot_data(instance)
+	if instance == null or sd == null or not ("condition" in sd):
+		return
+	instance.set_meta(META_BATTERY_PRE, float(sd.condition))
+
+func on_consumption_post(_delta) -> void:
+	var instance = _caller()
+	if instance == null or not instance.has_meta(META_BATTERY_PRE):
+		return
+	var before := float(instance.get_meta(META_BATTERY_PRE))
+	instance.remove_meta(META_BATTERY_PRE)
+	var sd = _gadget_slot_data(instance)
+	if sd == null or not ("condition" in sd):
+		return
+	var after := float(sd.condition)
+	if after >= before:
+		return
+	var factor := Stats.battery_factor(Store.affixes(sd))
+	if factor >= 0.999:
+		return
+	sd.condition = before + (after - before) * factor
 
 # fireRate is a cooldown, so a fire-rate bonus divides it. Vanilla writes a fresh
 # base only on the frames it fires, which is exactly what the stored pair detects.
@@ -596,6 +690,68 @@ func _hook_sensor_playerheardetection() -> void:
 		if owner != null and owner.has("State") and owner.get("currentState") != owner.State.Ambush:
 			instance.Threat(get_tree().get_first_node_in_group("Player"))
 
+
+# WeaponRig.Malfunction() -> bool. RTL владеет методом только когда аффикс есть
+# и оружие ещё целое: при condition == 0 ванильные пороги клина остаются, ремонт
+# по-прежнему обязателен.
+func _hook_weaponrig_malfunction() -> bool:
+	var rig = _lib._caller if _lib != null else null
+	if rig == null:
+		return false
+	var slot_data = rig.get("slotData")
+	if slot_data == null:
+		return false
+	if not Stats.has_flag(Store.affixes(slot_data), "never_jam"):
+		return false
+	var condition = slot_data.get("condition")
+	if condition != null and float(condition) <= 0.0:
+		return false
+	_lib.skip_super()
+	if "state" in slot_data and str(slot_data.state) == "Jammed":
+		slot_data.state = ""
+	return false
+
+# --- unbreakable -----------------------------------------------------------
+
+# Износ идёт тремя путями, ремонт — четвёртым, поэтому прочность сводится к базе
+# обходом, а не хуками: обход покрывает все четыре.
+func _process(_delta: float) -> void:
+	var iface = _iface()
+	if iface == null:
+		return
+	var ui = iface.get("equipmentUI")
+	if ui == null or not (ui is Object) or not ui.has_method("get_child"):
+		return
+	for index in DURABLE_SLOTS:
+		if ui.get_child_count() <= index:
+			continue
+		var slot = ui.get_child(index)
+		if slot == null or not (slot is Node) or slot.get_child_count() == 0:
+			continue
+		var item = slot.get_child(0)
+		if item == null or not ("slotData" in item) or item.slotData == null:
+			continue
+		_freeze_condition(item, item.slotData)
+
+func _freeze_condition(item, slot_data) -> void:
+	if not ("condition" in slot_data):
+		return
+	var affix: Dictionary = {}
+	for a in Store.affix_ref(slot_data):
+		if a is Dictionary and str(a.get("stat", "")) == "unbreakable":
+			affix = a
+			break
+	if affix.is_empty():
+		return
+	var base := float(affix.get("base", -1.0))
+	var condition := float(slot_data.condition)
+	var step := Stats.unbreakable_step(base, condition)
+	if not bool(step.get("changed", false)):
+		return
+	affix["base"] = float(step.get("base", condition))
+	slot_data.condition = float(step.get("condition", condition))
+	if item.has_method("UpdateDetails"):
+		item.UpdateDetails()
 
 func _caller() -> Variant:
 	if _lib == null or not ("_caller" in _lib):

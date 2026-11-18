@@ -24,9 +24,19 @@ class FakeSlot extends Resource:
 	var amount := 0
 	var chamber := false
 	var condition := 100
+	var state := ""
 
 class FakeLib extends RefCounted:
 	var _caller = null
+	var skipped := false
+	func skip_super() -> void:
+		skipped = true
+
+class FakeGadget extends Node:
+	var lightSlot = null
+
+class FakeIface extends Node:
+	var equipmentUI = null
 
 # аффикс есть, счётчика патронов нет: pre обязан не сохранить снимок, post — не упасть
 class FakeSlotNoCounter extends Resource:
@@ -178,7 +188,7 @@ func _init() -> void:
 	ck(not rig.has_meta("rtl_shot_pre"), "slot without amount/chamber does not crash the post hook")
 	rig.slotData = slot
 
-	# --- wear: снимок снимается и на оружии без ammo_save ---
+	# --- wear: теперь сопротивление, а не ускорение износа ---
 	slot.loot_affixes = [{"stat": "wear", "value": 0.12, "unit": "pct"}]
 	slot.amount = 30
 	slot.chamber = true
@@ -186,15 +196,26 @@ func _init() -> void:
 	ck(rig.has_meta("rtl_shot_pre"), "wear-only weapon snapshots the shot in pre")
 	appl.on_fireevent_post()
 
-	# --- wear: ролл только на реально потраченном патроне ---
+	# выстрел без траты патрона: прочность не трогаем
 	slot.loot_affixes = [{"stat": "wear", "value": 1.0, "unit": "pct"}]
 	slot.condition = 100
 	for i in 200:
 		_fire(appl, rig, 30, 30, true, true)
 	ck(slot.condition == 100, "wear does not roll when the dispatch spent no round: " + str(slot.condition))
+
+	# потратил патрон: ваниль списала 1, wear возвращает её всегда при 100%
+	var restored := 0
 	for i in 200:
-		_fire(appl, rig, 30, 29, true, true)
-	ck(slot.condition < 100, "wear rolls once per real shot: " + str(slot.condition))
+		slot.condition = 100
+		rig.slotData.amount = 30
+		rig.slotData.chamber = true
+		appl.on_fireevent_pre()
+		rig.slotData.amount = 29
+		slot.condition = 99
+		appl.on_fireevent_post()
+		if slot.condition == 100:
+			restored += 1
+	ck(restored == 200, "wear restores the lost point at 100%: " + str(restored))
 
 	# снимок не переживает post, вышедший по slotData == null
 	slot.amount = 30
@@ -205,6 +226,105 @@ func _init() -> void:
 	appl.on_fireevent_post()
 	rig.slotData = slot
 	ck(not rig.has_meta("rtl_shot_pre"), "post clears the snapshot even when slotData is null")
+
+	# --- гаджеты входят в общие тоталы, battery_save — нет ---
+	var gear := Node.new()
+	gear.add_child(_make_slot({
+		"itemData": {"type": "Electronics", "slots": ["Time"], "insulation": 0.0},
+		"loot_affixes": [
+			{"stat": "extra_loot", "value": 0.03, "unit": "pct"},
+			{"stat": "sanity_drain", "value": 0.05, "unit": "pct"},
+			{"stat": "battery_save", "value": 0.9, "unit": "pct"},
+		],
+	}))
+	gear.add_child(_make_slot({
+		"itemData": {"type": "Electronics", "slots": ["Light"], "insulation": 0.0},
+		"loot_affixes": [{"stat": "battery_save", "value": 0.9, "unit": "pct"}],
+	}))
+	var gear_totals: Dictionary = Appl.totals_from_equipment(gear)
+	ck(absf(float(gear_totals.get("extra_loot", 0.0)) - 0.03) < 0.001, "gadget extra_loot is counted")
+	ck(absf(float(gear_totals.get("sanity_drain", 0.0)) - 0.05) < 0.001, "gadget sanity_drain is counted")
+	ck(not gear_totals.has("battery_save"), "battery_save stays out of the totals")
+	gear.free()
+
+	# --- battery_save: post режет только убыль ---
+	var gadget := FakeGadget.new()
+	var torch_slot := FakeSlot.new()
+	torch_slot.loot_affixes = [{"stat": "battery_save", "value": 0.5, "unit": "pct"}]
+	torch_slot.condition = 100
+	gadget.lightSlot = _make_slot(torch_slot)
+	lib._caller = gadget
+	appl.on_consumption_pre(0.1)
+	torch_slot.condition = 90
+	appl.on_consumption_post(0.1)
+	ck(absf(float(torch_slot.condition) - 95.0) < 0.001, "battery_save halves the drain: " + str(torch_slot.condition))
+
+	# без аффикса убыль не трогаем
+	torch_slot.loot_affixes = []
+	appl.on_consumption_pre(0.1)
+	torch_slot.condition = 80
+	appl.on_consumption_post(0.1)
+	ck(absf(float(torch_slot.condition) - 80.0) < 0.001, "no battery_save: drain untouched")
+
+	# зарядка/рост condition не масштабируется
+	torch_slot.loot_affixes = [{"stat": "battery_save", "value": 0.5, "unit": "pct"}]
+	appl.on_consumption_pre(0.1)
+	torch_slot.condition = 85
+	appl.on_consumption_post(0.1)
+	ck(absf(float(torch_slot.condition) - 85.0) < 0.001, "battery_save never slows a recharge")
+
+	# плеер: слот берётся из equipmentUI.get_child(20)
+	var iface_node := FakeIface.new()
+	var ui := Node.new()
+	for i in 21:
+		ui.add_child(Node.new())
+	var player_slot := FakeSlot.new()
+	player_slot.loot_affixes = [{"stat": "battery_save", "value": 0.9, "unit": "pct"}]
+	player_slot.condition = 100
+	ui.get_child(20).add_child(FakeItem.new())
+	ui.get_child(20).get_child(0).slotData = player_slot
+	iface_node.equipmentUI = ui
+	lib._caller = iface_node
+	appl.on_consumption_pre(0.1)
+	player_slot.condition = 90
+	appl.on_consumption_post(0.1)
+	ck(absf(float(player_slot.condition) - 99.0) < 0.001, "cassette drain comes from slot 20: " + str(player_slot.condition))
+	iface_node.free()
+	lib._caller = rig
+
+	# --- never_jam: replace-хук WeaponRig.Malfunction ---
+	var rifle_slot := FakeSlot.new()
+	rifle_slot.condition = 100
+	rifle_slot.loot_affixes = [{"stat": "never_jam", "value": 1.0, "unit": "flag"}]
+	rifle_slot.state = ""
+	rig.slotData = rifle_slot
+	lib.skipped = false
+	ck(not appl._hook_weaponrig_malfunction(), "never_jam returns false (no jam)")
+	ck(lib.skipped, "never_jam skips vanilla")
+	rifle_slot.state = "Jammed"
+	appl._hook_weaponrig_malfunction()
+	ck(str(rifle_slot.state) == "", "a stale Jammed state is cleared")
+
+	rifle_slot.condition = 0
+	lib.skipped = false
+	ck(not appl._hook_weaponrig_malfunction(), "broken weapon returns false from the hook")
+	ck(not lib.skipped, "broken weapon falls through to vanilla")
+
+	rifle_slot.condition = 50
+	rifle_slot.loot_affixes = []
+	lib.skipped = false
+	appl._hook_weaponrig_malfunction()
+	ck(not lib.skipped, "no affix: vanilla runs")
+
+	# --- blocked_stats: только невзятые replace-хуки ---
+	appl._noise_owned = true
+	appl._never_jam_owned = true
+	ck(appl.blocked_stats().is_empty(), "all replace hooks owned: nothing blocked")
+	appl._noise_owned = false
+	appl._never_jam_owned = false
+	var blocked_now: Array = appl.blocked_stats()
+	ck(blocked_now.has("noise"), "unowned noise is blocked")
+	ck(blocked_now.has("never_jam"), "unowned never_jam is blocked")
 
 	rig.free()
 	appl.free()
