@@ -1,6 +1,6 @@
 # **Gimme the Loot**
 
-**Version:** 1.1.0  
+**Version:** 1.2.0  
 **Mod ID:** `gimme-the-loot`  
 **Author:** CaptiveAI
 
@@ -17,7 +17,8 @@ you find in Road to Vostok (containers, corpses, ground-spawned loot).
 - **Legendary** — gold border, 3-5 affixes
 
 Affixes are **real** (not cosmetic), e.g. carry capacity, insulation, sprint
-speed, stamina/hunger/thirst/sanity drains, regen, damage, recoil, fire rate.
+speed, stamina/hunger/thirst/sanity drains, regen, damage, recoil, fire rate,
+never jam, unbreakable gear and slower battery drain.
 
 ## Installation
 
@@ -50,12 +51,20 @@ Stat | Max |
 | Recoil | −12% |
 | Fire rate | +8% |
 | Low-HP damage | +20% |
-| Wear | +12% extra |
+| Wear Resistance | up to +60% |
 | Ammo save | +50% |
+| Battery save | up to 90% |
+| Never Jam | Rare and above |
+| Unbreakable | Legendary weapons, helmets and rigs |
 
 Notes:
-- Drains are floored at ~20% so they cannot fully stop.
+- There are no balance caps any more: stacking several Legendary pieces can
+  push a value all the way to its natural limit (a drain to 0, a chance to 100%).
 - Noise is floored at ~4 m.
+- `Extra Loot` and `Sanity Drain` also roll on the watch and the map.
+- `Never Jam` needs a working weapon: at 0% condition it still jams.
+- `Unbreakable` holds condition at the value the item was found with; a repair
+  raises that value.
 
 ## MCM settings
 

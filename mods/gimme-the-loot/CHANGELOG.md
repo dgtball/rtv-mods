@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.2.0] - 2026-11-18
+
+### Added
+- `Never Jam` affix for firearms from Rare upward: a weapon above 0% condition
+  no longer jams. A broken weapon still jams and still needs repair.
+- `Unbreakable` affix for Legendary weapons, helmets and rigs: condition never
+  drops below the value the item was found with, and repairs still work.
+  On helmets and rigs it means the armour never wears out at all.
+- `Battery Save` affix for the flashlight, NVG and cassette player: the battery
+  drains 5-10% / 20-50% / 70-90% slower by tier.
+- `Extra Loot` and `Sanity Drain` now also roll on the watch and the map.
+
+### Changed
+- `Wear` now slows weapon wear instead of speeding it up: it is a chance not to
+  lose condition on a shot, shown as `Wear Resistance` (10-20% / 20-35% /
+  35-60% by tier).
+- Balance caps are gone from every affix, so strong Legendary sets can now
+  stack far past the old limits.
+
+### Fixed
+- Carry capacity and insulation values in the tooltip no longer stay white
+  after a coloured affix is shown.
+- Debug mode can be enabled by adding `debug_enabled=true` to `config.ini`,
+  and the line is no longer dropped when the game rewrites the file.
+
 ## [1.1.0] - 2026-11-12
 
 ### Added
