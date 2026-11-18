@@ -202,6 +202,117 @@ func _init() -> void:
 		cmax = maxi(cmax, cn)
 	ck(cmin == 3 and cmax == 5, "clothing tier 3 rolls 3..5 affixes (got %d..%d)" % [cmin, cmax])
 
+	# --- never_jam: только огнестрел, с Rare ---
+	var torch := {"type": "Electronics", "slots": ["Light"]}
+	var gadget_map := {"type": "Misc", "slots": ["Map"]}
+	var torch_stats: Array = []
+	var map_stats: Array = []
+	for s in range(120):
+		var rgt := RandomNumberGenerator.new()
+		rgt.seed = s
+		for a in Roll.build_affixes("gadget", 3, torch, [], rgt, -1.0):
+			torch_stats.append(str(a["stat"]))
+		var rgm := RandomNumberGenerator.new()
+		rgm.seed = s
+		for a in Roll.build_affixes("gadget", 3, gadget_map, [], rgm, -1.0):
+			map_stats.append(str(a["stat"]))
+	ck(not torch_stats.is_empty(), "flashlight rolls something")
+	ck(not torch_stats.has("extra_loot"), "flashlight never rolls extra_loot: " + str(torch_stats))
+	ck(not torch_stats.has("sanity_drain"), "flashlight never rolls sanity_drain")
+	ck(torch_stats.has("battery_save"), "flashlight rolls battery_save")
+	ck(map_stats.has("extra_loot"), "map rolls extra_loot")
+	ck(map_stats.has("sanity_drain"), "map rolls sanity_drain")
+	ck(not map_stats.has("battery_save"), "map never rolls battery_save")
+
+	var never_jam_rifle := false
+	var never_jam_common := false
+	for s in range(200):
+		var rgn := RandomNumberGenerator.new()
+		rgn.seed = s
+		for a in Roll.build_affixes("weapon", 3, rifle, [], rgn, 100.0):
+			if str(a["stat"]) == "never_jam":
+				never_jam_rifle = true
+		var rgn1 := RandomNumberGenerator.new()
+		rgn1.seed = s
+		for a in Roll.build_affixes("weapon", 1, rifle, [], rgn1, 100.0):
+			if str(a["stat"]) == "never_jam":
+				never_jam_common = true
+	ck(never_jam_rifle, "rifle can roll never_jam")
+	ck(not never_jam_common, "never_jam never rolls at Common")
+
+	# --- unbreakable: гейт condition > 50 только для оружия ---
+	var ub_low := false
+	var ub_none := false
+	var ub_high := false
+	for s in range(300):
+		var rgul := RandomNumberGenerator.new()
+		rgul.seed = s
+		for a in Roll.build_affixes("weapon", 3, rifle, [], rgul, 40.0):
+			if str(a["stat"]) == "unbreakable":
+				ub_low = true
+		var rgun := RandomNumberGenerator.new()
+		rgun.seed = s
+		for a in Roll.build_affixes("weapon", 3, rifle, [], rgun, -1.0):
+			if str(a["stat"]) == "unbreakable":
+				ub_none = true
+		var rguh := RandomNumberGenerator.new()
+		rguh.seed = s
+		for a in Roll.build_affixes("weapon", 3, rifle, [], rguh, 100.0):
+			if str(a["stat"]) == "unbreakable":
+				ub_high = true
+	ck(not ub_low, "unbreakable never rolls at condition 40")
+	ck(not ub_none, "unbreakable never rolls without a condition")
+	ck(ub_high, "unbreakable rolls above 50")
+
+	# --- unbreakable на шлеме: condition не нужен, база = 100 ---
+	var helmet := {"type": "Helmet", "slots": ["Helmet"]}
+	var ub_helmet := false
+	var ub_base_ok := true
+	for s in range(300):
+		var rgh := RandomNumberGenerator.new()
+		rgh.seed = s
+		for a in Roll.build_affixes("clothing", 3, helmet, [], rgh, -1.0):
+			if str(a["stat"]) == "unbreakable":
+				ub_helmet = true
+				if int(a.get("base", -1)) != 100:
+					ub_base_ok = false
+	ck(ub_helmet, "helmet can roll unbreakable without a condition")
+	ck(ub_base_ok, "helmet unbreakable base is 100")
+
+	# --- база оружия = прочность подбора ---
+	var ub_weapon_base := -1
+	for s in range(400):
+		var rgb := RandomNumberGenerator.new()
+		rgb.seed = s
+		for a in Roll.build_affixes("weapon", 3, rifle, [], rgb, 73.0):
+			if str(a["stat"]) == "unbreakable":
+				ub_weapon_base = int(a.get("base", -1))
+	ck(ub_weapon_base == 73, "weapon unbreakable base is the drop condition: " + str(ub_weapon_base))
+
+	# --- исключения: unbreakable не встречается с never_jam/wear ---
+	var conflict := false
+	for s in range(600):
+		var rgc := RandomNumberGenerator.new()
+		rgc.seed = s
+		var got: Array = []
+		for a in Roll.build_affixes("weapon", 3, rifle, [], rgc, 100.0):
+			got.append(str(a["stat"]))
+		if got.has("unbreakable") and (got.has("never_jam") or got.has("wear")):
+			conflict = true
+	ck(not conflict, "unbreakable never coexists with never_jam or wear")
+
+	# --- флаг: value 1.0, единица flag ---
+	var flag_seen := false
+	for s in range(400):
+		var rgf := RandomNumberGenerator.new()
+		rgf.seed = s
+		for a in Roll.build_affixes("weapon", 3, rifle, [], rgf, 100.0):
+			if str(a["stat"]) == "never_jam":
+				flag_seen = true
+				ck(float(a.get("value", 0.0)) == 1.0, "never_jam value is 1.0")
+				ck(str(a.get("unit", "")) == "flag", "never_jam keeps the flag unit")
+	ck(flag_seen, "flag affix seen in the sample")
+
 	print("")
 	if fails > 0:
 		print("FAILED: %d" % fails)

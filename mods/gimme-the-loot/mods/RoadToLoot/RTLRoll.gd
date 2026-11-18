@@ -49,6 +49,15 @@ static func pick_tier(weights: Array, r: float) -> int:
 # build_affixes обрезает её по числу доступных статов.
 const COUNT_RANGES := {0: [0, 0], 1: [1, 2], 2: [2, 3], 3: [3, 5]}
 
+# unbreakable взаимоисключается с never_jam и wear: рядом с замороженной
+# прочностью wear мёртв, а never_jam уже покрывает поломку. Побеждает тот, кого
+# выбрали раньше; конфликтующие записи уходят из пула до следующего пика.
+const CONFLICTS := {
+	"unbreakable": ["never_jam", "wear"],
+	"never_jam": ["unbreakable"],
+	"wear": ["unbreakable"],
+}
+
 static func affix_count(tier: int, rng: RandomNumberGenerator) -> int:
 	if not COUNT_RANGES.has(tier):
 		return 0
@@ -67,12 +76,19 @@ static func _needs_ok(need: String, item_data) -> bool:
 		return t == "Armor" or t == "Helmet"
 	if need == "firearm":
 		return Category.is_firearm(item_data)
+	if need == "battery":
+		return Category.gadget_kind(item_data) == "battery"
+	if need == "comfort":
+		# одежда использует те же extra_loot/sanity_drain, что и часы с картой
+		return Category.of_item(item_data) == Category.CLOTHING or Category.gadget_kind(item_data) == "comfort"
+	if need == "durable":
+		return Category.is_durable(item_data)
 	if item_data == null:
 		return false
 	var v = item_data.get(need)
 	return v != null and float(v) > 0.0
 
-static func build_affixes(category: String, tier: int, item_data, blocked: Array, rng: RandomNumberGenerator) -> Array:
+static func build_affixes(category: String, tier: int, item_data, blocked: Array, rng: RandomNumberGenerator, condition: float = -1.0) -> Array:
 	var out: Array = []
 	var n: int = affix_count(tier, rng)
 	if n <= 0:
@@ -99,6 +115,15 @@ static func build_affixes(category: String, tier: int, item_data, blocked: Array
 			filtered.append(e)
 	candidates = filtered
 
+	# unbreakable на оружии: только пока прочность выше половины. Броня всегда
+	# спавнится со 100%, поэтому её гейт не касается.
+	filtered = []
+	for e in candidates:
+		if str(e["stat"]) == "unbreakable" and Category.of_item(item_data) == Category.WEAPON and condition <= 50.0:
+			continue
+		filtered.append(e)
+	candidates = filtered
+
 	# Exclude blocked (stats whose applier failed arity self-check)
 	if not blocked.is_empty():
 		filtered = []
@@ -117,14 +142,24 @@ static func build_affixes(category: String, tier: int, item_data, blocked: Array
 			break
 		var e: Dictionary = _weighted_pick(pool, rng)
 		pool.erase(e)
-		out.append(_roll_one(e, tier, rng))
+		out.append(_roll_one(e, tier, rng, condition))
+		var blocked_next: Array = []
+		for taken in out:
+			for c in CONFLICTS.get(str(taken.get("stat", "")), []):
+				blocked_next.append(c)
+		if not blocked_next.is_empty():
+			var kept: Array = []
+			for cand in pool:
+				if not blocked_next.has(str(cand["stat"])):
+					kept.append(cand)
+			pool = kept
 	return out
 
-static func build_affixes_from(category: String, tier: int, stat: String, rng: RandomNumberGenerator) -> Dictionary:
+static func build_affixes_from(category: String, tier: int, stat: String, rng: RandomNumberGenerator, condition: float = -1.0) -> Dictionary:
 	var e: Dictionary = Pool.entry(category, stat)
 	if e.is_empty() or not e["ranges"].has(tier):
 		return {}
-	return _roll_one(e, tier, rng)
+	return _roll_one(e, tier, rng, condition)
 
 static func _weighted_pick(pool: Array, rng: RandomNumberGenerator) -> Dictionary:
 	var total: float = 0.0
@@ -138,13 +173,15 @@ static func _weighted_pick(pool: Array, rng: RandomNumberGenerator) -> Dictionar
 			return e
 	return pool[pool.size() - 1]
 
-static func _roll_one(e: Dictionary, tier: int, rng: RandomNumberGenerator) -> Dictionary:
+static func _roll_one(e: Dictionary, tier: int, rng: RandomNumberGenerator, condition: float = -1.0) -> Dictionary:
 	var r: Array = e["ranges"][tier]
 	var lo: float = float(r[0])
 	var hi: float = float(r[1])
 	var unit: String = e["unit"]
 	var value: float
-	if unit == "flat":
+	if unit == "flag":
+		value = 1.0
+	elif unit == "flat":
 		value = float(rng.randi_range(int(lo), int(hi)))
 	elif unit == "mult":
 		value = lo
@@ -156,4 +193,7 @@ static func _roll_one(e: Dictionary, tier: int, rng: RandomNumberGenerator) -> D
 			value = float(int(round(value)))
 		elif unit == "rate":
 			value = snappedf(value, 0.01)
-	return {"stat": e["stat"], "value": value, "unit": unit}
+	var out := {"stat": e["stat"], "value": value, "unit": unit}
+	if str(e["stat"]) == "unbreakable":
+		out["base"] = condition if condition >= 0.0 else 100.0
+	return out
