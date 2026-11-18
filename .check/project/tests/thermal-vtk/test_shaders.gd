@@ -120,10 +120,18 @@ func t_nvg_compositor_contract() -> void:
 func t_palette_modes() -> void:
 	var code := FileAccess.get_file_as_string(NVG_SHADER_RES)
 	var n := 0
-	for i in [1, 2, 3, 4, 5, 6]:
+	for i in [1, 2, 3]:
 		if code.contains("worldPaletteMode == %d" % i):
 			n += 1
-	ck(n == 6, "palette modes 1..6 are present (got %d)" % n)
+	ck(n == 3, "palette modes 1..3 are present (got %d)" % n)
+	for i in [4, 5, 6]:
+		ck(not code.contains("worldPaletteMode == %d" % i), "palette mode %d removed" % i)
+	ck(code.contains("vrcets_amber_palette"), "amber VRCETS palette function present")
+	ck(code.contains("vrcets_forest_palette"), "forest VRCETS palette function present")
+	ck(code.contains("vrcets_red_palette"), "red/classic VRCETS palette function present")
+	ck(code.contains("vrcets_day_palette"), "blue/ice VRCETS palette function present")
+	ck(not code.contains("vrcets_night_palette"), "unused night/auto palette removed")
+	ck(not code.contains("worldPaletteMode >= 4"), "VRCETS path no longer gated to modes >= 4")
 
 func t_nvg_shader_compiles() -> void:
 	var sh = load(NVG_SHADER_RES)

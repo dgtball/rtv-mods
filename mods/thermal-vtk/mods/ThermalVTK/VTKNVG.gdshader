@@ -49,21 +49,7 @@ float Goggles(vec2 uv)
 	return min(G1Distance, G2Distance);
 }
 
-// 0 = Classic (else), 1 = Amber, 2 = Forest, 3 = Ice,
-// 4 = VRCETS Auto, 5 = VRCETS Blue/Day, 6 = VRCETS Red.
-vec3 vrcets_night_palette(float v) {
-	vec3 cold = vec3(0.02, 0.08, 0.34);
-	vec3 cool = vec3(0.04, 0.18, 0.62);
-	vec3 mid = vec3(0.42, 0.05, 0.18);
-	vec3 warm = vec3(0.92, 0.11, 0.03);
-	vec3 hot = vec3(1.0, 0.48, 0.08);
-	vec3 color = mix(cold, cool, smoothstep(0.05, 0.32, v));
-	color = mix(color, mid, smoothstep(0.22, 0.55, v));
-	color = mix(color, warm, smoothstep(0.42, 0.76, v));
-	color = mix(color, hot, smoothstep(0.68, 1.0, v));
-	return color;
-}
-
+// 0 = Classic (VRCETS Red), 1 = Amber, 2 = Forest, 3 = Ice (VRCETS Blue/Day).
 vec3 vrcets_day_palette(float v) {
 	vec3 cold = vec3(0.025, 0.075, 0.24);
 	vec3 cool = vec3(0.045, 0.17, 0.46);
@@ -88,6 +74,32 @@ vec3 vrcets_red_palette(float v) {
 	return color;
 }
 
+vec3 vrcets_amber_palette(float v) {
+	vec3 cold = vec3(0.04, 0.02, 0.00);
+	vec3 cool = vec3(0.22, 0.10, 0.01);
+	vec3 mid = vec3(0.55, 0.28, 0.03);
+	vec3 warm = vec3(0.88, 0.52, 0.08);
+	vec3 hot = vec3(1.00, 0.82, 0.24);
+	vec3 color = mix(cold, cool, smoothstep(0.04, 0.35, v));
+	color = mix(color, mid, smoothstep(0.30, 0.60, v));
+	color = mix(color, warm, smoothstep(0.55, 0.82, v));
+	color = mix(color, hot, smoothstep(0.78, 1.0, v));
+	return color;
+}
+
+vec3 vrcets_forest_palette(float v) {
+	vec3 cold = vec3(0.00, 0.03, 0.02);
+	vec3 cool = vec3(0.02, 0.14, 0.08);
+	vec3 mid = vec3(0.06, 0.36, 0.16);
+	vec3 warm = vec3(0.22, 0.62, 0.22);
+	vec3 hot = vec3(0.72, 0.96, 0.46);
+	vec3 color = mix(cold, cool, smoothstep(0.04, 0.35, v));
+	color = mix(color, mid, smoothstep(0.30, 0.60, v));
+	color = mix(color, warm, smoothstep(0.55, 0.82, v));
+	color = mix(color, hot, smoothstep(0.78, 1.0, v));
+	return color;
+}
+
 float vrcets_red_heat(vec3 src) {
 	float rh = smoothstep(0.10, 0.55, src.r) * (1.0 - smoothstep(src.r * 0.58, src.r * 0.94, max(src.g, src.b)));
 	return clamp(rh, 0.0, 1.0);
@@ -100,52 +112,14 @@ vec3 vrcets_held_heat(float luma) {
 vec3 ThermalPalette(float t)
 {
 	t = clamp(t, 0.0, 1.0);
-	if (worldPaletteMode == 4) {
-		return mix(vrcets_night_palette(t), vrcets_day_palette(t), clamp(dayMix, 0.0, 1.0));
-	} else if (worldPaletteMode == 5) {
-		return vrcets_day_palette(t);
-	} else if (worldPaletteMode == 6) {
-		return vrcets_red_palette(t);
-	}
-	vec3 c0;
-	vec3 c1;
-	vec3 c2;
-	vec3 c3;
-	vec3 c4;
 	if (worldPaletteMode == 1) {
-		c0 = vec3(0.02, 0.01, 0.0);
-		c1 = vec3(0.25, 0.12, 0.02);
-		c2 = vec3(0.55, 0.30, 0.05);
-		c3 = vec3(0.80, 0.58, 0.18);
-		c4 = vec3(1.0, 0.92, 0.70);
+		return vrcets_amber_palette(t);
 	} else if (worldPaletteMode == 2) {
-		c0 = vec3(0.0, 0.02, 0.02);
-		c1 = vec3(0.05, 0.18, 0.12);
-		c2 = vec3(0.10, 0.38, 0.22);
-		c3 = vec3(0.35, 0.62, 0.30);
-		c4 = vec3(0.80, 0.95, 0.65);
+		return vrcets_forest_palette(t);
 	} else if (worldPaletteMode == 3) {
-		c0 = vec3(0.0, 0.01, 0.04);
-		c1 = vec3(0.05, 0.12, 0.35);
-		c2 = vec3(0.10, 0.30, 0.60);
-		c3 = vec3(0.40, 0.65, 0.85);
-		c4 = vec3(0.85, 0.95, 1.0);
-	} else {
-		c0 = vec3(0.0, 0.0, 0.03);
-		// The Classic ladder must ascend in luminance (dot(rgb, 0.299/0.587/0.114)).
-		// The old c1 (0.30,0.12,0.45) measured 0.211, outshining the old c2
-		// (0.55,0,0.08) at 0.174: in fog, where the whole frame compresses onto
-		// the 0.25-0.5 palette span, warmer spots read darker than cold ground.
-		c1 = vec3(0.24, 0.10, 0.38);
-		c2 = vec3(0.65, 0.0, 0.10);
-		c3 = vec3(0.9, 0.65, 0.0);
-		c4 = vec3(1.0, 1.0, 0.8);
+		return vrcets_day_palette(t);
 	}
-	vec3 color = mix(c0, c1, smoothstep(0.0, 0.25, t));
-	color = mix(color, c2, smoothstep(0.25, 0.5, t));
-	color = mix(color, c3, smoothstep(0.5, 0.75, t));
-	color = mix(color, c4, smoothstep(0.75, 1.0, t));
-	return color;
+	return vrcets_red_palette(t);
 }
 
 // C1 highlight shoulder for daylight: luminance above the knee bends down
@@ -188,12 +162,10 @@ void fragment()
 			luminance = mix(luminance, lifted, dayMix);
 		}
 		vec3 backgroundColor = ThermalPalette(luminance) * 0.7;
-		if (worldPaletteMode >= 4) {
-			float rh = vrcets_red_heat(pixelColor.rgb) * vrcetsRedHold;
-			backgroundColor = mix(backgroundColor, vrcets_held_heat(clamp(rawLuminance, 0.0, 1.0)), clamp(rh, 0.0, 1.0));
-			// Blend toward thermal palette like VRCETS world palette (background only).
-			backgroundColor = mix(pixelColor.rgb, backgroundColor, clamp(vrcetsStrength, 0.0, 1.0));
-		}
+		float rh = vrcets_red_heat(pixelColor.rgb) * vrcetsRedHold;
+		backgroundColor = mix(backgroundColor, vrcets_held_heat(clamp(rawLuminance, 0.0, 1.0)), clamp(rh, 0.0, 1.0));
+		// Blend toward thermal palette (background only).
+		backgroundColor = mix(pixelColor.rgb, backgroundColor, clamp(vrcetsStrength, 0.0, 1.0));
 		color = vec4(backgroundColor, pixelColor.a);
 	} else {
 		color = pixelColor * tint;
