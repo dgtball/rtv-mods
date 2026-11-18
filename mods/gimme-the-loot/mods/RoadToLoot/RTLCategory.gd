@@ -2,13 +2,16 @@ extends RefCounted
 
 const WEAPON := "weapon"
 const CLOTHING := "clothing"
+const GADGET := "gadget"
 const OTHER := "other"
 
 const WEAPON_SLOTS := ["Primary", "Secondary", "Knife"]
 const CLOTHING_SLOTS := ["Backpack", "Rig", "Helmet", "Head", "Torso", "Legs", "Belt", "Feet", "Hands"]
+const GADGET_BATTERY_SLOTS := ["Light", "NVG", "Player"]
+const GADGET_COMFORT_SLOTS := ["Time", "Map"]
 const NON_WEAPON_TYPES := ["Fishing", "Instrument"]
 const KNIFE_TYPE := "Knife"
-const KNIFE_BLOCKED := ["recoil", "fire_rate", "wear"]
+const KNIFE_BLOCKED := ["recoil", "fire_rate", "wear", "unbreakable"]
 
 static func _field_str(itemData, field: String) -> String:
 	if itemData == null:
@@ -45,7 +48,33 @@ static func of_item(itemData) -> String:
 		return WEAPON
 	if _has_any(slots, CLOTHING_SLOTS):
 		return CLOTHING
+	if _has_any(slots, GADGET_BATTERY_SLOTS) or _has_any(slots, GADGET_COMFORT_SLOTS):
+		return GADGET
 	return OTHER
+
+# Какой аффиксный набор получает гаджет: батарейный или комфортный.
+static func gadget_kind(itemData) -> String:
+	if itemData == null:
+		return ""
+	var slots := _slots(itemData)
+	if _has_any(slots, GADGET_BATTERY_SLOTS):
+		return "battery"
+	if _has_any(slots, GADGET_COMFORT_SLOTS):
+		return "comfort"
+	return ""
+
+# unbreakable: оружие (кроме ножа), шлем и разгрузка. Пластина без SlotData
+# сюда не попадает, её прочность защищает разгрузка.
+static func is_durable(itemData) -> bool:
+	if itemData == null:
+		return false
+	var cat := of_item(itemData)
+	if cat == WEAPON:
+		return _field_str(itemData, "type") != KNIFE_TYPE
+	if cat != CLOTHING:
+		return false
+	var t := _field_str(itemData, "type")
+	return t == "Helmet" or t == "Rig"
 
 static func rollable(itemData) -> bool:
 	return of_item(itemData) != OTHER

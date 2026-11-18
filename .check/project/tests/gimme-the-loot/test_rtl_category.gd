@@ -31,8 +31,17 @@ func _init() -> void:
 	ck(Cat.of_item({"type": "Armor", "slots": []}) == Cat.OTHER, "armor plate -> other")
 	ck(Cat.of_item({"type": "Attachment", "slots": []}) == Cat.OTHER, "attachment -> other")
 	ck(Cat.of_item({"type": "Grenade", "slots": ["Grenade_1", "Grenade_2"]}) == Cat.OTHER, "grenade -> other")
-	ck(Cat.of_item({"type": "Electronics", "slots": ["Light"]}) == Cat.OTHER, "flashlight -> other")
-	ck(Cat.of_item({"type": "Misc", "slots": ["Map"]}) == Cat.OTHER, "map -> other")
+	# гаджеты: часы/карта — комфорт, фонарь/ПНВ/плеер — батарейка
+	ck(Cat.of_item({"type": "Electronics", "slots": ["Time"]}) == Cat.GADGET, "watch -> gadget")
+	ck(Cat.of_item({"type": "Misc", "slots": ["Map"]}) == Cat.GADGET, "map -> gadget")
+	ck(Cat.of_item({"type": "Electronics", "slots": ["Light"]}) == Cat.GADGET, "flashlight -> gadget")
+	ck(Cat.gadget_kind({"slots": ["Light"]}) == "battery", "flashlight kind battery")
+	ck(Cat.gadget_kind({"slots": ["NVG"]}) == "battery", "nvg kind battery")
+	ck(Cat.gadget_kind({"slots": ["Player"]}) == "battery", "cassette kind battery")
+	ck(Cat.gadget_kind({"slots": ["Time"]}) == "comfort", "watch kind comfort")
+	ck(Cat.gadget_kind({"slots": ["Map"]}) == "comfort", "map kind comfort")
+	ck(Cat.gadget_kind({"slots": ["Primary"]}) == "", "weapon is not a gadget kind")
+	ck(Cat.gadget_kind(null) == "", "null is not a gadget kind")
 	ck(Cat.of_item({"type": "Fishing", "slots": ["Primary", "Secondary"]}) == Cat.OTHER, "fishing rod -> other")
 	ck(Cat.of_item({"type": "Instrument", "slots": ["Primary", "Secondary"]}) == Cat.OTHER, "guitar -> other")
 	# грязный вход
@@ -66,6 +75,17 @@ func _init() -> void:
 	ck(not Cat.is_firearm({"type": "Armor", "slots": []}), "armor plate is not firearm")
 	ck(not Cat.is_firearm(null), "null is not firearm")
 	ck(not Cat.is_firearm({}), "empty dict is not firearm")
+
+	# unbreakable: оружие без ножа, шлем и разгрузка
+	ck(Cat.is_durable({"type": "Weapon", "slots": ["Primary"]}), "rifle durable")
+	ck(Cat.is_durable({"type": "Helmet", "slots": ["Helmet"]}), "helmet durable")
+	ck(Cat.is_durable({"type": "Rig", "slots": ["Rig"]}), "rig durable")
+	ck(not Cat.is_durable({"type": "Knife", "slots": ["Knife"]}), "knife not durable")
+	ck(not Cat.is_durable({"type": "Armor", "slots": []}), "loose plate not durable")
+	ck(not Cat.is_durable({"type": "Clothing", "slots": ["Torso"]}), "jacket not durable")
+	ck(not Cat.is_durable({"type": "Electronics", "slots": ["Light"]}), "flashlight not durable")
+	ck(not Cat.stat_allowed({"type": "Knife", "slots": ["Knife"]}, "unbreakable"),
+		"knife blocks unbreakable")
 
 	print("")
 	if fails > 0:
