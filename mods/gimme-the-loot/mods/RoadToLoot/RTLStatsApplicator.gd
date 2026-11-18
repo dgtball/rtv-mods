@@ -24,9 +24,6 @@ const META_WEAPON_BASE := "rtl_weapon_base"
 const META_SHOT_PRE := "rtl_shot_pre"
 const META_BATTERY_PRE := "rtl_battery_pre"
 
-# Слоты, которые носят unbreakable: основное и вторичное оружие, разгрузка, шлем.
-const DURABLE_SLOTS := [1, 2, 7, 8]
-
 const RECOIL_FIELDS := ["horizontalRecoil", "verticalRecoil", "kick"]
 
 var _lib = null
@@ -719,13 +716,16 @@ func _process(_delta: float) -> void:
 	var iface = _iface()
 	if iface == null:
 		return
-	var ui = iface.get("equipmentUI")
-	if ui == null or not (ui is Object) or not ui.has_method("get_child"):
+	freeze_equipment(iface.get("equipmentUI"))
+
+# Индексы слотов не зашиты: игру перестраивают, а кто носит unbreakable — решает
+# сам аффикс, который роллится только на оружие, шлеме и разгрузке. Обход
+# переживёт новый слот, а предмет без аффикса не трогается.
+func freeze_equipment(equipment) -> void:
+	if equipment == null or not (equipment is Object) or not equipment.has_method("get_child_count"):
 		return
-	for index in DURABLE_SLOTS:
-		if ui.get_child_count() <= index:
-			continue
-		var slot = ui.get_child(index)
+	for index in equipment.get_child_count():
+		var slot = equipment.get_child(index)
 		if slot == null or not (slot is Node) or slot.get_child_count() == 0:
 			continue
 		var item = slot.get_child(0)

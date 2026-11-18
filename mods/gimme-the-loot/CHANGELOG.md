@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.1] - 2026-11-18
+
+### Changed
+- `Unbreakable` now follows the equipment slot the item actually sits in, so a
+  weapon, helmet or rig moved to another slot keeps its bonus.
+
 ## [1.2.0] - 2026-11-18
 
 ### Added

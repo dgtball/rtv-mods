@@ -23,7 +23,7 @@ class FakeSlot extends Resource:
 	var loot_affixes: Array = []
 	var amount := 0
 	var chamber := false
-	var condition := 100
+	var condition := 100.0
 	var state := ""
 
 class FakeLib extends RefCounted:
@@ -315,6 +315,34 @@ func _init() -> void:
 	lib.skipped = false
 	appl._hook_weaponrig_malfunction()
 	ck(not lib.skipped, "no affix: vanilla runs")
+
+	# --- unbreakable: обход оборудования без зашитых индексов ---
+	var durable := FakeSlot.new()
+	durable.condition = 42.0
+	durable.loot_affixes = [{"stat": "unbreakable", "value": 1.0, "unit": "flag", "base": -1.0}]
+	var equip := Node.new()
+	for i in 5:
+		equip.add_child(Node.new())
+	equip.add_child(_make_slot(durable))
+	appl.freeze_equipment(equip)
+	ck(absf(float(durable.condition) - 42.0) < 0.001, "freeze captures the drop value")
+	ck(absf(float(durable.loot_affixes[0].get("base", -1.0)) - 42.0) < 0.001, "the base lives on the affix")
+	durable.condition = 17.0
+	appl.freeze_equipment(equip)
+	ck(absf(float(durable.condition) - 42.0) < 0.001, "wear returns the condition to the base")
+	durable.condition = 100.0
+	appl.freeze_equipment(equip)
+	ck(absf(float(durable.condition) - 100.0) < 0.001, "a repair is kept")
+	ck(absf(float(durable.loot_affixes[0].get("base", -1.0)) - 100.0) < 0.001, "a repair raises the base")
+	durable.condition = 55.0
+	appl.freeze_equipment(equip)
+	ck(absf(float(durable.condition) - 100.0) < 0.001, "after a repair the new base is the floor")
+	var plain := FakeSlot.new()
+	plain.condition = 30.0
+	equip.add_child(_make_slot(plain))
+	appl.freeze_equipment(equip)
+	ck(absf(float(plain.condition) - 30.0) < 0.001, "an item without the affix is left alone")
+	equip.free()
 
 	# --- blocked_stats: только невзятые replace-хуки ---
 	appl._noise_owned = true
