@@ -46,6 +46,7 @@ var _palette_strength: HSlider = null
 var _red_hold: HSlider = null
 
 var _suppress: bool = false
+var _last_change_log_ms: int = -100000
 
 func _ready() -> void:
 	layer = 128
@@ -224,6 +225,18 @@ func _on_changed(_v = null) -> void:
 			_nvg.set("set_red_hold", vh)
 	_refresh_status()
 	_apply_live()
+	var now_ms := Time.get_ticks_msec()
+	if VTKDebug.enabled and now_ms - _last_change_log_ms >= 400:
+		_last_change_log_ms = now_ms
+		var mode := "FILL" if _fill_mode != null and _fill_mode.selected == 1 else "OUTLINE"
+		var esp_on := _esp_enabled == null or bool(_esp_enabled.button_pressed)
+		VTKDebug.log("ESP_PANEL", "change mode=%s esp_enabled=%s xray=%s distance=%.1f contour=%s xray_layer=%s" % [
+			mode, str(esp_on), str(bool(_xray.button_pressed if _xray != null else false)),
+			float(_distance.value if _distance != null else 0.0),
+			str(bool(_esp.contour_layer)), str(bool(_esp.xray_layer)),
+		])
+		if _esp.has_method("dump_distance_debug"):
+			_esp.dump_distance_debug("panel_change")
 
 func _apply_live() -> void:
 	if _esp == null or not is_instance_valid(_esp):
@@ -232,13 +245,16 @@ func _apply_live() -> void:
 	# another mod, without touching saved MCM settings.
 	var preview_on := _esp_enabled == null or bool(_esp_enabled.button_pressed)
 	if not preview_on:
-		_esp.set_layers(false, false)
+		VTKDebug.log("ESP_LAYER", "esp_panel preview_off esp_enabled=false xray_ui=%s" % [
+			str(_xray == null or bool(_xray.button_pressed)),
+		])
+		_esp.set_layers(false, false, "esp_panel_preview_off")
 	elif _owner != null and is_instance_valid(_owner) and _owner.has_method("_set_esp_layers_for_preview"):
 		_owner._set_esp_layers_for_preview(_xray == null or bool(_xray.button_pressed))
 	elif _owner != null and is_instance_valid(_owner) and _owner.has_method("_apply_mode"):
 		_owner._apply_mode()
 	else:
-		_esp.set_layers(true, _xray == null or bool(_xray.button_pressed))
+		_esp.set_layers(true, _xray == null or bool(_xray.button_pressed), "esp_panel_fallback")
 	if _esp.has_method("refresh_outlines_now"):
 		_esp.refresh_outlines_now()
 
@@ -426,6 +442,8 @@ func _log_snapshot() -> void:
 	var parts: Array[String] = []
 	parts.append("mode=%s" % mode)
 	parts.append("esp_enabled=%s" % str(esp_on))
+	parts.append("contour_layer=%s" % str(bool(_esp.contour_layer)))
+	parts.append("xray_layer=%s" % str(bool(_esp.xray_layer)))
 	parts.append("thickness=%.4f" % float(_thickness.value))
 	parts.append("brightness=%.3f" % bright)
 	parts.append("fill_alpha=%.3f" % float(_fill_alpha.value))
@@ -443,6 +461,8 @@ func _log_snapshot() -> void:
 	if _red_hold != null:
 		parts.append("red_hold=%.3f" % float(_red_hold.value))
 	VTKDebug.log("ESP_PANEL", "snapshot " + " ".join(parts))
+	if _esp.has_method("dump_distance_debug"):
+		_esp.dump_distance_debug("panel_snapshot")
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not _open:

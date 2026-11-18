@@ -133,14 +133,23 @@ func _ready() -> void:
 	_overlay = OverlayLayer.new()
 	_overlay_layer.add_child(_overlay)
 
-func set_layers(contour: bool, xray: bool) -> void:
+func set_layers(contour: bool, xray: bool, reason: String = "") -> void:
 	if contour_layer == contour and xray_layer == xray:
 		return
 	var any_before := _any_layer()
+	var old_contour := contour_layer
+	var old_xray := xray_layer
 	contour_layer = contour
 	xray_layer = xray
 	marker_visible = contour
-	Dbg.log("ESP", "layers contour=%s xray=%s" % [str(contour), str(xray)])
+	_sync_weapon_buffer_occlusion()
+	Dbg.log("ESP", "layers %s->%s reason=%s dist=%.1f entries=%d" % [
+		"%s/%s" % [str(old_contour), str(old_xray)],
+		"%s/%s" % [str(contour), str(xray)],
+		reason if reason != "" else "unspecified",
+		p_dist,
+		_entries.size(),
+	])
 	if not _any_layer():
 		_outline.clear_all()
 		_overlay.clear()
@@ -157,6 +166,11 @@ func set_render_to_buffer(enabled: bool, layer_bit: int = 1 << 19) -> void:
 	_render_to_buffer = enabled
 	_buffer_layer_bit = layer_bit
 	_outline.set_buffer_mode(enabled, layer_bit)
+	_sync_weapon_buffer_occlusion()
+
+func _sync_weapon_buffer_occlusion() -> void:
+	if _weapon != null and _weapon.has_method("set_buffer_occlusion"):
+		_weapon.set_buffer_occlusion(_render_to_buffer and contour_layer, _buffer_layer_bit)
 
 func render_to_buffer() -> bool:
 	return _render_to_buffer
@@ -502,7 +516,7 @@ func _dbg_tick(delta: float, ppos: Variant) -> void:
 		return
 	# Only log when the numbers move: an idle session used to write a line every
 	# second for hours.
-	var sig := "%d/%d/%d/%d" % [_entries.size(), _dbg_cand, _dbg_keep, _dbg_applied]
+	var sig := "%d/%d/%d/%d/%s/%s/%.1f" % [_entries.size(), _dbg_cand, _dbg_keep, _dbg_applied, str(contour_layer), str(xray_layer), p_dist]
 	if sig == _dbg_sig:
 		return
 	_dbg_sig = sig
@@ -510,7 +524,57 @@ func _dbg_tick(delta: float, ppos: Variant) -> void:
 	if ppos != null:
 		var p: Vector3 = ppos
 		where = "ppos=%.1f,%.1f,%.1f" % [p.x, p.y, p.z]
-	Dbg.log("ESP", "entries=%d cand=%d keep=%d applied=%d draw=%.2fms %s" % [_entries.size(), _dbg_cand, _dbg_keep, _dbg_applied, _dbg_draw_ms, where])
+	Dbg.log("ESP", "entries=%d cand=%d keep=%d applied=%d draw=%.2fms dist=%.1f layers=%s/%s %s" % [
+		_entries.size(), _dbg_cand, _dbg_keep, _dbg_applied, _dbg_draw_ms, p_dist,
+		str(contour_layer), str(xray_layer), where,
+	])
+
+func dump_distance_debug(reason: String = "") -> void:
+	if not Dbg.enabled:
+		return
+	var rows: Array = []
+	for id in _entries.keys():
+		var e: Dictionary = _entries[id]
+		var node = e.get("node")
+		var valid: bool = node != null and is_instance_valid(node) and node.is_inside_tree()
+		var dead: bool = bool(e.get("dead", false))
+		var dist: float = float(e.get("dist", -1.0))
+		var in_cand: bool = contour_layer and valid and not dead and dist >= 0.0 and dist <= p_dist
+		var name := "?"
+		if valid:
+			name = str((node as Node).name)
+		rows.append({
+			"id": int(id),
+			"dist": dist,
+			"dead": dead,
+			"valid": valid,
+			"in_cand": in_cand,
+			"xray_live": bool(e.get("xray_live", false)),
+			"win": not (e.get("win", Tracker.EMPTY_WINDOW) as Dictionary).is_empty(),
+			"name": name,
+		})
+	rows.sort_custom(func(a, b): return float(a.get("dist", 1e9)) < float(b.get("dist", 1e9)))
+	Dbg.log("ESP_DIST", "reason=%s p_dist=%.1f contour=%s xray=%s entries=%d cand=%d keep=%d applied=%d" % [
+		reason if reason != "" else "unspecified",
+		p_dist, str(contour_layer), str(xray_layer),
+		_entries.size(), _dbg_cand, _dbg_keep, _dbg_applied,
+	])
+	var limit: int = mini(rows.size(), 24)
+	for i in limit:
+		var r: Dictionary = rows[i]
+		Dbg.log("ESP_DIST", "  #%d id=%d dist=%s dead=%s valid=%s in_cand=%s xray=%s win=%s name=%s" % [
+			i,
+			int(r.get("id", 0)),
+			("%.2f" % float(r.get("dist", -1.0))) if float(r.get("dist", -1.0)) >= 0.0 else "n/a",
+			str(bool(r.get("dead", false))),
+			str(bool(r.get("valid", false))),
+			str(bool(r.get("in_cand", false))),
+			str(bool(r.get("xray_live", false))),
+			str(bool(r.get("win", false))),
+			str(r.get("name", "?")),
+		])
+	if rows.size() > limit:
+		Dbg.log("ESP_DIST", "  ... %d more" % (rows.size() - limit))
 func _gd_cached() -> Resource:
 	if _probe_gd == null and ResourceLoader.exists(Paths.GAME_DATA):
 		_probe_gd = load(Paths.GAME_DATA)
@@ -639,7 +703,12 @@ func _draw(ppos: Vector3) -> void:
 		_cand_refs[i] = _cand_pool[i]
 	var keep: Array = Tracker.pick_nearest(_cand_refs, CAP, _keep_pool)
 	for id in keep:
-		_want_add(id)
+		if not _entries.has(id):
+			continue
+		var ke: Dictionary = _entries[id]
+		# DIAGNOSTIC 2.10.8: LOS raycast gating disabled to isolate crash.
+		if bool(ke.get("xray_live", false)) or true:
+			_want_add(id)
 	var applied := 0
 	for id in _want_ids:
 		if not _entries.has(id):
@@ -826,6 +895,18 @@ func _fill_opts(opts: Dictionary, e: Dictionary, now: float) -> void:
 	opts["grow"] = p_thickness
 	opts["xray"] = xray
 	opts["fill"] = p_body_fill
+
+func _los_cached(e: Dictionary, _now: float) -> bool:
+	var node = e.get("node")
+	if node == null or not is_instance_valid(node):
+		return false
+	var id: int = int(e.get("id", 0))
+	if not e.has("los") or (_frame + id) % LOS_EVERY == 0:
+		var anchor: Vector3 = _head_world(node)
+		var los: bool = _nomad_los(e, anchor)
+		e["los"] = los
+		return los
+	return bool(e.get("los", true))
 
 func _nomad_los(e: Dictionary, anchor_world: Vector3) -> bool:
 	if los_probe.is_valid():

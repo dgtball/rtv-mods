@@ -74,7 +74,7 @@ class FakeESP extends Node:
 	var marker_visible: bool = false
 	var p_body_fill: bool = false
 	var p_fill_alpha: float = 0.4
-	func set_layers(contour: bool, xray: bool) -> void:
+	func set_layers(contour: bool, xray: bool, _reason: String = "") -> void:
 		contour_layer = contour
 		xray_layer = xray
 		marker_visible = contour

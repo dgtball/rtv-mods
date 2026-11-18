@@ -174,10 +174,16 @@ func _apply_mode() -> void:
 	if _esp != null and is_instance_valid(_esp):
 		# The ESP only shows while the thermal vision actually runs: the goggles
 		# alone (vanilla NVG) do not carry it. The thermal switch owns that.
-		var on := _nvg_active() and _thermal_enabled
+		var nvg_on := _nvg_active()
+		var on := nvg_on and _thermal_enabled
 		var contour: bool = on and _outline_enabled
 		var xray: bool = on and _xray_enabled
-		_esp.set_layers(contour, xray)
+		VTKDebug.log("ESP_LAYER", "apply_mode nvg=%s thermal=%s outline_cfg=%s xray_cfg=%s -> contour=%s xray=%s panel_open=%s" % [
+			str(nvg_on), str(_thermal_enabled), str(_outline_enabled), str(_xray_enabled),
+			str(contour), str(xray),
+			str(_esp_panel != null and is_instance_valid(_esp_panel) and _esp_panel.has_method("is_open") and _esp_panel.is_open()),
+		])
+		_esp.set_layers(contour, xray, "apply_mode")
 		_sync_nvg_esp()
 
 
@@ -186,10 +192,15 @@ func _apply_mode() -> void:
 func _set_esp_layers_for_preview(xray_triggers: bool) -> void:
 	if _esp == null or not is_instance_valid(_esp):
 		return
-	var on := _nvg_active() and _thermal_enabled
+	var nvg_on := _nvg_active()
+	var on := nvg_on and _thermal_enabled
 	var contour: bool = on and _outline_enabled
 	var xray: bool = on and xray_triggers
-	_esp.set_layers(contour, xray)
+	VTKDebug.log("ESP_LAYER", "esp_panel_preview nvg=%s thermal=%s outline_cfg=%s xray_triggers=%s -> contour=%s xray=%s" % [
+		str(nvg_on), str(_thermal_enabled), str(_outline_enabled), str(xray_triggers),
+		str(contour), str(xray),
+	])
+	_esp.set_layers(contour, xray, "esp_panel_preview")
 	_sync_nvg_esp()
 
 func _sync_nvg_esp() -> void:
