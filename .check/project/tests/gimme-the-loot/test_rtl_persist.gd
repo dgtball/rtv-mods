@@ -23,6 +23,7 @@ func _init() -> void:
 	Store.stamp(live, 3, [
 		{"stat": "damage", "unit": "pct", "value": 0.2},
 		{"stat": "recoil", "unit": "pct", "value": 0.1},
+		{"stat": "unbreakable", "unit": "flag", "value": 1.0, "base": 88.0},
 	])
 	Sidecar.set_uid(live, "AKM|1717000000|424242")
 	Sidecar.set_plate(live, 2)
@@ -33,7 +34,7 @@ func _init() -> void:
 	ck(Store.tier(saved) == 0, "Update() on its own loses the roll")
 	Store.mirror(live, saved)
 	ck(Store.tier(saved) == 3, "mirroring fills the copy that gets written")
-	ck(Store.affixes(saved).size() == 2, "mirroring fills the affixes too")
+	ck(Store.affixes(saved).size() == 3, "mirroring fills the affixes too")
 
 	# --- write it the way the game writes Character.tres ---
 	var save = ProbeSave.new()
@@ -58,8 +59,14 @@ func _init() -> void:
 	var loaded = items[0]
 	ck(str(loaded.itemData) == "AKM", "vanilla fields survive the round trip")
 	ck(Store.tier(loaded) == 3, "tier survives the round trip")
-	ck(Store.affixes(loaded).size() == 2, "affixes survive the round trip")
+	ck(Store.affixes(loaded).size() == 3, "affixes survive the round trip")
 	ck(str(Store.affixes(loaded)[0].get("stat", "")) == "damage", "affix payload survives the round trip")
+	var ub := {}
+	for a in Store.affixes(loaded):
+		if str(a.get("stat", "")) == "unbreakable":
+			ub = a
+	ck(not ub.is_empty(), "unbreakable survives the round trip")
+	ck(absf(float(ub.get("base", -1.0)) - 88.0) < 0.001, "the frozen base survives the round trip")
 	ck(Sidecar.get_uid(loaded) == "AKM|1717000000|424242", "uid survives the round trip")
 	ck(Sidecar.get_plate(loaded) == 2, "plate survives the round trip")
 
@@ -69,14 +76,14 @@ func _init() -> void:
 	ck(Store.tier(shown) == 0, "Update() on load loses the roll as well")
 	Store.mirror(loaded, shown)
 	ck(Store.tier(shown) == 3, "mirroring restores the roll on load")
-	ck(Store.affixes(shown).size() == 2, "mirroring restores the affixes on load")
+	ck(Store.affixes(shown).size() == 3, "mirroring restores the affixes on load")
 
 	# --- a second save/load pass keeps one unchanged roll ---
 	var again = ProbeSlot.new()
 	again.Update(shown)
 	Store.mirror(shown, again)
 	ck(Store.tier(again) == 3, "re-saving keeps the tier")
-	ck(Store.affixes(again).size() == 2, "re-saving keeps the affix count")
+	ck(Store.affixes(again).size() == 3, "re-saving keeps the affix count")
 	ck(Sidecar.get_uid(again) == "AKM|1717000000|424242", "re-saving keeps the uid")
 
 	# --- an item that never rolled stays unrolled ---

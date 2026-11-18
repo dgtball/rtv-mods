@@ -221,10 +221,10 @@ func reroll_item(item) -> bool:
 	var ctx := {"rarity_roll": 100}
 	if _debug.force_tier() == 0:
 		ctx["rarity_roll"] = randi_range(1, 100)
-	var r: Dictionary = roll_for(item.slotData.itemData, ctx, RandomNumberGenerator.new())
+	var r: Dictionary = roll_for(item.slotData.itemData, ctx, RandomNumberGenerator.new(), _slot_condition(item.slotData))
 	if r["tier"] <= 0:
 		r = {"tier": Roll.pick_tier(Roll.tier_weights(ctx, _cfg.freq_mult, 1), randf()),
-			 "affixes": Roll.build_affixes(Category.of_item(item.slotData.itemData), 1, item.slotData.itemData, [], RandomNumberGenerator.new())}
+			 "affixes": Roll.build_affixes(Category.of_item(item.slotData.itemData), 1, item.slotData.itemData, blocked_stats(), RandomNumberGenerator.new(), _slot_condition(item.slotData))}
 	Store.stamp(item.slotData, r["tier"], r["affixes"])
 	_pending_add_container(item.slotData)
 	_display.paint(item)
@@ -469,7 +469,7 @@ func _roll_into(slotData, ctx: Dictionary, persist: bool = true) -> void:
 		return
 	if not Category.rollable(slotData.itemData):
 		return
-	var r: Dictionary = roll_for(slotData.itemData, ctx, RandomNumberGenerator.new())
+	var r: Dictionary = roll_for(slotData.itemData, ctx, RandomNumberGenerator.new(), _slot_condition(slotData))
 	if r["tier"] <= 0 and Store.has_tier(slotData):
 		return
 	Store.stamp(slotData, r["tier"], r["affixes"])
@@ -508,7 +508,17 @@ func _sidecar_upsert_uid(uid: String, file: String, tier: int, affixes: Array) -
 	f.store_string(JSON.stringify({"v": SIDECAR_VERSION, "items": items_prev, "by_uid": new_bu, "by_ft": by_ft_prev}))
 	f.close()
 
-func roll_for(itemData, ctx: Dictionary, rng: RandomNumberGenerator) -> Dictionary:
+# Прочность на момент ролла: unbreakable замораживает именно её. -1.0 значит
+# «прочности нет» (шлем и разгрузка всегда спавнятся со 100%, но поле у них есть).
+func _slot_condition(slotData) -> float:
+	if slotData == null or not ("condition" in slotData):
+		return -1.0
+	var raw = slotData.get("condition")
+	if raw == null:
+		return -1.0
+	return float(raw)
+
+func roll_for(itemData, ctx: Dictionary, rng: RandomNumberGenerator, condition: float = -1.0) -> Dictionary:
 	var cat: String = Category.of_item(itemData)
 	if cat == Category.OTHER:
 		return {"tier": 0, "affixes": []}
@@ -516,8 +526,14 @@ func roll_for(itemData, ctx: Dictionary, rng: RandomNumberGenerator) -> Dictiona
 	var ctx_dict := {"rarity_roll": rarity_roll, "corpse": bool(ctx.get("corpse", false)), "joker": bool(ctx.get("joker", false))}
 	var weights: Array = Roll.tier_weights(ctx_dict, _cfg.freq_mult, _debug.force_tier())
 	var tier: int = Roll.pick_tier(weights, rng.randf())
-	var affixes: Array = Roll.build_affixes(cat, tier, itemData, [], rng)
+	var affixes: Array = Roll.build_affixes(cat, tier, itemData, blocked_stats(), rng, condition)
 	return {"tier": tier, "affixes": affixes}
+
+# Статы, чей replace-хук занят другим модом: ролл такого стата был бы пустышкой.
+func blocked_stats() -> Array:
+	if _stats == null:
+		return []
+	return _stats.blocked_stats()
 
 func _stats_dirty() -> void:
 	if _stats != null:
