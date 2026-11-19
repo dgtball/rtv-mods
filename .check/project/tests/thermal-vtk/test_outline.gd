@@ -28,6 +28,7 @@ func _run() -> void:
 	t_overlay_on_mesh()
 	t_recollect_keeps_overlay()
 	t_recollect_detects_deep_mesh_replacement()
+	t_recollect_clears_detached_mesh_overlay()
 	t_clear_not_in()
 	print("")
 	if fails == 0:
@@ -258,6 +259,29 @@ func t_recollect_detects_deep_mesh_replacement() -> void:
 	ck(o._items[50]["meshes"][0] == repl, "recollect tracks the replaced mesh instance")
 	ck(repl.material_overlay == mat, "replaced mesh receives overlay")
 	o.clear(50)
+	root.free()
+
+# A mesh removed from the tracked subtree (still valid elsewhere) must lose its
+# overlay on recollect so outlines do not stick to detached meshes.
+func t_recollect_clears_detached_mesh_overlay() -> void:
+	var root := Node3D.new()
+	var holder := Node3D.new()
+	root.add_child(holder)
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	holder.add_child(mesh)
+	var detached_root := Node3D.new()
+	var o = Outline.new()
+	o.apply(51, root, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 1.0, "grow": 0.01, "cool": 0.0})
+	var mat: ShaderMaterial = o._items[51]["mat"]
+	ck(mesh.material_overlay == mat, "tracked mesh outlined before detach")
+	holder.remove_child(mesh)
+	detached_root.add_child(mesh)
+	o.refresh(51, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 1.0, "grow": 0.01, "cool": 0.0})
+	ck(o._items[51]["meshes"].is_empty(), "detached mesh no longer tracked")
+	ck(mesh.material_overlay == null, "detached mesh overlay cleared on recollect")
+	o.clear(51)
+	detached_root.free()
 	root.free()
 
 func t_clear_not_in() -> void:
