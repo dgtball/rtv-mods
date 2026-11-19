@@ -142,7 +142,6 @@ func set_layers(contour: bool, xray: bool, reason: String = "") -> void:
 	contour_layer = contour
 	xray_layer = xray
 	marker_visible = contour
-	_sync_weapon_buffer_occlusion()
 	Dbg.log("ESP", "layers %s->%s reason=%s dist=%.1f entries=%d" % [
 		"%s/%s" % [str(old_contour), str(old_xray)],
 		"%s/%s" % [str(contour), str(xray)],
@@ -159,23 +158,8 @@ func set_layers(contour: bool, xray: bool, reason: String = "") -> void:
 func _any_layer() -> bool:
 	return contour_layer or xray_layer
 
-# NVG compositor wiring removed in 2.10.x overlay-only baseline: contours always
-# render via main-view overlays. Keep API for callers/tests; buffer mode is off.
-func set_render_to_buffer(_enabled: bool, layer_bit: int = 1 << 19) -> void:
-	_render_to_buffer = false
-	_buffer_layer_bit = layer_bit
-	_sync_weapon_buffer_occlusion()
-
-func _sync_weapon_buffer_occlusion() -> void:
-	if _weapon != null and _weapon.has_method("set_buffer_occlusion"):
-		_weapon.set_buffer_occlusion(_render_to_buffer and contour_layer, _buffer_layer_bit)
-
-func render_to_buffer() -> bool:
-	return _render_to_buffer
-
 # Content demand helper: reports whether any outline or live reveal is currently
-# wanted this frame (i.e. ESP buffer/main-pass content is needed). Used by NVG
-# compositor wiring and kept for test/introspection; it never mutates state.
+# wanted this frame (overlay content is needed). Kept for test/introspection.
 func wants_contour() -> bool:
 	return _any_layer() and not _want.is_empty()
 
@@ -706,10 +690,10 @@ func _draw(ppos: Vector3) -> void:
 	for id in keep:
 		if not _entries.has(id):
 			continue
-		var ke: Dictionary = _entries[id]
-		# DIAGNOSTIC 2.10.8: LOS raycast gating disabled to isolate crash.
-		if bool(ke.get("xray_live", false)) or true:
-			_want_add(id)
+		# 2.10.x baseline: keep contour candidates inside distance without LOS
+		# raycast gating (parity with 2.10.8+ diagnostic behavior). Nomad diamond
+		# LOS remains raycast-based in _overlay_sync.
+		_want_add(id)
 	var applied := 0
 	for id in _want_ids:
 		if not _entries.has(id):
@@ -897,17 +881,7 @@ func _fill_opts(opts: Dictionary, e: Dictionary, now: float) -> void:
 	opts["xray"] = xray
 	opts["fill"] = p_body_fill
 
-func _los_cached(e: Dictionary, _now: float) -> bool:
-	var node = e.get("node")
-	if node == null or not is_instance_valid(node):
-		return false
-	var id: int = int(e.get("id", 0))
-	if not e.has("los") or (_frame + id) % LOS_EVERY == 0:
-		var anchor: Vector3 = _head_world(node)
-		var los: bool = _nomad_los(e, anchor)
-		e["los"] = los
-		return los
-	return bool(e.get("los", true))
+
 
 func _nomad_los(e: Dictionary, anchor_world: Vector3) -> bool:
 	if los_probe.is_valid():
