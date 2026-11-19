@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Rules = preload("res://mods/BatteryExtractor/BatteryRules.gd")
+const Mod = preload("res://mods/BatteryExtractor/BatteryExtractor.gd")
 
 var fails := 0
 
@@ -32,6 +33,7 @@ func _init() -> void:
 	t_charge_for()
 	t_mark_partial_contract()
 	t_plain_battery_unmarked()
+	t_mod_contract()
 	print("")
 	if fails == 0:
 		print("BatteryExtractor tests passed")
@@ -89,3 +91,17 @@ func t_plain_battery_unmarked() -> void:
 	ck(not Rules.is_partial(item), "ordinary battery has no partial marker")
 	ck(not Rules.is_partial(null), "null is not partial")
 	ck(not Rules.is_partial("Batteries"), "plain string is not partial")
+
+
+func t_mod_contract() -> void:
+	var m = Mod.new()
+	var script = m.get_script()
+	var consts: Dictionary = script.get_script_constant_map()
+	ck(consts.has(&"RULES"), "autoload declares RULES")
+	ck(consts.has(&"BATTERIES_PATH"), "autoload declares BATTERIES_PATH")
+	ck(consts.has(&"CONTEXT_HOOK"), "autoload declares CONTEXT_HOOK")
+	ck(consts.has(&"CHARGE_HOOK"), "autoload declares CHARGE_HOOK")
+	ck(m.has_method("_on_context_update"), "autoload has context hook")
+	ck(m.has_method("_on_extract_pressed"), "autoload has extraction action")
+	ck(m.has_method("_on_charge_post"), "autoload has charge hook")
+	m.free()
