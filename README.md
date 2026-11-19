@@ -1,6 +1,6 @@
 # Road to Vostok mods
 
-Six independent mods for **Road to Vostok**, each in its own folder under `mods/`. They ship as
+Seven independent mods for **Road to Vostok**, each in its own folder under `mods/`. They ship as
 separate `.vmz` archives and can be installed on their own — there is no shared runtime code.
 
 | Mod | What it does | Version | README |
@@ -11,6 +11,7 @@ separate `.vmz` archives and can be installed on their own — there is no share
 | **Freeze for JCM** (`jcm-freeze`) | Freezes NPCs, the BTR and the helicopter on demand (JCM addon) | 1.3.0 | [mods/jcm-freeze/README.md](mods/jcm-freeze/README.md) |
 | **Knife or Pistol** (`knife-or-pistol`) | Third weapon slot: the knife slot takes a knife or a pistol, and the pistol works normally when drawn | 1.0.0 | [mods/knife-or-pistol/README.md](mods/knife-or-pistol/README.md) |
 | **Stop Spitting** (`stop-spitting`) | Removes the two spitting sounds from the nomads' idle voice set | 1.0.0 | [mods/stop-spitting/README.md](mods/stop-spitting/README.md) |
+| **Battery Extractor** (`battery-extractor`) | Takes the battery back out of flashlights, NVG and the cassette player with its remaining charge | 1.0.0 | [mods/battery-extractor/README.md](mods/battery-extractor/README.md) |
 
 ## Layout
 
@@ -31,7 +32,7 @@ pack.ps1           builds all (or one) mod into dist/
 Requires PowerShell 5.1 (Windows) and Python 3 for the checks.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File pack.ps1 -All          # all six archives
+powershell -ExecutionPolicy Bypass -File pack.ps1 -All          # all seven archives
 powershell -ExecutionPolicy Bypass -File pack.ps1 -Mod thermal-vtk
 ```
 
@@ -46,6 +47,7 @@ Archives land in `dist/` and use the names below, so they drop straight into the
 | Freeze for JCM | `dist/Freeze.vmz` |
 | Knife or Pistol | `dist/KnifeOrPistol.vmz` |
 | Stop Spitting | `dist/StopSpitting.vmz` |
+| Battery Extractor | `dist/BatteryExtractor.vmz` |
 
 The build writes `version.txt` next to each mod's scripts (taken from `mod.txt`) and keeps the
 `**Version:**` line of that mod's README in sync. Shipped GDScript is stripped of comments and blank
@@ -59,7 +61,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .check\check.ps1
 ```
 
 `check.ps1` copies every mod's sources into the headless Godot project under `.check/project/`,
-parse-checks each script and runs all 48 test scripts. Godot **4.6.3** must be on `PATH`, otherwise
+parse-checks each script and runs all 49 test scripts. Godot **4.6.3** must be on `PATH`, otherwise
 pass `-Godot <path to Godot_*_console.exe>`.
 
 `layout_check.py` guards the Toolkit loadout UI against layout regressions: symbols that must not

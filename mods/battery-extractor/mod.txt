@@ -1,0 +1,11 @@
+[mod]
+name="Battery Extractor"
+id="battery-extractor"
+version="1.0.0"
+
+[autoload]
+BatteryExtractor="res://mods/BatteryExtractor/BatteryExtractor.gd"
+
+[hooks]
+res://Scripts/Context.gd = Update
+res://Scripts/Interface.gd = Charge
