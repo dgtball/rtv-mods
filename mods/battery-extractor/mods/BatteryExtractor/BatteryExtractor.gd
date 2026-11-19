@@ -149,6 +149,40 @@ func _on_extract_pressed() -> void:
 
 
 # Charge is void with two arguments; the trailing default is the same arity
-# insurance as above. Body arrives in Task 4.
-func _on_charge_post(_target_item, _source_item, _result = null) -> void:
-	pass
+# insurance as above. Vanilla sets condition = 100 only after the progress bar
+# completes, so queue a one-shot that overwrites it with the stored charge.
+# Ordinary batteries carry no marker and never reach this code.
+func _on_charge_post(target_item, source_item, _result = null) -> void:
+	if source_item == null or not is_instance_valid(source_item):
+		return
+	var sd = source_item.get("slotData")
+	if sd == null:
+		return
+	if not RULES.is_partial(sd.get("itemData")):
+		return
+	var iface = _lib._caller if _lib else null
+	if iface == null or not is_instance_valid(iface):
+		return
+	var progress = iface.get("activeProgress")
+	if progress == null or not is_instance_valid(progress):
+		return
+	if not progress.has_signal("completed"):
+		return
+	var charge: float = RULES.charge_for(sd.get("condition"))
+	progress.completed.connect(_apply_partial_charge.bind(target_item, charge), Object.CONNECT_ONE_SHOT)
+
+
+func _apply_partial_charge(target_item, charge) -> void:
+	if target_item == null or not is_instance_valid(target_item):
+		return
+	var iface = target_item.get("interface")
+	if iface != null and is_instance_valid(iface):
+		var gd = iface.get("gameData")
+		if gd != null and bool(gd.get("isDead")):
+			return
+	var sd = target_item.get("slotData")
+	if sd == null:
+		return
+	sd.set("condition", charge)
+	if target_item.has_method("UpdateDetails"):
+		target_item.UpdateDetails()

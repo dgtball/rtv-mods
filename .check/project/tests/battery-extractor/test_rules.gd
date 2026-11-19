@@ -13,6 +13,7 @@ class FakeItem extends Resource:
 	var showCondition: bool = false
 	var stackable: bool = true
 	var maxAmount: int = 1
+	var condition = 100
 
 	func _init(f: String = "Batteries", n: String = "Batteries") -> void:
 		file = f
@@ -33,6 +34,7 @@ func _init() -> void:
 	t_charge_for()
 	t_mark_partial_contract()
 	t_plain_battery_unmarked()
+	t_partial_gets_stored_charge()
 	t_mod_contract()
 	print("")
 	if fails == 0:
@@ -93,6 +95,16 @@ func t_plain_battery_unmarked() -> void:
 	ck(not Rules.is_partial("Batteries"), "plain string is not partial")
 
 
+func t_partial_gets_stored_charge() -> void:
+	var item := FakeItem.new()
+	Rules.mark_partial(item)
+	item.condition = 37.5
+	ck(is_equal_approx(Rules.charge_for(item.condition), 37.5), "partial battery keeps 37.5 charge")
+	item.condition = 100
+	ck(is_equal_approx(Rules.charge_for(item.condition), 100.0), "full partial battery keeps 100 charge")
+	ck(not Rules.is_partial(FakeItem.new()), "plain battery has no stored charge marker")
+
+
 func t_mod_contract() -> void:
 	var m = Mod.new()
 	var script = m.get_script()
@@ -104,4 +116,5 @@ func t_mod_contract() -> void:
 	ck(m.has_method("_on_context_update"), "autoload has context hook")
 	ck(m.has_method("_on_extract_pressed"), "autoload has extraction action")
 	ck(m.has_method("_on_charge_post"), "autoload has charge hook")
+	ck(m.has_method("_apply_partial_charge"), "autoload has partial-charge applier")
 	m.free()
