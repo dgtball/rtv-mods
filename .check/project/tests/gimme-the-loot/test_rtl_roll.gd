@@ -13,18 +13,18 @@ func ck(cond: bool, msg: String) -> void:
 		print("FAIL  ", msg)
 
 func _init() -> void:
-	ck(Pool.ACTIVE_RELEASE == 3, "ACTIVE_RELEASE == 3")
+	ck(Pool.ACTIVE_RELEASE == 4, "ACTIVE_RELEASE == 4")
 
 	# --- condition снят с обеих категорий ---
 	ck(not Pool.affix_ids("weapon").has("condition"), "weapon: condition removed")
 	ck(not Pool.affix_ids("clothing").has("condition"), "clothing: condition removed")
 	ck(Pool.entry("weapon", "condition").is_empty(), "weapon: no condition entry")
 	ck(Pool.entry("clothing", "condition").is_empty(), "clothing: no condition entry")
-	ck(Pool.POOL.size() == 21, "POOL: 21 entries")
+	ck(Pool.POOL.size() == 22, "POOL: 22 entries")
 
-	# --- релизный гейт: 7 оружейных, 14 одежды, 3 гаджетных ---
+	# --- релизный гейт: 7 оружейных, 15 одежды, 3 гаджетных ---
 	ck(Pool.entries("weapon").size() == 7, "weapon pool: 7 entries")
-	ck(Pool.entries("clothing").size() == 14, "clothing pool: 14 entries")
+	ck(Pool.entries("clothing").size() == 15, "clothing pool: 15 entries")
 	ck(Pool.entries("gadget").size() == 3, "gadget pool: 3 entries")
 
 	# --- статы, снятые в 0.3.0 ---

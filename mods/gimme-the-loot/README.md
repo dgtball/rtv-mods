@@ -1,6 +1,6 @@
 # **Gimme the Loot**
 
-**Version:** 1.2.1  
+**Version:** 1.2.2  
 **Mod ID:** `gimme-the-loot`  
 **Author:** CaptiveAI
 
@@ -18,7 +18,7 @@ you find in Road to Vostok (containers, corpses, ground-spawned loot).
 
 Affixes are **real** (not cosmetic), e.g. carry capacity, insulation, sprint
 speed, stamina/hunger/thirst/sanity drains, regen, damage, recoil, fire rate,
-never jam, unbreakable gear and slower battery drain.
+never jam, unbreakable gear, frost resistance and slower battery drain.
 
 ## Installation
 
@@ -44,7 +44,7 @@ Stat | Max |
 | Thirst/Hunger/Stamina drain | −9%–−12% |
 | Sprint | +6% |
 | Noise (AI range) | 16% |
-| max_hp | +4% per affix |
+| max_hp | +30% (1-5% / 5-15% / 15-30% by tier) |
 | Extra Loot | ~100% chance |
 | Protection | +1 level |
 | Damage | +12% |
@@ -56,6 +56,7 @@ Stat | Max |
 | Battery save | up to 90% |
 | Never Jam | Rare and above |
 | Unbreakable | Legendary weapons, helmets and rigs |
+| Frost Resistant | Legendary clothing: no frostbite while worn |
 
 Notes:
 - There are no balance caps any more: stacking several Legendary pieces can
@@ -65,6 +66,7 @@ Notes:
 - `Never Jam` needs a working weapon: at 0% condition it still jams.
 - `Unbreakable` holds condition at the value the item was found with; a repair
   raises that value.
+- `Frost Resistant` prevents frostbite only while the item is worn.
 
 ## MCM settings
 

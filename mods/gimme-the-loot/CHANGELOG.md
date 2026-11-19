@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.2] - 2026-11-19
+
+### Added
+- `Frost Resistant` affix for Legendary clothing: while worn, you cannot get
+  frostbite. Only newly found gear can roll it.
+
+### Changed
+- `Max HP` affix now grants 1-5% / 5-15% / 15-30% by tier (was 1% / 2-3% / 3-4%).
+
+### Fixed
+- The debug re-roll key now works on repeated presses without having to move the
+  mouse first.
+
 ## [1.2.1] - 2026-11-18
 
 ### Changed

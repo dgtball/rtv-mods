@@ -55,7 +55,11 @@ const POOL: Array = [
 	{"stat": "protection", "category": "clothing", "unit": "flat", "weight": 0.5,
 		"ranges": {2: [1, 1], 3: [1, 1]}, "release": 2, "needs": "armor"},
 	{"stat": "max_hp", "category": "clothing", "unit": "pct", "weight": 0.7,
-		"ranges": {1: [1, 1], 2: [2, 3], 3: [3, 4]}, "release": 2},
+		"ranges": {1: [1, 5], 2: [5, 15], 3: [15, 30]}, "release": 2},
+
+	# clothing, release=4 (1.2.2)
+	{"stat": "frost_resistant", "category": "clothing", "unit": "flag", "weight": 0.25,
+		"ranges": {3: [1, 1]}, "release": 4},
 
 	# gadget, release=3 (1.2.0)
 	{"stat": "battery_save", "category": "gadget", "unit": "pct", "weight": 0.8,
@@ -81,11 +85,13 @@ const ROW_ORDER := [
 	"recoil", "low_hp_damage", "wear", "ammo_save", "never_jam", "unbreakable",
 	"regen", "low_hp_regen",
 	"stamina_drain", "thirst_drain", "hunger_drain", "sanity_drain",
-	"noise", "sprint", "extra_loot", "max_hp", "battery_save",
+	"noise", "sprint", "extra_loot", "max_hp", "frost_resistant", "battery_save",
 ]
 
-# ACTIVE_RELEASE: активный релиз пула. 3 = 1.2.0: статы релизов 1, 2 и 3.
-const ACTIVE_RELEASE: int = 3
+# ACTIVE_RELEASE: активный релиз пула. 4 = 1.2.2: статы релизов 1-4.
+# Новый стат попадает только на только что созданный лут: ролл хранится в слоте
+# с момента создания, ретрофить уже разложенные предметы не нужно.
+const ACTIVE_RELEASE: int = 4
 
 const UNITS := ["pct", "hp", "kg", "flat", "rate", "mult", "flag"]
 const CATEGORIES := ["weapon", "clothing", "gadget"]

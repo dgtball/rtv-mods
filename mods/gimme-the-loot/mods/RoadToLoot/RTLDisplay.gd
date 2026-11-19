@@ -410,6 +410,14 @@ func reroll_hovered(tree: SceneTree) -> bool:
 		return false
 	var item = iface.hoverItem if "hoverItem" in iface else null
 	if item == null or item.slotData == null:
+		# The interface refreshes hoverItem once per frame. A key press can land
+		# before that refresh, or after a reroll replaced the cell under the
+		# cursor, leaving a stale/null hover until the mouse moves. Re-read the
+		# hover at press time so consecutive presses work without moving it.
+		if iface.has_method("Hover"):
+			iface.call("Hover")
+		item = iface.hoverItem if "hoverItem" in iface else null
+	if item == null or item.slotData == null:
 		return false
 	if _host == null or not _host.has_method("reroll_item"):
 		return false

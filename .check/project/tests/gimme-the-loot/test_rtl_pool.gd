@@ -12,18 +12,18 @@ func ck(cond: bool, msg: String) -> void:
 		print("FAIL  ", msg)
 
 func _init() -> void:
-	ck(Pool.ACTIVE_RELEASE == 3, "ACTIVE_RELEASE == 3")
+	ck(Pool.ACTIVE_RELEASE == 4, "ACTIVE_RELEASE == 4")
 
 	# --- condition снят с обеих категорий ---
 	ck(not Pool.affix_ids("weapon").has("condition"), "weapon: condition removed")
 	ck(not Pool.affix_ids("clothing").has("condition"), "clothing: condition removed")
 	ck(Pool.entry("weapon", "condition").is_empty(), "weapon: no condition entry")
 	ck(Pool.entry("clothing", "condition").is_empty(), "clothing: no condition entry")
-	ck(Pool.POOL.size() == 21, "POOL: 21 entries")
+	ck(Pool.POOL.size() == 22, "POOL: 22 entries")
 
-	# --- релизный гейт: 7 оружейных, 14 одежды, 3 гаджетных ---
+	# --- релизный гейт: 7 оружейных, 15 одежды, 3 гаджетных ---
 	ck(Pool.entries("weapon").size() == 7, "weapon pool: 7 entries")
-	ck(Pool.entries("clothing").size() == 14, "clothing pool: 14 entries")
+	ck(Pool.entries("clothing").size() == 15, "clothing pool: 15 entries")
 	ck(Pool.entries("gadget").size() == 3, "gadget pool: 3 entries")
 
 	# --- статы, снятые в 0.3.0 ---
@@ -58,6 +58,21 @@ func _init() -> void:
 	ck(not Pool.entry("weapon", "never_jam")["ranges"].has(1), "never_jam starts at Rare")
 	ck(not Pool.entry("weapon", "unbreakable")["ranges"].has(1)
 		and not Pool.entry("weapon", "unbreakable")["ranges"].has(2), "unbreakable is Legendary only")
+
+	# --- max_hp: расширенные диапазоны 1-5 / 5-15 / 15-30 ---
+	var hp: Dictionary = Pool.entry("clothing", "max_hp")
+	ck(str(hp["ranges"][1]) == "[1, 5]", "max_hp T1 1-5: " + str(hp["ranges"][1]))
+	ck(str(hp["ranges"][2]) == "[5, 15]", "max_hp T2 5-15: " + str(hp["ranges"][2]))
+	ck(str(hp["ranges"][3]) == "[15, 30]", "max_hp T3 15-30: " + str(hp["ranges"][3]))
+
+	# --- frost_resistant: только легендарная одежда ---
+	var fr: Dictionary = Pool.entry("clothing", "frost_resistant")
+	ck(not fr.is_empty(), "frost_resistant exists in clothing")
+	ck(fr["ranges"].has(3) and not fr["ranges"].has(1) and not fr["ranges"].has(2),
+		"frost_resistant is Legendary only")
+	ck(str(fr.get("unit", "")) == "flag", "frost_resistant unit flag")
+	ck(Pool.entry("weapon", "frost_resistant").is_empty(), "frost_resistant not on weapons")
+	ck(Pool.entry("gadget", "frost_resistant").is_empty(), "frost_resistant not on gadgets")
 
 	# --- MERGED: только те, у кого есть ванильная строка ---
 	var merge_keys: Array = Pool.MERGED.keys()

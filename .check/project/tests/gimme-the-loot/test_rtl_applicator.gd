@@ -38,6 +38,13 @@ class FakeGadget extends Node:
 class FakeIface extends Node:
 	var equipmentUI = null
 
+class FakeGameData extends RefCounted:
+	var temperature := -5.0
+	var frostbite := true
+
+class FakeCharacter extends Node:
+	var gameData = null
+
 # аффикс есть, счётчика патронов нет: pre обязан не сохранить снимок, post — не упасть
 class FakeSlotNoCounter extends Resource:
 	var loot_affixes: Array = [{"stat": "ammo_save", "value": 0.9, "unit": "pct"}]
@@ -343,6 +350,33 @@ func _init() -> void:
 	appl.freeze_equipment(equip)
 	ck(absf(float(plain.condition) - 30.0) < 0.001, "an item without the affix is left alone")
 	equip.free()
+
+	# --- frost_resistant: не даёт ванили поднять обморожение ---
+	var fr_appl := Appl.new()
+	var fr_lib := FakeLib.new()
+	fr_appl._lib = fr_lib
+	var fr_char := FakeCharacter.new()
+	var fr_data := FakeGameData.new()
+	fr_char.gameData = fr_data
+	fr_lib._caller = fr_char
+
+	# аффикс надет: держим температуру выше нуля и сбрасываем флаг
+	fr_appl._totals = {"frost_resistant": 1.0}
+	fr_appl._dirty = false
+	fr_appl.on_physics_process_pre(0.016)
+	ck(fr_data.temperature > 0.0, "frost_resistant lifts subzero temperature above 0: " + str(fr_data.temperature))
+	ck(not fr_data.frostbite, "frost_resistant clears an active frostbite")
+
+	# аффикс снят: ванильная температура и флаг не трогаются
+	fr_data.temperature = -5.0
+	fr_data.frostbite = true
+	fr_appl._totals = {}
+	fr_appl.on_physics_process_pre(0.016)
+	ck(fr_data.temperature <= 0.0, "without frost_resistant temperature untouched")
+	ck(fr_data.frostbite, "without frost_resistant frostbite untouched")
+
+	fr_char.free()
+	fr_appl.free()
 
 	# --- blocked_stats: только невзятые replace-хуки ---
 	appl._noise_owned = true

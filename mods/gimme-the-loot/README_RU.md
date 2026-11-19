@@ -1,6 +1,6 @@
 # **Gimme the Loot**
 
-**Версия:** 1.2.1  
+**Версия:** 1.2.2  
 **Идентификатор:** `gimme-the-loot`  
 **Автор:** CaptiveAI
 
@@ -28,6 +28,7 @@
 - Более медленный drain stamina/hunger/thirst/sanity
 - Regen, в т.ч. Low HP
 - max_hp
+- Frost Resistant (Legendary одежда: иммунитет к обморожению, пока надето)
 - Detection range ИИ (Noise)
 - Perks-like Extra Loot (шанс получить лишний лут)
 - Protection (helmet/armor plate)

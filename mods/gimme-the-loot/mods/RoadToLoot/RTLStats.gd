@@ -4,7 +4,7 @@ const KNOWN_STATS := ["regen", "low_hp_regen", "capacity", "stamina_drain",
 	"insulation", "thirst_drain", "hunger_drain", "sanity_drain",
 	"damage", "recoil", "fire_rate", "low_hp_damage", "sprint", "noise",
 	"protection", "extra_loot", "wear", "max_hp", "ammo_save",
-	"never_jam", "unbreakable", "battery_save"]
+	"never_jam", "unbreakable", "battery_save", "frost_resistant"]
 
 # Читается с самого гаджета, а не из общих тоталов: три легендарных гаджета
 # сложились бы в нулевой расход батарейки.

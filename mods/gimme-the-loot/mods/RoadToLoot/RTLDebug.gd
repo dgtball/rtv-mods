@@ -22,9 +22,15 @@ func reroll_enabled() -> bool:
 func matches_reroll(event: InputEvent) -> bool:
 	if not reroll_enabled():
 		return false
-	if event is InputEventKey and event.pressed and not event.echo:
-		return int(event.physical_keycode) == _reroll_key
-	return false
+	if not (event is InputEventKey) or not event.pressed or event.echo:
+		return false
+	# MCM stores a physical keycode, but a key event may arrive with only the
+	# logical keycode populated (and vice versa on some layouts). Accept either
+	# so a repeated press is never silently dropped by a zero code field.
+	var physical := int(event.physical_keycode)
+	if physical != 0 and physical == _reroll_key:
+		return true
+	return int(event.keycode) == _reroll_key
 
 func should_log() -> bool:
 	return _log

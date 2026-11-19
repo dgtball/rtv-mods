@@ -238,8 +238,6 @@ func tag_created_loot(item) -> void:
 	_roll_into(slotData, {"item": item, "rarity_roll": _caller_rarity_roll()})
 	_pending_add_container(slotData)
 	_queue_sidecar_save()
-	call_deferred("_queue_sidecar_save")
-	call_deferred("_queue_sidecar_save")
 
 func _created_slot():
 	if _lib == null:
@@ -259,7 +257,6 @@ func tag_ai_loot(slotData) -> void:
 	_roll_into(slotData, ctx)
 	_pending_add_container(slotData)
 	_queue_sidecar_save()
-	call_deferred("_queue_sidecar_save")
 
 func on_world_loot_spawned() -> void:
 	# LootSimulation.SpawnItems() is void and takes no arguments: this callback

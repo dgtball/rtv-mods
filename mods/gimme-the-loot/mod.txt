@@ -1,7 +1,7 @@
 [mod]
 name="Gimme The Loot | GTL"
 id="gimme-the-loot"
-version="1.2.1"
+version="1.2.2"
 priority=-1
 author="CaptiveAI"
 
@@ -14,7 +14,7 @@ res://Scripts/LootSimulation.gd = SpawnItems
 res://Scripts/Item.gd = Initialize
 res://Scripts/Loader.gd = SaveCharacter, LoadCharacter, NewGame, LoadShelter
 res://Scripts/Interface.gd = Drop, UpdateStats, PlateCheck, HelmetCheck, CasetteConsumption
-res://Scripts/Character.gd = Stamina, Energy, Hydration, Mental, Health
+res://Scripts/Character.gd = Stamina, Energy, Hydration, Mental, Health, _physics_process
 res://Scripts/WeaponRig.gd = FireEvent, FireInput, Malfunction
 res://Scripts/Tooltip.gd = Update, Info
 res://Scripts/Flashlight.gd = Consumption

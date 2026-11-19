@@ -52,6 +52,7 @@ func setup(lib) -> void:
 	_lib.hook("character-mental-pre", Callable(self, "on_mental_pre"), 1000)
 	_lib.hook("character-mental-post", Callable(self, "on_mental_post"), 1000)
 	_lib.hook("character-health-post", Callable(self, "on_health_post"), 1000)
+	_lib.hook("character-_physics_process-pre", Callable(self, "on_physics_process_pre"), 1000)
 	_lib.hook("interface-updatestats-post", Callable(self, "on_updatestats_post"), 1000)
 	_lib.hook("interface-platecheck-pre", Callable(self, "on_platecheck_pre"), 1000)
 	_lib.hook("interface-platecheck-post", Callable(self, "on_platecheck_post"), 1000)
@@ -219,6 +220,25 @@ func on_health_post(delta) -> void:
 	if rate <= 0.0:
 		return
 	data.set("health", minf(1000.0, float(data.get("health")) + rate * float(delta)))
+
+# frost-resistant: while worn, keep the character above freezing so the
+# vanilla Temperature() never raises frostbite in the first place. Runs before
+# Temperature in Character._physics_process; also clears an already-active
+# frostbite when the item was equipped after the player started freezing.
+func on_physics_process_pre(_delta) -> void:
+	var totals := _ensure_totals()
+	if float(totals.get("frost_resistant", 0.0)) <= 0.0:
+		return
+	var character = _caller()
+	if character == null:
+		return
+	var data = _game_data(character)
+	if data == null:
+		return
+	if float(data.get("temperature")) <= 0.0:
+		data.set("temperature", 1.0)
+	if bool(data.get("frostbite")):
+		data.set("frostbite", false)
 
 # --- capacity, insulation, sprint ----------------------------------------
 

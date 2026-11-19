@@ -10,6 +10,7 @@ const STAT_LABELS := {
 	"never_jam": "Never Jam",
 	"unbreakable": "Unbreakable",
 	"battery_save": "Battery Save",
+	"frost_resistant": "Frost Resistant",
 }
 
 # Меньше — лучше: минус читается как бонус, плюс сбивал бы с толку.
