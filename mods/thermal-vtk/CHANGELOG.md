@@ -1,5 +1,100 @@
 # Changelog
 
+## [2.10.17] - 2026-11-19
+
+### Changed
+
+- Minor internal improvements.
+
+### Fixed
+
+- Improved NPC outline stability in some cases.
+
+## [2.10.16] - 2026-11-19
+
+### Fixed
+
+- Disable face culling in outline shaders to fix angle-dependent outline disappearance.
+
+## [2.10.15] - 2026-11-19
+
+### Fixed
+
+- Reassert outline overlays on tracked meshes to prevent partial outline loss (e.g. body missing while held weapon remains outlined).
+
+## [2.10.14] - 2026-11-19
+
+### Added
+
+- Diagnostic logging for ESP outline mesh tracking (apply/recollect events and per-entry mesh counts in distance snapshots) to investigate partial outline loss.
+
+## [2.10.13] - 2026-11-19
+
+### Changed
+
+- Diagnostic build: main-pass weapon occlusion patching is temporarily disabled to isolate outline disappearance when drawing or holstering a weapon.
+
+## [2.10.1] - 2026-11-15
+
+### Fixed
+
+- NPC outlines stay a thin ring at every distance instead of turning into a full-body fill past a few metres.
+- "Fill brightness" and "Fill gain" now change the full-body highlight visibly; it stops at the colour you picked instead of washing out to white.
+- The fill sliders are greyed out while the outline ring is selected, so it is clear where they apply.
+
+## [2.10.0] - 2026-11-15
+
+### Changed
+
+- The full-body highlight is now a solid colour instead of a see-through dot pattern that looked like a net over the NPC.
+- "Fill alpha" and "thermal-mix" are now "Fill brightness" and "Fill gain": they adjust how strongly the solid highlight glows rather than its transparency.
+- NPC outlines are now a solid band of the chosen colour rather than a soft gradient.
+- "Thickness" now only moves the outline ring; it has no effect on the full-body highlight.
+
+### Removed
+
+- The "Rim" setting. Outlines are always solid, so it had nothing left to control.
+
+## [2.9.3] - 2026-11-15
+
+### Fixed
+
+- NPC highlights no longer blink out or vanish while an NPC is moving.
+- NPC outlines are now a consistent thickness at any distance instead of a thin, patchy edge.
+- Full-body highlight now shows the colour you picked instead of a muddy, washed-out shade.
+
+### Changed
+
+- Full-body highlight transparency is drawn as a fine dot pattern instead of a see-through tint, so colours stay true and easy to tell apart.
+
+## [2.9.2] - 2026-11-15
+
+### Fixed
+
+- NPC highlights no longer flicker or disappear while moving in thermal vision.
+- Improved stability of full-body highlight color and tint in thermal vision.
+
+## [2.9.1] - 2026-11-14
+
+### Fixed
+
+- NPC and mine highlights now show their chosen colours correctly in thermal vision.
+- Mine highlighting now responds to your colour, brightness, and distance settings as expected.
+- Full-body highlight tint and opacity controls now work as expected.
+- Settings adjusted in the ESP tuning panel now stay in place while you use it.
+
+## [2.9.0] - 2026-11-14
+
+### Added
+
+- A "thermal-mix" control for adjusting how strong the full-body tint looks under thermal vision, separate from fill opacity.
+
+### Changed
+
+- Reworked NPC and mine highlights for more consistent outlines and full-body fill in normal view and during reveal-through-walls moments.
+- Full-body reveals through walls now stay as a filled silhouette (without adding an outline ring), while outline reveals stay as a ring.
+- Improved mine highlighting consistency with the rest of the thermal view.
+
 ## [2.8.2] - 2026-11-14
 
 ### Added

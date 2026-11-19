@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode unshaded, cull_back, depth_draw_never, depth_test_disabled;
+render_mode unshaded, cull_disabled, depth_draw_never, depth_test_disabled;
 stencil_mode write, 1;
 
 // XRAY body/tint pass of the direct contour overlay. Same shape as the LOS

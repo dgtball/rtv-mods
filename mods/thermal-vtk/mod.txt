@@ -1,7 +1,7 @@
 ﻿[mod]
 name="ThermalVTK"
 id="thermal-vtk"
-version="2.10.12"
+version="2.10.17"
 
 [autoload]
 ThermalVTK="res://mods/ThermalVTK/ThermalVTK.gd"

@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode unshaded, cull_back, depth_draw_never, depth_test_disabled;
+render_mode unshaded, cull_disabled, depth_draw_never, depth_test_disabled;
 stencil_mode read, compare_not_equal, 1;
 
 // XRAY ring pass of the direct contour overlay. Same as the LOS ring pass, but

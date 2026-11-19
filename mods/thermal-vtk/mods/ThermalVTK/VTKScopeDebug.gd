@@ -197,8 +197,7 @@ static func _desc_overlay(mi: MeshInstance3D, head: String) -> void:
 	if ov is ShaderMaterial:
 		var osm := ov as ShaderMaterial
 		if osm.shader != null:
-			d += " sh=%s prio=%d grow=%s rim=%s" % [osm.shader.resource_path, osm.render_priority, str(osm.get_shader_parameter("grow")), str(osm.get_shader_parameter("rim_power"))]
-			d += " ALPHA_now=" + str(osm.get_shader_parameter("cool"))
+			d += " sh=%s prio=%d grow=%s cool=%s" % [osm.shader.resource_path, osm.render_priority, str(osm.get_shader_parameter("grow")), str(osm.get_shader_parameter("cool"))]
 	Dbg.log("SCOPE", head + d)
 
 static func _snapshot_entries(esp: Node) -> void:
@@ -230,7 +229,7 @@ static func _snapshot_entries(esp: Node) -> void:
 				continue
 			if ov is ShaderMaterial:
 				var osm := ov as ShaderMaterial
-				Dbg.log("SCOPE", head + " overlay sh=%s prio=%d rim=%s" % [str(osm.shader.resource_path) if osm.shader != null else "?", osm.render_priority, str(osm.get_shader_parameter("rim_power"))])
+				Dbg.log("SCOPE", head + " overlay sh=%s prio=%d alpha=%s" % [str(osm.shader.resource_path) if osm.shader != null else "?", osm.render_priority, str(osm.get_shader_parameter("alpha"))])
 			else:
 				Dbg.log("SCOPE", head + " overlay=" + ov.get_class())
 

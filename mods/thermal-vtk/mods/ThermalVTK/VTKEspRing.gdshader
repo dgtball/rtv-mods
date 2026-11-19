@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode unshaded, cull_back, depth_draw_never;
+render_mode unshaded, cull_disabled, depth_draw_never;
 stencil_mode read, compare_not_equal, 1;
 
 // Ring pass of the direct contour overlay. Reads the stencil written by the
