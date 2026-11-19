@@ -22,7 +22,7 @@ func _run() -> void:
 	t_active_profile_name()
 	t_merge_refreshes_labels_keeps_values()
 	t_apply_reads_active_profile()
-	t_sync_nvg_esp_gates_demand()
+	t_sync_nvg_esp_baseline_no_compositor()
 	t_apply_mode_splits_layers()
 	_cleanup()
 	print("")
@@ -164,8 +164,6 @@ class FakeNVG extends Node:
 	var set_mines: bool = true
 	var palette_mode: int = 0
 	var thermal_on: bool = false
-	var esp_layer_calls: Array = []
-	var esp_demand_calls: Array = []
 	func apply_config(rec: Variant) -> void:
 		set_nvg_noise = rec.nvg_noise
 		set_nvg_white = rec.nvg_white
@@ -176,10 +174,6 @@ class FakeNVG extends Node:
 		palette_mode = v
 	func set_thermal_enabled(v: bool) -> void:
 		thermal_on = v
-	func set_esp_layer(on: bool) -> void:
-		esp_layer_calls.append(on)
-	func set_esp_demand(on: bool) -> void:
-		esp_demand_calls.append(on)
 	func nvg_active() -> bool:
 		return true
 
@@ -205,9 +199,9 @@ func t_apply_reads_active_profile() -> void:
 	esp.free()
 	nvg.free()
 
-# DIAGNOSTIC 2.10.7 (preserved in 2.10.9 palette build): ThermalVTK sync keeps
-# NVG ESP layer/demand gates disabled to isolate native crashes.
-func t_sync_nvg_esp_gates_demand() -> void:
+# 2.10.x baseline: direct overlay contour path only (no NVG ESP buffer/compositor).
+# Sync must not require compositor APIs and must preserve ESP layer state.
+func t_sync_nvg_esp_baseline_no_compositor() -> void:
 	var mod = ThermalMod.new()
 	var esp := FakeESP.new()
 	var nvg := FakeNVG.new()
@@ -220,15 +214,13 @@ func t_sync_nvg_esp_gates_demand() -> void:
 	esp.xray_layer = false
 	esp._wants_contour = true
 	mod._sync_nvg_esp()
-	ck(nvg.esp_layer_calls.size() >= 1 and bool(nvg.esp_layer_calls[nvg.esp_layer_calls.size() - 1]) == false, "diagnostic: sync keeps NVG ESP layer disabled")
-	ck(nvg.esp_demand_calls.size() >= 1 and bool(nvg.esp_demand_calls[nvg.esp_demand_calls.size() - 1]) == false, "diagnostic: sync keeps NVG ESP demand disabled")
+	ck(esp.contour_layer == true and esp.xray_layer == false, "sync preserves ESP contour/xray state without compositor")
 	esp._wants_contour = false
 	mod._sync_nvg_esp()
-	ck(bool(nvg.esp_demand_calls[nvg.esp_demand_calls.size() - 1]) == false, "diagnostic: demand remains disabled without contour")
+	ck(esp.contour_layer == true and esp.xray_layer == false, "sync does not mutate ESP layers")
 	mod._thermal_enabled = false
 	mod._apply_mode()
-	ck(bool(nvg.esp_layer_calls[nvg.esp_layer_calls.size() - 1]) == false, "diagnostic: inactive thermal path keeps NVG ESP layer disabled")
-	ck(bool(nvg.esp_demand_calls[nvg.esp_demand_calls.size() - 1]) == false, "diagnostic: inactive thermal path keeps NVG ESP demand disabled")
+	ck(not esp.contour_layer and not esp.xray_layer, "inactive thermal path clears ESP layers without compositor APIs")
 	mod.free()
 	esp.free()
 	nvg.free()

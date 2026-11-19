@@ -204,25 +204,10 @@ func _set_esp_layers_for_preview(xray_triggers: bool) -> void:
 	_sync_nvg_esp()
 
 func _sync_nvg_esp() -> void:
-	if _nvg == null or not is_instance_valid(_nvg) or _esp == null or not is_instance_valid(_esp):
-		return
-	var contour: bool = _esp.contour_layer if "contour_layer" in _esp else _outline_enabled
-	var xray: bool = _esp.xray_layer if "xray_layer" in _esp else _xray_enabled
-	var esp_active: bool = contour or xray
-	var nvg_on: bool = _nvg_active()
-	# NVG compositor path: render ESP into the NVG buffer and composite over the
-	# palettized background while NVG is worn; NVG-off uses direct overlays.
-	# DIAGNOSTIC 2.10.7: buffer/composite path disabled to isolate native crash.
-	var use_buffer: bool = false
-	var layer_bit: int = 1 << 19
-	if _nvg.has_method("esp_buffer_layer"):
-		layer_bit = 1 << (int(_nvg.esp_buffer_layer()) - 1)
-	if _esp.has_method("set_render_to_buffer"):
-		_esp.set_render_to_buffer(use_buffer, layer_bit)
-	if _nvg.has_method("set_esp_layer"):
-		_nvg.set_esp_layer(false)
-	if _nvg.has_method("set_esp_demand"):
-		_nvg.set_esp_demand(false)
+	# 2.10.x baseline: direct overlay contour path only (no NVG ESP buffer/
+	# compositor). ESP render-to-buffer API is a no-op during transition and is
+	# removed in Task 5.
+	pass
 
 func _nvg_active() -> bool:
 	if _nvg == null or not is_instance_valid(_nvg):

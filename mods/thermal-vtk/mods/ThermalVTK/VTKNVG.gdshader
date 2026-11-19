@@ -2,18 +2,12 @@ shader_type canvas_item;
 
 // NVG / thermal overlay. Replaces the vanilla NVG ColorRect shader (see
 // VTKNVG.gd for why the swap is safe). The thermal palette is applied to the
-// background; contours and mines are rendered into a separate ESP buffer and
-// composited here with their own display colours/alpha.
+// background sampled from the screen.
 
 // filter_linear, not filter_linear_mipmap: the screen is sampled 1:1 through
 // SCREEN_UV, so mip 0 is the only one ever read. Requesting mipmaps makes the
 // renderer build a full-screen mip chain every frame for nothing.
 uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_linear;
-// ESP buffer pass (contours/mines) composited over the palettized background.
-// ESP pixels keep their own display colour/alpha and are not recoloured by the
-// world palette or nvgWhite/noise.
-uniform sampler2D espTex : repeat_disable, filter_linear;
-uniform bool espComposite = false;
 uniform vec4 tint : source_color = vec4(0.47, 0.67, 0.51, 1.0);
 uniform float noise : hint_range(0.0, 60.0, 1.0) = 4.0;
 uniform float vignette : hint_range(0.0, 1.0, 0.1) = 0.1;
@@ -34,8 +28,7 @@ uniform float dayMix : hint_range(0.0, 1.0, 0.01) = 0.0;
 // Night is unaffected either way: the shoulder only engages with daylight mix.
 uniform float highlightKnee : hint_range(0.3, 1.0, 0.05) = 0.55;
 uniform int worldPaletteMode = 0;
-// Final image brightness while NVG is on. Applied to the composited overlay, so
-// unlike the old Environment.tonemap_white poke it is actually visible.
+// Final image brightness while NVG is on. Applied to the composited overlay.
 uniform float nvgWhite : hint_range(0.05, 1.0, 0.05) = 1.0;
 uniform float paletteStrength : hint_range(0.0, 1.0, 0.01) = 0.58;
 uniform float redHold : hint_range(0.0, 1.0, 0.01) = 0.72;
@@ -124,10 +117,7 @@ vec3 ThermalPalette(float t)
 
 // C1 highlight shoulder for daylight: luminance above the knee bends down
 // toward a bounded top, so the palette never receives a flat clipped value for
-// the brightest part of the frame. Must run on the UNCLAMPED luminance: once
-// clamped, snow and sky are both exactly 1.0 and the gradient between them is
-// already lost. strength = dayMix: at night the knee sits above 1.0 and the
-// curve is a no-op.
+// the brightest part of the frame. Must run on the UNCLAMPED luminance.
 float hiShoulder(float x, float knee, float strength)
 {
 	float k = mix(1.0, knee, strength);
@@ -153,7 +143,6 @@ void fragment()
 	vec4 noiseEffect = vec4(mod((mod(x, 13.0)) * (mod(x, 123.0)), 0.01) - 0.005) * noise;
 
 	vec4 color;
-	bool composited = false;
 	if (thermalMode) {
 		float rawLuminance = dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114));
 		float luminance = clamp(hiShoulder(rawLuminance * thermalDarken, highlightKnee, dayMix), 0.0, 1.0);
@@ -176,20 +165,8 @@ void fragment()
 			color.rgb *= mix(1.0, liftedLum / tintLum, dayMix);
 		}
 	}
-	if (espComposite) {
-		vec4 esp = texture(espTex, SCREEN_UV);
-		if (esp.a > 0.001) {
-			// ESP pixels keep their own display colour/alpha: composite over the
-			// palettized/tinted background without passing them through palette,
-			// nvgWhite or noise.
-			color.rgb = mix(color.rgb, esp.rgb, clamp(esp.a, 0.0, 1.0));
-			composited = true;
-		}
-	}
-	if (!composited) {
-		color.rgb *= nvgWhite;
-		color += noiseEffect;
-	}
+	color.rgb *= nvgWhite;
+	color += noiseEffect;
 	color.rgb *= (1.0 + goggleOutlines);
 	COLOR = mix(vec4(0.0, 0.0, 0.0, 1.0), color, goggleMask);
 }
