@@ -159,13 +159,11 @@ func set_layers(contour: bool, xray: bool, reason: String = "") -> void:
 func _any_layer() -> bool:
 	return contour_layer or xray_layer
 
-# NVG compositor wiring: render contours into the ESP buffer (shells on the
-# reserved buffer layer) when the NVG composite path is active, otherwise keep
-# the direct overlay path for NVG-off parity.
-func set_render_to_buffer(enabled: bool, layer_bit: int = 1 << 19) -> void:
-	_render_to_buffer = enabled
+# NVG compositor wiring removed in 2.10.x overlay-only baseline: contours always
+# render via main-view overlays. Keep API for callers/tests; buffer mode is off.
+func set_render_to_buffer(_enabled: bool, layer_bit: int = 1 << 19) -> void:
+	_render_to_buffer = false
 	_buffer_layer_bit = layer_bit
-	_outline.set_buffer_mode(enabled, layer_bit)
 	_sync_weapon_buffer_occlusion()
 
 func _sync_weapon_buffer_occlusion() -> void:
@@ -562,15 +560,18 @@ func dump_distance_debug(reason: String = "") -> void:
 	var limit: int = mini(rows.size(), 24)
 	for i in limit:
 		var r: Dictionary = rows[i]
-		Dbg.log("ESP_DIST", "  #%d id=%d dist=%s dead=%s valid=%s in_cand=%s xray=%s win=%s name=%s" % [
+		var rid: int = int(r.get("id", 0))
+		var meshes: int = _outline.mesh_count(rid) if _outline != null and _outline.has_method("mesh_count") else -1
+		Dbg.log("ESP_DIST", "  #%d id=%d dist=%s dead=%s valid=%s in_cand=%s xray=%s win=%s meshes=%s name=%s" % [
 			i,
-			int(r.get("id", 0)),
+			rid,
 			("%.2f" % float(r.get("dist", -1.0))) if float(r.get("dist", -1.0)) >= 0.0 else "n/a",
 			str(bool(r.get("dead", false))),
 			str(bool(r.get("valid", false))),
 			str(bool(r.get("in_cand", false))),
 			str(bool(r.get("xray_live", false))),
 			str(bool(r.get("win", false))),
+			str(meshes),
 			str(r.get("name", "?")),
 		])
 	if rows.size() > limit:

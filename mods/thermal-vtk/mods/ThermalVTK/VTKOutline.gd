@@ -1,55 +1,45 @@
 ﻿extends RefCounted
-# Owns ESP contour rendering per NPC in two modes:
-# - NVG-off/overlay mode (direct parity): applies direct display materials as
-#   `material_overlay` on the source meshes in the main 3D pass.
-# - NVG-on buffer mode: renders shell MeshInstance3D copies (same parent, mesh/
-#   skin/skeleton copied) on the ESP buffer layer with direct display materials,
-#   keeping source meshes free of ESP overlays so ESP is absent from screen_texture.
-#
-# Direct display semantics (both modes): outline = mask+ring band with translucent
-# ring alpha driven by fill_alpha, fill = translucent body alpha (fill_alpha),
-# xray swaps depth_test_disabled variants; color/brightness/cool/grow follow opts.
+# Owns ESP contour rendering per NPC in overlay mode (2.10.x diagnostic baseline):
+# applies direct display materials as `material_overlay` on source meshes in the
+# main 3D pass. Direct display semantics: outline = mask+ring band with
+# translucent ring alpha driven by fill_alpha, fill = translucent body alpha
+# (fill_alpha), xray swaps depth_test_disabled variants; color/brightness/cool/grow
+# follow opts.
 
 const Shaders = preload("res://mods/ThermalVTK/VTKShaders.gd")
+const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 
-# Nodes the mod adds under a bot's subtree (the nomad marker, the debug label,
-# shells, etc.) carry this meta: the sweep must skip them.
+# Nodes the mod adds under a bot's subtree (marker, debug label, etc.) carry
+# this meta: the sweep must skip them.
 const NO_CONTOUR_META := "vtk_no_contour"
-const SHELL_META := "vtk_esp_shell"
 
 var _items: Dictionary = {}
 var _clear_pool: Array = []
-var _buffer_mode: bool = false
-var _buffer_layer_bit: int = 1 << 19
 
 func has(id: int) -> bool:
 	return _items.has(id)
 
-func buffer_mode() -> bool:
-	return _buffer_mode
-
-func set_buffer_mode(enabled: bool, layer_bit: int = 1 << 19) -> void:
-	if _buffer_mode == enabled and _buffer_layer_bit == layer_bit:
-		return
-	_buffer_mode = enabled
-	_buffer_layer_bit = layer_bit
-	if enabled:
-		for id in _items:
-			_enter_buffer(id, _items[id])
-	else:
-		for id in _items:
-			_leave_buffer(id, _items[id])
+func mesh_count(id: int) -> int:
+	var entry: Dictionary = _items.get(id, {})
+	if entry.is_empty():
+		return -1
+	var meshes = entry.get("meshes", [])
+	return meshes.size() if meshes is Array else -1
 
 func _collect(node: Node, out: Array) -> void:
+	if node == null or not is_instance_valid(node):
+		return
 	if node.has_meta(NO_CONTOUR_META):
 		return
-	if node is MeshInstance3D:
+	if node is MeshInstance3D and is_instance_valid(node):
 		out.append(node)
 	for c in node.get_children():
 		_collect(c, out)
 
 func _child_count(node: Node) -> int:
 	var n: int = 0
+	if node == null or not is_instance_valid(node):
+		return 0
 	for c in node.get_children():
 		if not c.has_meta(NO_CONTOUR_META):
 			n += 1
@@ -62,6 +52,16 @@ func _same_meshes(old: Array, fresh: Array) -> bool:
 		if old[i] != fresh[i]:
 			return false
 	return true
+
+func _valid_meshes(meshes: Array) -> Array:
+	var out: Array = []
+	for m in meshes:
+		if m == null or not is_instance_valid(m):
+			continue
+		var mi := m as MeshInstance3D
+		if mi != null:
+			out.append(mi)
+	return out
 
 func _material_for(fill: bool, xray: bool) -> Material:
 	var body_mat := ShaderMaterial.new()
@@ -89,74 +89,16 @@ func _set_material(entry: Dictionary, mat: Material) -> void:
 	entry["p_band"] = null
 	entry["p_cool"] = null
 	entry["p_rim"] = null
-	if _buffer_mode:
-		_apply_shell_materials(entry)
-	else:
-		_apply_to(entry.get("meshes", []), mat)
+	_apply_to(entry.get("meshes", []), mat)
 
 # Overlay-mode write. A null material takes the contour off the source mesh.
 func _apply_to(meshes: Array, mat: Material) -> void:
 	for m in meshes:
-		var mi := m as MeshInstance3D
-		if mi != null and is_instance_valid(mi):
-			mi.material_overlay = mat
-
-func _shells(entry: Dictionary) -> Array:
-	var s = entry.get("shells", [])
-	return s if s is Array else []
-
-func _sync_shell(shell: MeshInstance3D, src: MeshInstance3D) -> void:
-	shell.global_transform = src.global_transform
-	shell.visible = src.visible
-	shell.layers = _buffer_layer_bit
-
-func _make_shell(src: MeshInstance3D) -> MeshInstance3D:
-	var shell := MeshInstance3D.new()
-	shell.set_meta(NO_CONTOUR_META, true)
-	shell.set_meta(SHELL_META, true)
-	shell.top_level = true
-	shell.mesh = src.mesh
-	shell.skin = src.skin
-	shell.skeleton = src.skeleton
-	shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	src.add_sibling(shell)
-	_sync_shell(shell, src)
-	return shell
-
-func _apply_shell_materials(entry: Dictionary) -> void:
-	var mat: Material = entry.get("mat")
-	for s in _shells(entry):
-		var shell := s as MeshInstance3D
-		if shell != null and is_instance_valid(shell):
-			shell.material_override = mat
-
-func _free_shells(entry: Dictionary) -> void:
-	for s in _shells(entry):
-		var shell := s as MeshInstance3D
-		if shell != null and is_instance_valid(shell):
-			shell.queue_free()
-	entry["shells"] = []
-
-func _enter_buffer(id: int, entry: Dictionary) -> void:
-	_apply_to(entry.get("meshes", []), null)
-	_rebuild_shells(entry)
-
-func _leave_buffer(id: int, entry: Dictionary) -> void:
-	_free_shells(entry)
-	_apply_to(entry.get("meshes", []), entry.get("mat"))
-
-func _rebuild_shells(entry: Dictionary) -> void:
-	_free_shells(entry)
-	if not _buffer_mode:
-		return
-	var shells: Array = []
-	for m in entry.get("meshes", []):
-		var src := m as MeshInstance3D
-		if src == null or not is_instance_valid(src):
+		if m == null or not is_instance_valid(m):
 			continue
-		shells.append(_make_shell(src))
-	entry["shells"] = shells
-	_apply_shell_materials(entry)
+		var mi := m as MeshInstance3D
+		if mi != null:
+			mi.material_overlay = mat
 
 func apply(id: int, node: Node, opts: Dictionary) -> void:
 	var meshes: Array = []
@@ -167,7 +109,6 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 	_items[id] = {
 		"node": node,
 		"meshes": meshes,
-		"shells": [],
 		"mat": mat,
 		"ring": _ring_of(mat),
 		"fill_mode": fill,
@@ -182,10 +123,9 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 		"p_cool": null,
 		"p_rim": null,
 	}
-	if _buffer_mode:
-		_rebuild_shells(_items[id])
-	else:
-		_apply_to(meshes, mat)
+	if Dbg.enabled:
+		Dbg.log("ESP_OUTLINE", "apply id=%d meshes=%d children=%d" % [id, meshes.size(), _child_count(node)])
+	_apply_to(meshes, mat)
 	# Seed the uniforms in the same frame: the first draw of a fresh bot must
 	# already carry its display state, not the shader default.
 	refresh(id, opts)
@@ -195,14 +135,27 @@ func refresh(id: int, opts: Dictionary) -> void:
 	if entry == null:
 		return
 	var node: Node = entry.get("node")
-	if node == null or not is_instance_valid(node) or _child_count(node) != int(entry.get("child_count", -1)):
-		_recollect(id, entry)
+	var fresh: Array = []
+	if node != null and is_instance_valid(node):
+		_collect(node, fresh)
+		var stored: Array = _valid_meshes(entry.get("meshes", []))
+		var fresh_count := _child_count(node)
+		var changed := int(entry.get("child_count", -1)) != fresh_count or not _same_meshes(stored, fresh)
+		if changed:
+			_recollect(id, entry, fresh, fresh_count)
+			# _recollect may update entry state; continue with uniform refresh.
+	if not _items.has(id):
+		return
+	entry = _items.get(id)
+	if entry == null:
+		return
 	var xray: bool = bool(opts.get("xray", false))
 	var fill: bool = bool(opts.get("fill", false))
 	if bool(entry.get("xray", false)) != xray or bool(entry.get("fill_mode", false)) != fill:
 		entry["xray"] = xray
 		entry["fill_mode"] = fill
 		_set_material(entry, _material_for(fill, xray))
+		entry = _items.get(id, entry)
 	var display: Color = opts.get("color", Color(1.0, 0.0, 0.0, 1.0))
 	var brightness: float = float(opts.get("brightness", 1.0))
 	var fill_alpha: float = clampf(float(opts.get("fill_alpha", opts.get("alpha", 0.4))), 0.0, 1.0)
@@ -261,41 +214,50 @@ func refresh(id: int, opts: Dictionary) -> void:
 		if p_ring_alpha == null or not is_equal_approx(float(p_ring_alpha), ring_alpha):
 			ring_mat.set_shader_parameter("alpha", ring_alpha)
 			entry["p_ring_alpha"] = ring_alpha
-	if _buffer_mode:
-		var meshes: Array = entry.get("meshes", [])
-		var shells: Array = _shells(entry)
-		for i in shells.size():
-			var shell := shells[i] as MeshInstance3D
-			if shell == null or not is_instance_valid(shell):
-				continue
-			if i < meshes.size():
-				var src := meshes[i] as MeshInstance3D
-				if src != null and is_instance_valid(src):
-					_sync_shell(shell, src)
+	# Reassert overlays on valid tracked meshes so state changes do not leave
+	# partial/stale application (overlay-only baseline).
+	_apply_to(_valid_meshes(entry.get("meshes", [])), entry.get("mat"))
 
-func _recollect(id: int, entry: Dictionary) -> void:
+func _recollect(id: int, entry: Dictionary, fresh: Array = [], fresh_count: int = -1) -> void:
 	var node: Node = entry.get("node")
 	if node == null or not is_instance_valid(node):
 		return
-	var fresh: Array = []
-	_collect(node, fresh)
-	entry["child_count"] = _child_count(node)
-	if _same_meshes(entry.get("meshes", []), fresh):
-		if _buffer_mode:
-			_apply_shell_materials(entry)
-		return
-	entry["meshes"] = fresh
-	if _buffer_mode:
-		_rebuild_shells(entry)
-	else:
+	var old_meshes: Array = _valid_meshes(entry.get("meshes", []))
+	if fresh.is_empty() and fresh_count < 0:
+		_collect(node, fresh)
+		fresh_count = _child_count(node)
+	elif fresh_count < 0:
+		fresh_count = _child_count(node)
+	var old_children: int = int(entry.get("child_count", -1))
+	entry["child_count"] = fresh_count
+	if _same_meshes(old_meshes, fresh):
+		entry["meshes"] = fresh
 		_apply_to(fresh, entry.get("mat"))
+		return
+	if Dbg.enabled:
+		var nname := "?"
+		if is_instance_valid(node):
+			nname = str((node as Node).name)
+		Dbg.log("ESP_OUTLINE", "recollect id=%d name=%s meshes=%d->%d children=%d->%d" % [
+			id, nname, old_meshes.size(), fresh.size(), old_children, fresh_count
+		])
+	# Remove overlay from meshes no longer tracked.
+	for m in old_meshes:
+		if m == null or not is_instance_valid(m):
+			continue
+		var mi := m as MeshInstance3D
+		if mi == null:
+			continue
+		if not fresh.has(mi):
+			mi.material_overlay = null
+	entry["meshes"] = fresh
+	_apply_to(fresh, entry.get("mat"))
 
 func clear(id: int) -> void:
 	var entry: Dictionary = _items.get(id)
 	if entry == null:
 		return
 	_apply_to(entry.get("meshes", []), null)
-	_free_shells(entry)
 	_items.erase(id)
 
 func clear_all() -> void:
@@ -308,4 +270,3 @@ func clear_not_in(keep: Dictionary) -> void:
 			_clear_pool.append(id)
 	for id in _clear_pool:
 		clear(id)
-

@@ -90,18 +90,16 @@ func t_ring_contracts() -> void:
 	ck(not los.contains("depth_test_disabled"), "los ring keeps depth test")
 	ck(xray.contains("depth_test_disabled"), "xray ring disables depth test")
 
-# Buffer/direct rendering paths use direct display materials on source overlays
-# (NVG-off) or shell meshes (NVG-on buffer). Outline keeps the stencil/ring
-# chain and display uniforms in both modes.
+# Overlay-only baseline: direct display materials are applied as source overlays.
+# Outline keeps the stencil/ring chain and display uniforms.
 func t_band_contract() -> void:
 	var outline := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKOutline.gd")
-	ck(outline.contains("func set_buffer_mode"), "VTKOutline exposes buffer mode control")
-	ck(outline.contains("SHELL_META"), "VTKOutline marks shell geometry")
-	ck(outline.contains("1 << 19"), "VTKOutline defaults to ESP buffer layer 20")
-	ck(outline.contains("material_overlay"), "VTKOutline keeps NVG-off overlay path")
+	ck(outline.contains("material_overlay"), "VTKOutline keeps overlay path")
 	ck(outline.contains("outline_color"), "VTKOutline drives direct display color")
 	ck(outline.contains("brightness"), "VTKOutline drives direct display brightness")
 	ck(outline.contains("fill_alpha"), "VTKOutline drives direct display alpha")
+	ck(not outline.contains("func set_buffer_mode"), "VTKOutline has no buffer mode control")
+	ck(not outline.contains("SHELL_META"), "VTKOutline has no shell geometry markers")
 
 # Buffer-composited ESP: NVG overlay palettizes/tints the background and composites
 # the ESP buffer on top. No screen-space key detection/substitution remains.

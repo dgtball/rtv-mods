@@ -311,14 +311,15 @@ func t_opts_contour_key() -> void:
 	ck(normal.get("color") == S.DEFAULT_NORMAL, "normal uses normal display color")
 	var defend := opts_of(esp, {"cat": S.DEFEND, "nomad": false})
 	ck(defend.get("color") == S.DEFAULT_DEFEND, "defend uses defend display color")
-	# Buffer-composite contour rendering uses the same direct display opts.
+	# Buffer-composite contour rendering removed in overlay-only baseline:
+	# render-to-buffer is a no-op and contour opts remain direct display opts.
 	esp.set_render_to_buffer(true, 1 << 19)
 	var buf := opts_of(esp, {"cat": S.COMBAT, "nomad": false})
-	ck(not buf.has("key"), "buffer mode contour opts carry no key")
-	ck(buf.get("color") == S.DEFAULT_COMBAT, "buffer mode keeps combat display color")
-	ck(absf(float(buf.get("fill_alpha", -1.0)) - float(esp.p_fill_alpha)) < 0.001, "buffer mode keeps fill_alpha")
-	ck(absf(float(buf.get("brightness", -1.0)) - float(esp.p_brightness)) < 0.001, "buffer mode keeps brightness")
-	ck(esp._outline.buffer_mode(), "buffer mode targets outline buffer rendering")
+	ck(not buf.has("key"), "contour opts carry no key after render-to-buffer no-op")
+	ck(buf.get("color") == S.DEFAULT_COMBAT, "render-to-buffer no-op keeps combat display color")
+	ck(absf(float(buf.get("fill_alpha", -1.0)) - float(esp.p_fill_alpha)) < 0.001, "render-to-buffer no-op keeps fill_alpha")
+	ck(absf(float(buf.get("brightness", -1.0)) - float(esp.p_brightness)) < 0.001, "render-to-buffer no-op keeps brightness")
+	ck(not esp._outline.has_method("buffer_mode") or esp._outline.buffer_mode() == false if esp._outline.has_method("buffer_mode") else true, "outline buffer mode is not active in overlay-only baseline")
 	esp.free()
 
 # The fill flag and configured fill alpha/brightness travel in opts.
