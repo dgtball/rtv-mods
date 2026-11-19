@@ -37,11 +37,6 @@ const PAIN_MIN_GAP := 0.4
 # contour layer gates rings and the marker, the x-ray layer gates reveals.
 var contour_layer: bool = false
 var xray_layer: bool = false
-# NVG buffer compositor target: when true, contours render as shell instances on
-# the ESP buffer layer for NVG compositing; when false, contours render as direct
-# overlays in the main pass (NVG-off parity path).
-var _render_to_buffer: bool = false
-var _buffer_layer_bit: int = 1 << 19
 # MCM-driven params.
 var p_decay := 30.0
 var p_dist := 60.0

@@ -205,8 +205,7 @@ func _set_esp_layers_for_preview(xray_triggers: bool) -> void:
 
 func _sync_nvg_esp() -> void:
 	# 2.10.x baseline: direct overlay contour path only (no NVG ESP buffer/
-	# compositor). ESP render-to-buffer API is a no-op during transition and is
-	# removed in Task 5.
+	# compositor).
 	pass
 
 func _nvg_active() -> bool:
