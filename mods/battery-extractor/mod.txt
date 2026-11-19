@@ -8,4 +8,4 @@ BatteryExtractor="res://mods/BatteryExtractor/BatteryExtractor.gd"
 
 [hooks]
 res://Scripts/Context.gd = Update
-res://Scripts/Interface.gd = Charge
+res://Scripts/Interface.gd = Release

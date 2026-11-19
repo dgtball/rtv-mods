@@ -3,12 +3,15 @@ extends Node
 const RULES := preload("res://mods/BatteryExtractor/BatteryRules.gd")
 const BATTERIES_PATH := "res://Items/Electronics/Batteries/Batteries.tres"
 const CONTEXT_HOOK := "context-update-post"
-const CHARGE_HOOK := "interface-charge-post"
+const RELEASE_PRE_HOOK := "interface-release-pre"
+const RELEASE_POST_HOOK := "interface-release-post"
 
 var _lib = null
 var _partial_item = null
 var _button = null
 var _context = null
+var _pending_charge: float = -1.0
+var _pending_target = null
 
 
 func _ready() -> void:
@@ -25,7 +28,8 @@ func _register() -> void:
 	if _lib == null:
 		return
 	_lib.hook(CONTEXT_HOOK, Callable(self, "_on_context_update"))
-	_lib.hook(CHARGE_HOOK, Callable(self, "_on_charge_post"))
+	_lib.hook(RELEASE_PRE_HOOK, Callable(self, "_on_release_pre"))
+	_lib.hook(RELEASE_POST_HOOK, Callable(self, "_on_release_post"))
 
 
 # The context node is cached because a button press has no hook caller of its
@@ -148,17 +152,47 @@ func _on_extract_pressed() -> void:
 	iface.PlayAttach()
 
 
-# Charge is void with two arguments; the trailing default is the same arity
-# insurance as above. Vanilla sets condition = 100 only after the progress bar
-# completes, so queue a one-shot that overwrites it with the stored charge.
-# Ordinary batteries carry no marker and never reach this code.
-func _on_charge_post(target_item, source_item, _result = null) -> void:
-	if source_item == null or not is_instance_valid(source_item):
+# Interface.Charge is not hookable (no modloader wrapper), and its own post
+# dispatch would fire only after the await, when activeProgress is already
+# null. The drag-drop entry point Interface.Release is hookable and is sync:
+# Combine() calls Charge() without awaiting, so at release-post the progress
+# bar is still active. Arm in pre (itemDragged/hoverItem are still readable,
+# Reset() clears them inside Combine) and install the one-shot in post.
+func _on_release_pre(_unused = null) -> void:
+	_pending_charge = -1.0
+	_pending_target = null
+	var iface = _lib._caller if _lib else null
+	if iface == null or not is_instance_valid(iface):
 		return
-	var sd = source_item.get("slotData")
-	if sd == null:
+	var source = iface.get("itemDragged")
+	if source == null or not is_instance_valid(source):
 		return
-	if not RULES.is_partial(sd.get("itemData")):
+	var sd = source.get("slotData")
+	if sd == null or not RULES.is_partial(sd.get("itemData")):
+		return
+	var target = iface.get("hoverItem")
+	if target == null:
+		var slot = iface.get("hoverSlot")
+		if slot != null and is_instance_valid(slot) and slot.get_child_count() > 0:
+			target = slot.get_child(0)
+	if target == null or not is_instance_valid(target):
+		return
+	var target_sd = target.get("slotData")
+	if target_sd == null:
+		return
+	var data = target_sd.get("itemData")
+	if data == null or not RULES.is_target(str(data.get("file"))):
+		return
+	_pending_charge = RULES.charge_for(sd.get("condition"))
+	_pending_target = target
+
+
+func _on_release_post(_result = null) -> void:
+	var charge: float = _pending_charge
+	var target = _pending_target
+	_pending_charge = -1.0
+	_pending_target = null
+	if charge < 0.0 or target == null or not is_instance_valid(target):
 		return
 	var iface = _lib._caller if _lib else null
 	if iface == null or not is_instance_valid(iface):
@@ -168,8 +202,7 @@ func _on_charge_post(target_item, source_item, _result = null) -> void:
 		return
 	if not progress.has_signal("completed"):
 		return
-	var charge: float = RULES.charge_for(sd.get("condition"))
-	progress.completed.connect(_apply_partial_charge.bind(target_item, charge), Object.CONNECT_ONE_SHOT)
+	progress.completed.connect(_apply_partial_charge.bind(target, charge), Object.CONNECT_ONE_SHOT)
 
 
 func _apply_partial_charge(target_item, charge) -> void:
