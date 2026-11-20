@@ -1106,6 +1106,7 @@ func _sidecar_write() -> void:
 	var err := _replace(SIDECAR_TMP, SIDECAR_PATH)
 	if err != OK:
 		Log.warn("sidecar: replace failed (code " + str(err) + ")")
+		_sidecar_invalidate()
 		return
 	_sidecar_invalidate()
 	Log.line("[RTL-DBG] _sidecar_write: wrote items=" + str(merged.size()) + " by_uid=" + str(merged_by_uid.size()) + " (prev_items=" + str(prev_items.size()) + " prev_by_uid=" + str(prev_by_uid.size()) + " new=" + str(items.size()) + ")")
@@ -1131,11 +1132,11 @@ func _scan_collect_slots(node: Node, out: Array) -> void:
 			_scan_collect_slots(c, out)
 
 func _sidecar_read() -> Dictionary:
-	if _sidecar_cache_valid:
-		return _sidecar_cached
-	_sidecar_cached = _sidecar_parse()
-	_sidecar_cache_valid = true
-	return _sidecar_cached
+	if not _sidecar_cache_valid:
+		_sidecar_cached = _sidecar_parse()
+		_sidecar_cache_valid = true
+	# restore-пути правят by_uid на месте; кэш должен остаться нетронутым
+	return _sidecar_cached.duplicate(true)
 
 func _sidecar_invalidate() -> void:
 	_sidecar_cached = {}

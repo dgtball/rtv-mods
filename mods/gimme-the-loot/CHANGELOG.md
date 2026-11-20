@@ -5,8 +5,7 @@
 ### Changed
 - Rarity colour choice has been removed from the settings; item rarity borders
   now always use the default blue, purple and gold colours.
-- Loot data is read less often while playing, and inventory cells are refreshed
-  without repeated redraw work.
+- Minor performance improvements.
 
 ## [1.2.2] - 2026-11-19
 

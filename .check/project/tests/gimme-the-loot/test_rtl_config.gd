@@ -48,16 +48,28 @@ func _init() -> void:
 
 	# --- node_added батчится: track только кладёт узел в очередь ---
 	var d := Display.new()
-	var cell := Panel.new()
+	var cell := PaintedCell.new()
+	var qslot := FakeSlot.new()
+	qslot.loot_tier = 1
+	cell.slotData = qslot
 	d.track(cell)
 	var pending: Array = d.get("_pending")
 	ck(pending.size() == 1, "track enqueues a node instead of walking it")
+	ck(cell.get_node_or_null("_rtl_border") == null, "track does not paint synchronously")
+
+	# ready надо подписывать на node_added, пока сигнал ещё не прошёл
+	var bare := Panel.new()
+	d.track(bare)
+	ck(bare.get_signal_connection_list("ready").size() == 1,
+		"ready is subscribed at node_added time, not at drain")
 	d.call("_drain_pending")
+	ck(cell.get_node_or_null("_rtl_border") != null, "drain paints queued cells")
 	pending = d.get("_pending")
 	ck(pending.is_empty(), "drain clears the queue")
 	d.call("_drain_pending")
 	ck(true, "drain on an empty queue is safe")
 	cell.free()
+	bare.free()
 
 	# --- повторная покраска не пересоздаёт стиль, смена tier обновляет его ---
 	var slot := FakeSlot.new()

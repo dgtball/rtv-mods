@@ -59,6 +59,11 @@ func attach(tree: SceneTree) -> void:
 func track(node: Node) -> void:
 	if node == null:
 		return
+	# ready подписываем здесь, а не при разборе очереди: node_added приходит
+	# до NOTIFICATION_READY, а process_frame — уже после него.
+	if node is Panel and not ("slotData" in node):
+		if node.has_signal("ready") and not node.is_connected("ready", Callable(self, "_on_item_ready")):
+			node.ready.connect(Callable(self, "_on_item_ready").bind(node), CONNECT_ONE_SHOT)
 	_pending.append(node)
 
 func _drain_pending() -> void:
@@ -72,8 +77,6 @@ func _drain_pending() -> void:
 
 func _process_node(node: Node) -> void:
 	if node is Panel and not ("slotData" in node):
-		if node.has_signal("ready") and not node.is_connected("ready", Callable(self, "_on_item_ready")):
-			node.ready.connect(Callable(self, "_on_item_ready").bind(node), CONNECT_ONE_SHOT)
 		return
 	if _is_item(node):
 		var _t = Store.tier(node.slotData)

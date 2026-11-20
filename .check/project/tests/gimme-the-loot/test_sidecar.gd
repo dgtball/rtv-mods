@@ -94,6 +94,27 @@ func _init() -> void:
 	var after_upsert: Dictionary = boot._sidecar_read()
 	ck(after_upsert.get("by_uid", {}).has("u3"),
 		"upsert invalidates the cache so the new roll is visible")
+
+	# кэш отдаётся копией: починки restore-путей не должны оседать в нём
+	var shared: Dictionary = boot._sidecar_read()
+	var shared_bu: Dictionary = shared.get("by_uid", {})
+	shared_bu["ghost"] = {"t": 1, "a": [], "file": "g"}
+	var unmutated: Dictionary = boot._sidecar_read()
+	ck(not unmutated.get("by_uid", {}).has("ghost"),
+		"cached sidecar is returned by value")
+
+	# новая игра удаляет файл и обязана сбросить кэш
+	boot.on_new_game(null, null)
+	var after_reset: Dictionary = boot._sidecar_read()
+	ck(after_reset.is_empty(), "new game clears both sidecar and its cache")
+
+	# поведенческий тест не дотягивается до _sidecar_write: страховка на точки записи
+	var boot_src := FileAccess.get_file_as_string("res://mods/RoadToLoot/RTLBoot.gd")
+	ck(boot_src.split("_sidecar_invalidate()").size() - 1 >= 4,
+		"every sidecar write path invalidates the cache")
+	ck(not boot_src.contains("_sidecar_retry"), "five-retry chain is gone")
+	ck(boot_src.count("call_deferred(\"_retry_sidecar_save\")") == 1,
+		"exactly one deferred sidecar retry remains")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 	print("")
