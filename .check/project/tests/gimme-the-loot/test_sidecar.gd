@@ -1,6 +1,7 @@
 extends SceneTree
 
 const Sidecar = preload("res://mods/RoadToLoot/RTLSidecar.gd")
+const Boot = preload("res://mods/RoadToLoot/RTLBoot.gd")
 
 var fails := 0
 
@@ -68,6 +69,32 @@ func _init() -> void:
 	var null_dict: Dictionary = Sidecar.read(null)
 	ck(null_dict.get("uid", "") == "", "read(null) returns uid=''")
 	ck(null_dict.get("plate", 0) == 0, "read(null) returns plate=0")
+
+	# --- sidecar cache: repeated reads reuse the first snapshot ---
+	var path := "user://roadtoloot_moddata.json"
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(JSON.stringify({"v": 3, "items": {}, "by_uid": {"u1": {"t": 2, "a": [], "file": "x"}}, "by_ft": {}}))
+	f.close()
+	var boot := Boot.new()
+	var first: Dictionary = boot._sidecar_read()
+	ck(first.get("by_uid", {}).has("u1"), "first sidecar read sees u1")
+	var f2 := FileAccess.open(path, FileAccess.WRITE)
+	f2.store_string(JSON.stringify({"v": 3, "items": {}, "by_uid": {"u2": {"t": 3, "a": [], "file": "y"}}, "by_ft": {}}))
+	f2.close()
+	var second: Dictionary = boot._sidecar_read()
+	ck(second.get("by_uid", {}).has("u1") and not second.get("by_uid", {}).has("u2"),
+		"cached sidecar read ignores a file change")
+	boot.call("_sidecar_invalidate")
+	var third: Dictionary = boot._sidecar_read()
+	ck(third.get("by_uid", {}).has("u2"), "invalidate makes the next read see the file")
+
+	# upsert пишет прямо в sidecar и обязан сбросить кэш, иначе новый лут
+	# не увидит свои аффиксы в этой же сессии
+	boot.call("_sidecar_upsert_uid", "u3", "z", 2, ["frost"])
+	var after_upsert: Dictionary = boot._sidecar_read()
+	ck(after_upsert.get("by_uid", {}).has("u3"),
+		"upsert invalidates the cache so the new roll is visible")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 	print("")
 	if fails > 0:

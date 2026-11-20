@@ -20,7 +20,8 @@ var _debug = DebugMod.new()
 var _display = Display.new()
 var _stats = null
 var _sidecar_deferred := false
-var _sidecar_retry := 0
+var _sidecar_cached: Dictionary = {}
+var _sidecar_cache_valid := false
 var _container_watch := 0
 
 var _pending_container: Dictionary = {} # instance_id -> { "sd": slotData, "uid": String, "file": String, "t": int, "a": Array }
@@ -451,9 +452,7 @@ func _flush_sidecar_save() -> void:
 		# When opening/rebuilding container grid, avoid full _sidecar_write() scan
 		try_restore_container()
 	_container_watch = max(_container_watch, 15)
-	if _sidecar_retry < 5:
-		_sidecar_retry += 1
-		call_deferred("_retry_sidecar_save")
+	call_deferred("_retry_sidecar_save")
 
 func _retry_sidecar_save() -> void:
 	if _pending_container.size() > 0:
@@ -503,6 +502,7 @@ func _sidecar_upsert_uid(uid: String, file: String, tier: int, affixes: Array) -
 		return
 	f.store_string(JSON.stringify({"v": SIDECAR_VERSION, "items": items_prev, "by_uid": new_bu, "by_ft": by_ft_prev}))
 	f.close()
+	_sidecar_invalidate()
 
 # Прочность на момент ролла: unbreakable замораживает именно её. -1.0 значит
 # «прочности нет» (шлем и разгрузка всегда спавнятся со 100%, но поле у них есть).
@@ -1107,6 +1107,7 @@ func _sidecar_write() -> void:
 	if err != OK:
 		Log.warn("sidecar: replace failed (code " + str(err) + ")")
 		return
+	_sidecar_invalidate()
 	Log.line("[RTL-DBG] _sidecar_write: wrote items=" + str(merged.size()) + " by_uid=" + str(merged_by_uid.size()) + " (prev_items=" + str(prev_items.size()) + " prev_by_uid=" + str(prev_by_uid.size()) + " new=" + str(items.size()) + ")")
 	if _debug.should_log():
 		Log.line("sidecar: wrote " + str(merged.size()) + " rolls (new=" + str(items.size()) + ")")
@@ -1130,6 +1131,17 @@ func _scan_collect_slots(node: Node, out: Array) -> void:
 			_scan_collect_slots(c, out)
 
 func _sidecar_read() -> Dictionary:
+	if _sidecar_cache_valid:
+		return _sidecar_cached
+	_sidecar_cached = _sidecar_parse()
+	_sidecar_cache_valid = true
+	return _sidecar_cached
+
+func _sidecar_invalidate() -> void:
+	_sidecar_cached = {}
+	_sidecar_cache_valid = false
+
+func _sidecar_parse() -> Dictionary:
 	if not FileAccess.file_exists(SIDECAR_PATH):
 		return {}
 	var txt := FileAccess.get_file_as_string(SIDECAR_PATH)
@@ -1262,4 +1274,5 @@ func on_new_game(_difficulty, _season) -> void:
 	_stats_dirty()
 	if FileAccess.file_exists(SIDECAR_PATH):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(SIDECAR_PATH))
+	_sidecar_invalidate()
 	Log.line("sidecar: cleared for a new run")
