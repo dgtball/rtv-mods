@@ -32,31 +32,35 @@ never jam, unbreakable gear, frost resistance and slower battery drain.
 - Optional integration with Evolve/ItemClarity **is NOT recommended** for
   stability: use only one of the three mods.
 
-## Table: maximum affix values (T3)
+## Table: affix values by tier
 
-Stat | Max |
-|---|---|
-| Capacity | +6 kg |
-| Insulation | +12–16% |
-| Regen | 0.04 HP/s |
-| Low-HP regen | 0.04 HP/s |
-| Sanity drain | −12% |
-| Thirst/Hunger/Stamina drain | −9%–−12% |
-| Sprint | +6% |
-| Noise (AI range) | 16% |
-| max_hp | +30% (1-5% / 5-15% / 15-30% by tier) |
-| Extra Loot | ~100% chance |
-| Protection | +1 level |
-| Damage | +12% |
-| Recoil | −12% |
-| Fire rate | +8% |
-| Low-HP damage | +20% |
-| Wear Resistance | up to +60% |
-| Ammo save | +50% |
-| Battery save | up to 90% |
-| Never Jam | Rare and above |
-| Unbreakable | Legendary weapons, helmets and rigs |
-| Frost Resistant | Legendary clothing: no frostbite while worn |
+| Stat                               | Common         | Rare           | Legendary      |
+| ---------------------------------- | --------------- | --------------- | --------------- |
+| damage                             | 2–6%           | 4–8%           | 6–12%          |
+| recoil                             | −1–−2%         | −2–−4%         | −4–−6%         |
+| wear                               | 10–20%         | 20–35%         | 35–60%         |
+| low_hp_damage                      | 5–10%          | 8–14%          | 12–20%         |
+| ammo_save                          | 5–10%          | 10–15%         | 15–50%         |
+| never_jam                          | —              | Yes            | Yes            |
+| unbreakable                        | —              | —              | Yes            |
+| regen                              | 0.005–0.01 HP/s | 0.01–0.025 HP/s | 0.02–0.04 HP/s |
+| low_hp_regen                       | 0.015 HP/s     | 0.025 HP/s     | 0.04 HP/s      |
+| capacity                           | 1–2 kg         | 2–4 kg         | 4–6 kg         |
+| stamina_drain                      | −3–−6%         | −5–−9%         | −8–−12%        |
+| insulation                         | 4–8%           | 8–12%          | 12–16%         |
+| thirst_drain                       | −3–−6%         | −5–−9%         | −8–−12%        |
+| hunger_drain                       | −3–−6%         | −5–−9%         | −8–−12%        |
+| sanity_drain                       | −3–−6%         | −5–−9%         | −8–−12%        |
+| noise                              | −5–−8%         | −7–−12%        | −10–−16%       |
+| sprint                             | 1–2%           | 2–4%           | 4–6%           |
+| extra_loot                         | 1%             | 2–3%           | 3–4%           |
+| protection                         | —              | +1 level       | +1 level       |
+| max_hp                             | 1–5%           | 5–15%          | 15–30%         |
+| frost_resistant                    | —              | —              | Yes            |
+| battery_save                       | 5–10%          | 20–50%         | 70–90%         |
+
+`—` means the affix does not roll at that tier. Negative values are bonuses:
+drain, recoil and AI detection range go down.
 
 Notes:
 - There are no balance caps any more: stacking several Legendary pieces can
