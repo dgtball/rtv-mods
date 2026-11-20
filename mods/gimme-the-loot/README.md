@@ -35,25 +35,25 @@ never jam, unbreakable gear, frost resistance and slower battery drain.
 ## Table: affix values by tier
 
 | Stat                               | Common         | Rare           | Legendary      |
-| ---------------------------------- | --------------- | --------------- | --------------- |
-| damage                             | 2–6%           | 4–8%           | 6–12%          |
-| recoil                             | −1–−2%         | −2–−4%         | −4–−6%         |
-| wear                               | 10–20%         | 20–35%         | 35–60%         |
-| low_hp_damage                      | 5–10%          | 8–14%          | 12–20%         |
-| ammo_save                          | 5–10%          | 10–15%         | 15–50%         |
+| ---------------------------------- | -------------- | -------------- | ---------------|
+| damage                             | 1–5%           | 6–10%          | 10–20%         |
+| recoil                             | −1–−5%         | −6–−10%        | −10–−20%       |
+| wear                               | 5–10%          | 10–15%         | 20–50%         |
+| low_hp_damage                      | 5–10%          | 10–15%         | 20–50%         |
+| ammo_save                          | 5–10%          | 10–15%         | 20–50%         |
 | never_jam                          | —              | Yes            | Yes            |
 | unbreakable                        | —              | —              | Yes            |
-| regen                              | 0.005–0.01 HP/s | 0.01–0.025 HP/s | 0.02–0.04 HP/s |
-| low_hp_regen                       | 0.015 HP/s     | 0.025 HP/s     | 0.04 HP/s      |
-| capacity                           | 1–2 kg         | 2–4 kg         | 4–6 kg         |
-| stamina_drain                      | −3–−6%         | −5–−9%         | −8–−12%        |
-| insulation                         | 4–8%           | 8–12%          | 12–16%         |
-| thirst_drain                       | −3–−6%         | −5–−9%         | −8–−12%        |
-| hunger_drain                       | −3–−6%         | −5–−9%         | −8–−12%        |
-| sanity_drain                       | −3–−6%         | −5–−9%         | −8–−12%        |
-| noise                              | −5–−8%         | −7–−12%        | −10–−16%       |
-| sprint                             | 1–2%           | 2–4%           | 4–6%           |
-| extra_loot                         | 1%             | 2–3%           | 3–4%           |
+| regen                              | 0.01 HP/s      | 0.02–0.04 HP/s | 0.05–0.1 HP/s  |
+| low_hp_regen                       | 0.02 HP/s      | 0.04 HP/s      | 0.1 HP/s       |
+| capacity                           | 1–2 kg         | 2–4 kg         | 5–10 kg        |
+| insulation                         | 1–5%           | 5–15%          | 20–50%         |
+| stamina_drain                      | −1–−5%         | −5–−10%        | −15–−25%       |
+| thirst_drain                       | −1–−5%         | −5–−10%        | −15–−25%       |
+| hunger_drain                       | −1–−5%         | −5–−10%        | −15–−25%       |
+| sanity_drain                       | −1–−5%         | −5–−10%        | −15–−25%       |
+| noise                              | −1–−5%         | −5–−10%        | −15–−25%       |
+| sprint                             | 1–5%           | 5–15%          | 15–25%         |
+| extra_loot                         | 1%             | 2–3%           | 5–10%          |
 | protection                         | —              | +1 level       | +1 level       |
 | max_hp                             | 1–5%           | 5–15%          | 15–30%         |
 | frost_resistant                    | —              | —              | Yes            |
