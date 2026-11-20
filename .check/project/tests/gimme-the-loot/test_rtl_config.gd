@@ -4,6 +4,12 @@ const ConfigRec = preload("res://mods/RoadToLoot/RTLConfig.gd")
 const Boot = preload("res://mods/RoadToLoot/RTLBoot.gd")
 const Display = preload("res://mods/RoadToLoot/RTLDisplay.gd")
 
+class FakeSlot extends RefCounted:
+	var loot_tier: int = 0
+
+class PaintedCell extends Panel:
+	var slotData = null
+
 var fails := 0
 
 func ck(cond: bool, msg: String) -> void:
@@ -52,6 +58,25 @@ func _init() -> void:
 	d.call("_drain_pending")
 	ck(true, "drain on an empty queue is safe")
 	cell.free()
+
+	# --- повторная покраска не пересоздаёт стиль, смена tier обновляет его ---
+	var slot := FakeSlot.new()
+	slot.loot_tier = 2
+	var painted := PaintedCell.new()
+	painted.slotData = slot
+	var paint_disp := Display.new()
+	paint_disp.paint(painted)
+	var overlay := painted.get_node_or_null("_rtl_border")
+	ck(overlay != null, "border created")
+	var style_id: int = int(overlay.get_theme_stylebox("panel").get_instance_id())
+	paint_disp.paint(painted)
+	ck(painted.get_child_count() == 1, "repaint does not add another border")
+	ck(int(overlay.get_theme_stylebox("panel").get_instance_id()) == style_id,
+		"repaint keeps the same StyleBoxFlat instance")
+	slot.loot_tier = 3
+	paint_disp.paint(painted)
+	ck(int(overlay.get_meta("rtl_border_tier", -1)) == 3, "tier change updates the border")
+	painted.free()
 
 	# --- debug: голый bool в любой секции включает debug ---
 	var d1 := ConfigFile.new()

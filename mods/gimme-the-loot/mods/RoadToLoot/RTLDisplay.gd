@@ -8,6 +8,7 @@ const Rows = preload("res://mods/RoadToLoot/RTLRows.gd")
 
 const BORDER_NAME := "_rtl_border"
 const BORDER_TAG := "rtl_border"
+const META_BORDER_TIER := "rtl_border_tier"
 const ROW_NAME := "_rtl_stat"
 const ROW_TAG := "rtl_stat"
 const ROW_VALUE_MIN_W := 40.0
@@ -127,6 +128,8 @@ func paint(item) -> void:
 		return
 	var overlay = _existing_border(item)
 	_drop_borders(item, overlay)
+	if overlay != null and int(overlay.get_meta(META_BORDER_TIER, -1)) == tier:
+		return
 	if overlay == null:
 		overlay = Panel.new()
 		overlay.name = BORDER_NAME
@@ -142,6 +145,7 @@ func paint(item) -> void:
 	style.bg_color = c
 	style.set_border_width_all(0)
 	overlay.add_theme_stylebox_override("panel", style)
+	overlay.set_meta(META_BORDER_TIER, tier)
 
 # Nodes queued for deletion keep their slot in the parent until the frame ends,
 # so a same-frame recreation of a same-named child is renamed by Godot
