@@ -6,7 +6,6 @@ const FREQ_DEFAULT := 0.5
 var paint_cells: bool = true
 var show_affix_block: bool = true
 var freq_mult: float = FREQ_DEFAULT
-var tier_palette: int = 0
 var debug_enabled: bool = false
 var debug_force_tier: int = 0
 var debug_reroll_key: int = 0
@@ -17,7 +16,6 @@ func read(cfg: ConfigFile) -> void:
 	paint_cells = _b(cfg, "paint_cells", paint_cells)
 	show_affix_block = _b(cfg, "show_affix_block", show_affix_block)
 	freq_mult = _f(cfg, "freq_mult", freq_mult)
-	tier_palette = _i(cfg, "tier_palette", tier_palette)
 	debug_enabled = _b(cfg, "debug_enabled", debug_enabled)
 	debug_force_tier = _i(cfg, "debug_force_tier", debug_force_tier)
 	debug_reroll_key = _i(cfg, "debug_reroll_key", debug_reroll_key)

@@ -73,7 +73,6 @@ Notes:
 ### 01. Display
 - Paint item cells
 - Show affix block in tooltip
-- Rarity palette
 
 ### 02. Balance
 - Rarity frequency (0.5–2.0×)

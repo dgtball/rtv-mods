@@ -16,7 +16,6 @@ const ROW_VALUE_MIN_W := 40.0
 # instead of a hardcoded white. The original is captured once per label.
 const META_BASE_MOD := "rtl_base_modulate"
 const COLORS_DEFAULT := {1: Color(0.35, 0.6, 1.0), 2: Color(0.7, 0.4, 1.0), 3: Color(1.0, 0.8, 0.2)}
-const COLORS_CONTRAST := {1: Color(0.1, 0.75, 1.0), 2: Color(1.0, 0.2, 0.9), 3: Color(1.0, 0.95, 0.1)}
 
 var _cfg = null
 var _host = null
@@ -144,10 +143,7 @@ func _existing_border(item):
 	return null
 
 func _border_color(tier: int) -> Color:
-	var palette: Dictionary = COLORS_DEFAULT
-	if _cfg != null and _cfg.tier_palette == 1:
-		palette = COLORS_CONTRAST
-	return palette.get(tier, Color(1, 1, 1, 0))
+	return COLORS_DEFAULT.get(tier, Color(1, 1, 1, 0))
 
 func _inspect_tooltip(node: Node, depth: int = 0, path: String = "") -> void:
 	if node == null or depth > 3:

@@ -2,6 +2,7 @@ extends SceneTree
 
 const ConfigRec = preload("res://mods/RoadToLoot/RTLConfig.gd")
 const Boot = preload("res://mods/RoadToLoot/RTLBoot.gd")
+const Display = preload("res://mods/RoadToLoot/RTLDisplay.gd")
 
 var fails := 0
 
@@ -27,6 +28,17 @@ func _init() -> void:
 	var user := ConfigRec.new()
 	user.read(cfg)
 	ck(absf(user.freq_mult - 1.5) < 0.0001, "user value 1.5 is preserved")
+
+	# removed Rarity palette: a stale config key must no longer change colours
+	var stale := ConfigFile.new()
+	stale.set_value("Dropdown", "tier_palette", {"value": 1})
+	var rec := ConfigRec.new()
+	rec.read(stale)
+	var disp := Display.new()
+	disp.configure(rec)
+	ck(disp._border_color(1) == Color(0.35, 0.6, 1.0), "tier 1 is default blue")
+	ck(disp._border_color(2) == Color(0.7, 0.4, 1.0), "tier 2 is default purple")
+	ck(disp._border_color(3) == Color(1.0, 0.8, 0.2), "tier 3 is default gold")
 
 	# --- debug: голый bool в любой секции включает debug ---
 	var d1 := ConfigFile.new()
