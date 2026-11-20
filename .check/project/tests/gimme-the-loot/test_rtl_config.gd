@@ -40,6 +40,19 @@ func _init() -> void:
 	ck(disp._border_color(2) == Color(0.7, 0.4, 1.0), "tier 2 is default purple")
 	ck(disp._border_color(3) == Color(1.0, 0.8, 0.2), "tier 3 is default gold")
 
+	# --- node_added батчится: track только кладёт узел в очередь ---
+	var d := Display.new()
+	var cell := Panel.new()
+	d.track(cell)
+	var pending: Array = d.get("_pending")
+	ck(pending.size() == 1, "track enqueues a node instead of walking it")
+	d.call("_drain_pending")
+	pending = d.get("_pending")
+	ck(pending.is_empty(), "drain clears the queue")
+	d.call("_drain_pending")
+	ck(true, "drain on an empty queue is safe")
+	cell.free()
+
 	# --- debug: голый bool в любой секции включает debug ---
 	var d1 := ConfigFile.new()
 	d1.set_value("Bool", "debug_enabled", true)

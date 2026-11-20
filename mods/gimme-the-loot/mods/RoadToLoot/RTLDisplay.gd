@@ -23,6 +23,7 @@ var _scan_frames_remaining: int = 0
 var _last_tooltip_item_id: int = 0
 var _did_inspect_tooltip: bool = false
 var _rows_root = null
+var _pending: Array = []
 var _rows: Array = []
 var _merged_values: Array = []
 var _last_rows_item_id: int = 0
@@ -48,11 +49,27 @@ func attach(tree: SceneTree) -> void:
 	if not tree.node_added.is_connected(track):
 		tree.node_added.connect(track)
 	_walk(tree.get_root())
+	if not tree.process_frame.is_connected(_drain_pending):
+		tree.process_frame.connect(_drain_pending)
 	if not tree.process_frame.is_connected(_scan_after_frame):
 		_scan_frames_remaining = 12
 		tree.process_frame.connect(_scan_after_frame)
 
 func track(node: Node) -> void:
+	if node == null:
+		return
+	_pending.append(node)
+
+func _drain_pending() -> void:
+	if _pending.is_empty():
+		return
+	var batch: Array = _pending
+	_pending = []
+	for node in batch:
+		if is_instance_valid(node):
+			_process_node(node)
+
+func _process_node(node: Node) -> void:
 	if node is Panel and not ("slotData" in node):
 		if node.has_signal("ready") and not node.is_connected("ready", Callable(self, "_on_item_ready")):
 			node.ready.connect(Callable(self, "_on_item_ready").bind(node), CONNECT_ONE_SHOT)
@@ -71,7 +88,7 @@ func track(node: Node) -> void:
 		if _cfg == null or _cfg.paint_cells:
 			paint(node)
 	for child in node.get_children():
-		track(child)
+		_process_node(child)
 
 func _on_item_ready(node: Node) -> void:
 	if _is_item(node) and (_cfg == null or _cfg.paint_cells):
