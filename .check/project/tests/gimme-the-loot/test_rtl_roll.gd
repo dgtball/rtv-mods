@@ -47,9 +47,9 @@ func _init() -> void:
 
 	# --- wear теперь сопротивление, а не ускорение износа ---
 	var wr: Dictionary = Pool.entry("weapon", "wear")
-	ck(float(wr["ranges"][1][0]) == 10.0 and float(wr["ranges"][1][1]) == 20.0, "wear T1 10-20")
-	ck(float(wr["ranges"][2][0]) == 20.0 and float(wr["ranges"][2][1]) == 35.0, "wear T2 20-35")
-	ck(float(wr["ranges"][3][0]) == 35.0 and float(wr["ranges"][3][1]) == 60.0, "wear T3 35-60")
+	ck(float(wr["ranges"][1][0]) == 5.0 and float(wr["ranges"][1][1]) == 10.0, "wear T1 5-10")
+	ck(float(wr["ranges"][2][0]) == 10.0 and float(wr["ranges"][2][1]) == 15.0, "wear T2 10-15")
+	ck(float(wr["ranges"][3][0]) == 20.0 and float(wr["ranges"][3][1]) == 50.0, "wear T3 20-50")
 
 	# --- флаги: единица flag и веса ---
 	ck(str(Pool.entry("weapon", "never_jam").get("unit", "")) == "flag", "never_jam unit flag")
@@ -123,7 +123,7 @@ func _init() -> void:
 	if ar.has(1) and ar.has(2) and ar.has(3):
 		ck(float(ar[1][0]) == 5.0 and float(ar[1][1]) == 10.0, "ammo_save T1 5-10")
 		ck(float(ar[2][0]) == 10.0 and float(ar[2][1]) == 15.0, "ammo_save T2 10-15")
-		ck(float(ar[3][0]) == 15.0 and float(ar[3][1]) == 50.0, "ammo_save T3 15-50")
+		ck(float(ar[3][0]) == 20.0 and float(ar[3][1]) == 50.0, "ammo_save T3 20-50")
 	ck(Pool.ROW_ORDER.has("ammo_save"), "ROW_ORDER has ammo_save")
 	ck(Pool.ROW_ORDER.find("ammo_save") == Pool.ROW_ORDER.find("wear") + 1, "ammo_save follows wear")
 

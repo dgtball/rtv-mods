@@ -11,6 +11,12 @@ func ck(cond: bool, msg: String) -> void:
 		fails += 1
 		print("FAIL  ", msg)
 
+func ck_range(cat: String, stat: String, tier: int, want: String) -> void:
+	var e: Dictionary = Pool.entry(cat, stat)
+	var ranges: Dictionary = e.get("ranges", {})
+	var got: String = str(ranges.get(tier, []))
+	ck(got == want, stat + " T" + str(tier) + " " + want + ": " + got)
+
 func _init() -> void:
 	ck(Pool.ACTIVE_RELEASE == 4, "ACTIVE_RELEASE == 4")
 
@@ -44,11 +50,65 @@ func _init() -> void:
 	ck(Pool.entry("clothing", "extra_loot") == Pool.entry("gadget", "extra_loot"),
 		"extra_loot is one shared entry")
 
-	# --- wear теперь сопротивление, а не ускорение износа ---
-	var wr: Dictionary = Pool.entry("weapon", "wear")
-	ck(float(wr["ranges"][1][0]) == 10.0 and float(wr["ranges"][1][1]) == 20.0, "wear T1 10-20")
-	ck(float(wr["ranges"][2][0]) == 20.0 and float(wr["ranges"][2][1]) == 35.0, "wear T2 20-35")
-	ck(float(wr["ranges"][3][0]) == 35.0 and float(wr["ranges"][3][1]) == 60.0, "wear T3 35-60")
+	# --- 1.2.4: новая матрица значений ---
+	ck_range("weapon", "damage", 1, "[1, 5]")
+	ck_range("weapon", "damage", 2, "[6, 10]")
+	ck_range("weapon", "damage", 3, "[10, 20]")
+	ck_range("weapon", "recoil", 1, "[1, 5]")
+	ck_range("weapon", "recoil", 2, "[6, 10]")
+	ck_range("weapon", "recoil", 3, "[10, 20]")
+	ck_range("weapon", "wear", 1, "[5, 10]")
+	ck_range("weapon", "wear", 2, "[10, 15]")
+	ck_range("weapon", "wear", 3, "[20, 50]")
+	ck_range("weapon", "low_hp_damage", 1, "[5, 10]")
+	ck_range("weapon", "low_hp_damage", 2, "[10, 15]")
+	ck_range("weapon", "low_hp_damage", 3, "[20, 50]")
+	ck_range("weapon", "ammo_save", 1, "[5, 10]")
+	ck_range("weapon", "ammo_save", 2, "[10, 15]")
+	ck_range("weapon", "ammo_save", 3, "[20, 50]")
+
+	ck_range("clothing", "regen", 1, "[0.01, 0.01]")
+	ck_range("clothing", "regen", 2, "[0.02, 0.04]")
+	ck_range("clothing", "regen", 3, "[0.05, 0.1]")
+	ck_range("clothing", "low_hp_regen", 1, "[0.02, 0.02]")
+	ck_range("clothing", "low_hp_regen", 2, "[0.04, 0.04]")
+	ck_range("clothing", "low_hp_regen", 3, "[0.1, 0.1]")
+	ck_range("clothing", "capacity", 1, "[1, 2]")
+	ck_range("clothing", "capacity", 2, "[2, 4]")
+	ck_range("clothing", "capacity", 3, "[5, 10]")
+	ck_range("clothing", "insulation", 1, "[1, 5]")
+	ck_range("clothing", "insulation", 2, "[5, 15]")
+	ck_range("clothing", "insulation", 3, "[20, 50]")
+	ck_range("clothing", "stamina_drain", 1, "[1, 5]")
+	ck_range("clothing", "stamina_drain", 2, "[5, 10]")
+	ck_range("clothing", "stamina_drain", 3, "[15, 25]")
+	ck_range("clothing", "thirst_drain", 1, "[1, 5]")
+	ck_range("clothing", "thirst_drain", 2, "[5, 10]")
+	ck_range("clothing", "thirst_drain", 3, "[15, 25]")
+	ck_range("clothing", "hunger_drain", 1, "[1, 5]")
+	ck_range("clothing", "hunger_drain", 2, "[5, 10]")
+	ck_range("clothing", "hunger_drain", 3, "[15, 25]")
+	ck_range("clothing", "sanity_drain", 1, "[1, 5]")
+	ck_range("clothing", "sanity_drain", 2, "[5, 10]")
+	ck_range("clothing", "sanity_drain", 3, "[15, 25]")
+	ck_range("clothing", "noise", 1, "[1, 5]")
+	ck_range("clothing", "noise", 2, "[5, 10]")
+	ck_range("clothing", "noise", 3, "[15, 25]")
+	ck_range("clothing", "sprint", 1, "[1, 5]")
+	ck_range("clothing", "sprint", 2, "[5, 15]")
+	ck_range("clothing", "sprint", 3, "[15, 25]")
+	ck_range("clothing", "extra_loot", 1, "[1, 1]")
+	ck_range("clothing", "extra_loot", 2, "[2, 3]")
+	ck_range("clothing", "extra_loot", 3, "[5, 10]")
+
+	# статы, которых матрица не касается, остаются прежними
+	ck_range("gadget", "battery_save", 1, "[5, 10]")
+	ck_range("gadget", "battery_save", 2, "[20, 50]")
+	ck_range("gadget", "battery_save", 3, "[70, 90]")
+	var pr: Dictionary = Pool.entry("clothing", "protection")
+	ck(pr["ranges"].has(2) and pr["ranges"].has(3) and not pr["ranges"].has(1),
+		"protection tiers unchanged")
+	ck(Pool.validate().is_empty(), "all ranges are valid")
 
 	# --- флаги: единица flag и веса ---
 	ck(str(Pool.entry("weapon", "never_jam").get("unit", "")) == "flag", "never_jam unit flag")
