@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.4] - 2026-11-20
+
+### Changed
+- Rebalanced affix values: Legendary gear now rolls much stronger bonuses —
+  up to +20% damage, +50% wear and low-HP damage, +25% sprint and drain reduction,
+  10 kg carry capacity and 0.1 HP/s low-HP regen. Only newly found loot is affected;
+  gear you already own keeps the rolls it was found with.
+
 ## [1.2.3] - 2026-11-20
 
 ### Changed

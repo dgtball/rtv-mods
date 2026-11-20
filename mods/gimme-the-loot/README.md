@@ -1,6 +1,6 @@
 # **Gimme the Loot**
 
-**Version:** 1.2.3  
+**Version:** 1.2.4  
 **Mod ID:** `gimme-the-loot`  
 **Author:** CaptiveAI
 
