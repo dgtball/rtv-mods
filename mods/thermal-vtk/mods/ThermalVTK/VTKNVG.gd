@@ -9,10 +9,9 @@ const Buf = preload("res://mods/ThermalVTK/VTKESPBuffer.gd")
 
 # Owns the NVG overlay shader and mine highlighting.
 #
-# The NVG overlay palettizes/tints the background (screen_texture). Mines are
-# highlighted with main-view shell meshes carrying the configured display colour;
-# contours are handled by VTKOutline/VTKESP in the main view (overlay-only
-# baseline).
+# The NVG overlay palettizes/tints the background (screen_texture). Mines and
+# contours are drawn as shells on a private render layer and composited after
+# the palette, so their display colours stay exact in every thermal palette.
 
 const GAME_DATA_RES := Paths.GAME_DATA
 const NVG_SCRIPT_SUFFIX := "NVG.gd"
@@ -57,8 +56,8 @@ var _installed: bool = false
 var _mat_mine: StandardMaterial3D = null
 
 # ESP buffer pass: a shared-world SubViewport drawn by a layer-only camera.
-# `_esp_demand` comes from the contour coordinator; mines still use their own
-# display path for now. The buffer is lazy and costs nothing while inactive.
+# `_esp_demand` comes from the contour coordinator; painted mines also keep the
+# buffer alive. The buffer is lazy and costs nothing while inactive.
 var _esp_demand: bool = false
 var _esp_vp: SubViewport = null
 var _esp_cam: Camera3D = null
@@ -274,8 +273,6 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("nvgWhite", set_nvg_white)
 	nvg_mat.set_shader_parameter("paletteStrength", set_palette_strength)
 	nvg_mat.set_shader_parameter("redHold", set_red_hold)
-	nvg_mat.set_shader_parameter("minePassthroughOn", thermal_on and set_mines)
-	nvg_mat.set_shader_parameter("minePassthroughColor", _mine_color)
 	nvg_mat.set_shader_parameter("dayFactor", _day_factor)
 	_push_esp_composite()
 
@@ -305,7 +302,9 @@ func set_esp_demand(contour: bool) -> void:
 
 
 func esp_composite_active() -> bool:
-	return set_thermal and _nvg_active() and _esp_demand
+	# Mines own their demand: with the contour layer off a painted mine still
+	# needs the buffer, or its shell falls into the main pass and gets palettized.
+	return set_thermal and _nvg_active() and (_esp_demand or _mine_painted > 0)
 
 
 func esp_buffer_viewport() -> SubViewport:
@@ -917,19 +916,10 @@ func _retry_mines() -> void:
 
 func _build_mine_entry(node: Node, meshes: Array) -> Dictionary:
 	var entry := {"node": node, "meshes": meshes, "painted": false}
-	_clear_source_overrides(entry)
+	Buf.rebuild(entry, _mat_mine, Buf.LAYER_BIT)
+	# Shells start hidden; the per-frame mine sweep decides what is in range.
+	_apply_mine_paint(entry, false)
 	return entry
-
-
-func _clear_source_overrides(e: Dictionary) -> void:
-	for m in e.get("meshes", []):
-		if m == null or not is_instance_valid(m):
-			continue
-		var gi := m as GeometryInstance3D
-		if gi == null:
-			continue
-		gi.material_overlay = null
-		gi.material_override = null
 
 
 func _set_mine_painted(entry: Dictionary, show: bool) -> void:
@@ -944,13 +934,10 @@ func _set_mine_painted(entry: Dictionary, show: bool) -> void:
 
 
 func _apply_mine_paint(entry: Dictionary, show: bool) -> void:
-	for m in entry.get("meshes", []):
-		if m == null or not is_instance_valid(m):
-			continue
-		var gi := m as GeometryInstance3D
-		if gi == null:
-			continue
-		gi.material_overlay = _mat_mine if show else null
+	for s in Buf.shells(entry):
+		var shell := s as MeshInstance3D
+		if shell != null and is_instance_valid(shell):
+			shell.visible = show
 
 
 func _remove_mine(id: int) -> void:
@@ -958,16 +945,15 @@ func _remove_mine(id: int) -> void:
 	if e != null:
 		if bool(e.get("painted", false)):
 			_mine_painted = maxi(_mine_painted - 1, 0)
-		_clear_source_overrides(e)
+		Buf.clear(e)
 	_mines.erase(id)
 
 
 func _clear_mine_state() -> void:
 	for id in _mines.keys():
 		var e = _mines.get(id)
-		if e == null:
-			continue
-		_clear_source_overrides(e)
+		if e != null:
+			Buf.clear(e)
 	_mines.clear()
 	_mine_watch.clear()
 	_mine_painted = 0

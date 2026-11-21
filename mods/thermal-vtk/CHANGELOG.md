@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.10.34] - 2026-11-21
+
+### Fixed
+
+- Mine markers now keep their colour at night instead of shifting with the thermal palette.
+
 ## [2.10.33] - 2026-11-21
 
 ### Fixed

@@ -118,6 +118,9 @@ func t_nvg_compositor_contract() -> void:
 	ck(palette_at >= 0 and esp_at > palette_at and mask_at > esp_at, "ESP composite runs after palette and before the goggle mask")
 	for bad in ["uniform bool espOn", "stNormalKey", "stCombatKey", "stDefendKey", "mineKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineColor", "stateBright", "scopeRotate", "espFillAlpha", "espBodyFill", "orbitDist", "DET_TOL_CORE", "dCore", "dMine"]:
 		ck(not code.contains(bad), "overlay has no substitution token %s" % bad)
+	for key in ["minePassthroughOn", "minePassthroughColor", "isMine"]:
+		ck(not code.contains(key), "overlay has no mine key token %s" % key)
+	ck(code.contains("uniform float dayFactor"), "overlay keeps the daylight heat factor")
 
 func t_palette_modes() -> void:
 	var code := FileAccess.get_file_as_string(NVG_SHADER_RES)
@@ -145,7 +148,7 @@ func t_nvg_shader_compiles() -> void:
 	ck(names.size() > 0, "NVG shader compiled (uniform list not empty)")
 	for u in ["dayMix", "thermalMode", "thermalDarken", "worldPaletteMode", "highlightKnee", "nvgWhite", "paletteStrength", "redHold", "noise", "tint", "espTex", "espComposite"]:
 		ck(names.has(u), "compiled shader exposes %s" % u)
-	for bad in ["espOn", "stNormalKey", "stCombatKey", "stDefendKey", "mineKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineColor", "stateBright", "scopeRotate", "espFillAlpha", "espBodyFill"]:
+	for bad in ["espOn", "stNormalKey", "stCombatKey", "stDefendKey", "mineKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineColor", "stateBright", "scopeRotate", "espFillAlpha", "espBodyFill", "minePassthroughOn", "minePassthroughColor"]:
 		ck(not names.has(bad), "compiled shader does not expose substitution uniform %s" % bad)
 
 func t_runtime_contract() -> void:
