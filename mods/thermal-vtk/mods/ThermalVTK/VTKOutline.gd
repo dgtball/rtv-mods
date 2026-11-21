@@ -1,14 +1,16 @@
 ﻿extends RefCounted
-# Owns ESP contour rendering per NPC in overlay mode (2.10.x diagnostic baseline):
-# applies direct display materials as `material_overlay` on source meshes in the
-# main 3D pass. Direct display semantics: outline = translucent body fill
-# (fill_alpha) + ring band at the same alpha, fill = translucent body alpha
-# (fill_alpha), xray swaps depth_test_disabled variants; color/brightness/cool/grow
-# follow opts. Pass order is pinned with render_priority (body floor, ring
-# ceiling) so the tint always draws under the band.
+# Owns ESP contour rendering per NPC. The default path applies display
+# materials as `material_overlay` on source meshes in the main 3D pass; buffer
+# mode moves that same chain onto shells on the ESP layer via VTKESPBuffer.
+# Direct display semantics: outline = translucent body fill (fill_alpha) + ring
+# band at the same alpha, fill = translucent body alpha (fill_alpha), xray swaps
+# depth_test_disabled variants; color/brightness/cool/grow follow opts. Pass
+# order is pinned with render_priority (body floor, ring ceiling) so the tint
+# always draws under the band.
 
 const Shaders = preload("res://mods/ThermalVTK/VTKShaders.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
+const Buf = preload("res://mods/ThermalVTK/VTKESPBuffer.gd")
 
 # Nodes the mod adds under a bot's subtree (marker, debug label, etc.) carry
 # this meta: the sweep must skip them.
@@ -16,6 +18,35 @@ const NO_CONTOUR_META := "vtk_no_contour"
 
 var _items: Dictionary = {}
 var _clear_pool: Array = []
+# Off by default: the direct overlay path stays the baseline. Enable only while
+# the NVG ESP composite runs, so its camera sees the shells on this layer.
+var _buffer_mode: bool = false
+var _buffer_layer: int = Buf.LAYER_BIT
+
+func set_buffer_mode(enabled: bool, layer_bit: int = Buf.LAYER_BIT) -> void:
+	var layer_changed := layer_bit != _buffer_layer
+	if _buffer_mode == enabled and (not enabled or not layer_changed):
+		return
+	_buffer_mode = enabled
+	_buffer_layer = layer_bit
+	for id in _items:
+		var entry: Dictionary = _items[id]
+		if enabled:
+			# A source mesh with a leftover display overlay would draw the
+			# contour twice: once in the main pass, once from the shell.
+			for m in entry.get("meshes", []):
+				var src := m as MeshInstance3D
+				if src != null and is_instance_valid(src):
+					src.material_overlay = null
+			Buf.rebuild(entry, entry.get("mat"), layer_bit)
+		else:
+			Buf.clear(entry)
+			_apply_to(entry.get("meshes", []), entry.get("mat"))
+	if Dbg.enabled:
+		Dbg.log("ESP_OUTLINE", "buffer_mode=%s layer=%d" % [str(enabled), layer_bit])
+
+func buffer_mode() -> bool:
+	return _buffer_mode
 
 func has(id: int) -> bool:
 	return _items.has(id)
@@ -161,15 +192,40 @@ func _set_material(entry: Dictionary, mat: Material) -> void:
 	entry["p_cool"] = null
 	entry["p_rim"] = null
 	_apply_to(entry.get("meshes", []), mat)
+	if _buffer_mode:
+		# A material swap (fill/xray toggle) must reach the shells too: they
+		# carry the display chain, not the source meshes.
+		Buf.rebuild(entry, mat, _buffer_layer)
 
 # Overlay-mode write. A null material takes the contour off the source mesh.
+# In buffer mode a MeshInstance3D is represented by its shell on the ESP layer
+# and must stay clean here. Other GeometryInstance3D types have no shell
+# counterpart (a shell only copies mesh/skin/skeleton), so they keep the direct
+# overlay path even while buffer mode is on.
 func _apply_to(meshes: Array, mat: Material) -> void:
 	for m in meshes:
 		if m == null or not is_instance_valid(m):
 			continue
+		if _buffer_mode and m is MeshInstance3D:
+			continue
 		var gi := m as GeometryInstance3D
 		if gi != null:
 			gi.material_overlay = mat
+
+# Per-frame shell follow. Buf.rebuild queues the old shells for deletion and
+# makes new ones, so it cannot run every frame; mirroring its source order here
+# keeps the transform/visibility current without that churn.
+func _sync_shells(entry: Dictionary) -> void:
+	var shells: Array = Buf.shells(entry)
+	var idx: int = 0
+	for m in entry.get("meshes", []):
+		var src := m as MeshInstance3D
+		if src == null or not is_instance_valid(src):
+			continue
+		if idx >= shells.size():
+			break
+		Buf.sync_shell(shells[idx] as MeshInstance3D, src)
+		idx += 1
 
 func apply(id: int, node: Node, opts: Dictionary) -> void:
 	var meshes: Array = []
@@ -202,6 +258,8 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 	if Dbg.enabled:
 		Dbg.log("ESP_OUTLINE", "apply id=%d meshes=%d children=%d" % [id, meshes.size(), _child_count(node)])
 	_apply_to(meshes, mat)
+	if _buffer_mode:
+		Buf.rebuild(_items[id], mat, _buffer_layer)
 	# Seed the uniforms in the same frame: the first draw of a fresh bot must
 	# already carry its display state, not the shader default.
 	refresh(id, opts)
@@ -282,9 +340,9 @@ func refresh(id: int, opts: Dictionary) -> void:
 		if ring_mat != null:
 			ring_mat.set_shader_parameter("rim_power", rim)
 		entry["p_rim"] = rim
-	# Direct display: the body always carries the fill alpha (that is the
-	# translucent tint inside the contour), the ring carries it only in
-	# outline mode where it draws the band.
+	# Direct display (or the shell's display material in buffer mode): the body
+	# always carries the fill alpha (that is the translucent tint inside the
+	# contour), the ring carries it only in outline mode where it draws the band.
 	var body_alpha: float = fill_alpha
 	var ring_alpha: float = fill_alpha if not fill else 0.0
 	var p_alpha = entry.get("p_alpha")
@@ -299,6 +357,8 @@ func refresh(id: int, opts: Dictionary) -> void:
 	# Reassert overlays on valid tracked meshes so state changes do not leave
 	# partial/stale application (overlay-only baseline).
 	_apply_to(_valid_meshes(entry.get("meshes", [])), entry.get("mat"))
+	if _buffer_mode:
+		_sync_shells(entry)
 
 func _recollect(id: int, entry: Dictionary, fresh: Array = [], fresh_count: int = -1) -> void:
 	var node: Node = entry.get("node")
@@ -315,6 +375,8 @@ func _recollect(id: int, entry: Dictionary, fresh: Array = [], fresh_count: int 
 	if _same_meshes(old_meshes, fresh):
 		entry["meshes"] = fresh
 		_apply_to(fresh, entry.get("mat"))
+		if _buffer_mode:
+			_sync_shells(entry)
 		return
 	entry["last_recollect"] = "%d->%d" % [old_meshes.size(), fresh.size()]
 	if Dbg.enabled:
@@ -335,11 +397,15 @@ func _recollect(id: int, entry: Dictionary, fresh: Array = [], fresh_count: int 
 			gi.material_overlay = null
 	entry["meshes"] = fresh
 	_apply_to(fresh, entry.get("mat"))
+	if _buffer_mode:
+		Buf.rebuild(entry, entry.get("mat"), _buffer_layer)
 
 func clear(id: int) -> void:
 	var entry: Dictionary = _items.get(id)
 	if entry == null:
 		return
+	if _buffer_mode:
+		Buf.clear(entry)
 	_apply_to(entry.get("meshes", []), null)
 	_items.erase(id)
 

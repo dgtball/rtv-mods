@@ -3,6 +3,7 @@ extends SceneTree
 const Outline = preload("res://mods/ThermalVTK/VTKOutline.gd")
 const Sh = preload("res://mods/ThermalVTK/VTKShaders.gd")
 const S = preload("res://mods/ThermalVTK/VTKStates.gd")
+const Buf = preload("res://mods/ThermalVTK/VTKESPBuffer.gd")
 
 var fails := 0
 
@@ -21,6 +22,8 @@ func _run() -> void:
 	t_collect_all_geometry()
 	t_collect_skips_mod_geometry()
 	t_overlay_outline_chain_and_uniforms()
+	t_buffer_mode_uses_shells()
+	t_buffer_mode_keeps_uniforms()
 	t_ring_band_widens_grow()
 	t_wide_band_leaves_body_at_thickness()
 	t_material_info()
@@ -116,6 +119,57 @@ func t_overlay_outline_chain_and_uniforms() -> void:
 	ck(body.get_shader_parameter("rim_power") == 1.4, "outline body fill uses the same rim falloff")
 	ck(is_equal_approx(float(ring.get_shader_parameter("cool")), 0.3), "outline ring cool set")
 	o.clear(1)
+	root.free()
+
+# Buffer mode moves the display chain off the source meshes and onto shells on
+# the ESP layer. The body material (with its ring as next_pass) travels with the
+# shell so the composited contour stays identical to the direct overlay.
+func t_buffer_mode_uses_shells() -> void:
+	var root := Node3D.new()
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	root.add_child(mesh)
+	var o = Outline.new()
+	var opts := {"fill": false, "xray": false, "color": S.DEFAULT_COMBAT, "brightness": 1.2, "fill_alpha": 0.8, "grow": 0.01, "cool": 0.3, "rim": 1.4}
+	o.set_buffer_mode(true, Buf.LAYER_BIT)
+	o.apply(2, root, opts)
+	var body: ShaderMaterial = o._items[2]["mat"]
+	var shell: MeshInstance3D = Buf.shells(o._items[2])[0]
+	ck(mesh.material_overlay == null, "source mesh stays clean in buffer mode")
+	ck(shell.layers == Buf.LAYER_BIT, "shell lives on the ESP layer")
+	ck(shell.material_override == body, "shell carries the direct display material")
+	ck(shell.has_meta(Buf.SHELL_META), "shell is marked as mod geometry")
+	mesh.global_position = Vector3(3.0, 0.0, 0.0)
+	o.refresh(2, opts)
+	ck(shell.global_position == mesh.global_position, "shell follows the source transform")
+	o.set_buffer_mode(false)
+	ck(Buf.shells(o._items[2]).is_empty(), "leaving buffer mode frees shells")
+	ck(mesh.material_overlay == body, "direct overlay restored")
+	root.free()
+
+func t_buffer_mode_keeps_uniforms() -> void:
+	var root := Node3D.new()
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	root.add_child(mesh)
+	var o = Outline.new()
+	var opts := {"fill": false, "xray": false, "color": S.DEFAULT_COMBAT, "brightness": 1.2, "fill_alpha": 0.8, "grow": 0.01, "cool": 0.3, "rim": 1.4}
+	o.set_buffer_mode(true, Buf.LAYER_BIT)
+	o.apply(6, root, opts)
+	var body: ShaderMaterial = o._items[6]["mat"]
+	var ring: ShaderMaterial = body.next_pass as ShaderMaterial
+	ck(body.get_shader_parameter("outline_color") == S.DEFAULT_COMBAT, "buffer body carries display color")
+	ck(ring != null and ring.get_shader_parameter("outline_color") == S.DEFAULT_COMBAT, "buffer ring carries display color")
+	ck(is_equal_approx(float(body.get_shader_parameter("alpha")), 0.8), "buffer body carries the fill alpha")
+	ck(is_equal_approx(float(ring.get_shader_parameter("alpha")), 0.8), "buffer ring carries the fill alpha")
+	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.01), "buffer body grow set")
+	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.01), "buffer ring grow set")
+	ck(is_equal_approx(float(ring.get_shader_parameter("rim_power")), 1.4), "buffer ring rim set")
+	ck(body.render_priority == -128 and ring.render_priority == 127, "buffer chain keeps direct pass order")
+	var shell: MeshInstance3D = Buf.shells(o._items[6])[0]
+	var shell_mat := shell.material_override as ShaderMaterial
+	ck(shell_mat == body and shell_mat.next_pass == ring, "buffer shell carries the whole chain")
+	o.set_buffer_mode(false)
 	root.free()
 
 func t_ring_band_widens_grow() -> void:

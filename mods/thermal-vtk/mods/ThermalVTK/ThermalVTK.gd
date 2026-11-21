@@ -204,9 +204,16 @@ func _set_esp_layers_for_preview(xray_triggers: bool) -> void:
 	_sync_nvg_esp()
 
 func _sync_nvg_esp() -> void:
-	# 2.10.x baseline: direct overlay contour path only (no NVG ESP buffer/
-	# compositor).
-	pass
+	# The buffer/composite is gated on NVG + thermal inside VTKNVG; the
+	# coordinator only says whether contours are wanted right now. This keeps
+	# the worn/thermal gating in _apply_mode unchanged.
+	var want: bool = _esp != null and is_instance_valid(_esp) and _esp.contour_layer
+	if _nvg == null or not is_instance_valid(_nvg):
+		return
+	# An install (or a test double) without the compositor API keeps the direct
+	# overlay path: sync never requires the buffer plumbing to exist.
+	if _nvg.has_method("set_esp_demand"):
+		_nvg.set_esp_demand(want)
 
 func _nvg_active() -> bool:
 	if _nvg == null or not is_instance_valid(_nvg):

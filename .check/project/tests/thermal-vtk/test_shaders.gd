@@ -91,16 +91,17 @@ func t_ring_contracts() -> void:
 	ck(not los.contains("depth_test_disabled"), "los ring keeps depth test")
 	ck(xray.contains("depth_test_disabled"), "xray ring disables depth test")
 
-# Overlay-only baseline: direct display materials are applied as source overlays.
-# Outline keeps the stencil/ring chain and display uniforms.
+# Direct overlay stays the default, but the contour chain can also be routed
+# through ESP-buffer shells without changing its shaders or display uniforms.
 func t_band_contract() -> void:
 	var outline := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKOutline.gd")
 	ck(outline.contains("material_overlay"), "VTKOutline keeps overlay path")
 	ck(outline.contains("outline_color"), "VTKOutline drives direct display color")
 	ck(outline.contains("brightness"), "VTKOutline drives direct display brightness")
 	ck(outline.contains("fill_alpha"), "VTKOutline drives direct display alpha")
-	ck(not outline.contains("func set_buffer_mode"), "VTKOutline has no buffer mode control")
-	ck(not outline.contains("SHELL_META"), "VTKOutline has no shell geometry markers")
+	ck(outline.contains("func set_buffer_mode"), "VTKOutline exposes buffer mode control")
+	ck(outline.contains("func buffer_mode"), "VTKOutline reports buffer mode state")
+	ck(outline.contains("VTKESPBuffer"), "VTKOutline routes contours through the ESP buffer")
 
 # NVG overlay palettizes/tints the background, then composites the ESP buffer
 # over it with its own display colours. No screen-space key substitution remains.
@@ -155,6 +156,10 @@ func t_runtime_contract() -> void:
 		ck(owner.contains(api), "VTKNVG exposes %s" % api)
 	for bad in ["set_esp_layer", "func esp_buffer_layer", "MINE_KEY", "DET_ST_NORMAL", "DET_ST_COMBAT", "DET_ST_DEFEND", "DET_MINE", "set_esp_fill", "set_state_colors", "set_esp_brightness", "set_esp_on", "vtk_key_gain"]:
 		ck(not owner.contains(bad), "VTKNVG has no substitution token %s" % bad)
+	var coordinator := FileAccess.get_file_as_string("res://mods/ThermalVTK/ThermalVTK.gd")
+	var sync_at := coordinator.find("func _sync_nvg_esp")
+	var demand_at := coordinator.find("_nvg.set_esp_demand(", sync_at)
+	ck(sync_at >= 0 and demand_at > sync_at, "coordinator pushes contour demand from _sync_nvg_esp")
 	var store := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKShaders.gd")
 	ck(store.contains("func body_los"), "shader store exposes body_los")
 	ck(store.contains("func body_xray"), "shader store exposes body_xray")

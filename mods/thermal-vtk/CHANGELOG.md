@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.10.33] - 2026-11-21
+
+### Fixed
+
+- ESP outlines now keep their colours consistent with the thermal palette in every mode.
+
 ## [2.10.32] - 2026-11-21
 
 ### Changed
