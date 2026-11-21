@@ -9,7 +9,7 @@ separate `.vmz` archives and can be installed on their own — there is no share
 | **ThermalVTK** (`thermal-vtk`) | Standalone thermal vision / NVG overlay with heat glow and ESP, plus an in-game ESP tuning panel | 2.10.1 | [mods/thermal-vtk/README.md](mods/thermal-vtk/README.md) |
 | **Gimme the Loot** (`gimme-the-loot`) | Per-instance rarity tiers and affixes for looted weapons, clothing and gadgets | 1.2.4 | [mods/gimme-the-loot/README.md](mods/gimme-the-loot/README.md) |
 | **Freeze for JCM** (`jcm-freeze`) | Freezes NPCs, the BTR and the helicopter on demand (JCM addon) | 1.3.0 | [mods/jcm-freeze/README.md](mods/jcm-freeze/README.md) |
-| **Knife or Pistol** (`knife-or-pistol`) | Third weapon slot: the knife slot takes a knife or a pistol, and the pistol works normally when drawn | 1.0.0 | [mods/knife-or-pistol/README.md](mods/knife-or-pistol/README.md) |
+| **Knife or Pistol** (`knife-or-pistol`) | Third weapon slot: the knife slot takes a knife or a pistol, and the pistol works normally when drawn | 1.0.1 | [mods/knife-or-pistol/README.md](mods/knife-or-pistol/README.md) |
 | **Stop Spitting** (`stop-spitting`) | Removes the two spitting sounds from the nomads' idle voice set | 1.0.0 | [mods/stop-spitting/README.md](mods/stop-spitting/README.md) |
 | **Battery Extractor** (`battery-extractor`) | Takes the battery back out of flashlights, NVG and the cassette player with its remaining charge | 1.0.0 | [mods/battery-extractor/README.md](mods/battery-extractor/README.md) |
 

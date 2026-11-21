@@ -1,6 +1,6 @@
 # Knife or Pistol
 
-**Version:** 1.0.0
+**Version:** 1.0.1
 
 A small mod that turns the knife slot into a third weapon slot: put a knife or
 a pistol in it, and the pistol works like a normal sidearm when you draw it.

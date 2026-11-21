@@ -15,6 +15,7 @@ func _init() -> void:
 	t_is_pistol()
 	t_add_knife_slot()
 	t_should_alias()
+	t_knife_icon_scale()
 	print("")
 	if fails == 0:
 		print("KnifeOrPistol tests passed")
@@ -57,3 +58,21 @@ func t_should_alias() -> void:
 	ck(not Rules.should_alias(true, 0, pistol), "empty slot: no alias")
 	ck(not Rules.should_alias(true, 1, {"type": "Weapon", "subtype": "Rifle"}), "rifle in slot: no alias")
 	ck(not Rules.should_alias(true, 1, null), "null item: no alias")
+
+func t_knife_icon_scale() -> void:
+	var knife := {"x": 128, "y": 64}
+	var makarov := {"size": Vector2(2, 2)}
+	# Vanilla leaves a 2x2 pistol at 0.5 in the 2x1 knife slot; the 128px icon
+	# spills out of the 64px slot. Fit it by height: 64 / (128 * 2) = 0.25.
+	ck(absf(Rules.knife_icon_scale(makarov, knife, 0.5) - 0.25) < 0.0001, "2x2 pistol fits knife slot height")
+	# A 3x2 pistol is already scaled to 0.333 by vanilla width fit; leave it alone.
+	ck(Rules.knife_icon_scale({"size": Vector2(3, 2)}, knife, 1.0 / 3.0) < 0.0, "3x2 pistol: no correction")
+	# Square slot: no height overflow, nothing to do.
+	ck(Rules.knife_icon_scale(makarov, {"x": 128, "y": 128}, 0.5) < 0.0, "square slot: no correction")
+	# An item wider than the slot is already scaled by vanilla width fit; leave it alone
+	# even when its height still overflows (no such pistol ships with the game).
+	ck(Rules.knife_icon_scale({"size": Vector2(4, 4)}, knife, 0.5) < 0.0, "wider item: vanilla handles width")
+	# Missing or unusable size data must never produce a scale.
+	ck(Rules.knife_icon_scale({}, knife, 0.5) < 0.0, "missing size: no correction")
+	ck(Rules.knife_icon_scale(null, knife, 0.5) < 0.0, "null item: no correction")
+	ck(Rules.knife_icon_scale(makarov, null, 0.5) < 0.0, "null slot: no correction")

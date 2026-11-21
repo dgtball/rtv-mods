@@ -32,6 +32,7 @@ func _register() -> void:
 	_lib.hook("rigmanager-updaterig-pre", _on_update_rig_pre)
 	_lib.hook("rigmanager-updaterig-post", _on_update_rig_post)
 	_lib.hook("loader-loadcharacter-post", _on_load_character_post)
+	_lib.hook("item-updatesprite-post", _on_update_sprite_post)
 
 
 func _game_data() -> Variant:
@@ -129,6 +130,33 @@ func _on_update_rig_pre(_animate) -> void:
 
 func _on_update_rig_post(_animate) -> void:
 	_restore_alias()
+
+
+# Vanilla misses the height overflow of a square pistol in the 2x1 knife slot.
+# Fit the sprite by height there, after vanilla has picked its own scale.
+func _on_update_sprite_post() -> void:
+	if _lib == null:
+		return
+	var item = _lib._caller
+	if item == null or not bool(item.get("equipped")):
+		return
+	var slot = item.get("equipSlot")
+	if slot == null or str(slot.get("name")) != Rules.KNIFE_SLOT:
+		return
+	var sd = item.get("slotData")
+	if sd == null:
+		return
+	var data = sd.get("itemData")
+	if not Rules.is_pistol(data):
+		return
+	var sprite = item.get("sprite")
+	if sprite == null:
+		return
+	var scale = sprite.get("scale")
+	var fit: float = Rules.knife_icon_scale(data, slot.get("size"), float(scale.x))
+	if fit < 0.0:
+		return
+	sprite.set("scale", Vector2(fit, fit))
 
 
 func _restore_alias() -> void:
