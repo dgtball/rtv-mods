@@ -9,6 +9,20 @@ class FakeGameData extends Resource:
 	var NVG: bool = false
 
 
+# Records the order of the two per-frame calls that decide whether a mine shell
+# reaches the buffer. Both overrides delegate to the real implementation.
+class OrderNVG extends "res://mods/ThermalVTK/VTKNVG.gd":
+	var calls: Array = []
+
+	func _push_esp_composite() -> void:
+		calls.append("push")
+		super._push_esp_composite()
+
+	func _update_mine(id: int, thermal_on: bool, ppos: Vector3) -> void:
+		calls.append("update")
+		super._update_mine(id, thermal_on, ppos)
+
+
 func ck(cond: bool, msg: String) -> void:
 	if cond:
 		print("ok    ", msg)
@@ -26,6 +40,7 @@ func _run() -> void:
 	t_mine_color_stored_and_applied()
 	t_mine_highlight_uses_esp_buffer()
 	t_esp_composite_demand_includes_mines()
+	t_composite_push_follows_mine_paint()
 	t_script_kind_cache()
 	t_esp_buffer_lifecycle()
 	print("")
@@ -138,6 +153,33 @@ func t_esp_composite_demand_includes_mines() -> void:
 	nvg._update_mine(id, true, Vector3(1000.0, 0.0, 0.0))
 	ck(nvg.painted_mine_count() == 0, "mine is no longer painted")
 	ck(not nvg.esp_composite_active(), "composite stops once the last mine is out of range")
+	nvg.free()
+	mine.free()
+
+
+# A mine that first enters range must be swept before that frame's composite
+# decision; with the old order the shell renders once in the main pass and the
+# NVG shader palettizes it. Contour demand stays off so only mines can activate
+# the buffer, and one real _process frame exercises both call sites together.
+func t_composite_push_follows_mine_paint() -> void:
+	var nvg := OrderNVG.new()
+	root.add_child(nvg)
+	nvg.set_thermal = true
+	var data := FakeGameData.new()
+	data.NVG = true
+	nvg._game_data = data
+	var mine := Node3D.new()
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	mine.add_child(mesh)
+	root.add_child(mine)
+	mine.global_position = Vector3(2.0, 0.0, 0.0)
+	nvg._register_mine(mine)
+	nvg.calls.clear()
+	nvg._process(0.016)
+	ck(nvg.calls.has("update"), "a frame sweeps the mine")
+	ck(nvg.calls.has("push"), "a frame pushes the composite")
+	ck(nvg.calls.find("update") < nvg.calls.find("push"), "the composite push follows the mine paint in the same frame")
 	nvg.free()
 	mine.free()
 

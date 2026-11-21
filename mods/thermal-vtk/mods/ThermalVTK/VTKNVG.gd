@@ -463,7 +463,6 @@ func _process(delta: float) -> void:
 		_daylight_tick(delta)
 	if worn or set_daylight or (_probe != null and is_instance_valid(_probe)):
 		_sync_probe()
-	_push_esp_composite()
 	# Player position, fetched once per frame.
 	var ppos := _player_pos()
 
@@ -476,6 +475,10 @@ func _process(delta: float) -> void:
 
 	if not on:
 		_off_frame_upkeep()
+
+	# Decide the composite only after every paint mutation in this frame: a
+	# mine entering range must not render one frame in the main pass first.
+	_push_esp_composite()
 
 	if _tick_cd > 0.0:
 		_tick_cd -= delta
