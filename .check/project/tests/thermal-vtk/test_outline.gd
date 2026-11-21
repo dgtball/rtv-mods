@@ -22,6 +22,9 @@ func _run() -> void:
 	t_collect_skips_mod_geometry()
 	t_overlay_outline_chain_and_uniforms()
 	t_ring_band_widens_grow()
+	t_wide_band_leaves_body_at_thickness()
+	t_material_info()
+	t_material_info_reads_real_overlay()
 	t_overlay_fill_single_body_no_ring()
 	t_overlay_xray_preserves_shape()
 	t_toggle_xray_restores_los()
@@ -62,9 +65,10 @@ func t_collect_all_geometry() -> void:
 	var o = Outline.new()
 	var out: Array = []
 	o._collect(root, out)
-	ck(out.size() == 1, "geometry collected (mesh instances only): %d" % out.size())
+	ck(out.size() == 2, "all GeometryInstance3D nodes collected: %d" % out.size())
 	ck(out.has(mesh), "an invisible LOD still gets the overlay")
-	ck(not out.has(mm), "a MultiMesh has no overlay target")
+	ck(out.has(mm), "a MultiMeshInstance3D is a valid overlay target")
+	ck(not out.has(plain), "non-geometry nodes are not collected")
 	root.free()
 
 func t_collect_skips_mod_geometry() -> void:
@@ -97,7 +101,9 @@ func t_overlay_outline_chain_and_uniforms() -> void:
 	ck(mesh.material_overlay == body, "outline applies body overlay to mesh")
 	ck(body.shader == Sh.body_los(), "outline body uses body_los shader")
 	ck(ring != null and ring.shader == Sh.ring_los(), "outline body has ring_los next_pass")
-	ck(is_equal_approx(float(body.get_shader_parameter("alpha")), 0.0), "outline body alpha is mask-only 0")
+	ck(is_equal_approx(float(body.get_shader_parameter("alpha")), 0.8), "outline body carries the fill alpha")
+	ck(body.render_priority == -128, "outline body draws before every other transparent")
+	ck(ring.render_priority == 127, "outline ring draws after every other transparent")
 	ck(body.get_shader_parameter("outline_color") == S.DEFAULT_COMBAT, "outline body carries display color")
 	ck(is_equal_approx(float(body.get_shader_parameter("brightness")), 1.2), "outline body brightness set")
 	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.01), "outline body grow set")
@@ -107,6 +113,7 @@ func t_overlay_outline_chain_and_uniforms() -> void:
 	ck(is_equal_approx(float(ring.get_shader_parameter("alpha")), 0.8), "outline ring alpha set")
 	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.01), "outline ring grow set")
 	ck(is_equal_approx(float(ring.get_shader_parameter("rim_power")), 1.4), "outline ring rim set")
+	ck(body.get_shader_parameter("rim_power") == 1.4, "outline body fill uses the same rim falloff")
 	ck(is_equal_approx(float(ring.get_shader_parameter("cool")), 0.3), "outline ring cool set")
 	o.clear(1)
 	root.free()
@@ -122,11 +129,11 @@ func t_ring_band_widens_grow() -> void:
 	o.apply(21, root_node, opts)
 	var body: ShaderMaterial = o._items[21]["mat"]
 	var ring: ShaderMaterial = body.next_pass as ShaderMaterial
-	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.025), "mask grow accounts for band depth step")
-	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.05), "ring inflates by mask grow plus band")
+	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.01), "body uses only the configured thickness")
+	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.035), "ring inflates by thickness plus band")
 	o.refresh(21, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.05, "cool": 0.0})
-	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.05), "band-only change updates mask grow")
-	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.1), "band-only change updates ring grow")
+	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.01), "band-only change leaves body thickness alone")
+	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.06), "band-only change updates ring grow")
 	o.refresh(21, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.03, "band": 0.01, "cool": 0.0})
 	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.03), "configured grow wins over thinner band on mask")
 	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.04), "ring keeps visible band width")
@@ -135,6 +142,102 @@ func t_ring_band_widens_grow() -> void:
 	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.01), "zero band collapses ring offset to grow")
 	o.clear(21)
 	root_node.free()
+
+# The band scales with distance to stay screen-sized. With the stencil mask
+# gone it belongs entirely to the ring; the body keeps its configured thickness.
+func t_wide_band_leaves_body_at_thickness() -> void:
+	var root_node := Node3D.new()
+	root.add_child(root_node)
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	root_node.add_child(mesh)
+	var o = Outline.new()
+	o.apply(70, root_node, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.0005, "band": 0.4, "cool": 0.0})
+	var body: ShaderMaterial = o._items[70]["mat"]
+	var ring: ShaderMaterial = body.next_pass as ShaderMaterial
+	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.0005), "a wide band leaves the body at its configured thickness")
+	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.4005), "the ring keeps the full band as its visible width")
+	o.clear(70)
+	root_node.free()
+
+# The per-frame subject log must read what the shaders actually hold, not what
+# the opts asked for — material_info is that read-out (real uniforms, shader
+# names, ring presence), empty for an unknown id.
+func t_material_info() -> void:
+	var host := Node3D.new()
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	host.add_child(mesh)
+	var o = Outline.new()
+	ck(o.material_info(90).is_empty(), "an unknown id reports no material info")
+	o.apply(90, host, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.025, "cool": 0.0})
+	var info: Dictionary = o.material_info(90)
+	ck(bool(info.get("has_ring", false)), "outline mode reports the ring pass")
+	ck(not bool(info.get("fill_mode", true)), "outline mode reports fill_mode false")
+	ck(is_equal_approx(float(info.get("body_grow", -1.0)), 0.01), "info reads the body grow uniform")
+	ck(is_equal_approx(float(info.get("ring_grow", -1.0)), 0.035), "info reads the ring grow uniform")
+	ck(is_equal_approx(float(info.get("body_alpha", -1.0)), 0.6), "info reads the fill body alpha")
+	ck(is_equal_approx(float(info.get("ring_alpha", -1.0)), 0.6), "info reads the ring alpha uniform")
+	ck(str(info.get("body_shader", "")) == "VTKEspBody.gdshader", "info names the body shader")
+	ck(str(info.get("ring_shader", "")) == "VTKEspRing.gdshader", "info names the ring shader")
+	ck(int(info.get("meshes", -1)) == 1, "info counts the tracked meshes")
+	ck(is_equal_approx(float(info.get("brightness", -1.0)), 1.0), "info reads the brightness uniform")
+	ck(is_equal_approx(float(info.get("cool", -1.0)), 0.0), "info reads the cool uniform")
+	ck(is_equal_approx(float(info.get("rim", -1.0)), 2.0), "info reads the rim power uniform")
+	ck(info.get("color") == S.DEFAULT_NORMAL, "info reads the display colour")
+	ck(int(info.get("overlay_ok", -1)) == 1, "info counts the meshes carrying our material")
+	ck(int(info.get("overlay_lost", -1)) == 0, "info counts no lost overlay after a fresh apply")
+	ck(int(info.get("overlay_other", -1)) == 0, "info counts no foreign overlay after a fresh apply")
+	ck(int(info.get("mat_gen", -1)) == 1, "the first material is generation one")
+	o.clear(90)
+	o.apply(91, host, {"fill": true, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.4, "grow": 0.01, "cool": 0.0})
+	var finfo: Dictionary = o.material_info(91)
+	ck(not bool(finfo.get("has_ring", true)), "fill mode reports no ring pass")
+	ck(bool(finfo.get("fill_mode", false)), "fill mode reports fill_mode true")
+	ck(is_equal_approx(float(finfo.get("body_alpha", -1.0)), 0.4), "fill mode reads the visible body alpha")
+	ck(not finfo.has("ring_grow"), "fill mode reports no ring uniforms")
+	o.clear(91)
+	host.free()
+
+# The overlay read-out answers "what is actually on the meshes": the entry
+# can still describe a perfect contour while a rebuild left a foreign
+# material or nothing at all on the GeometryInstance3D. The subject log must
+# see that gap, or it would report the ideal while the screen shows none.
+func t_material_info_reads_real_overlay() -> void:
+	var host := Node3D.new()
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	host.add_child(mesh)
+	var o = Outline.new()
+	o.apply(92, host, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.025, "cool": 0.0})
+	var info: Dictionary = o.material_info(92)
+	ck(int(info.get("overlay_ok", -1)) == 1, "a fresh apply puts our material on every mesh")
+	ck(int(info.get("overlay_lost", -1)) == 0, "a fresh apply loses nothing")
+	ck(int(info.get("overlay_other", -1)) == 0, "a fresh apply has no foreign overlay")
+
+	# A foreign material sits on the mesh: the entry stays perfect, the screen
+	# does not — only the real-overlay read-out can tell them apart.
+	mesh.material_overlay = ShaderMaterial.new()
+	info = o.material_info(92)
+	ck(int(info.get("overlay_ok", -1)) == 0, "a foreign overlay is not counted as ours")
+	ck(int(info.get("overlay_other", -1)) == 1, "a foreign overlay is reported as other")
+	ck(int(info.get("overlay_lost", -1)) == 0, "a foreign overlay is not lost")
+	ck(bool(info.get("has_ring", false)), "the entry still reports its ring")
+
+	# Overlay wiped entirely (recollect miss, node rebuild).
+	mesh.material_overlay = null
+	info = o.material_info(92)
+	ck(int(info.get("overlay_lost", -1)) == 1, "a wiped overlay is reported as lost")
+	ck(int(info.get("overlay_ok", -1)) == 0, "a wiped overlay is not ours")
+
+	# Regenerating the material bumps the generation and re-arms the meshes.
+	o.apply(92, host, {"fill": false, "xray": true, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.025, "cool": 0.0})
+	info = o.material_info(92)
+	ck(int(info.get("mat_gen", -1)) == 2, "swapping the material bumps the generation")
+	ck(str(info.get("body_shader", "")) == "VTKEspBodyXray.gdshader", "the swapped shader is reported")
+	ck(int(info.get("overlay_ok", -1)) == 1, "the regenerated material is back on the mesh")
+	o.clear(92)
+	host.free()
 
 func t_overlay_fill_single_body_no_ring() -> void:
 	var root := Node3D.new()
@@ -146,6 +249,8 @@ func t_overlay_fill_single_body_no_ring() -> void:
 	var body: ShaderMaterial = o._items[2]["mat"]
 	ck(body.shader == Sh.body_los(), "full-body uses body_los shader")
 	ck(body.next_pass == null, "full-body has no ring next_pass")
+	ck(body.render_priority == -128, "fill body draws before every other transparent")
+	ck(body.get_shader_parameter("rim_power") == 0.0, "fill body keeps a flat tint")
 	ck(body.get_shader_parameter("outline_color") == S.DEFAULT_DEFEND, "full-body sets display color")
 	ck(is_equal_approx(float(body.get_shader_parameter("alpha")), 0.4), "full-body sets visible alpha")
 	ck(is_equal_approx(float(body.get_shader_parameter("cool")), 0.2), "full-body sets cool")
@@ -168,7 +273,8 @@ func t_overlay_xray_preserves_shape() -> void:
 	var ring: ShaderMaterial = body.next_pass as ShaderMaterial
 	ck(body.shader == Sh.body_xray(), "outline xray body uses body_xray shader")
 	ck(ring != null and ring.shader == Sh.ring_xray(), "outline xray keeps ring_xray shape")
-	ck(is_equal_approx(float(body.get_shader_parameter("alpha")), 0.0), "outline xray body remains mask-only")
+	ck(is_equal_approx(float(body.get_shader_parameter("alpha")), 0.7), "outline xray body carries the fill alpha")
+	ck(body.get_shader_parameter("rim_power") == 2.0, "outline xray body keeps rim falloff")
 	ck(is_equal_approx(float(ring.get_shader_parameter("alpha")), 0.7), "outline xray ring keeps alpha")
 	ck(is_equal_approx(float(ring.get_shader_parameter("cool")), 0.1), "outline xray ring keeps cool")
 	o.clear(3)
@@ -204,10 +310,11 @@ func t_overlay_on_mesh() -> void:
 	var body: ShaderMaterial = o._items[13]["mat"]
 	ck(mesh.material_overlay == body, "mesh carries contour as material_overlay")
 	ck(mesh.material_override == null, "source material pipeline untouched")
-	ck(mm.material_overlay == null, "non-mesh geometry gets no overlay")
+	ck(mm.material_overlay == body, "all geometry gets the overlay")
 	ck(body.next_pass != null, "outline entry has ring pass")
 	o.clear(13)
 	ck(mesh.material_overlay == null, "clear removes overlay")
+	ck(mm.material_overlay == null, "clear removes overlay from all geometry")
 	root.free()
 
 func t_recollect_keeps_overlay() -> void:

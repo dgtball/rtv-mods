@@ -1,9 +1,8 @@
 shader_type spatial;
 render_mode unshaded, cull_disabled, depth_draw_never, depth_test_disabled;
-stencil_mode read, compare_not_equal, 1;
-
 // XRAY ring pass of the direct contour overlay. Same as the LOS ring pass, but
-// depth testing is disabled so the band shows through walls.
+// depth testing is disabled so the band shows through walls. No stencil mask
+// suppresses the body interior.
 
 uniform vec3 outline_color : source_color = vec3(1.0, 0.0, 0.0);
 uniform float brightness : hint_range(0.0, 4.0, 0.01) = 1.0;

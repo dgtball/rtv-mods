@@ -1,5 +1,105 @@
 # Changelog
 
+## [2.10.31] - 2026-11-21
+
+### Changed
+
+- Minor performance improvements.
+
+## [2.10.30] - 2026-11-21
+
+### Changed
+
+- The contour line now hugs the model at any distance instead of growing an offset glow around distant NPCs.
+
+## [2.10.29] - 2026-11-21
+
+### Changed
+
+- Contours now glow across the whole model instead of only along its edge; overlapping models no longer cut holes in each other's outline.
+
+### Fixed
+
+- The outline no longer inflates the body silhouette at distance.
+
+## [2.10.28] - 2026-11-21
+
+### Changed
+
+- Default state colours are now green for idle NPCs, red for combat, yellow for defending, and blue for mines.
+- Default outline brightness and fill opacity now match the original look.
+
+### Fixed
+
+- Distant NPCs no longer look inflated: the contour keeps its width without swelling the model.
+
+## [2.10.27] - 2026-11-21
+
+### Changed
+
+- Outlined models now keep their detail in the centre with a soft glow towards the edges, instead of a flat tint.
+
+## [2.10.26] - 2026-11-21
+
+### Changed
+
+- The outline now always includes the translucent body fill (the existing fill alpha setting), so every marked model looks the same.
+
+### Fixed
+
+- The contour no longer switches between a plain line and a full glow when you move the camera.
+
+## [2.10.25] - 2026-11-21
+
+### Changed
+
+- The debug log now records the full outline state of the watched NPC per frame — brightness, colour, material changes and whether the outline is really attached to the NPC's meshes — and stops repeating unchanged lines.
+
+## [2.10.24] - 2026-11-21
+
+### Changed
+
+- The debug log now records the outline state of the single NPC you are looking at on every frame, making outline stage changes easier to diagnose.
+
+## [2.10.23] - 2026-11-20
+
+### Fixed
+
+- Fixed NPC outlines in Outline mode not appearing: the ring around NPCs draws again.
+
+## [2.10.22] - 2026-11-20
+
+### Changed
+
+- Improved diagnostic information for NPC outline issues.
+
+## [2.10.21] - 2026-11-20
+
+### Changed
+
+- Adjusted NPC outline rendering to diagnose missing body contours in some views.
+
+## [2.10.20] - 2026-11-20
+
+### Fixed
+
+- Fixed crashes that could occur when mine highlights were enabled in thermal vision.
+
+## [2.10.19] - 2026-11-20
+
+### Fixed
+
+- Mine highlights are more likely to keep their configured colour under different lighting and daylight compensation.
+- "Red hold" now responds more consistently when daylight compensation is enabled.
+
+## [2.10.18] - 2026-11-20
+
+### Fixed
+
+- The nomad marker now stays appropriately sized at a distance.
+- Mine highlights now keep their configured colour in thermal vision instead of changing with the world palette.
+- Improved NPC outline reliability in some cases.
+
 ## [2.10.17] - 2026-11-19
 
 ### Changed

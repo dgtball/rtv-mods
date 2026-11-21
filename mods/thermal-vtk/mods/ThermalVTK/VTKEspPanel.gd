@@ -339,7 +339,7 @@ func _build_ui() -> void:
 	_c_normal = _add_color(v, "Normal", States.DEFAULT_NORMAL)
 	_c_combat = _add_color(v, "Combat", States.DEFAULT_COMBAT)
 	_c_defend = _add_color(v, "Defend", States.DEFAULT_DEFEND)
-	_c_mine = _add_color(v, "Mine", Color8(9, 46, 246))
+	_c_mine = _add_color(v, "Mine", States.DEFAULT_MINE)
 
 	v.add_child(HSeparator.new())
 	var wl := Label.new()

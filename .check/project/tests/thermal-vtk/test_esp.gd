@@ -6,6 +6,7 @@ const Outline = preload("res://mods/ThermalVTK/VTKOutline.gd")
 const Sh = preload("res://mods/ThermalVTK/VTKShaders.gd")
 const Tracker = preload("res://mods/ThermalVTK/VTKTracker.gd")
 const Labels = preload("res://mods/ThermalVTK/VTKLabels.gd")
+const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 
 var fails := 0
 
@@ -47,7 +48,8 @@ func _run() -> void:
 	t_opts_contour_key()
 	t_fill_opts_carry_fill_flag()
 	t_opts_brightness_thermal_mix()
-	t_band_tracks_distance()
+	t_band_is_zero_at_every_distance()
+	t_outline_ring_matches_body()
 	t_fullbody_xray_no_ring()
 	t_no_through_walls_opt()
 	t_dead_node_marks_entry()
@@ -61,6 +63,8 @@ func _run() -> void:
 	t_layers_drive_marker()
 	t_wants_contour()
 	t_weapon_runs_without_contour()
+	t_subject_is_nearest_candidate()
+	t_no_perframe_subject_log()
 	print("")
 	if fails == 0:
 		print("ESP tests passed")
@@ -306,7 +310,7 @@ func t_opts_contour_key() -> void:
 	ck(not hostile.has("alpha"), "the contour opts carry no alpha to blend the key with")
 	ck(not hostile.has("rim"), "the ring has no rim falloff")
 	ck(not hostile.has("fill_grow"), "fill grow lives in the shader, not in opts")
-	ck(not hostile.has("band"), "contour opts omit screen-space band heuristic")
+	ck(hostile.has("band"), "contour opts carry the ring band")
 	var normal := opts_of(esp, {"cat": S.NORMAL, "nomad": true})
 	ck(normal.get("color") == S.DEFAULT_NORMAL, "normal uses normal display color")
 	var defend := opts_of(esp, {"cat": S.DEFEND, "nomad": false})
@@ -350,16 +354,44 @@ func t_opts_brightness_thermal_mix() -> void:
 	ck(absf(float(opts.get("brightness", 0.0)) - 1.0) < 0.001, "body fill caps brightness at 1.0")
 	esp.free()
 
-# Contour opts carry the configured outline thickness as grow; screen-space band
-# heuristics are not emitted (VTKOutline handles band sizing from grow).
-func t_band_tracks_distance() -> void:
+# The band is the distance-compensated extra ring inflation. With it pinned at
+# zero the ring sits exactly on the body silhouette: the visible line is the
+# fresnel falloff, with no outward halo growing on distant NPCs.
+func t_band_is_zero_at_every_distance() -> void:
 	var esp = ESP.new()
 	root.add_child(esp)
 	esp.p_thickness = 0.012
-	var opts := opts_of(esp, {"cat": S.NORMAL, "dist": 30.0})
-	ck(absf(float(opts.get("grow", 0.0)) - 0.012) < 0.000001, "the opts carry the configured ring offset")
-	ck(not opts.has("band"), "contour opts omit screen-space band heuristic")
+	for d in [3.0, 30.0, 120.0]:
+		var opts := opts_of(esp, {"cat": S.NORMAL, "dist": d})
+		ck(absf(float(opts.get("grow", 0.0)) - 0.012) < 0.000001, "the opts carry the configured thickness at %f m" % d)
+		ck(is_equal_approx(float(opts.get("band", -1.0)), 0.0), "the band stays zero at %f m" % d)
+	ck(is_equal_approx(esp._band_for(120.0), 0.0), "the band source itself returns zero")
 	esp.free()
+
+# With the band pinned at zero the ring must sit on the body silhouette, so a
+# distant NPC cannot grow an outward halo. FILL has no ring either way.
+func t_outline_ring_matches_body() -> void:
+	var esp = ESP.new()
+	root.add_child(esp)
+	esp.p_body_fill = false
+	esp.p_thickness = 0.012
+	var opts := opts_of(esp, {"cat": S.NORMAL, "nomad": false, "dist": 30.0})
+	var bot := Node3D.new()
+	bot.name = "AI_Band"
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	bot.add_child(mesh)
+	root.add_child(bot)
+	var o = Outline.new()
+	o.apply(91, bot, opts)
+	var body: ShaderMaterial = o._items[91]["mat"]
+	var ring: ShaderMaterial = body.next_pass as ShaderMaterial
+	ck(ring != null, "outline mode still builds the ring pass")
+	if ring != null:
+		ck(is_equal_approx(float(ring.get_shader_parameter("grow")), float(body.get_shader_parameter("grow"))), "the ring sits on the body silhouette")
+	o.clear_all()
+	esp.free()
+	bot.free()
 
 func t_fullbody_xray_no_ring() -> void:
 	var scene := Node3D.new()
@@ -677,6 +709,68 @@ func t_weapon_runs_without_contour() -> void:
 	ck(w.modes.size() == 1, "scope mode is pushed once")
 	esp.free()
 	scene.queue_free()
+# The subject log follows ONE npc: the nearest candidate inside Distance.
+# Dead / out-of-range / contour-off must move or drop the subject, otherwise
+# the log would spread across every bot and turn into porridge.
+func t_subject_is_nearest_candidate() -> void:
+	var scene := Node3D.new()
+	scene.name = "Map_subj"
+	var near := FakeBot.new()
+	near.name = "AI_Bandit_near"
+	var far := FakeBot.new()
+	far.name = "AI_Bandit_far"
+	scene.add_child(near)
+	scene.add_child(far)
+	root.add_child(scene)
+	current_scene = scene
+
+	var esp = ESP.new()
+	esp.name = "VTKESP_subj"
+	root.add_child(esp)
+	esp.p_trig = false
+	esp.p_dist = 60.0
+	var m1 := MeshInstance3D.new()
+	m1.mesh = BoxMesh.new()
+	near.add_child(m1)
+	var m2 := MeshInstance3D.new()
+	m2.mesh = BoxMesh.new()
+	far.add_child(m2)
+	esp.set_layers(true, false)
+	near.global_position = Vector3(0.0, 0.0, -3.0)
+	far.global_position = Vector3(0.0, 0.0, -30.0)
+	esp._draw(Vector3.ZERO)
+	ck(esp._subject_id() == near.get_instance_id(), "subject is the nearest candidate")
+
+	near.dead = true
+	esp._draw(Vector3.ZERO)
+	ck(esp._subject_id() == far.get_instance_id(), "a corpse is not a subject")
+
+	far.global_position = Vector3(0.0, 0.0, -300.0)
+	esp._draw(Vector3.ZERO)
+	ck(esp._subject_id() == 0, "nobody inside Distance leaves no subject")
+
+	esp.set_layers(false, false)
+	far.global_position = Vector3(0.0, 0.0, -30.0)
+	esp._draw(Vector3.ZERO)
+	ck(esp._subject_id() == 0, "contour off means no subject")
+
+	esp.free()
+	scene.queue_free()
+
+# The per-frame ESP_SUBJ row was a 2.10.25 investigation aid for the pass-order
+# bug. With that fixed it only spoils the log: dist is in the dedup signature,
+# so a moving subject writes a line every frame. The logger must stay gone.
+func t_no_perframe_subject_log() -> void:
+	var f := FileAccess.open("res://mods/ThermalVTK/VTKESP.gd", FileAccess.READ)
+	ck(f != null, "the ESP source is readable")
+	if f == null:
+		return
+	var src := f.get_as_text()
+	f.close()
+	ck(not src.contains("ESP_SUBJ"), "the subject log tag is gone")
+	ck(not src.contains("_dbg_subject"), "the per-frame subject logger is gone")
+	ck(not src.contains("_log_subject"), "the subject sink helper is gone")
+
 func los_force(esp, id: int) -> void:
 	esp._frame = (esp.LOS_EVERY - (id % esp.LOS_EVERY)) % esp.LOS_EVERY
 

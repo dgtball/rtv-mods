@@ -63,7 +63,7 @@ func t_off_upkeep_clears_dead_mines() -> void:
 	root.add_child(nvg)
 	var mine := Node3D.new()
 	root.add_child(mine)
-	nvg._mines[mine.get_instance_id()] = {"node": mine, "meshes": [], "shells": [], "painted": false}
+	nvg._mines[mine.get_instance_id()] = {"node": mine, "meshes": [], "painted": false}
 	mine.free()
 	nvg._off_frame_upkeep()
 	ck(nvg._mines.is_empty(), "a freed mine is dropped while thermal is off")
@@ -71,22 +71,22 @@ func t_off_upkeep_clears_dead_mines() -> void:
 	ck(nvg._mines.is_empty(), "the early return keeps the next pass cheap")
 	nvg.free()
 
-# Mine display colour is stored and applied to the shared mine shell material.
+# Mine display colour is stored and applied to the shared mine display material.
 func t_mine_color_stored_and_applied() -> void:
 	var nvg = NVG.new()
 	root.add_child(nvg)
 	nvg.set_mine_color(Color(0.2, 0.4, 0.9))
 	ck(nvg.mine_color() == Color(0.2, 0.4, 0.9), "mine colour is stored")
 	var sm := nvg._mat_mine as StandardMaterial3D
-	ck(sm != null and sm.albedo_color == Color(0.2, 0.4, 0.9), "mine shell material uses mine colour")
+	ck(sm != null and sm.albedo_color == Color(0.2, 0.4, 0.9), "mine display material uses mine colour")
 	nvg.set_mine_color(Color(0.1, 0.8, 0.3))
 	sm = nvg._mat_mine as StandardMaterial3D
 	ck(nvg.mine_color() == Color(0.1, 0.8, 0.3), "mine colour updates")
-	ck(sm != null and sm.albedo_color == Color(0.1, 0.8, 0.3), "mine shell material follows colour updates")
+	ck(sm != null and sm.albedo_color == Color(0.1, 0.8, 0.3), "mine display material follows colour updates")
 	nvg.free()
 
-# Mines are highlighted in the main view (no compositor/buffer layer) while
-# thermal is on and NVG is worn; source meshes stay clean.
+# Mines are highlighted in the main view while thermal is on and NVG is worn;
+# source meshes get a material overlay (no extra shell nodes).
 func t_mine_highlight_uses_main_view_shells() -> void:
 	var nvg = NVG.new()
 	root.add_child(nvg)
@@ -103,21 +103,16 @@ func t_mine_highlight_uses_main_view_shells() -> void:
 	var id := mine.get_instance_id()
 	ck(nvg._mines.has(id), "mine registered")
 	var entry: Dictionary = nvg._mines.get(id, {})
-	var shells: Array = entry.get("shells", [])
-	ck(shells.size() == 1, "mine shell is created for source mesh")
-	var shell: MeshInstance3D = shells[0] if shells.size() == 1 else null
+	ck(not entry.has("shells"), "mine entry has no shell nodes")
+	var child_count := mine.get_child_count()
 	nvg._update_mine(id, true, Vector3.ZERO)
 	ck(mesh.material_override == null, "in-range mine leaves source mesh without override")
-	ck(shell != null and is_instance_valid(shell) and shell.visible, "in-range mine shows shell")
-	ck(shell != null and shell.material_override == nvg._mat_mine, "mine shell uses direct mine display material")
-	if shell != null:
-		ck((shell.layers & 1) == 1, "mine shell renders in main view")
+	ck(mesh.material_overlay == nvg._mat_mine, "in-range mine paints source mesh with overlay material")
+	ck(mine.get_child_count() == child_count, "in-range mine does not add extra nodes")
 	nvg._update_mine(id, true, Vector3(1000.0, 0.0, 0.0))
-	ck(mesh.material_override == null, "out-of-range mine keeps source mesh clear")
-	ck(shell != null and is_instance_valid(shell) and not shell.visible, "out-of-range mine hides shell")
+	ck(mesh.material_overlay == null, "out-of-range mine clears overlay")
 	nvg._update_mine(id, true, Vector3.ZERO)
-	ck(mesh.material_override == null, "mine re-entry does not touch source mesh override")
-	ck(shell != null and is_instance_valid(shell) and shell.visible, "mine repaints shell on re-entry")
+	ck(mesh.material_overlay == nvg._mat_mine, "mine repaints overlay on re-entry")
 	nvg.free()
 	mine.free()
 

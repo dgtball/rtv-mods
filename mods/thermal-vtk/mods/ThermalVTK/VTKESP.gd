@@ -28,6 +28,15 @@ const SPRINT_SPEED := 4.0
 # one cry, not one per frame. The reveal stays up for p_pain_s anyway, so the
 # player sees the same window; only the re-tagging is debounced.
 const PAIN_MIN_GAP := 0.4
+# Ring band width in screen pixels. 2.10.30 experiment: pinned at zero, so the
+# ring sits exactly on the body silhouette and the visible line is only the
+# fresnel falloff -- no outward halo that inflates distant NPCs. The old
+# distance compensation (2.5 px, floor 0.002) stayed in place because a
+# world-space band shrank to sub-pixel at range, where the MSAA resolve lost
+# the key for the NVG detector; that risk returns with the band at zero.
+const OUTLINE_BAND_PX := 0.0
+const OUTLINE_BAND_MIN := 0.0
+const OUTLINE_BAND_MAX := 0.5
 # The overlay runs in the main 3D pass, so the shells need no dedicated camera
 # and no reach clip: the depth test of the source mesh does the clipping
 # (walls, weapon, sight glass), and the demand below only says whether any
@@ -506,6 +515,29 @@ func _dbg_tick(delta: float, ppos: Variant) -> void:
 		str(contour_layer), str(xray_layer), where,
 	])
 
+# The nearest live candidate inside Distance (same gate dump_distance_debug
+# prints as in_cand), 0 when nobody qualifies. Kept as the diagnostic seam for
+# the nearest-candidate test; the per-frame subject log is gone.
+func _subject_id() -> int:
+	if not contour_layer:
+		return 0
+	var best := 0
+	var best_dist := INF
+	for id in _entries.keys():
+		var e: Dictionary = _entries[id]
+		var node = e.get("node")
+		if node == null or not is_instance_valid(node) or not node.is_inside_tree():
+			continue
+		if bool(e.get("dead", false)):
+			continue
+		var dist: float = float(e.get("dist", -1.0))
+		if dist < 0.0 or dist > p_dist:
+			continue
+		if dist < best_dist:
+			best_dist = dist
+			best = int(id)
+	return best
+
 func dump_distance_debug(reason: String = "") -> void:
 	if not Dbg.enabled:
 		return
@@ -541,7 +573,10 @@ func dump_distance_debug(reason: String = "") -> void:
 		var r: Dictionary = rows[i]
 		var rid: int = int(r.get("id", 0))
 		var meshes: int = _outline.mesh_count(rid) if _outline != null and _outline.has_method("mesh_count") else -1
-		Dbg.log("ESP_DIST", "  #%d id=%d dist=%s dead=%s valid=%s in_cand=%s xray=%s win=%s meshes=%s name=%s" % [
+		var rc := ""
+		if _outline != null and _outline.has_method("recollect_info"):
+			rc = str(_outline.recollect_info(rid))
+		Dbg.log("ESP_DIST", "  #%d id=%d dist=%s dead=%s valid=%s in_cand=%s xray=%s win=%s meshes=%s%s name=%s" % [
 			i,
 			rid,
 			("%.2f" % float(r.get("dist", -1.0))) if float(r.get("dist", -1.0)) >= 0.0 else "n/a",
@@ -551,6 +586,7 @@ func dump_distance_debug(reason: String = "") -> void:
 			str(bool(r.get("xray_live", false))),
 			str(bool(r.get("win", false))),
 			str(meshes),
+			(" recollect=%s" % rc) if rc != "" else "",
 			str(r.get("name", "?")),
 		])
 	if rows.size() > limit:
@@ -873,8 +909,28 @@ func _fill_opts(opts: Dictionary, e: Dictionary, now: float) -> void:
 	opts["fill_alpha"] = p_fill_alpha
 	opts["cool"] = cool
 	opts["grow"] = p_thickness
+	opts["band"] = _band_for(float(e.get("dist", 0.0)))
 	opts["xray"] = xray
 	opts["fill"] = p_body_fill
+
+
+
+# World-space width of a screen-sized band at `dist`. The band is the only part
+# of the contour that is actually visible in outline mode, so it has to stay
+# wide enough in pixels to survive the MSAA resolve.
+func _band_for(dist: float) -> float:
+	var height := 1080.0
+	var vp := get_viewport()
+	if vp != null:
+		var h := float(vp.get_visible_rect().size.y)
+		if h > 1.0:
+			height = h
+	var tan_half := 0.7
+	var cam := _camera()
+	if cam != null:
+		tan_half = maxf(tan(deg_to_rad(cam.fov) * 0.5), 0.05)
+	var d := maxf(dist, 0.1)
+	return clampf(OUTLINE_BAND_PX * (2.0 * d * tan_half) / height, OUTLINE_BAND_MIN, OUTLINE_BAND_MAX)
 
 
 

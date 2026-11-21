@@ -32,6 +32,13 @@ uniform int worldPaletteMode = 0;
 uniform float nvgWhite : hint_range(0.05, 1.0, 0.05) = 1.0;
 uniform float paletteStrength : hint_range(0.0, 1.0, 0.01) = 0.58;
 uniform float redHold : hint_range(0.0, 1.0, 0.01) = 0.72;
+// Mine highlights are 3D shells in the main pass; bypass thermal remapping so
+// the configured mine colour stays readable and does not react to palettes.
+uniform bool minePassthroughOn = false;
+uniform vec3 minePassthroughColor : source_color = vec3(0.035, 0.18, 0.965);
+// Daylight compensation scales scene exposure; use it to keep heat/mine
+// detection stable across lighting conditions.
+uniform float dayFactor : hint_range(0.05, 2.0, 0.01) = 1.0;
 
 float Goggles(vec2 uv)
 {
@@ -141,21 +148,37 @@ void fragment()
 	float goggleOutlines = 1.0 - smoothstep(0.0, goggleOutline, goggleRim);
 	float x = (SCREEN_UV.x + 1.0) * (SCREEN_UV.y + 1.0) * (TIME * 10.0);
 	vec4 noiseEffect = vec4(mod((mod(x, 13.0)) * (mod(x, 123.0)), 0.01) - 0.005) * noise;
+	bool isMine = false;
+	if (minePassthroughOn) {
+		isMine = distance(pixelColor.rgb, minePassthroughColor) < 0.045;
+		if (!isMine) {
+			float l = max(dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114)), 1e-4);
+			float lm = max(dot(minePassthroughColor, vec3(0.299, 0.587, 0.114)), 1e-4);
+			vec3 n0 = pixelColor.rgb / l;
+			vec3 n1 = minePassthroughColor / lm;
+			isMine = distance(n0, n1) < 0.14 && l > 0.008;
+		}
+	}
 
 	vec4 color;
 	if (thermalMode) {
-		float rawLuminance = dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114));
-		float luminance = clamp(hiShoulder(rawLuminance * thermalDarken, highlightKnee, dayMix), 0.0, 1.0);
-		if (dayMix > 0.0) {
-			float lifted = 1.0 - pow(1.0 - luminance, 1.6);
-			luminance = mix(luminance, lifted, dayMix);
+		if (isMine) {
+			color = vec4(minePassthroughColor, pixelColor.a);
+		} else {
+			float rawLuminance = dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114));
+			float luminance = clamp(hiShoulder(rawLuminance * thermalDarken, highlightKnee, dayMix), 0.0, 1.0);
+			if (dayMix > 0.0) {
+				float lifted = 1.0 - pow(1.0 - luminance, 1.6);
+				luminance = mix(luminance, lifted, dayMix);
+			}
+			vec3 backgroundColor = ThermalPalette(luminance) * 0.7;
+			vec3 srcForHeat = pixelColor.rgb / max(dayFactor, 0.05);
+			float rh = red_heat(srcForHeat) * redHold;
+			backgroundColor = mix(backgroundColor, held_heat(clamp(rawLuminance / max(dayFactor, 0.05), 0.0, 1.0)), clamp(rh, 0.0, 1.0));
+			// Blend toward thermal palette (background only).
+			backgroundColor = mix(pixelColor.rgb, backgroundColor, clamp(paletteStrength, 0.0, 1.0));
+			color = vec4(backgroundColor, pixelColor.a);
 		}
-		vec3 backgroundColor = ThermalPalette(luminance) * 0.7;
-		float rh = red_heat(pixelColor.rgb) * redHold;
-		backgroundColor = mix(backgroundColor, held_heat(clamp(rawLuminance, 0.0, 1.0)), clamp(rh, 0.0, 1.0));
-		// Blend toward thermal palette (background only).
-		backgroundColor = mix(pixelColor.rgb, backgroundColor, clamp(paletteStrength, 0.0, 1.0));
-		color = vec4(backgroundColor, pixelColor.a);
 	} else {
 		color = pixelColor * tint;
 		if (dayMix > 0.0) {
@@ -166,7 +189,9 @@ void fragment()
 		}
 	}
 	color.rgb *= nvgWhite;
-	color += noiseEffect;
+	if (!isMine) {
+		color += noiseEffect;
+	}
 	color.rgb *= (1.0 + goggleOutlines);
 	COLOR = mix(vec4(0.0, 0.0, 0.0, 1.0), color, goggleMask);
 }

@@ -63,7 +63,7 @@ func t_esp_shaders_compile() -> void:
 		ck(names.has("grow"), "esp %s shader exposes grow" % pair[0])
 		ck(names.has("cool"), "esp %s shader exposes cool" % pair[0])
 	for body in [Sh.body_los(), Sh.body_xray()]:
-		ck(not _uniform_names(body).has("rim_power"), "body shader has no rim falloff")
+		ck(_uniform_names(body).has("rim_power"), "body shader exposes rim falloff")
 	for ring in [Sh.ring_los(), Sh.ring_xray()]:
 		ck(_uniform_names(ring).has("rim_power"), "ring shader exposes rim_power")
 
@@ -71,10 +71,11 @@ func t_body_contracts() -> void:
 	var los := FileAccess.get_file_as_string(BODY_LOS_RES)
 	var xray := FileAccess.get_file_as_string(BODY_XRAY_RES)
 	for src in [los, xray]:
-		ck(src.contains("stencil_mode write, 1"), "body shader writes stencil")
+		ck(not src.contains("stencil_mode"), "body shader leaves the stencil buffer untouched")
 		ck(src.contains("depth_draw_never"), "body shader never writes depth")
 		ck(src.contains("outline_color * brightness"), "body shader emits display color")
-		ck(src.contains("ALPHA = alpha * (1.0 - cool)"), "body shader applies alpha and cool")
+		ck(src.contains("pow(edge, rim_power)"), "body shader supports rim falloff")
+		ck(src.contains("ALPHA = (0.3 + 0.7 * rim) * alpha * (1.0 - cool)"), "body shader applies a floored rim fill")
 	ck(not los.contains("depth_test_disabled"), "los body keeps depth test")
 	ck(xray.contains("depth_test_disabled"), "xray body disables depth test")
 
@@ -82,7 +83,7 @@ func t_ring_contracts() -> void:
 	var los := FileAccess.get_file_as_string(RING_LOS_RES)
 	var xray := FileAccess.get_file_as_string(RING_XRAY_RES)
 	for src in [los, xray]:
-		ck(src.contains("stencil_mode read, compare_not_equal, 1"), "ring shader reads stencil")
+		ck(not src.contains("stencil_mode"), "ring shader leaves the stencil buffer untouched")
 		ck(src.contains("depth_draw_never"), "ring shader never writes depth")
 		ck(src.contains("outline_color * brightness"), "ring shader emits display color")
 		ck(src.contains("rim_power"), "ring shader supports rim falloff")

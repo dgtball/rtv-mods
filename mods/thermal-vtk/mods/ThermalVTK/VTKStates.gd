@@ -16,11 +16,11 @@ const DEFEND_STATES: Array[int] = [5, 6, 7, 10, 12, 14, 15]
 # derives both the MCM defaults (DESCRIPTORS "def") and the typed Rec defaults
 # from here, and direct display contours/overlays use them when a profile carries
 # none.
-const DEFAULT_NORMAL := Color(0.98, 0.96, 0, 1)
-const DEFAULT_COMBAT := Color(0.95, 0.18, 0.15)
-const DEFAULT_DEFEND := Color(0.11, 0.6, 0.96, 1)
+const DEFAULT_NORMAL := Color8(17, 240, 4)
+const DEFAULT_COMBAT := Color8(242, 46, 38)
+const DEFAULT_DEFEND := Color8(223, 245, 28)
 # Default display colour of mine ESP buffer shells. Not a state category.
-const DEFAULT_MINE := Color(1.0, 0.2, 0.85, 1)
+const DEFAULT_MINE := Color8(9, 46, 246)
 static var _map: Dictionary = {}
 
 static func _build() -> void:

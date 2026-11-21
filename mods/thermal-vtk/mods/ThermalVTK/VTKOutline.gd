@@ -1,10 +1,11 @@
 ﻿extends RefCounted
 # Owns ESP contour rendering per NPC in overlay mode (2.10.x diagnostic baseline):
 # applies direct display materials as `material_overlay` on source meshes in the
-# main 3D pass. Direct display semantics: outline = mask+ring band with
-# translucent ring alpha driven by fill_alpha, fill = translucent body alpha
+# main 3D pass. Direct display semantics: outline = translucent body fill
+# (fill_alpha) + ring band at the same alpha, fill = translucent body alpha
 # (fill_alpha), xray swaps depth_test_disabled variants; color/brightness/cool/grow
-# follow opts.
+# follow opts. Pass order is pinned with render_priority (body floor, ring
+# ceiling) so the tint always draws under the band.
 
 const Shaders = preload("res://mods/ThermalVTK/VTKShaders.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
@@ -26,12 +27,76 @@ func mesh_count(id: int) -> int:
 	var meshes = entry.get("meshes", [])
 	return meshes.size() if meshes is Array else -1
 
+func recollect_info(id: int) -> String:
+	var entry: Dictionary = _items.get(id, {})
+	if entry.is_empty():
+		return ""
+	return str(entry.get("last_recollect", ""))
+
+# Snapshot of what the shaders actually hold for one NPC: the real uniforms,
+# the shader in use and the tracked mesh count. The per-frame subject log
+# reads this instead of the opts it was asked for, so a stale or swapped
+# material shows up as itself. The overlay trio (ok/lost/other) reads the
+# GeometryInstance3D nodes, not the entry — that is the only way to see a
+# contour that is perfect on paper but gone from the screen. Empty for an
+# unknown id.
+func material_info(id: int) -> Dictionary:
+	var entry: Dictionary = _items.get(id, {})
+	if entry.is_empty():
+		return {}
+	var body := entry.get("mat") as ShaderMaterial
+	if body == null:
+		return {}
+	var info := {
+		"fill_mode": bool(entry.get("fill_mode", false)),
+		"has_ring": entry.get("ring") != null,
+		"meshes": mesh_count(id),
+		"mat_gen": int(entry.get("mat_gen", 0)),
+		"body_grow": float(body.get_shader_parameter("grow")),
+		"body_alpha": float(body.get_shader_parameter("alpha")),
+		"brightness": float(body.get_shader_parameter("brightness")),
+		"cool": float(body.get_shader_parameter("cool")),
+		"body_shader": _shader_file(body),
+	}
+	var col: Variant = body.get_shader_parameter("outline_color")
+	info["color"] = col if col is Color else Color.BLACK
+	var ok := 0
+	var lost := 0
+	var other := 0
+	var meshes = entry.get("meshes", [])
+	if meshes is Array:
+		for m in meshes:
+			var gi := m as GeometryInstance3D
+			if gi == null or not is_instance_valid(gi):
+				continue
+			if gi.material_overlay == body:
+				ok += 1
+			elif gi.material_overlay == null:
+				lost += 1
+			else:
+				other += 1
+	info["overlay_ok"] = ok
+	info["overlay_lost"] = lost
+	info["overlay_other"] = other
+	var ring := entry.get("ring") as ShaderMaterial
+	if ring != null:
+		info["ring_grow"] = float(ring.get_shader_parameter("grow"))
+		info["ring_alpha"] = float(ring.get_shader_parameter("alpha"))
+		info["rim"] = float(ring.get_shader_parameter("rim_power"))
+		info["ring_shader"] = _shader_file(ring)
+	return info
+
+func _shader_file(m: ShaderMaterial) -> String:
+	if m == null or m.shader == null:
+		return ""
+	return m.shader.resource_path.get_file()
+
 func _collect(node: Node, out: Array) -> void:
 	if node == null or not is_instance_valid(node):
 		return
 	if node.has_meta(NO_CONTOUR_META):
 		return
-	if node is MeshInstance3D and is_instance_valid(node):
+	if node is GeometryInstance3D and is_instance_valid(node):
 		out.append(node)
 	for c in node.get_children():
 		_collect(c, out)
@@ -58,17 +123,22 @@ func _valid_meshes(meshes: Array) -> Array:
 	for m in meshes:
 		if m == null or not is_instance_valid(m):
 			continue
-		var mi := m as MeshInstance3D
-		if mi != null:
-			out.append(mi)
+		var gi := m as GeometryInstance3D
+		if gi != null:
+			out.append(gi)
 	return out
 
 func _material_for(fill: bool, xray: bool) -> Material:
 	var body_mat := ShaderMaterial.new()
 	body_mat.shader = Shaders.body_xray() if xray else Shaders.body_los()
+	# Keep the translucent fill under the ring band whatever order the
+	# transparent queue picks for the camera. Priorities are the primary
+	# sort key: body at the floor, ring at the ceiling pin body -> ring.
+	body_mat.render_priority = -128
 	if not fill:
 		var ring_mat := ShaderMaterial.new()
 		ring_mat.shader = Shaders.ring_xray() if xray else Shaders.ring_los()
+		ring_mat.render_priority = 127
 		body_mat.next_pass = ring_mat
 	return body_mat
 
@@ -81,6 +151,7 @@ func _ring_of(mat: Material) -> ShaderMaterial:
 func _set_material(entry: Dictionary, mat: Material) -> void:
 	entry["mat"] = mat
 	entry["ring"] = _ring_of(mat)
+	entry["mat_gen"] = int(entry.get("mat_gen", 0)) + 1
 	entry["p_color"] = null
 	entry["p_brightness"] = null
 	entry["p_alpha"] = null
@@ -96,9 +167,9 @@ func _apply_to(meshes: Array, mat: Material) -> void:
 	for m in meshes:
 		if m == null or not is_instance_valid(m):
 			continue
-		var mi := m as MeshInstance3D
-		if mi != null:
-			mi.material_overlay = mat
+		var gi := m as GeometryInstance3D
+		if gi != null:
+			gi.material_overlay = mat
 
 func apply(id: int, node: Node, opts: Dictionary) -> void:
 	var meshes: Array = []
@@ -106,14 +177,19 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 	var xray: bool = bool(opts.get("xray", false))
 	var fill: bool = bool(opts.get("fill", false))
 	var mat: Material = _material_for(fill, xray)
+	# Generation counts material creations for this id across re-applies, so a
+	# mid-session swap is visible in the subject log as a step, not a reset.
+	var prev: Dictionary = _items.get(id, {})
 	_items[id] = {
 		"node": node,
 		"meshes": meshes,
 		"mat": mat,
 		"ring": _ring_of(mat),
+		"mat_gen": int(prev.get("mat_gen", 0)) + 1,
 		"fill_mode": fill,
 		"xray": xray,
 		"child_count": _child_count(node),
+		"last_recollect": "",
 		"p_color": null,
 		"p_brightness": null,
 		"p_alpha": null,
@@ -182,7 +258,7 @@ func refresh(id: int, opts: Dictionary) -> void:
 	var p_grow = entry.get("p_grow")
 	var p_band = entry.get("p_band")
 	if p_grow == null or not is_equal_approx(float(p_grow), grow) or p_band == null or not is_equal_approx(float(p_band), band):
-		var body_grow: float = maxf(grow, band)
+		var body_grow: float = grow
 		if fill:
 			body_mat.set_shader_parameter("grow", body_grow)
 		else:
@@ -197,13 +273,19 @@ func refresh(id: int, opts: Dictionary) -> void:
 		if ring_mat != null:
 			ring_mat.set_shader_parameter("cool", cool)
 		entry["p_cool"] = cool
-	if ring_mat != null:
-		var p_rim = entry.get("p_rim")
-		if p_rim == null or not is_equal_approx(float(p_rim), rim):
+	var p_rim = entry.get("p_rim")
+	if p_rim == null or not is_equal_approx(float(p_rim), rim):
+		# Outline weights the body fill by the same fresnel as the band, so
+		# the silhouette glows at its edges while the centre keeps its detail.
+		# Fill mode keeps a flat tint by disabling the body falloff.
+		body_mat.set_shader_parameter("rim_power", 0.0 if fill else rim)
+		if ring_mat != null:
 			ring_mat.set_shader_parameter("rim_power", rim)
-			entry["p_rim"] = rim
-	# Direct display: fill = translucent body alpha, outline = mask body + ring alpha.
-	var body_alpha: float = fill_alpha if fill else 0.0
+		entry["p_rim"] = rim
+	# Direct display: the body always carries the fill alpha (that is the
+	# translucent tint inside the contour), the ring carries it only in
+	# outline mode where it draws the band.
+	var body_alpha: float = fill_alpha
 	var ring_alpha: float = fill_alpha if not fill else 0.0
 	var p_alpha = entry.get("p_alpha")
 	if p_alpha == null or not is_equal_approx(float(p_alpha), body_alpha):
@@ -234,6 +316,7 @@ func _recollect(id: int, entry: Dictionary, fresh: Array = [], fresh_count: int 
 		entry["meshes"] = fresh
 		_apply_to(fresh, entry.get("mat"))
 		return
+	entry["last_recollect"] = "%d->%d" % [old_meshes.size(), fresh.size()]
 	if Dbg.enabled:
 		var nname := "?"
 		if is_instance_valid(node):
@@ -245,11 +328,11 @@ func _recollect(id: int, entry: Dictionary, fresh: Array = [], fresh_count: int 
 	for m in old_meshes:
 		if m == null or not is_instance_valid(m):
 			continue
-		var mi := m as MeshInstance3D
-		if mi == null:
+		var gi := m as GeometryInstance3D
+		if gi == null:
 			continue
-		if not fresh.has(mi):
-			mi.material_overlay = null
+		if not fresh.has(gi):
+			gi.material_overlay = null
 	entry["meshes"] = fresh
 	_apply_to(fresh, entry.get("mat"))
 

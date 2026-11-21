@@ -18,8 +18,6 @@ const NVG_SCRIPT_SUFFIX := "NVG.gd"
 const SHADER_RES := "res://mods/ThermalVTK/VTKNVG.gdshader"
 
 const TICK := 0.1
-const MINE_SHELL_META := "vtk_mine_shell"
-const NO_CONTOUR_META := "vtk_no_contour"
 
 # settings
 var set_nvg_noise: float = 0.0
@@ -254,8 +252,9 @@ func _apply_uniforms() -> void:
 	if nvg_mat == null or not (nvg_mat is ShaderMaterial):
 		_installed = false
 		return
+	var thermal_on := set_thermal and _nvg_active()
 	nvg_mat.set_shader_parameter("noise", set_nvg_noise)
-	nvg_mat.set_shader_parameter("thermalMode", set_thermal and _nvg_active())
+	nvg_mat.set_shader_parameter("thermalMode", thermal_on)
 	nvg_mat.set_shader_parameter("thermalDarken", set_world * _snow_trim * _day_trim)
 	nvg_mat.set_shader_parameter("dayMix", _day_mix)
 	nvg_mat.set_shader_parameter("worldPaletteMode", set_palette)
@@ -263,6 +262,9 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("nvgWhite", set_nvg_white)
 	nvg_mat.set_shader_parameter("paletteStrength", set_palette_strength)
 	nvg_mat.set_shader_parameter("redHold", set_red_hold)
+	nvg_mat.set_shader_parameter("minePassthroughOn", thermal_on and set_mines)
+	nvg_mat.set_shader_parameter("minePassthroughColor", _mine_color)
+	nvg_mat.set_shader_parameter("dayFactor", _day_factor)
 
 
 # Direct display colour of mine shells. Stored even before the overlay material
@@ -707,7 +709,6 @@ func _clear_paint() -> void:
 		if e == null:
 			continue
 		_set_mine_painted(e, false)
-		_clear_source_overrides(e)
 	_mine_painted = 0
 
 
@@ -764,75 +765,24 @@ func _retry_mines() -> void:
 
 
 func _build_mine_entry(node: Node, meshes: Array) -> Dictionary:
-	var entry := {"node": node, "meshes": meshes, "shells": [], "painted": false}
+	var entry := {"node": node, "meshes": meshes, "painted": false}
 	_clear_source_overrides(entry)
-	_rebuild_mine_shells(entry)
 	return entry
 
 
 func _clear_source_overrides(e: Dictionary) -> void:
 	for m in e.get("meshes", []):
-		if is_instance_valid(m):
-			(m as GeometryInstance3D).material_override = null
-
-
-func _mine_shells(entry: Dictionary) -> Array:
-	var s = entry.get("shells", [])
-	return s if s is Array else []
-
-
-func _sync_mine_shell(shell: MeshInstance3D, src: MeshInstance3D) -> void:
-	if not is_instance_valid(src) or not src.is_inside_tree():
-		return
-	if not is_instance_valid(shell) or not shell.is_inside_tree():
-		return
-	shell.global_transform = src.global_transform
-	shell.visible = src.visible
-	shell.layers = 1
-
-
-func _make_mine_shell(src: MeshInstance3D) -> MeshInstance3D:
-	var shell := MeshInstance3D.new()
-	shell.set_meta(NO_CONTOUR_META, true)
-	shell.set_meta(MINE_SHELL_META, true)
-	shell.top_level = true
-	shell.mesh = src.mesh
-	shell.skin = src.skin
-	shell.skeleton = src.skeleton
-	shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	shell.layers = 1
-	shell.material_override = _mat_mine
-	shell.visible = false
-	src.add_sibling(shell)
-	_sync_mine_shell(shell, src)
-	shell.visible = false
-	return shell
-
-
-func _rebuild_mine_shells(entry: Dictionary) -> void:
-	_free_mine_shells(entry)
-	var shells: Array = []
-	for m in entry.get("meshes", []):
-		var src := m as MeshInstance3D
-		if src == null or not is_instance_valid(src):
+		if m == null or not is_instance_valid(m):
 			continue
-		shells.append(_make_mine_shell(src))
-	entry["shells"] = shells
-	_apply_mine_paint(entry, bool(entry.get("painted", false)))
-
-
-func _free_mine_shells(entry: Dictionary) -> void:
-	for s in _mine_shells(entry):
-		var shell := s as MeshInstance3D
-		if shell != null and is_instance_valid(shell):
-			shell.queue_free()
-	entry["shells"] = []
+		var gi := m as GeometryInstance3D
+		if gi == null:
+			continue
+		gi.material_overlay = null
+		gi.material_override = null
 
 
 func _set_mine_painted(entry: Dictionary, show: bool) -> void:
 	if bool(entry.get("painted", false)) == show:
-		if show:
-			_apply_mine_paint(entry, true)
 		return
 	entry["painted"] = show
 	if show:
@@ -843,18 +793,13 @@ func _set_mine_painted(entry: Dictionary, show: bool) -> void:
 
 
 func _apply_mine_paint(entry: Dictionary, show: bool) -> void:
-	var meshes: Array = entry.get("meshes", [])
-	var shells: Array = _mine_shells(entry)
-	for i in shells.size():
-		var shell := shells[i] as MeshInstance3D
-		if shell == null or not is_instance_valid(shell):
+	for m in entry.get("meshes", []):
+		if m == null or not is_instance_valid(m):
 			continue
-		if i < meshes.size():
-			var src := meshes[i] as MeshInstance3D
-			if src != null and is_instance_valid(src):
-				_sync_mine_shell(shell, src)
-		shell.material_override = _mat_mine
-		shell.visible = show
+		var gi := m as GeometryInstance3D
+		if gi == null:
+			continue
+		gi.material_overlay = _mat_mine if show else null
 
 
 func _remove_mine(id: int) -> void:
@@ -863,7 +808,6 @@ func _remove_mine(id: int) -> void:
 		if bool(e.get("painted", false)):
 			_mine_painted = maxi(_mine_painted - 1, 0)
 		_clear_source_overrides(e)
-		_free_mine_shells(e)
 	_mines.erase(id)
 
 
@@ -873,7 +817,6 @@ func _clear_mine_state() -> void:
 		if e == null:
 			continue
 		_clear_source_overrides(e)
-		_free_mine_shells(e)
 	_mines.clear()
 	_mine_watch.clear()
 	_mine_painted = 0
@@ -917,7 +860,6 @@ func _update_mine(id: int, thermal_on: bool, ppos: Vector3) -> void:
 	var dist := ppos.distance_to(node.global_position)
 	var show := thermal_on and set_mines and dist <= maxf(set_glow_distance, 1.0)
 	_set_mine_painted(e, show)
-	_clear_source_overrides(e)
 
 
 func set_thermal_enabled(on: bool) -> void:

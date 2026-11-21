@@ -39,8 +39,8 @@ class Rec:
 	var corpse_decay: float = 70.0
 	var outline_distance: float = 60.0
 	var outline_thickness: float = 0.0005
-	var outline_brightness: float = 0.7
-	var fill_alpha: float = 0.6
+	var outline_brightness: float = 0.2
+	var fill_alpha: float = 0.35
 	# X-ray Triggers: reveal window ranges ("_d") and durations ("_s").
 	var fire_d: float = 80.0
 	var fire_s: float = 2.0
@@ -63,7 +63,7 @@ class Rec:
 	var color_combat: Color = States.DEFAULT_COMBAT
 	var color_defend: Color = States.DEFAULT_DEFEND
 	# Display colour of the mine ESP (mines are filled whole, not outlined).
-	var color_mine: Color = Color8(9, 46, 246)
+	var color_mine: Color = States.DEFAULT_MINE
 
 	func state_colors() -> Dictionary:
 		return {
@@ -85,7 +85,7 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Bool", "key": "body_fill", "name": "Full body fill", "def": true, "cat": "01. ThermalVision", "pos": 4, "tip": "Paint the whole NPC silhouette instead of a ring. Walls still clip it."},
 	{"sect": "Bool", "key": "outline_xray", "name": "X-ray Triggers", "def": false, "cat": "01. ThermalVision", "pos": 5, "tip": "While on, the NPC ring lights up through walls only while a sound event is live: gunfire, shouts, idle chatter, footsteps, reloads, pain cries or grenade throws. Between events the outline stays a normal ring behind walls. The reveal timers themselves show on the debug labels regardless of this toggle."},
 	{"sect": "Bool", "key": "thermal_mines", "name": "Mine ESP", "def": true, "cat": "01. ThermalVision", "pos": 6, "tip": "Highlight mines while thermal vision is on."},
-	{"sect": "Color", "key": "mine_color", "name": "Mine", "def": Color8(9, 46, 246), "cat": "01. ThermalVision", "pos": 7, "tip": "Colour the thermal layer paints over a mine. Mines are filled whole, not outlined."},
+	{"sect": "Color", "key": "mine_color", "name": "Mine", "def": States.DEFAULT_MINE, "cat": "01. ThermalVision", "pos": 7, "tip": "Colour the thermal layer paints over a mine. Mines are filled whole, not outlined."},
 	{"sect": "Bool", "key": "nomad_marker", "name": "Nomads marker", "def": true, "cat": "01. ThermalVision", "pos": 2, "tip": "Draw a small triangle over friendly nomads while thermal vision is on. Obeys the Distance setting. Independent of the debug log."},
 	{"sect": "Float", "key": "nvg_noise", "name": "NVG noise", "def": 0.0, "min": 0.0, "max": 60.0, "step": 0.5, "cat": "01. ThermalVision", "pos": 8, "tip": "Grain amount over the NVG image. Lower is cleaner. Vanilla is fixed at 10."},
 	{"sect": "Float", "key": "nvg_white", "name": "NVG brightness", "def": 1.0, "min": 0.05, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 9, "tip": "Brightness of the NVG image. 1 = full brightness; lower darkens the whole overlay."},
@@ -97,7 +97,7 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Float", "key": "red_hold", "name": "Red hold", "def": 0.72, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 15, "tip": "How strongly hot/red highlights are held in thermal palettes. Higher preserves hotter reds on bright/warm sources."},
 	{"sect": "Float", "key": "outline_distance", "name": "Distance", "def": 60.0, "min": 0.0, "max": 300.0, "step": 10.0, "cat": "02. NPC", "pos": 0, "tip": "Maximum distance for an outline. Outlines are hidden past this range."},
 	{"sect": "Float", "key": "outline_thickness", "name": "Thickness", "def": 0.0005, "min": 0.0005, "max": 0.02, "step": 0.0005, "cat": "02. NPC", "pos": 2, "tip": "Outline/rim thickness in direct mode."},
-	{"sect": "Float", "key": "outline_brightness", "name": "Brightness", "def": 0.7, "min": 0.1, "max": 3.0, "step": 0.1, "cat": "02. NPC", "pos": 3, "tip": "Brightness multiplier on the outline/fill colour."},
+	{"sect": "Float", "key": "outline_brightness", "name": "Brightness", "def": 0.2, "min": 0.1, "max": 3.0, "step": 0.1, "cat": "02. NPC", "pos": 3, "tip": "Brightness multiplier on the outline/fill colour."},
 	{"sect": "Float", "key": "corpse_decay", "name": "Cooling time", "def": 70.0, "min": 0.0, "max": 180.0, "step": 1.0, "cat": "02. NPC", "pos": 4, "tip": "Seconds a dead NPC's outline takes to cool from warm to cold."},
 	{"sect": "Float", "key": "trigger_fire_dist", "name": "Gunfire distance", "def": 80.0, "min": 0.0, "max": 300.0, "step": 5.0, "cat": "03. X-ray Triggers", "pos": 0, "tip": "Reveal range for a gun-shot."},
 	{"sect": "Float", "key": "trigger_voice_dist", "name": "Combat voice distance", "def": 5.0, "min": 0.0, "max": 60.0, "step": 1.0, "cat": "03. X-ray Triggers", "pos": 1, "tip": "Reveal range for a combat shout."},
@@ -121,7 +121,7 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Bool", "key": "npc_labels", "name": "NPC labels (debug)", "def": true, "cat": "04. Diagnostics", "pos": 1, "tip": "Draw NPC nametags, health bars and trigger timers while the debug log is on. Works without thermal vision or the NVG helmet, so states can be checked in plain daylight."},
 	{"sect": "Keycode", "key": "key_esp_panel", "name": "Hotkey: ESP panel", "def": KEY_F8, "cat": "04. Diagnostics", "pos": 21, "tip": "Debug tool: opens the live ESP tuning panel; the game pauses while it is open. Turn the debug log on first -- without it the key stays free for the game. The panel saves nothing: slider values live until the helmet comes off or the map changes."},
 	{"sect": "Keycode", "key": "key_live_panel", "name": "Hotkey: NVG panel", "def": KEY_F9, "cat": "04. Diagnostics", "pos": 22, "tip": "Debug tool: opens the live daylight/NVG tuning panel; the game pauses while it is open. Turn the debug log on first -- without it the key stays free for the game. The panel saves nothing: slider values live until the helmet comes off."},
-	{"sect": "Float", "key": "fill_alpha", "name": "fill_alpha", "def": 0.6, "min": 0.05, "max": 1.0, "step": 0.05, "cat": "02. NPC", "pos": 8, "tip": "Alpha/opacity for ESP fill (NVG substitution in FILL mode blends with background). In other modes/paths it may affect fill or contour visibility differently."},
+	{"sect": "Float", "key": "fill_alpha", "name": "fill_alpha", "def": 0.35, "min": 0.05, "max": 1.0, "step": 0.05, "cat": "02. NPC", "pos": 8, "tip": "Alpha/opacity for ESP fill (NVG substitution in FILL mode blends with background). In other modes/paths it may affect fill or contour visibility differently."},
 ]
 
 # The seed MCM copies a fresh profile from: every entry the mod declares, with

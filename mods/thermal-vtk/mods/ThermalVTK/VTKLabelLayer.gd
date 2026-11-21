@@ -58,7 +58,8 @@ func _draw() -> void:
 			continue
 		if p.x < -64.0 or p.y < -64.0 or p.x > vs.x + 64.0 or p.y > vs.y + 64.0:
 			continue
-		var r := MARKER_R
+		var dist_cam := cam.global_position.distance_to(anchor)
+		var r := clampf(MARKER_R * 16.0 / maxf(dist_cam, 4.0), 4.0, MARKER_R)
 		# Inverted triangle: the tip points at the head, so the marker reads as
 		# "this NPC" and cannot be mistaken for a mine.
 		var poly := PackedVector2Array([p + Vector2(0.0, r), p + Vector2(-r * 0.9, -r * 0.7), p + Vector2(r * 0.9, -r * 0.7)])
