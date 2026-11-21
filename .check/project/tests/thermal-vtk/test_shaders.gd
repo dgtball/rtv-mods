@@ -7,6 +7,7 @@ const BODY_LOS_RES := "res://mods/ThermalVTK/VTKEspBody.gdshader"
 const BODY_XRAY_RES := "res://mods/ThermalVTK/VTKEspBodyXray.gdshader"
 const RING_LOS_RES := "res://mods/ThermalVTK/VTKEspRing.gdshader"
 const RING_XRAY_RES := "res://mods/ThermalVTK/VTKEspRingXray.gdshader"
+const OCCLUDER_RES := "res://mods/ThermalVTK/VTKEspOccluder.gdshader"
 
 var fails := 0
 
@@ -22,6 +23,7 @@ func _init() -> void:
 
 func _run() -> void:
 	t_esp_shaders_compile()
+	t_occluder_contract()
 	t_body_contracts()
 	t_ring_contracts()
 	t_band_contract()
@@ -66,6 +68,18 @@ func t_esp_shaders_compile() -> void:
 		ck(_uniform_names(body).has("rim_power"), "body shader exposes rim falloff")
 	for ring in [Sh.ring_los(), Sh.ring_xray()]:
 		ck(_uniform_names(ring).has("rim_power"), "ring shader exposes rim_power")
+
+func t_occluder_contract() -> void:
+	var code := FileAccess.get_file_as_string(OCCLUDER_RES)
+	ck(code.contains("depth_draw_always"), "world occluder writes depth")
+	ck(code.contains("ALPHA = 0.0"), "world occluder leaves no colour in the buffer")
+	ck(not code.contains("depth_test_disabled"), "world occluder keeps depth test")
+	var store := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKShaders.gd")
+	ck(store.contains("func occluder"), "shader store exposes the world occluder")
+	var nvg_owner := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKNVG.gd")
+	ck(nvg_owner.contains("render_priority = -128"), "occluder draws before contour shells")
+	var outline := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKOutline.gd")
+	ck(outline.contains("render_priority = -127"), "contour body draws after world occluders")
 
 func t_body_contracts() -> void:
 	var los := FileAccess.get_file_as_string(BODY_LOS_RES)
@@ -112,6 +126,8 @@ func t_nvg_compositor_contract() -> void:
 	ck(code.contains("uniform sampler2D espTex"), "overlay declares ESP buffer sampler")
 	ck(code.contains("uniform bool espComposite"), "overlay declares ESP composite flag")
 	ck(code.contains("texture(espTex, SCREEN_UV)"), "overlay samples ESP buffer")
+	ck(code.contains("color.rgb = esp.rgb + color.rgb * (1.0 - clamp(esp.a, 0.0, 1.0))"), "ESP composite uses premultiplied-over blending")
+	ck(not code.contains("mix(color.rgb, esp.rgb"), "ESP composite no longer double-blends the alpha")
 	var palette_at := code.find("mix(pixelColor.rgb, backgroundColor, clamp(paletteStrength")
 	var esp_at := code.find("if (espComposite)")
 	var mask_at := code.find("COLOR = mix(vec4(0.0, 0.0, 0.0, 1.0), color, goggleMask)")

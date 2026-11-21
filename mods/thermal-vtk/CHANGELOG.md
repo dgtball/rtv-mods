@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.10.35] - 2026-11-21
+
+### Fixed
+
+- Contours no longer show through walls or cover when thermal vision is on, while x-ray reveals still do.
+- Translucent contours and mine markers keep their exact colours in every thermal palette.
+
 ## [2.10.34] - 2026-11-21
 
 ### Fixed
@@ -10,7 +17,7 @@
 
 ### Fixed
 
-- ESP outlines now keep their colours consistent with the thermal palette in every mode.
+- ESP outlines now keep the configured colour in every thermal palette.
 
 ## [2.10.32] - 2026-11-21
 

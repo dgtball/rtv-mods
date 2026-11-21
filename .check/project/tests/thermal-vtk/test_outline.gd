@@ -105,7 +105,7 @@ func t_overlay_outline_chain_and_uniforms() -> void:
 	ck(body.shader == Sh.body_los(), "outline body uses body_los shader")
 	ck(ring != null and ring.shader == Sh.ring_los(), "outline body has ring_los next_pass")
 	ck(is_equal_approx(float(body.get_shader_parameter("alpha")), 0.8), "outline body carries the fill alpha")
-	ck(body.render_priority == -128, "outline body draws before every other transparent")
+	ck(body.render_priority == -127, "outline body draws before every other transparent")
 	ck(ring.render_priority == 127, "outline ring draws after every other transparent")
 	ck(body.get_shader_parameter("outline_color") == S.DEFAULT_COMBAT, "outline body carries display color")
 	ck(is_equal_approx(float(body.get_shader_parameter("brightness")), 1.2), "outline body brightness set")
@@ -165,7 +165,7 @@ func t_buffer_mode_keeps_uniforms() -> void:
 	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.01), "buffer body grow set")
 	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.01), "buffer ring grow set")
 	ck(is_equal_approx(float(ring.get_shader_parameter("rim_power")), 1.4), "buffer ring rim set")
-	ck(body.render_priority == -128 and ring.render_priority == 127, "buffer chain keeps direct pass order")
+	ck(body.render_priority == -127 and ring.render_priority == 127, "buffer chain keeps direct pass order")
 	var shell: MeshInstance3D = Buf.shells(o._items[6])[0]
 	var shell_mat := shell.material_override as ShaderMaterial
 	ck(shell_mat == body and shell_mat.next_pass == ring, "buffer shell carries the whole chain")
@@ -303,7 +303,7 @@ func t_overlay_fill_single_body_no_ring() -> void:
 	var body: ShaderMaterial = o._items[2]["mat"]
 	ck(body.shader == Sh.body_los(), "full-body uses body_los shader")
 	ck(body.next_pass == null, "full-body has no ring next_pass")
-	ck(body.render_priority == -128, "fill body draws before every other transparent")
+	ck(body.render_priority == -127, "fill body draws before every other transparent")
 	ck(body.get_shader_parameter("rim_power") == 0.0, "fill body keeps a flat tint")
 	ck(body.get_shader_parameter("outline_color") == S.DEFAULT_DEFEND, "full-body sets display color")
 	ck(is_equal_approx(float(body.get_shader_parameter("alpha")), 0.4), "full-body sets visible alpha")

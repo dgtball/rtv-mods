@@ -6,6 +6,7 @@ const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 const SceneProbe = preload("res://mods/ThermalVTK/VTKSceneProbe.gd")
 const Buf = preload("res://mods/ThermalVTK/VTKESPBuffer.gd")
+const Shaders = preload("res://mods/ThermalVTK/VTKShaders.gd")
 
 # Owns the NVG overlay shader and mine highlighting.
 #
@@ -54,6 +55,12 @@ var _nvg_mat_node: Node = null
 var _installed: bool = false
 
 var _mat_mine: StandardMaterial3D = null
+# Invisible world copies write depth into the ESP buffer before the contour
+# shells, restoring the wall/weapon occlusion the direct main-pass path had.
+var _occ_mat: ShaderMaterial = null
+var _occ_shells: Array = []
+var _occ_exclusions: Dictionary = {}
+var _occ_active: bool = false
 
 # ESP buffer pass: a shared-world SubViewport drawn by a layer-only camera.
 # `_esp_demand` comes from the contour coordinator; painted mines also keep the
@@ -133,6 +140,9 @@ func _ready() -> void:
 
 	# Direct mine display material for main-view shells.
 	_mat_mine = _mine_display_material(_mine_color)
+	_occ_mat = ShaderMaterial.new()
+	_occ_mat.shader = Shaders.occluder()
+	_occ_mat.render_priority = -128
 
 	get_tree().node_added.connect(_on_node_added)
 	_scene_ref = get_tree().current_scene
@@ -367,8 +377,102 @@ func _restore_main_cam_mask() -> void:
 	_esp_main_cam_mask_saved = false
 
 
+func _same_id_set(a: Dictionary, b: Dictionary) -> bool:
+	if a.size() != b.size():
+		return false
+	for k in b:
+		if not a.has(k):
+			return false
+	return true
+
+
+# The coordinator reports which NPC meshes own contour shells. They must not
+# also get depth-only copies, or a contour would hide behind its own occluder.
+func set_occluder_exclusions(exclusions: Dictionary) -> void:
+	if _same_id_set(_occ_exclusions, exclusions):
+		return
+	_occ_exclusions = exclusions.duplicate()
+	if _occ_active:
+		_rebuild_occluders()
+
+
+func _occluder_root() -> Node:
+	if _scene_ref != null and is_instance_valid(_scene_ref):
+		return _scene_ref
+	var tree := get_tree()
+	if tree == null:
+		return null
+	if tree.current_scene != null and is_instance_valid(tree.current_scene):
+		return tree.current_scene
+	return tree.root
+
+
+func _collect_occluders(node: Node, out: Array, excluded: Dictionary) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if node == self or node == _esp_vp:
+		return
+	if node.has_meta(Buf.NO_CONTOUR_META) or node.has_meta(Buf.OCCLUDER_META):
+		return
+	if excluded.has(node.get_instance_id()):
+		return
+	if node is MeshInstance3D:
+		var mi := node as MeshInstance3D
+		if mi.mesh != null and (mi.layers & Buf.LAYER_BIT) == 0:
+			out.append(mi)
+	for c in node.get_children():
+		_collect_occluders(c, out, excluded)
+
+
+func _occluder_exclusions_now() -> Dictionary:
+	var out := _occ_exclusions.duplicate()
+	for id in _mines:
+		var e = _mines.get(id)
+		if not (e is Dictionary):
+			continue
+		var d: Dictionary = e
+		var n = d.get("node")
+		if n != null and is_instance_valid(n):
+			out[n.get_instance_id()] = true
+		for m in d.get("meshes", []):
+			if m != null and is_instance_valid(m):
+				out[m.get_instance_id()] = true
+	for id in _mine_watch:
+		var w = _mine_watch.get(id)
+		if not (w is Dictionary):
+			continue
+		var n = w.get("node")
+		if n != null and is_instance_valid(n):
+			out[n.get_instance_id()] = true
+	return out
+
+
+func _clear_occluders() -> void:
+	for s in _occ_shells:
+		var shell := s as MeshInstance3D
+		if shell != null and is_instance_valid(shell):
+			shell.queue_free()
+	_occ_shells.clear()
+
+
+func _rebuild_occluders() -> void:
+	_clear_occluders()
+	var root := _occluder_root()
+	if root == null or _occ_mat == null:
+		return
+	var sources: Array = []
+	_collect_occluders(root, sources, _occluder_exclusions_now())
+	for s in sources:
+		var shell := Buf.make_occluder(s as MeshInstance3D, _occ_mat, Buf.LAYER_BIT)
+		if shell != null:
+			_occ_shells.append(shell)
+
+
 func _sync_esp_buffer(active: bool) -> void:
 	if not active:
+		if _occ_active:
+			_occ_active = false
+			_clear_occluders()
 		if _esp_vp != null and is_instance_valid(_esp_vp):
 			_esp_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
 		_restore_main_cam_mask()
@@ -407,6 +511,9 @@ func _sync_esp_buffer(active: bool) -> void:
 		# the ESP layer excluded from the main pass.
 		_esp_main_cam_mask = cam.cull_mask
 	cam.cull_mask = _esp_main_cam_mask & ~Buf.LAYER_BIT
+	if not _occ_active:
+		_occ_active = true
+		_rebuild_occluders()
 
 
 func _push_esp_composite() -> void:
@@ -445,6 +552,9 @@ func _process(delta: float) -> void:
 		_nvg_root = null
 		_installed = false
 		_restore_main_cam_mask()
+		if _occ_active:
+			_occ_active = false
+			_clear_occluders()
 		_reseed(_scene_ref)
 		_tick_cd = 0.0
 		_reset_daylight()
@@ -891,6 +1001,8 @@ func _register_mine(node: Node) -> void:
 		return
 	_mine_watch.erase(id)
 	_mines[id] = _build_mine_entry(node, meshes)
+	if _occ_active:
+		_rebuild_occluders()
 
 
 func _retry_mines() -> void:
@@ -908,6 +1020,8 @@ func _retry_mines() -> void:
 		if not meshes.is_empty():
 			_mines[id] = _build_mine_entry(n, meshes)
 			drop.append(id)
+			if _occ_active:
+				_rebuild_occluders()
 			continue
 		var tries := int(w.get("tries", 0)) + 1
 		w["tries"] = tries
@@ -936,6 +1050,15 @@ func _set_mine_painted(entry: Dictionary, show: bool) -> void:
 	_apply_mine_paint(entry, show)
 
 
+func _sync_mine_shells(entry: Dictionary) -> void:
+	var shells: Array = Buf.shells(entry)
+	var meshes = entry.get("meshes", [])
+	for i in shells.size():
+		if i >= meshes.size():
+			break
+		Buf.sync_transform(shells[i] as MeshInstance3D, meshes[i] as MeshInstance3D)
+
+
 func _apply_mine_paint(entry: Dictionary, show: bool) -> void:
 	for s in Buf.shells(entry):
 		var shell := s as MeshInstance3D
@@ -950,6 +1073,8 @@ func _remove_mine(id: int) -> void:
 			_mine_painted = maxi(_mine_painted - 1, 0)
 		Buf.clear(e)
 	_mines.erase(id)
+	if _occ_active:
+		_rebuild_occluders()
 
 
 func _clear_mine_state() -> void:
@@ -999,6 +1124,7 @@ func _update_mine(id: int, thermal_on: bool, ppos: Vector3) -> void:
 	var node = e["node"]
 	var dist := ppos.distance_to(node.global_position)
 	var show := thermal_on and set_mines and dist <= maxf(set_glow_distance, 1.0)
+	_sync_mine_shells(e)
 	_set_mine_painted(e, show)
 
 

@@ -173,6 +173,24 @@ func _any_layer() -> bool:
 func wants_contour() -> bool:
 	return _any_layer() and not _want.is_empty()
 
+
+# NPC roots/meshes carrying contour shells must not get depth-only occluders in
+# the ESP buffer, or the contour would hide behind its own world copy.
+func occluder_exclusions() -> Dictionary:
+	var out := {}
+	for id in _outline._items.keys():
+		var e = _outline._items.get(id)
+		if not (e is Dictionary):
+			continue
+		var d: Dictionary = e
+		var node = d.get("node")
+		if node != null and is_instance_valid(node):
+			out[node.get_instance_id()] = true
+		for m in d.get("meshes", []):
+			if m != null and is_instance_valid(m):
+				out[m.get_instance_id()] = true
+	return out
+
 # Live panel helper: reapply current opts to all outlined entries so changes
 # (thickness/fill/colors/distance effects via opts) show immediately while the
 # game is paused.

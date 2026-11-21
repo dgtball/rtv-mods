@@ -165,7 +165,8 @@ func _material_for(fill: bool, xray: bool) -> Material:
 	# Keep the translucent fill under the ring band whatever order the
 	# transparent queue picks for the camera. Priorities are the primary
 	# sort key: body at the floor, ring at the ceiling pin body -> ring.
-	body_mat.render_priority = -128
+	# -128 is reserved for the depth-only world occluders in the ESP buffer.
+	body_mat.render_priority = -127
 	if not fill:
 		var ring_mat := ShaderMaterial.new()
 		ring_mat.shader = Shaders.ring_xray() if xray else Shaders.ring_los()

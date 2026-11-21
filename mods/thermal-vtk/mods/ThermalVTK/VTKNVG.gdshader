@@ -180,7 +180,9 @@ void fragment()
 		if (esp.a > 0.001) {
 			// ESP pixels keep their own display colour/alpha: they bypass the
 			// palette, redHold, noise and nvgWhite applied to the background.
-			color.rgb = mix(color.rgb, esp.rgb, clamp(esp.a, 0.0, 1.0));
+			// The viewport texture is premultiplied; a plain mix multiplies the
+			// ESP alpha into its colour twice and dims translucent contours.
+			color.rgb = esp.rgb + color.rgb * (1.0 - clamp(esp.a, 0.0, 1.0));
 		}
 	}
 	color.rgb *= (1.0 + goggleOutlines);

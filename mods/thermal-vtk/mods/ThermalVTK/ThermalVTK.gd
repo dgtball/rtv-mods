@@ -219,6 +219,8 @@ func _sync_nvg_esp() -> void:
 	# overlay path: sync never requires the buffer plumbing to exist.
 	if _nvg.has_method("set_esp_demand"):
 		_nvg.set_esp_demand(want)
+	if _esp != null and is_instance_valid(_esp) and _nvg.has_method("set_occluder_exclusions"):
+		_nvg.set_occluder_exclusions(_esp.occluder_exclusions())
 
 func _nvg_active() -> bool:
 	if _nvg == null or not is_instance_valid(_nvg):

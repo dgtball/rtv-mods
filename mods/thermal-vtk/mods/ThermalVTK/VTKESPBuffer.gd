@@ -8,6 +8,7 @@ const SHELL_META := "vtk_esp_shell"
 # Same marker the contour sweep in VTKOutline uses: a shell must never be
 # picked up as another NPC mesh to outline.
 const NO_CONTOUR_META := "vtk_no_contour"
+const OCCLUDER_META := "vtk_esp_occluder"
 
 static func shells(entry: Dictionary) -> Array:
 	var stored = entry.get("shells", [])
@@ -42,6 +43,39 @@ static func sync_shell(shell: MeshInstance3D, src: MeshInstance3D) -> void:
 		return
 	shell.global_transform = src.global_transform
 	shell.visible = src.visible
+
+
+# Transform-only follow for shells whose visibility is owned by the caller
+# (painted mines gate visibility separately from the source mesh).
+static func sync_transform(shell: MeshInstance3D, src: MeshInstance3D) -> void:
+	if shell == null or src == null or not is_instance_valid(shell) or not is_instance_valid(src):
+		return
+	shell.global_transform = src.global_transform
+
+
+# Depth-only world copy for the ESP buffer. It is a child of the source, so
+# moving/animated world geometry drags its occluder along without a per-frame
+# transform pass. Skeleton paths are relative to the owning MeshInstance3D and
+# therefore have to be rebound after the child is attached.
+static func make_occluder(src: MeshInstance3D, mat: Material, layer_bit: int) -> MeshInstance3D:
+	if src == null or not is_instance_valid(src) or src.mesh == null:
+		return null
+	var shell := MeshInstance3D.new()
+	shell.name = "VTKESPOccluder"
+	shell.set_meta(NO_CONTOUR_META, true)
+	shell.set_meta(OCCLUDER_META, true)
+	shell.mesh = src.mesh
+	shell.skin = src.skin
+	shell.layers = layer_bit
+	shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	shell.material_override = mat
+	src.add_child(shell)
+	var skeleton_path: NodePath = src.skeleton
+	if not String(skeleton_path).is_empty():
+		var skel := src.get_node_or_null(skeleton_path)
+		if skel != null:
+			shell.skeleton = shell.get_path_to(skel)
+	return shell
 
 
 static func rebuild(entry: Dictionary, mat: Material, layer_bit: int) -> void:
