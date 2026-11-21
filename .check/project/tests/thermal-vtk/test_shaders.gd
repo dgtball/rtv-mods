@@ -160,6 +160,8 @@ func t_runtime_contract() -> void:
 	var sync_at := coordinator.find("func _sync_nvg_esp")
 	var demand_at := coordinator.find("_nvg.set_esp_demand(", sync_at)
 	ck(sync_at >= 0 and demand_at > sync_at, "coordinator pushes contour demand from _sync_nvg_esp")
+	var mode_at := coordinator.find("_esp.set_buffer_mode(", sync_at)
+	ck(sync_at >= 0 and mode_at > sync_at, "coordinator switches outline render mode from _sync_nvg_esp")
 	var store := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKShaders.gd")
 	ck(store.contains("func body_los"), "shader store exposes body_los")
 	ck(store.contains("func body_xray"), "shader store exposes body_xray")

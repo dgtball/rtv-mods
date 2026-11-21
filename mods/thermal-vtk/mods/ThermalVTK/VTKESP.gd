@@ -159,6 +159,12 @@ func set_layers(contour: bool, xray: bool, reason: String = "") -> void:
 	elif not any_before and is_inside_tree():
 		_reseed(get_tree().current_scene)
 
+# The coordinator drives render mode with the same contour demand it pushes to
+# NVG. Off keeps the direct overlay path; on moves the same display chain onto
+# shells the ESP composite can see.
+func set_buffer_mode(enabled: bool) -> void:
+	_outline.set_buffer_mode(enabled)
+
 func _any_layer() -> bool:
 	return contour_layer or xray_layer
 
