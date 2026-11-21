@@ -8,6 +8,10 @@ shader_type canvas_item;
 // SCREEN_UV, so mip 0 is the only one ever read. Requesting mipmaps makes the
 // renderer build a full-screen mip chain every frame for nothing.
 uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_linear;
+// Separate ESP pass (its own layer, own linear environment). Composited after
+// the background palette so ESP colours stay exact in every palette.
+uniform sampler2D espTex : repeat_disable, filter_linear;
+uniform bool espComposite = false;
 uniform vec4 tint : source_color = vec4(0.47, 0.67, 0.51, 1.0);
 uniform float noise : hint_range(0.0, 60.0, 1.0) = 4.0;
 uniform float vignette : hint_range(0.0, 1.0, 0.1) = 0.1;
@@ -191,6 +195,14 @@ void fragment()
 	color.rgb *= nvgWhite;
 	if (!isMine) {
 		color += noiseEffect;
+	}
+	if (espComposite) {
+		vec4 esp = texture(espTex, SCREEN_UV);
+		if (esp.a > 0.001) {
+			// ESP pixels keep their own display colour/alpha: they bypass the
+			// palette, redHold, noise and nvgWhite applied to the background.
+			color.rgb = mix(color.rgb, esp.rgb, clamp(esp.a, 0.0, 1.0));
+		}
 	}
 	color.rgb *= (1.0 + goggleOutlines);
 	COLOR = mix(vec4(0.0, 0.0, 0.0, 1.0), color, goggleMask);

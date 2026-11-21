@@ -5,6 +5,7 @@ const Daylight = preload("res://mods/ThermalVTK/VTKDaylight.gd")
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 const SceneProbe = preload("res://mods/ThermalVTK/VTKSceneProbe.gd")
+const Buf = preload("res://mods/ThermalVTK/VTKESPBuffer.gd")
 
 # Owns the NVG overlay shader and mine highlighting.
 #
@@ -54,6 +55,17 @@ var _nvg_mat_node: Node = null
 var _installed: bool = false
 
 var _mat_mine: StandardMaterial3D = null
+
+# ESP buffer pass: a shared-world SubViewport drawn by a layer-only camera.
+# `_esp_demand` comes from the contour coordinator; mines still use their own
+# display path for now. The buffer is lazy and costs nothing while inactive.
+var _esp_demand: bool = false
+var _esp_vp: SubViewport = null
+var _esp_cam: Camera3D = null
+var _esp_env: Environment = null
+var _esp_main_cam: Camera3D = null
+var _esp_main_cam_mask: int = 0
+var _esp_main_cam_mask_saved: bool = false
 
 var _mines: Dictionary = {}
 var _mine_watch: Dictionary = {}
@@ -265,6 +277,7 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("minePassthroughOn", thermal_on and set_mines)
 	nvg_mat.set_shader_parameter("minePassthroughColor", _mine_color)
 	nvg_mat.set_shader_parameter("dayFactor", _day_factor)
+	_push_esp_composite()
 
 
 # Direct display colour of mine shells. Stored even before the overlay material
@@ -275,6 +288,142 @@ func set_mine_color(c: Color) -> void:
 
 func mine_color() -> Color:
 	return _mine_color
+
+
+func painted_mine_count() -> int:
+	return _mine_painted
+
+
+# Contour demand from the coordinator. The buffer only composites while the
+# vanilla NVG is worn and thermal is on, so an idle overlay never pays for the
+# extra pass.
+func set_esp_demand(contour: bool) -> void:
+	if _esp_demand == contour:
+		return
+	_esp_demand = contour
+	_push_esp_composite()
+
+
+func esp_composite_active() -> bool:
+	return set_thermal and _nvg_active() and _esp_demand
+
+
+func esp_buffer_viewport() -> SubViewport:
+	return _esp_vp
+
+
+func _ensure_esp_buffer() -> bool:
+	if _esp_vp != null and is_instance_valid(_esp_vp):
+		return true
+	if not is_inside_tree():
+		return false
+	var main: Viewport = get_viewport()
+	if main == null:
+		return false
+	_esp_vp = SubViewport.new()
+	_esp_vp.name = "VTKESPBuffer"
+	_esp_vp.own_world_3d = false
+	_esp_vp.world_3d = main.world_3d
+	_esp_vp.transparent_bg = true
+	_esp_vp.handle_input_locally = false
+	_esp_vp.msaa_3d = Viewport.MSAA_DISABLED
+	_esp_vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
+	_esp_vp.use_taa = false
+	_esp_vp.use_debanding = false
+	_esp_vp.positional_shadow_atlas_size = 0
+	_esp_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	_esp_vp.size = main.size
+	add_child(_esp_vp)
+
+	# Unlit, linear, exposure 1: the shells carry final display colours, so the
+	# buffer must not apply the world's tonemap, fog, glow or adjustments.
+	_esp_env = Environment.new()
+	_esp_env.background_mode = Environment.BG_CLEAR_COLOR
+	_esp_env.background_color = Color(0.0, 0.0, 0.0, 0.0)
+	_esp_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	_esp_env.ambient_light_color = Color(0.0, 0.0, 0.0, 1.0)
+	_esp_env.ambient_light_energy = 0.0
+	_esp_env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	_esp_env.tonemap_exposure = 1.0
+	_esp_env.tonemap_white = 1.0
+	_esp_env.glow_enabled = false
+	_esp_env.fog_enabled = false
+	_esp_env.volumetric_fog_enabled = false
+	_esp_env.adjustment_enabled = false
+
+	_esp_cam = Camera3D.new()
+	_esp_cam.name = "VTKESPCamera"
+	_esp_cam.cull_mask = Buf.LAYER_BIT
+	_esp_cam.environment = _esp_env
+	_esp_vp.add_child(_esp_cam)
+	_esp_cam.current = true
+	return true
+
+
+func _restore_main_cam_mask() -> void:
+	if _esp_main_cam_mask_saved and _esp_main_cam != null and is_instance_valid(_esp_main_cam):
+		_esp_main_cam.cull_mask = _esp_main_cam_mask
+	_esp_main_cam = null
+	_esp_main_cam_mask = 0
+	_esp_main_cam_mask_saved = false
+
+
+func _sync_esp_buffer(active: bool) -> void:
+	if not active:
+		if _esp_vp != null and is_instance_valid(_esp_vp):
+			_esp_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		_restore_main_cam_mask()
+		return
+	if not _ensure_esp_buffer():
+		_restore_main_cam_mask()
+		return
+	var main: Viewport = get_viewport()
+	var cam: Camera3D = null if main == null else main.get_camera_3d()
+	if main == null or cam == null:
+		_esp_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		_restore_main_cam_mask()
+		return
+	if _esp_vp.size != main.size and main.size.x > 0 and main.size.y > 0:
+		_esp_vp.size = main.size
+	_esp_vp.world_3d = main.world_3d
+	_esp_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_esp_cam.global_transform = cam.global_transform
+	_esp_cam.projection = cam.projection
+	_esp_cam.fov = cam.fov
+	_esp_cam.size = cam.size
+	_esp_cam.near = cam.near
+	_esp_cam.far = cam.far
+	_esp_cam.keep_aspect = cam.keep_aspect
+	_esp_cam.h_offset = cam.h_offset
+	_esp_cam.v_offset = cam.v_offset
+	_esp_cam.frustum_offset = cam.frustum_offset
+	_esp_cam.cull_mask = Buf.LAYER_BIT
+	if _esp_main_cam != cam:
+		_restore_main_cam_mask()
+		_esp_main_cam = cam
+		_esp_main_cam_mask = cam.cull_mask
+		_esp_main_cam_mask_saved = true
+	elif cam.cull_mask != (_esp_main_cam_mask & ~Buf.LAYER_BIT):
+		# Adopt an external mask change as the new restorable baseline, but keep
+		# the ESP layer excluded from the main pass.
+		_esp_main_cam_mask = cam.cull_mask
+	cam.cull_mask = _esp_main_cam_mask & ~Buf.LAYER_BIT
+
+
+func _push_esp_composite() -> void:
+	var active := esp_composite_active()
+	if _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
+		_sync_esp_buffer(false)
+		return
+	var mat = _nvg_mat_node.get("material")
+	if not (mat is ShaderMaterial):
+		_sync_esp_buffer(false)
+		return
+	var sm := mat as ShaderMaterial
+	_sync_esp_buffer(active)
+	sm.set_shader_parameter("espComposite", active and _esp_vp != null and is_instance_valid(_esp_vp))
+	if active and _esp_vp != null and is_instance_valid(_esp_vp):
+		sm.set_shader_parameter("espTex", _esp_vp.get_texture())
 
 
 func _nvg_active() -> bool:
@@ -296,6 +445,7 @@ func _process(delta: float) -> void:
 		_script_kind.clear()
 		_nvg_root = null
 		_installed = false
+		_restore_main_cam_mask()
 		_reseed(_scene_ref)
 		_tick_cd = 0.0
 		_reset_daylight()
@@ -314,6 +464,7 @@ func _process(delta: float) -> void:
 		_daylight_tick(delta)
 	if worn or set_daylight or (_probe != null and is_instance_valid(_probe)):
 		_sync_probe()
+	_push_esp_composite()
 	# Player position, fetched once per frame.
 	var ppos := _player_pos()
 
@@ -907,6 +1058,7 @@ func set_palette_tuning(strength: float, hold: float) -> void:
 
 
 func _exit_tree() -> void:
+	_restore_main_cam_mask()
 	_clear_mine_state()
 
 # Hide the NVG overlay for a single frame. The overlay paints the thermal

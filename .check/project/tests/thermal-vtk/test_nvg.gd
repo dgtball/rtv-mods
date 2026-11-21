@@ -1,6 +1,7 @@
 extends SceneTree
 
 const NVG = preload("res://mods/ThermalVTK/VTKNVG.gd")
+const Buf = preload("res://mods/ThermalVTK/VTKESPBuffer.gd")
 
 var fails := 0
 
@@ -21,6 +22,7 @@ func _run() -> void:
 	t_mine_color_stored_and_applied()
 	t_mine_highlight_uses_main_view_shells()
 	t_script_kind_cache()
+	t_esp_buffer_lifecycle()
 	print("")
 	if fails == 0:
 		print("NVG tests passed")
@@ -136,3 +138,21 @@ func t_script_kind_cache() -> void:
 	nvg.free()
 	a.free()
 	b.free()
+
+func t_esp_buffer_lifecycle() -> void:
+	var nvg = NVG.new()
+	root.add_child(nvg)
+	var cam := Camera3D.new()
+	root.add_child(cam)
+	cam.current = true
+	var before := cam.cull_mask
+	ck(nvg.esp_buffer_viewport() == null, "buffer is lazy")
+	nvg._sync_esp_buffer(true)
+	var vp: SubViewport = nvg.esp_buffer_viewport()
+	ck(vp != null and vp.render_target_update_mode == SubViewport.UPDATE_ALWAYS, "active buffer renders")
+	ck(vp.size == root.size, "buffer matches screen")
+	ck(nvg._esp_cam.cull_mask == Buf.LAYER_BIT, "buffer camera sees only the ESP layer")
+	ck(cam.cull_mask == (before & ~Buf.LAYER_BIT), "main camera excludes the ESP layer")
+	nvg._sync_esp_buffer(false)
+	ck(vp.render_target_update_mode == SubViewport.UPDATE_DISABLED, "inactive buffer costs nothing")
+	ck(cam.cull_mask == before, "main camera mask restored")

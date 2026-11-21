@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.10.32] - 2026-11-21
+
+### Changed
+
+- Minor performance improvements.
+
 ## [2.10.31] - 2026-11-21
 
 ### Changed

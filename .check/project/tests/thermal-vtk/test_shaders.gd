@@ -102,15 +102,19 @@ func t_band_contract() -> void:
 	ck(not outline.contains("func set_buffer_mode"), "VTKOutline has no buffer mode control")
 	ck(not outline.contains("SHELL_META"), "VTKOutline has no shell geometry markers")
 
-# NVG overlay palettizes/tints the background (no ESP compositor/buffer path in
-# 2.10.x baseline). No screen-space key detection/substitution remains.
+# NVG overlay palettizes/tints the background, then composites the ESP buffer
+# over it with its own display colours. No screen-space key substitution remains.
 func t_nvg_compositor_contract() -> void:
 	var code := FileAccess.get_file_as_string(NVG_SHADER_RES)
 	ck(code.contains("uniform sampler2D screen_texture"), "overlay declares the screen sampler")
 	ck(code.contains("texture(screen_texture, SCREEN_UV)"), "overlay samples the frame itself")
-	ck(not code.contains("uniform sampler2D espTex"), "overlay has no ESP buffer sampler")
-	ck(not code.contains("uniform bool espComposite"), "overlay has no ESP composite flag")
-	ck(not code.contains("espComposite"), "overlay has no ESP compositing path")
+	ck(code.contains("uniform sampler2D espTex"), "overlay declares ESP buffer sampler")
+	ck(code.contains("uniform bool espComposite"), "overlay declares ESP composite flag")
+	ck(code.contains("texture(espTex, SCREEN_UV)"), "overlay samples ESP buffer")
+	var palette_at := code.find("mix(pixelColor.rgb, backgroundColor, clamp(paletteStrength")
+	var esp_at := code.find("if (espComposite)")
+	var mask_at := code.find("COLOR = mix(vec4(0.0, 0.0, 0.0, 1.0), color, goggleMask)")
+	ck(palette_at >= 0 and esp_at > palette_at and mask_at > esp_at, "ESP composite runs after palette and before the goggle mask")
 	for bad in ["uniform bool espOn", "stNormalKey", "stCombatKey", "stDefendKey", "mineKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineColor", "stateBright", "scopeRotate", "espFillAlpha", "espBodyFill", "orbitDist", "DET_TOL_CORE", "dCore", "dMine"]:
 		ck(not code.contains(bad), "overlay has no substitution token %s" % bad)
 
@@ -138,17 +142,19 @@ func t_nvg_shader_compiles() -> void:
 		return
 	var names := _uniform_names(sh)
 	ck(names.size() > 0, "NVG shader compiled (uniform list not empty)")
-	for u in ["dayMix", "thermalMode", "thermalDarken", "worldPaletteMode", "highlightKnee", "nvgWhite", "paletteStrength", "redHold", "noise", "tint"]:
+	for u in ["dayMix", "thermalMode", "thermalDarken", "worldPaletteMode", "highlightKnee", "nvgWhite", "paletteStrength", "redHold", "noise", "tint", "espTex", "espComposite"]:
 		ck(names.has(u), "compiled shader exposes %s" % u)
-	for bad in ["espTex", "espComposite", "espOn", "stNormalKey", "stCombatKey", "stDefendKey", "mineKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineColor", "stateBright", "scopeRotate", "espFillAlpha", "espBodyFill"]:
+	for bad in ["espOn", "stNormalKey", "stCombatKey", "stDefendKey", "mineKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineColor", "stateBright", "scopeRotate", "espFillAlpha", "espBodyFill"]:
 		ck(not names.has(bad), "compiled shader does not expose substitution uniform %s" % bad)
 
 func t_runtime_contract() -> void:
 	var owner := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKNVG.gd")
 	ck(owner.contains("func set_mine_color"), "VTKNVG owns mine display colour")
 	ck(owner.contains("func mine_color"), "VTKNVG exposes mine display colour")
-	for bad in ["set_esp_layer", "set_esp_demand", "func esp_buffer_layer", "func esp_composite_active", "func esp_buffer_viewport", "espTex", "espComposite", "MINE_KEY", "DET_ST_NORMAL", "DET_ST_COMBAT", "DET_ST_DEFEND", "DET_MINE", "set_esp_fill", "set_state_colors", "set_esp_brightness", "set_esp_on", "vtk_key_gain"]:
-		ck(not owner.contains(bad), "VTKNVG has no compositor/substitution token %s" % bad)
+	for api in ["set_esp_demand", "esp_composite_active", "esp_buffer_viewport", "painted_mine_count", "LAYER_BIT"]:
+		ck(owner.contains(api), "VTKNVG exposes %s" % api)
+	for bad in ["set_esp_layer", "func esp_buffer_layer", "MINE_KEY", "DET_ST_NORMAL", "DET_ST_COMBAT", "DET_ST_DEFEND", "DET_MINE", "set_esp_fill", "set_state_colors", "set_esp_brightness", "set_esp_on", "vtk_key_gain"]:
+		ck(not owner.contains(bad), "VTKNVG has no substitution token %s" % bad)
 	var store := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKShaders.gd")
 	ck(store.contains("func body_los"), "shader store exposes body_los")
 	ck(store.contains("func body_xray"), "shader store exposes body_xray")
