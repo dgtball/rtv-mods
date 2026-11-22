@@ -37,11 +37,9 @@ var _face_captured := false
 # --- Visual Effects ---
 var _light: OmniLight3D
 var _particles: GPUParticles3D
-var _beer_cans: Array[Node3D] = []
 var _rainbow_hue := 0.0
 var _flash_strength := 0.0
 var _emission_strength := 0.0
-var _can_glow_material: StandardMaterial3D
 var _material_cache: Dictionary = {}
 var _invisible_until: Dictionary = {}  # cat -> time when becomes visible again
 
@@ -300,72 +298,6 @@ func _do_flash() -> void:
 		_light.light_energy = 7.0
 		_light.light_color = Color.from_hsv(_rainbow_hue, 0.8, 1.0)
 
-func _beer_can_mesh() -> Mesh:
-	# Beer.tscn — RigidBody3D с мешем MS_Soda.obj (0.08 × 0.122 × 0.08).
-	# Берём только меш: инстанцировать сам RigidBody не нужно.
-	if ResourceLoader.exists(Rules.BEER_SCENE_PATH):
-		var packed := load(Rules.BEER_SCENE_PATH) as PackedScene
-		if packed != null:
-			var inst := packed.instantiate()
-			if inst != null:
-				var found: Mesh = null
-				for child in inst.find_children("*", "MeshInstance3D", true, false):
-					var mi := child as MeshInstance3D
-					if mi != null and mi.mesh != null:
-						found = mi.mesh
-						break
-				inst.free()
-				if found != null:
-					return found
-	var fallback := CylinderMesh.new()
-	fallback.top_radius = 0.04
-	fallback.bottom_radius = 0.04
-	fallback.height = 0.122
-	return fallback
-
-func _spawn_beer_cans() -> void:
-	if _beer_cans.size() > 0 or not is_instance_valid(_target):
-		return
-	var can_mesh := _beer_can_mesh()
-	_can_glow_material = StandardMaterial3D.new()
-	_can_glow_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_can_glow_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_can_glow_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	_can_glow_material.albedo_color = Color(1.0, 1.0, 1.0, 0.18)
-	_can_glow_material.emission_enabled = true
-	_can_glow_material.emission_energy_multiplier = 1.0
-
-	for i in range(Rules.BEER_COUNT):
-		var can := MeshInstance3D.new()
-		can.mesh = can_mesh
-		can.scale = Vector3.ONE * Rules.BEER_CAN_SCALE
-		_target.get_parent().add_child(can)
-		var glow := MeshInstance3D.new()
-		glow.name = "Glow"
-		var sphere := SphereMesh.new()
-		sphere.radius = 0.09
-		sphere.height = 0.18
-		glow.mesh = sphere
-		glow.material_override = _can_glow_material
-		can.add_child(glow)
-		_beer_cans.append(can)
-
-func _update_beer_cans(delta: float) -> void:
-	for i in range(_beer_cans.size()):
-		var can: Node3D = _beer_cans[i]
-		if not is_instance_valid(can):
-			continue
-		var angle := _time * 1.8 + TAU * float(i) / float(_beer_cans.size())
-		var radius := Rules.BEER_RADIUS + sin(_time * 3.0 + float(i)) * Rules.BEER_RADIUS_SWING
-		var height := Rules.BEER_HEIGHT + sin(_time * 4.0 + float(i) * 0.7) * Rules.BEER_HEIGHT_SWING + _flash_strength * 0.08
-		can.position = _origin_position + Vector3(cos(angle) * radius, height, sin(angle) * radius)
-		can.rotate_y(delta * 4.0)
-	if _can_glow_material != null:
-		var col := Color.from_hsv(_rainbow_hue, 0.8, 1.0)
-		_can_glow_material.emission = col
-		_can_glow_material.albedo_color = Color(col.r, col.g, col.b, 0.18)
-		_can_glow_material.emission_energy_multiplier = 0.8 + _flash_strength * 2.0
-
 func _make_random_invisible() -> void:
 	if _targets.is_empty():
 		return
@@ -447,11 +379,6 @@ func _process(delta: float) -> void:
 	else:
 		_emission_strength = lerpf(_emission_strength, 0.0, clampf(delta * 3.0, 0.0, 1.0))
 
-	# Beer cans
-	if _time > 22.0 and _beer_cans.is_empty():
-		_spawn_beer_cans()
-	_update_beer_cans(delta)
-
 	var merge := _merge_factor()
 	var lift := Rules.lift_at(_time)
 	var bob := 0.0
@@ -524,7 +451,6 @@ func stop_oiia() -> void:
 	var run_origin_rotation: Vector3 = _origin_rotation
 	var run_origin_scale: Vector3 = _origin_scale
 	var run_clones: Array = _clones.duplicate()
-	var run_cans: Array = _beer_cans.duplicate()
 	var run_light: OmniLight3D = _light
 	var run_particles: GPUParticles3D = _particles
 
@@ -571,16 +497,12 @@ func stop_oiia() -> void:
 	for cat in run_clones:
 		if is_instance_valid(cat):
 			(cat as Node).queue_free()
-	for can in run_cans:
-		if is_instance_valid(can):
-			(can as Node).queue_free()
 	if is_instance_valid(run_light):
 		run_light.queue_free()
 	if is_instance_valid(run_particles):
 		run_particles.queue_free()
 
 	_clones.clear()
-	_beer_cans.clear()
 	if same_run:
 		_material_cache.clear()
 		_targets.clear()

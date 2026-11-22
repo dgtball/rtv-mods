@@ -46,15 +46,6 @@ const STATE_SIT := 1
 # Вспышки
 const FLASH_DECAY := 12.0
 
-# Летающие банки
-const BEER_SCENE_PATH := "res://Items/Consumables/Beer/Beer.tscn"
-const BEER_COUNT := 7
-const BEER_RADIUS := 0.85
-const BEER_RADIUS_SWING := 0.12
-const BEER_HEIGHT := 0.55
-const BEER_HEIGHT_SWING := 0.18
-const BEER_CAN_SCALE := 3.0
-
 # Хаос и динамика
 const CHAOS_START := 33.0
 const CHAOS_RAMP := 2.0
