@@ -39,7 +39,7 @@ var _light: OmniLight3D
 var _particles: GPUParticles3D
 var _rainbow_hue := 0.0
 var _flash_strength := 0.0
-var _emission_strength := 0.0
+var _glow_strength := 0.0
 var _material_cache: Dictionary = {}
 var _invisible_until: Dictionary = {}  # cat -> time when becomes visible again
 
@@ -257,28 +257,23 @@ func _merge_factor() -> float:
 
 # ---------- Effects helpers ----------
 
-func _apply_rainbow_and_emission(cat: Node3D, delta: float) -> void:
-	_rainbow_hue = fmod(_rainbow_hue + delta * 0.38, 1.0)
-	var col := Color.from_hsv(_rainbow_hue, 0.7, 1.0)
-	_apply_cat_look(cat, col, _emission_strength)
-
 # Оверрайд меша один на все поверхности — для него одна запись на меш;
 # поверхностные оверрайды — по записи на поверхность. Копируем исходный
-# материал один раз и добавляем только слабое свечение: текстуры и альбедо
-# кота остаются ванильными. Rim выключен — при ярком OmniLight он белит мех.
-func _apply_cat_look(node: Node, color: Color, emission: float) -> void:
+# материал один раз, но не меняем его внешний вид: текстуры и альбедо кота
+# остаются ванильными, цвет даёт только OmniLight.
+func _apply_cat_look(node: Node) -> void:
 	for child in node.get_children():
 		if child is MeshInstance3D:
 			var mesh := child as MeshInstance3D
 			var count := mesh.mesh.get_surface_count() if mesh.mesh != null else 0
 			if mesh.material_override != null:
-				_tint_cached_material(mesh, "override:" + str(mesh.get_instance_id()), "override", 0, mesh.material_override, color, emission)
+				_tint_cached_material(mesh, "override:" + str(mesh.get_instance_id()), "override", 0, mesh.material_override)
 			else:
 				for i in range(count):
-					_tint_cached_material(mesh, str(mesh.get_instance_id()) + ":" + str(i), "surface", i, mesh.get_surface_override_material(i), color, emission)
-		_apply_cat_look(child, color, emission)
+					_tint_cached_material(mesh, str(mesh.get_instance_id()) + ":" + str(i), "surface", i, mesh.get_surface_override_material(i))
+		_apply_cat_look(child)
 
-func _tint_cached_material(mesh: MeshInstance3D, key: String, channel: String, surface: int, original: Material, color: Color, emission: float) -> void:
+func _tint_cached_material(mesh: MeshInstance3D, key: String, channel: String, surface: int, original: Material) -> void:
 	var entry = _material_cache.get(key)
 	if entry == null:
 		var base: Material = original
@@ -302,9 +297,7 @@ func _tint_cached_material(mesh: MeshInstance3D, key: String, channel: String, s
 		_set_cached_material(mesh, channel, surface, tinted)
 	var mat: StandardMaterial3D = entry["tinted"] as StandardMaterial3D
 	mat.rim_enabled = false
-	mat.emission_enabled = emission > 0.01
-	mat.emission = color
-	mat.emission_energy_multiplier = clampf(emission * 0.08, 0.0, 0.25)
+	mat.emission_enabled = false
 
 func _set_cached_material(mesh: MeshInstance3D, channel: String, surface: int, mat: Material) -> void:
 	if channel == "override":
@@ -410,11 +403,11 @@ func _process(delta: float) -> void:
 	_apply_state()
 	_update_invisibility()
 
-	# Emission grows toward peak (clamp weight: lerpf extrapolates on large deltas)
+	# Light-only glow grows toward peak (clamp weight: lerpf extrapolates on large deltas)
 	if _time > 26.0 and _time < 55.0:
-		_emission_strength = lerpf(_emission_strength, 2.8, clampf(delta * 1.5, 0.0, 1.0))
+		_glow_strength = lerpf(_glow_strength, 2.8, clampf(delta * 1.5, 0.0, 1.0))
 	else:
-		_emission_strength = lerpf(_emission_strength, 0.0, clampf(delta * 3.0, 0.0, 1.0))
+		_glow_strength = lerpf(_glow_strength, 0.0, clampf(delta * 3.0, 0.0, 1.0))
 
 	var merge := _merge_factor()
 	var lift := Rules.lift_at(_time)
@@ -457,7 +450,8 @@ func _process(delta: float) -> void:
 			_origin_position.z + (off.z + jitter.z) * (1.0 - merge)
 		)
 		cat.scale = scale_now * Rules.scale_wave(_time, i)
-		_apply_rainbow_and_emission(cat, delta)
+		_rainbow_hue = fmod(_rainbow_hue + delta * 0.38, 1.0)
+		_apply_cat_look(cat)
 
 	# Light & flash — один свет в центре четверки
 	_flash_strength = lerpf(_flash_strength, 0.0, clampf(delta * 5.5, 0.0, 1.0))
@@ -470,7 +464,7 @@ func _process(delta: float) -> void:
 				count += 1
 		if count > 0:
 			_light.global_position = center / float(count) + Vector3(0.0, 0.45, 0.0)
-		_light.light_energy = lerpf(_light.light_energy, 0.5 + _flash_strength * 6.0 + _emission_strength * 0.4, clampf(delta * 9.0, 0.0, 1.0))
+		_light.light_energy = lerpf(_light.light_energy, 0.5 + _flash_strength * 6.0 + _glow_strength * 0.4, clampf(delta * 9.0, 0.0, 1.0))
 
 func stop_oiia() -> void:
 	if not _spinning:
