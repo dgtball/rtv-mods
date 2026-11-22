@@ -166,7 +166,9 @@ func start_oiia(feeder: Node) -> void:
 
 	_beat_timer.wait_time = Rules.BEAT_INTERVAL
 	_beat_timer.start()
-	get_tree().create_timer(_duration).timeout.connect(stop_oiia)
+	# Таймер должен замирать вместе с игрой: иначе пауза в меню отсчитает
+	# финал раньше покадрового времени и кот застынет над коробкой.
+	get_tree().create_timer(_duration, false).timeout.connect(stop_oiia)
 
 	print("OIIA OIIA started!")
 
