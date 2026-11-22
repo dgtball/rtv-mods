@@ -217,6 +217,7 @@ func t_esp_apply_maps_fields() -> void:
 	ck(esp.p_thickness == 0.009, "ESP maps outline_thickness")
 	ck(absf(esp.p_brightness - 1.5) < 0.001, "ESP maps outline_brightness")
 	ck(absf(esp.p_fill_alpha - 0.2) < 0.001, "ESP maps fill_alpha")
+	ck(esp.get("p_body_fill") == null, "ESP has no body fill field")
 	ck(esp.get("p_thermal_mix") == null, "ESP has no thermal mix field")
 	ck(esp.p_trig == false, "ESP maps the x-ray toggle")
 	ck(esp.p_fire_d == 90.0 and esp.p_fire_s == 4.0, "ESP maps the fire window")
