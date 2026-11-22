@@ -25,7 +25,7 @@ func _run() -> void:
 	t_wide_band_leaves_body_at_thickness()
 	t_material_info()
 	t_material_info_reads_real_overlay()
-	t_overlay_fill_single_body_no_ring()
+	t_overlay_outline_ignores_stale_fill_flag()
 	t_overlay_xray_preserves_shape()
 	t_toggle_xray_restores_los()
 	t_overlay_on_mesh()
@@ -95,7 +95,7 @@ func t_overlay_outline_chain_and_uniforms() -> void:
 	mesh.mesh = BoxMesh.new()
 	root.add_child(mesh)
 	var o = Outline.new()
-	o.apply(1, root, {"fill": false, "xray": false, "color": S.DEFAULT_COMBAT, "brightness": 1.2, "fill_alpha": 0.8, "grow": 0.01, "cool": 0.3, "rim": 1.4})
+	o.apply(1, root, {"xray": false, "color": S.DEFAULT_COMBAT, "brightness": 1.2, "fill_alpha": 0.8, "grow": 0.01, "cool": 0.3, "rim": 1.4})
 	var body: ShaderMaterial = o._items[1]["mat"]
 	var ring: ShaderMaterial = body.next_pass as ShaderMaterial
 	ck(mesh.material_overlay == body, "outline applies body overlay to mesh")
@@ -125,19 +125,19 @@ func t_ring_band_widens_grow() -> void:
 	mesh.mesh = BoxMesh.new()
 	root_node.add_child(mesh)
 	var o = Outline.new()
-	var opts := {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.025, "cool": 0.0}
+	var opts := {"xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.025, "cool": 0.0}
 	o.apply(21, root_node, opts)
 	var body: ShaderMaterial = o._items[21]["mat"]
 	var ring: ShaderMaterial = body.next_pass as ShaderMaterial
 	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.01), "body uses only the configured thickness")
 	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.035), "ring inflates by thickness plus band")
-	o.refresh(21, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.05, "cool": 0.0})
+	o.refresh(21, {"xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.05, "cool": 0.0})
 	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.01), "band-only change leaves body thickness alone")
 	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.06), "band-only change updates ring grow")
-	o.refresh(21, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.03, "band": 0.01, "cool": 0.0})
+	o.refresh(21, {"xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.03, "band": 0.01, "cool": 0.0})
 	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.03), "configured grow wins over thinner band on mask")
 	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.04), "ring keeps visible band width")
-	o.refresh(21, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.0, "cool": 0.0})
+	o.refresh(21, {"xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.0, "cool": 0.0})
 	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.01), "zero band leaves mask at grow")
 	ck(is_equal_approx(float(ring.get_shader_parameter("grow")), 0.01), "zero band collapses ring offset to grow")
 	o.clear(21)
@@ -152,7 +152,7 @@ func t_wide_band_leaves_body_at_thickness() -> void:
 	mesh.mesh = BoxMesh.new()
 	root_node.add_child(mesh)
 	var o = Outline.new()
-	o.apply(70, root_node, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.0005, "band": 0.4, "cool": 0.0})
+	o.apply(70, root_node, {"xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.0005, "band": 0.4, "cool": 0.0})
 	var body: ShaderMaterial = o._items[70]["mat"]
 	var ring: ShaderMaterial = body.next_pass as ShaderMaterial
 	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.0005), "a wide band leaves the body at its configured thickness")
@@ -170,10 +170,10 @@ func t_material_info() -> void:
 	host.add_child(mesh)
 	var o = Outline.new()
 	ck(o.material_info(90).is_empty(), "an unknown id reports no material info")
-	o.apply(90, host, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.025, "cool": 0.0})
+	o.apply(90, host, {"xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.025, "cool": 0.0})
 	var info: Dictionary = o.material_info(90)
 	ck(bool(info.get("has_ring", false)), "outline mode reports the ring pass")
-	ck(not bool(info.get("fill_mode", true)), "outline mode reports fill_mode false")
+	ck(not info.has("fill_mode"), "no fill mode is reported")
 	ck(is_equal_approx(float(info.get("body_grow", -1.0)), 0.01), "info reads the body grow uniform")
 	ck(is_equal_approx(float(info.get("ring_grow", -1.0)), 0.035), "info reads the ring grow uniform")
 	ck(is_equal_approx(float(info.get("body_alpha", -1.0)), 0.6), "info reads the fill body alpha")
@@ -190,13 +190,6 @@ func t_material_info() -> void:
 	ck(int(info.get("overlay_other", -1)) == 0, "info counts no foreign overlay after a fresh apply")
 	ck(int(info.get("mat_gen", -1)) == 1, "the first material is generation one")
 	o.clear(90)
-	o.apply(91, host, {"fill": true, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.4, "grow": 0.01, "cool": 0.0})
-	var finfo: Dictionary = o.material_info(91)
-	ck(not bool(finfo.get("has_ring", true)), "fill mode reports no ring pass")
-	ck(bool(finfo.get("fill_mode", false)), "fill mode reports fill_mode true")
-	ck(is_equal_approx(float(finfo.get("body_alpha", -1.0)), 0.4), "fill mode reads the visible body alpha")
-	ck(not finfo.has("ring_grow"), "fill mode reports no ring uniforms")
-	o.clear(91)
 	host.free()
 
 # The overlay read-out answers "what is actually on the meshes": the entry
@@ -209,7 +202,7 @@ func t_material_info_reads_real_overlay() -> void:
 	mesh.mesh = BoxMesh.new()
 	host.add_child(mesh)
 	var o = Outline.new()
-	o.apply(92, host, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.025, "cool": 0.0})
+	o.apply(92, host, {"xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.025, "cool": 0.0})
 	var info: Dictionary = o.material_info(92)
 	ck(int(info.get("overlay_ok", -1)) == 1, "a fresh apply puts our material on every mesh")
 	ck(int(info.get("overlay_lost", -1)) == 0, "a fresh apply loses nothing")
@@ -231,15 +224,18 @@ func t_material_info_reads_real_overlay() -> void:
 	ck(int(info.get("overlay_ok", -1)) == 0, "a wiped overlay is not ours")
 
 	# Regenerating the material bumps the generation and re-arms the meshes.
-	o.apply(92, host, {"fill": false, "xray": true, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.025, "cool": 0.0})
+	o.apply(92, host, {"xray": true, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.6, "grow": 0.01, "band": 0.025, "cool": 0.0})
 	info = o.material_info(92)
 	ck(int(info.get("mat_gen", -1)) == 2, "swapping the material bumps the generation")
+	ck(info.has("ring_grow") and info.has("ring_alpha"), "the outline always reports ring uniforms")
 	ck(str(info.get("body_shader", "")) == "VTKEspBodyXray.gdshader", "the swapped shader is reported")
 	ck(int(info.get("overlay_ok", -1)) == 1, "the regenerated material is back on the mesh")
 	o.clear(92)
 	host.free()
 
-func t_overlay_fill_single_body_no_ring() -> void:
+# Third-party code may still hand over the old opts key. The contour must
+# ignore it: one body+ring chain, fresnel on the body, fill alpha on the ring.
+func t_overlay_outline_ignores_stale_fill_flag() -> void:
 	var root := Node3D.new()
 	var mesh := MeshInstance3D.new()
 	mesh.mesh = BoxMesh.new()
@@ -247,18 +243,10 @@ func t_overlay_fill_single_body_no_ring() -> void:
 	var o = Outline.new()
 	o.apply(2, root, {"fill": true, "xray": false, "color": S.DEFAULT_DEFEND, "brightness": 1.0, "fill_alpha": 0.4, "grow": 0.01, "cool": 0.2})
 	var body: ShaderMaterial = o._items[2]["mat"]
-	ck(body.shader == Sh.body_los(), "full-body uses body_los shader")
-	ck(body.next_pass == null, "full-body has no ring next_pass")
-	ck(body.render_priority == -128, "fill body draws before every other transparent")
-	ck(body.get_shader_parameter("rim_power") == 0.0, "fill body keeps a flat tint")
-	ck(body.get_shader_parameter("outline_color") == S.DEFAULT_DEFEND, "full-body sets display color")
-	ck(is_equal_approx(float(body.get_shader_parameter("alpha")), 0.4), "full-body sets visible alpha")
-	ck(is_equal_approx(float(body.get_shader_parameter("cool")), 0.2), "full-body sets cool")
-	o.refresh(2, {"fill": true, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 0.9, "fill_alpha": 0.6, "grow": 0.02, "cool": 0.5})
-	ck(body.get_shader_parameter("outline_color") == S.DEFAULT_NORMAL, "full-body refresh updates color")
-	ck(is_equal_approx(float(body.get_shader_parameter("brightness")), 0.9), "full-body refresh updates brightness")
-	ck(is_equal_approx(float(body.get_shader_parameter("alpha")), 0.6), "full-body refresh updates alpha")
-	ck(is_equal_approx(float(body.get_shader_parameter("cool")), 0.5), "full-body refresh updates cool")
+	var ring := body.next_pass as ShaderMaterial
+	ck(ring != null, "a stale fill flag cannot remove the ring pass")
+	ck(float(body.get_shader_parameter("rim_power")) > 0.0, "the body keeps the outline fresnel")
+	ck(is_equal_approx(float(ring.get_shader_parameter("alpha")), 0.4), "the ring carries fill alpha")
 	o.clear(2)
 	root.free()
 
@@ -268,7 +256,7 @@ func t_overlay_xray_preserves_shape() -> void:
 	mesh.mesh = BoxMesh.new()
 	root.add_child(mesh)
 	var o = Outline.new()
-	o.apply(3, root, {"fill": false, "xray": true, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.7, "grow": 0.01, "rim": 2.0, "cool": 0.1})
+	o.apply(3, root, {"xray": true, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 0.7, "grow": 0.01, "rim": 2.0, "cool": 0.1})
 	var body: ShaderMaterial = o._items[3]["mat"]
 	var ring: ShaderMaterial = body.next_pass as ShaderMaterial
 	ck(body.shader == Sh.body_xray(), "outline xray body uses body_xray shader")
@@ -286,12 +274,12 @@ func t_toggle_xray_restores_los() -> void:
 	mesh.mesh = BoxMesh.new()
 	root.add_child(mesh)
 	var o = Outline.new()
-	o.apply(4, root, {"fill": false, "xray": false, "color": S.DEFAULT_DEFEND, "brightness": 1.0, "fill_alpha": 0.9, "grow": 0.01, "rim": 1.5, "cool": 0.0})
-	o.refresh(4, {"fill": false, "xray": true, "color": S.DEFAULT_DEFEND, "brightness": 1.0, "fill_alpha": 0.9, "grow": 0.01, "rim": 1.5, "cool": 0.0})
+	o.apply(4, root, {"xray": false, "color": S.DEFAULT_DEFEND, "brightness": 1.0, "fill_alpha": 0.9, "grow": 0.01, "rim": 1.5, "cool": 0.0})
+	o.refresh(4, {"xray": true, "color": S.DEFAULT_DEFEND, "brightness": 1.0, "fill_alpha": 0.9, "grow": 0.01, "rim": 1.5, "cool": 0.0})
 	var xbody: ShaderMaterial = o._items[4]["mat"]
 	ck(xbody.shader == Sh.body_xray(), "toggled xray uses body_xray")
 	ck((xbody.next_pass as ShaderMaterial).shader == Sh.ring_xray(), "toggled xray keeps ring_xray")
-	o.refresh(4, {"fill": false, "xray": false, "color": S.DEFAULT_DEFEND, "brightness": 1.0, "fill_alpha": 0.9, "grow": 0.01, "rim": 1.5, "cool": 0.0})
+	o.refresh(4, {"xray": false, "color": S.DEFAULT_DEFEND, "brightness": 1.0, "fill_alpha": 0.9, "grow": 0.01, "rim": 1.5, "cool": 0.0})
 	var lbody: ShaderMaterial = o._items[4]["mat"]
 	ck(lbody.shader == Sh.body_los(), "xray off restores body_los")
 	ck((lbody.next_pass as ShaderMaterial).shader == Sh.ring_los(), "xray off restores ring_los")
@@ -306,7 +294,7 @@ func t_overlay_on_mesh() -> void:
 	var mm := MultiMeshInstance3D.new()
 	root.add_child(mm)
 	var o = Outline.new()
-	o.apply(13, root, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 1.0, "grow": 0.01, "cool": 0.0})
+	o.apply(13, root, {"xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 1.0, "grow": 0.01, "cool": 0.0})
 	var body: ShaderMaterial = o._items[13]["mat"]
 	ck(mesh.material_overlay == body, "mesh carries contour as material_overlay")
 	ck(mesh.material_override == null, "source material pipeline untouched")
@@ -323,15 +311,15 @@ func t_recollect_keeps_overlay() -> void:
 	mesh.mesh = BoxMesh.new()
 	root.add_child(mesh)
 	var o = Outline.new()
-	o.apply(5, root, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 1.0, "grow": 0.01, "cool": 0.0})
+	o.apply(5, root, {"xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 1.0, "grow": 0.01, "cool": 0.0})
 	var mat: ShaderMaterial = o._items[5]["mat"]
 	root.add_child(Node3D.new())
-	o.refresh(5, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 1.0, "grow": 0.01, "cool": 0.0})
+	o.refresh(5, {"xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 1.0, "grow": 0.01, "cool": 0.0})
 	ck(o._items[5]["meshes"].size() == 1, "mesh list unchanged for non-geometry child")
 	var extra := MeshInstance3D.new()
 	extra.mesh = QuadMesh.new()
 	root.add_child(extra)
-	o.refresh(5, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 1.0, "grow": 0.01, "cool": 0.0})
+	o.refresh(5, {"xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 1.0, "grow": 0.01, "cool": 0.0})
 	ck(o._items[5]["meshes"].size() == 2, "recollect picked up new mesh")
 	ck(mesh.material_overlay == mat, "known mesh keeps overlay")
 	ck(extra.material_overlay == mat, "new mesh got same overlay")
@@ -352,7 +340,7 @@ func t_recollect_detects_deep_mesh_replacement() -> void:
 	mesh.mesh = BoxMesh.new()
 	holder.add_child(mesh)
 	var o = Outline.new()
-	o.apply(50, root, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 1.0, "grow": 0.01, "cool": 0.0})
+	o.apply(50, root, {"xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 1.0, "grow": 0.01, "cool": 0.0})
 	var mat: ShaderMaterial = o._items[50]["mat"]
 	ck(mesh.material_overlay == mat, "deep mesh initially outlined")
 	var repl := MeshInstance3D.new()
@@ -361,7 +349,7 @@ func t_recollect_detects_deep_mesh_replacement() -> void:
 	holder.add_child(repl)
 	mesh.free()
 	# Same root direct child count (holder still there), but tracked mesh changed.
-	o.refresh(50, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 1.0, "grow": 0.01, "cool": 0.0})
+	o.refresh(50, {"xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 1.0, "grow": 0.01, "cool": 0.0})
 	ck(o._items[50]["meshes"].size() == 1, "recollect keeps one tracked mesh after deep replacement")
 	ck(o._items[50]["meshes"][0] == repl, "recollect tracks the replaced mesh instance")
 	ck(repl.material_overlay == mat, "replaced mesh receives overlay")
@@ -379,12 +367,12 @@ func t_recollect_clears_detached_mesh_overlay() -> void:
 	holder.add_child(mesh)
 	var detached_root := Node3D.new()
 	var o = Outline.new()
-	o.apply(51, root, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 1.0, "grow": 0.01, "cool": 0.0})
+	o.apply(51, root, {"xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 1.0, "grow": 0.01, "cool": 0.0})
 	var mat: ShaderMaterial = o._items[51]["mat"]
 	ck(mesh.material_overlay == mat, "tracked mesh outlined before detach")
 	holder.remove_child(mesh)
 	detached_root.add_child(mesh)
-	o.refresh(51, {"fill": false, "xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 1.0, "grow": 0.01, "cool": 0.0})
+	o.refresh(51, {"xray": false, "color": S.DEFAULT_NORMAL, "brightness": 1.0, "fill_alpha": 1.0, "grow": 0.01, "cool": 0.0})
 	ck(o._items[51]["meshes"].is_empty(), "detached mesh no longer tracked")
 	ck(mesh.material_overlay == null, "detached mesh overlay cleared on recollect")
 	o.clear(51)
@@ -399,8 +387,8 @@ func t_clear_not_in() -> void:
 	b.add_child(MeshInstance3D.new())
 	(b.get_child(0) as MeshInstance3D).mesh = BoxMesh.new()
 	var o = Outline.new()
-	o.apply(1, a, {"fill": false, "color": S.DEFAULT_NORMAL})
-	o.apply(2, b, {"fill": false, "color": S.DEFAULT_NORMAL})
+	o.apply(1, a, {"color": S.DEFAULT_NORMAL})
+	o.apply(2, b, {"color": S.DEFAULT_NORMAL})
 	o.clear_not_in({1: true})
 	ck(o.has(1), "kept id survives")
 	ck(not o.has(2), "absent id is cleared")
@@ -409,7 +397,7 @@ func t_clear_not_in() -> void:
 	var c := Node3D.new()
 	c.add_child(MeshInstance3D.new())
 	(c.get_child(0) as MeshInstance3D).mesh = BoxMesh.new()
-	o.apply(3, c, {"fill": false, "color": S.DEFAULT_NORMAL})
+	o.apply(3, c, {"color": S.DEFAULT_NORMAL})
 	o.clear_not_in({3: true})
 	ck(o.has(3), "later clear leaves nothing stale behind")
 	a.free()

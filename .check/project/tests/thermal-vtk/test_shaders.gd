@@ -101,6 +101,8 @@ func t_band_contract() -> void:
 	ck(outline.contains("fill_alpha"), "VTKOutline drives direct display alpha")
 	ck(not outline.contains("func set_buffer_mode"), "VTKOutline has no buffer mode control")
 	ck(not outline.contains("SHELL_META"), "VTKOutline has no shell geometry markers")
+	ck(not outline.contains("fill_mode"), "VTKOutline has no fill mode flag")
+	ck(not outline.contains("\"fill\""), "VTKOutline has no fill opts key")
 
 # NVG overlay palettizes/tints the background (no ESP compositor/buffer path in
 # 2.10.x baseline). No screen-space key detection/substitution remains.

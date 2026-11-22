@@ -1,11 +1,10 @@
 ﻿extends RefCounted
 # Owns ESP contour rendering per NPC in overlay mode (2.10.x diagnostic baseline):
 # applies direct display materials as `material_overlay` on source meshes in the
-# main 3D pass. Direct display semantics: outline = translucent body fill
-# (fill_alpha) + ring band at the same alpha, fill = translucent body alpha
-# (fill_alpha), xray swaps depth_test_disabled variants; color/brightness/cool/grow
-# follow opts. Pass order is pinned with render_priority (body floor, ring
-# ceiling) so the tint always draws under the band.
+# main 3D pass. OUTLINE is the only path: a translucent body (fill_alpha) plus a
+# ring band at the same alpha, with xray swapping depth_test_disabled variants;
+# color/brightness/cool/grow follow opts. Pass order is pinned with
+# render_priority (body floor, ring ceiling) so the tint draws under the band.
 
 const Shaders = preload("res://mods/ThermalVTK/VTKShaders.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
@@ -48,7 +47,6 @@ func material_info(id: int) -> Dictionary:
 	if body == null:
 		return {}
 	var info := {
-		"fill_mode": bool(entry.get("fill_mode", false)),
 		"has_ring": entry.get("ring") != null,
 		"meshes": mesh_count(id),
 		"mat_gen": int(entry.get("mat_gen", 0)),
@@ -128,18 +126,17 @@ func _valid_meshes(meshes: Array) -> Array:
 			out.append(gi)
 	return out
 
-func _material_for(fill: bool, xray: bool) -> Material:
+func _material_for(xray: bool) -> Material:
 	var body_mat := ShaderMaterial.new()
 	body_mat.shader = Shaders.body_xray() if xray else Shaders.body_los()
-	# Keep the translucent fill under the ring band whatever order the
+	# Keep the translucent body under the ring band whatever order the
 	# transparent queue picks for the camera. Priorities are the primary
 	# sort key: body at the floor, ring at the ceiling pin body -> ring.
 	body_mat.render_priority = -128
-	if not fill:
-		var ring_mat := ShaderMaterial.new()
-		ring_mat.shader = Shaders.ring_xray() if xray else Shaders.ring_los()
-		ring_mat.render_priority = 127
-		body_mat.next_pass = ring_mat
+	var ring_mat := ShaderMaterial.new()
+	ring_mat.shader = Shaders.ring_xray() if xray else Shaders.ring_los()
+	ring_mat.render_priority = 127
+	body_mat.next_pass = ring_mat
 	return body_mat
 
 func _ring_of(mat: Material) -> ShaderMaterial:
@@ -175,8 +172,7 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 	var meshes: Array = []
 	_collect(node, meshes)
 	var xray: bool = bool(opts.get("xray", false))
-	var fill: bool = bool(opts.get("fill", false))
-	var mat: Material = _material_for(fill, xray)
+	var mat: Material = _material_for(xray)
 	# Generation counts material creations for this id across re-applies, so a
 	# mid-session swap is visible in the subject log as a step, not a reset.
 	var prev: Dictionary = _items.get(id, {})
@@ -186,7 +182,6 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 		"mat": mat,
 		"ring": _ring_of(mat),
 		"mat_gen": int(prev.get("mat_gen", 0)) + 1,
-		"fill_mode": fill,
 		"xray": xray,
 		"child_count": _child_count(node),
 		"last_recollect": "",
@@ -226,11 +221,9 @@ func refresh(id: int, opts: Dictionary) -> void:
 	if entry == null:
 		return
 	var xray: bool = bool(opts.get("xray", false))
-	var fill: bool = bool(opts.get("fill", false))
-	if bool(entry.get("xray", false)) != xray or bool(entry.get("fill_mode", false)) != fill:
+	if bool(entry.get("xray", false)) != xray:
 		entry["xray"] = xray
-		entry["fill_mode"] = fill
-		_set_material(entry, _material_for(fill, xray))
+		_set_material(entry, _material_for(xray))
 		entry = _items.get(id, entry)
 	var display: Color = opts.get("color", Color(1.0, 0.0, 0.0, 1.0))
 	var brightness: float = float(opts.get("brightness", 1.0))
@@ -258,13 +251,9 @@ func refresh(id: int, opts: Dictionary) -> void:
 	var p_grow = entry.get("p_grow")
 	var p_band = entry.get("p_band")
 	if p_grow == null or not is_equal_approx(float(p_grow), grow) or p_band == null or not is_equal_approx(float(p_band), band):
-		var body_grow: float = grow
-		if fill:
-			body_mat.set_shader_parameter("grow", body_grow)
-		else:
-			body_mat.set_shader_parameter("grow", body_grow)
-			if ring_mat != null:
-				ring_mat.set_shader_parameter("grow", body_grow + band)
+		body_mat.set_shader_parameter("grow", grow)
+		if ring_mat != null:
+			ring_mat.set_shader_parameter("grow", grow + band)
 		entry["p_grow"] = grow
 		entry["p_band"] = band
 	var p_cool = entry.get("p_cool")
@@ -275,18 +264,15 @@ func refresh(id: int, opts: Dictionary) -> void:
 		entry["p_cool"] = cool
 	var p_rim = entry.get("p_rim")
 	if p_rim == null or not is_equal_approx(float(p_rim), rim):
-		# Outline weights the body fill by the same fresnel as the band, so
-		# the silhouette glows at its edges while the centre keeps its detail.
-		# Fill mode keeps a flat tint by disabling the body falloff.
-		body_mat.set_shader_parameter("rim_power", 0.0 if fill else rim)
+		# The body carries the same fresnel as the band, so the silhouette
+		# glows at its edges while the centre keeps its detail.
+		body_mat.set_shader_parameter("rim_power", rim)
 		if ring_mat != null:
 			ring_mat.set_shader_parameter("rim_power", rim)
 		entry["p_rim"] = rim
-	# Direct display: the body always carries the fill alpha (that is the
-	# translucent tint inside the contour), the ring carries it only in
-	# outline mode where it draws the band.
+	# Direct display: the translucent body and its band share one opacity.
 	var body_alpha: float = fill_alpha
-	var ring_alpha: float = fill_alpha if not fill else 0.0
+	var ring_alpha: float = fill_alpha
 	var p_alpha = entry.get("p_alpha")
 	if p_alpha == null or not is_equal_approx(float(p_alpha), body_alpha):
 		body_mat.set_shader_parameter("alpha", body_alpha)
