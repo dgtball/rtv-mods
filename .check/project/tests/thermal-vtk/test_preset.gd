@@ -23,6 +23,7 @@ func _run() -> void:
 	t_no_fill_toggle()
 	t_fill_keys_present()
 	t_thickness_and_decay_defaults()
+	t_panel_has_no_fill_mode()
 	t_single_state_source()
 	t_mcm_labels()
 	print("")
@@ -40,11 +41,9 @@ func t_no_fill_toggle() -> void:
 	ck(set_src.contains("OUTLINE_BRIGHTNESS"), "brightness default comes from the shared constant")
 	ck(set_src.contains("FILL_ALPHA"), "fill alpha default comes from the shared constant")
 
-# Full-body fill is configurable: ESP carries fill mode/alpha and MCM registers
-# body_fill and fill_alpha.
+# ESP carries the shared outline opacity and MCM registers it.
 func t_fill_keys_present() -> void:
 	var esp = ESP.new()
-	ck(esp.get("p_body_fill") != null, "ESP has a p_body_fill field")
 	ck(esp.get("p_fill_alpha") != null, "ESP has a p_fill_alpha field")
 	esp.free()
 	var set_src := FileAccess.get_file_as_string(SET_SRC)
@@ -75,6 +74,17 @@ func t_thickness_and_decay_defaults() -> void:
 # The thermal toggle and the world palette live in our own state file only.
 # A second source of truth (an MCM checkbox or dropdown) fought the hotkey on
 # every menu round-trip, so both MCM entries are gone.
+func t_panel_has_no_fill_mode() -> void:
+	var panel_src := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKEspPanel.gd")
+	ck(not panel_src.contains("_fill_mode"), "the panel has no mode widget")
+	ck(not panel_src.contains("FILL (flat body)"), "the panel has no FILL option")
+	ck(not panel_src.contains("p_body_fill"), "the panel does not touch the removed field")
+	ck(not panel_src.contains("mode="), "the log snapshot has no mode field")
+	ck(not panel_src.contains("Mode:"), "the status has no mode label")
+	ck(panel_src.contains("Settings.OUTLINE_THICKNESS"), "thickness slider uses the shared default")
+	ck(panel_src.contains("Settings.OUTLINE_BRIGHTNESS"), "brightness slider uses the shared default")
+	ck(panel_src.contains("Settings.FILL_ALPHA"), "fill alpha slider uses the shared default")
+
 func t_single_state_source() -> void:
 	var src := FileAccess.get_file_as_string(SRC)
 	ck(not src.contains("\"thermal_enabled\", {"), "MCM drops the thermal_enabled entry")

@@ -9,6 +9,7 @@ extends CanvasLayer
 
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const VTKDebug = preload("res://mods/ThermalVTK/VTKDebug.gd")
+const Settings = preload("res://mods/ThermalVTK/VTKSettings.gd")
 
 var _esp: Node = null
 var _nvg: Node = null
@@ -29,7 +30,6 @@ var _prev_owner_process_mode: int = Node.PROCESS_MODE_INHERIT
 
 # Widgets
 var _esp_enabled: CheckBox = null
-var _fill_mode: OptionButton = null
 var _thickness: HSlider = null
 var _brightness: HSlider = null
 var _fill_alpha: HSlider = null
@@ -106,7 +106,6 @@ func _snapshot() -> void:
 	if _esp == null or not is_instance_valid(_esp):
 		return
 	_saved = {
-		"body_fill": bool(_esp.p_body_fill),
 		"thickness": float(_esp.p_thickness),
 		"brightness": float(_esp.p_brightness),
 		"fill_alpha": float(_esp.p_fill_alpha),
@@ -134,10 +133,9 @@ func _snapshot() -> void:
 func _restore_snapshot() -> void:
 	if _esp == null or not is_instance_valid(_esp):
 		return
-	_esp.p_body_fill = bool(_saved.get("body_fill", false))
-	_esp.p_thickness = float(_saved.get("thickness", 0.006))
-	_esp.p_brightness = float(_saved.get("brightness", 0.6))
-	_esp.p_fill_alpha = float(_saved.get("fill_alpha", 0.4))
+	_esp.p_thickness = float(_saved.get("thickness", Settings.OUTLINE_THICKNESS))
+	_esp.p_brightness = float(_saved.get("brightness", Settings.OUTLINE_BRIGHTNESS))
+	_esp.p_fill_alpha = float(_saved.get("fill_alpha", Settings.FILL_ALPHA))
 	_esp.p_dist = float(_saved.get("dist", 60.0))
 	_esp.p_decay = float(_saved.get("decay", 90.0))
 	_esp.p_trig = bool(_saved.get("trig", true))
@@ -165,7 +163,6 @@ func _sync_from_runtime() -> void:
 	_suppress = true
 	if _esp_enabled != null:
 		_esp_enabled.button_pressed = bool(_esp.contour_layer or _esp.xray_layer)
-	_fill_mode.selected = 1 if bool(_esp.p_body_fill) else 0
 	_thickness.value = float(_esp.p_thickness)
 	_brightness.value = float(_esp.p_brightness)
 	_fill_alpha.value = float(_esp.p_fill_alpha)
@@ -202,7 +199,6 @@ func _apply_mine_color(c: Color) -> void:
 func _on_changed(_v = null) -> void:
 	if _suppress or _esp == null or not is_instance_valid(_esp):
 		return
-	_esp.p_body_fill = (_fill_mode.selected == 1)
 	_esp.p_thickness = float(_thickness.value)
 	_esp.p_brightness = float(_brightness.value)
 	_esp.p_fill_alpha = float(_fill_alpha.value)
@@ -228,10 +224,9 @@ func _on_changed(_v = null) -> void:
 	var now_ms := Time.get_ticks_msec()
 	if VTKDebug.enabled and now_ms - _last_change_log_ms >= 400:
 		_last_change_log_ms = now_ms
-		var mode := "FILL" if _fill_mode != null and _fill_mode.selected == 1 else "OUTLINE"
 		var esp_on := _esp_enabled == null or bool(_esp_enabled.button_pressed)
-		VTKDebug.log("ESP_PANEL", "change mode=%s esp_enabled=%s xray=%s distance=%.1f contour=%s xray_layer=%s" % [
-			mode, str(esp_on), str(bool(_xray.button_pressed if _xray != null else false)),
+		VTKDebug.log("ESP_PANEL", "change esp_enabled=%s xray=%s distance=%.1f contour=%s xray_layer=%s" % [
+			str(esp_on), str(bool(_xray.button_pressed if _xray != null else false)),
 			float(_distance.value if _distance != null else 0.0),
 			str(bool(_esp.contour_layer)), str(bool(_esp.xray_layer)),
 		])
@@ -261,17 +256,9 @@ func _apply_live() -> void:
 func _refresh_status() -> void:
 	if _status == null:
 		return
-	var mode := "FILL" if _fill_mode != null and _fill_mode.selected == 1 else "OUTLINE"
 	var esp_on := _esp_enabled == null or bool(_esp_enabled.button_pressed)
-	# Both sliders only reach the fill body: in outline mode the contour is the
-	# ring and brightness comes from the plain Brightness slider. Greying them
-	# out stops "it does nothing" reports from an outline session.
-	var fill_on := _fill_mode != null and _fill_mode.selected == 1
-	if _fill_alpha != null:
-		_fill_alpha.editable = true
-	_status.text = "ESP: %s  |  Mode: %s  |  Thickness %.4f  Bright %.2f  Fill %.2f  Dist %.0f  Cool %.0f" % [
+	_status.text = "ESP: %s  |  Thickness %.4f  Bright %.2f  Fill %.2f  Dist %.0f  Cool %.0f" % [
 		"ON" if esp_on else "OFF",
-		mode,
 		_thickness.value if _thickness != null else 0.0,
 		_brightness.value if _brightness != null else 0.0,
 		_fill_alpha.value if _fill_alpha != null else 0.0,
@@ -319,10 +306,9 @@ func _build_ui() -> void:
 	v.add_child(HSeparator.new())
 
 	_esp_enabled = _add_check(v, "ESP enabled (preview)", true)
-	_fill_mode = _add_option(v, "Mode", ["Outline", "FILL (flat body)"])
-	_thickness = _add_slider(v, "Thickness (rim/offset)", 0.0005, 0.02, 0.0005, 0.0005)
-	_brightness = _add_slider(v, "Brightness", 0.1, 3.0, 0.1, 0.7)
-	_fill_alpha = _add_slider(v, "fill_alpha", 0.05, 1.0, 0.05, 0.6)
+	_thickness = _add_slider(v, "Thickness (rim/offset)", 0.0005, 0.02, 0.0005, Settings.OUTLINE_THICKNESS)
+	_brightness = _add_slider(v, "Brightness", 0.1, 3.0, 0.1, Settings.OUTLINE_BRIGHTNESS)
+	_fill_alpha = _add_slider(v, "fill_alpha", 0.05, 1.0, 0.05, Settings.FILL_ALPHA)
 	_distance = _add_slider(v, "Distance", 0.0, 300.0, 10.0, 60.0)
 	_cooling = _add_slider(v, "Cooling time (s)", 0.0, 180.0, 1.0, 70.0)
 
@@ -330,7 +316,6 @@ func _build_ui() -> void:
 	_xray = _add_check(v, "X-ray triggers", false)
 	_nomad = _add_check(v, "Nomad marker", true)
 	_labels = _add_check(v, "NPC labels (debug)", true)
-	_fill_mode.selected = 1
 
 	v.add_child(HSeparator.new())
 	var cl := Label.new()
@@ -369,20 +354,6 @@ func _build_ui() -> void:
 	hint.text = "Changes apply live and are not saved to MCM. Reset restores values from panel open."
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	v.add_child(hint)
-
-func _add_option(parent: Control, label_text: String, items: Array) -> OptionButton:
-	var h := HBoxContainer.new()
-	parent.add_child(h)
-	var l := Label.new()
-	l.text = label_text
-	l.custom_minimum_size = Vector2(220, 0)
-	h.add_child(l)
-	var ob := OptionButton.new()
-	for it in items:
-		ob.add_item(str(it))
-	ob.item_selected.connect(func(_i): _on_changed())
-	h.add_child(ob)
-	return ob
 
 func _add_slider(parent: Control, label_text: String, mn: float, mx: float, step: float, def: float) -> HSlider:
 	var h := HBoxContainer.new()
@@ -435,12 +406,10 @@ func _color_hex(c: Color) -> String:
 func _log_snapshot() -> void:
 	if _esp == null or not is_instance_valid(_esp):
 		return
-	var mode := "FILL" if _fill_mode != null and _fill_mode.selected == 1 else "OUTLINE"
 	var esp_on := _esp_enabled == null or bool(_esp_enabled.button_pressed)
 	var bright := float(_brightness.value) if _brightness != null else 0.0
 	var mine_c: Color = _c_mine.color if _c_mine != null else States.DEFAULT_MINE
 	var parts: Array[String] = []
-	parts.append("mode=%s" % mode)
 	parts.append("esp_enabled=%s" % str(esp_on))
 	parts.append("contour_layer=%s" % str(bool(_esp.contour_layer)))
 	parts.append("xray_layer=%s" % str(bool(_esp.xray_layer)))
