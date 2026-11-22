@@ -262,50 +262,57 @@ func _apply_rainbow_and_emission(cat: Node3D, delta: float) -> void:
 	var col := Color.from_hsv(_rainbow_hue, 0.7, 1.0)
 	_apply_cat_look(cat, col, _emission_strength)
 
-# Один материал на surface: ключ instance_id меша + индекс поверхности.
-# Копируем исходный материал один раз и трогаем только подсветку краёв:
-# текстуры и альбедо кота остаются ванильными.
+# Оверрайд меша один на все поверхности — для него одна запись на меш;
+# поверхностные оверрайды — по записи на поверхность. Копируем исходный
+# материал один раз и трогаем только подсветку краёв: текстуры и альбедо
+# кота остаются ванильными.
 func _apply_cat_look(node: Node, color: Color, emission: float) -> void:
 	for child in node.get_children():
 		if child is MeshInstance3D:
 			var mesh := child as MeshInstance3D
 			var count := mesh.mesh.get_surface_count() if mesh.mesh != null else 0
-			for i in range(count):
-				var key := str(mesh.get_instance_id()) + ":" + str(i)
-				var rec = _material_cache.get(key)
-				if rec == null:
-					var channel := "surface"
-					var original: Material = mesh.get_surface_override_material(i)
-					if mesh.material_override != null:
-						channel = "override"
-						original = mesh.material_override
-					var tinted: StandardMaterial3D
-					if original is StandardMaterial3D:
-						tinted = (original as StandardMaterial3D).duplicate() as StandardMaterial3D
-					else:
-						tinted = StandardMaterial3D.new()
-						if original != null and "albedo_color" in original:
-							tinted.albedo_color = original.get("albedo_color")
-					rec = {
-						"mesh": mesh,
-						"surface": i,
-						"channel": channel,
-						"original": original,
-						"tinted": tinted,
-					}
-					_material_cache[key] = rec
-					if channel == "override":
-						mesh.material_override = tinted
-					else:
-						mesh.set_surface_override_material(i, tinted)
-				var mat: StandardMaterial3D = rec["tinted"] as StandardMaterial3D
-				mat.rim_enabled = emission > 0.01
-				mat.rim = clampf(emission * 0.12, 0.0, 0.3)
-				mat.rim_tint = 0.0
-				mat.emission_enabled = emission > 0.01
-				mat.emission = color
-				mat.emission_energy_multiplier = clampf(emission * 0.08, 0.0, 0.25)
+			if mesh.material_override != null:
+				_tint_cached_material(mesh, "override:" + str(mesh.get_instance_id()), "override", 0, mesh.material_override, color, emission)
+			else:
+				for i in range(count):
+					_tint_cached_material(mesh, str(mesh.get_instance_id()) + ":" + str(i), "surface", i, mesh.get_surface_override_material(i), color, emission)
 		_apply_cat_look(child, color, emission)
+
+func _tint_cached_material(mesh: MeshInstance3D, key: String, channel: String, surface: int, original: Material, color: Color, emission: float) -> void:
+	var entry = _material_cache.get(key)
+	if entry == null:
+		var base: Material = original
+		if base == null:
+			base = mesh.get_active_material(surface)
+		var tinted: StandardMaterial3D
+		if base is StandardMaterial3D:
+			tinted = (base as StandardMaterial3D).duplicate() as StandardMaterial3D
+		else:
+			tinted = StandardMaterial3D.new()
+			if base != null and "albedo_color" in base:
+				tinted.albedo_color = base.get("albedo_color")
+		entry = {
+			"mesh": mesh,
+			"surface": surface,
+			"channel": channel,
+			"original": original,
+			"tinted": tinted,
+		}
+		_material_cache[key] = entry
+		_set_cached_material(mesh, channel, surface, tinted)
+	var mat: StandardMaterial3D = entry["tinted"] as StandardMaterial3D
+	mat.rim_enabled = emission > 0.01
+	mat.rim = clampf(emission * 0.12, 0.0, 0.3)
+	mat.rim_tint = 0.0
+	mat.emission_enabled = emission > 0.01
+	mat.emission = color
+	mat.emission_energy_multiplier = clampf(emission * 0.08, 0.0, 0.25)
+
+func _set_cached_material(mesh: MeshInstance3D, channel: String, surface: int, mat: Material) -> void:
+	if channel == "override":
+		mesh.material_override = mat
+	else:
+		mesh.set_surface_override_material(surface, mat)
 
 # Возвращает ровно те материалы, которые занял забег, и чистит их записи.
 func _clear_cat_look(node: Node) -> void:
@@ -314,15 +321,12 @@ func _clear_cat_look(node: Node) -> void:
 		affected.append(child)
 	var to_erase: Array[String] = []
 	for key in _material_cache.keys():
-		var rec = _material_cache[key]
-		if not affected.has(rec["mesh"]):
+		var entry = _material_cache[key]
+		if not affected.has(entry["mesh"]):
 			continue
-		var mesh: MeshInstance3D = rec["mesh"] as MeshInstance3D
+		var mesh: MeshInstance3D = entry["mesh"] as MeshInstance3D
 		if is_instance_valid(mesh):
-			if rec["channel"] == "override":
-				mesh.material_override = rec["original"]
-			else:
-				mesh.set_surface_override_material(int(rec["surface"]), rec["original"])
+			_set_cached_material(mesh, str(entry["channel"]), int(entry["surface"]), entry["original"])
 		to_erase.append(str(key))
 	for key in to_erase:
 		_material_cache.erase(key)
