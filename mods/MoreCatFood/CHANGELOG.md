@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.6] - 2026-11-22
+
+### Fixed
+- Fixed the pale mask that stayed on the cat's face during the dance; the cat keeps its normal markings while the colored light plays over it.
+
 ## [1.0.5] - 2026-11-22
 
 ### Fixed

@@ -1,6 +1,6 @@
 # More cat food
 
-**Version:** 1.0.5
+**Version:** 1.0.6
 
 A small mod that adds a 60-second OIIA dance to cat feeding stations.
 
