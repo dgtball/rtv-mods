@@ -41,6 +41,7 @@ var _beer_cans: Array[Node3D] = []
 var _rainbow_hue := 0.0
 var _flash_strength := 0.0
 var _emission_strength := 0.0
+var _can_glow_material: StandardMaterial3D
 var _material_cache: Dictionary = {}
 var _invisible_until: Dictionary = {}  # cat -> time when becomes visible again
 
@@ -300,16 +301,54 @@ func _do_flash() -> void:
 		_light.light_energy = 7.0
 		_light.light_color = Color.from_hsv(_rainbow_hue, 0.8, 1.0)
 
+func _beer_can_mesh() -> Mesh:
+	# Beer.tscn — RigidBody3D с мешем MS_Soda.obj (0.08 × 0.122 × 0.08).
+	# Берём только меш: инстанцировать сам RigidBody не нужно.
+	if ResourceLoader.exists(Rules.BEER_SCENE_PATH):
+		var packed := load(Rules.BEER_SCENE_PATH) as PackedScene
+		if packed != null:
+			var inst := packed.instantiate()
+			if inst != null:
+				var found: Mesh = null
+				for child in inst.find_children("*", "MeshInstance3D", true, false):
+					var mi := child as MeshInstance3D
+					if mi != null and mi.mesh != null:
+						found = mi.mesh
+						break
+				inst.free()
+				if found != null:
+					return found
+	var fallback := CylinderMesh.new()
+	fallback.top_radius = 0.04
+	fallback.bottom_radius = 0.04
+	fallback.height = 0.122
+	return fallback
+
 func _spawn_beer_cans() -> void:
 	if _beer_cans.size() > 0 or not is_instance_valid(_target):
 		return
-	var beer_mesh = load("res://Items/Consumables/Beer/Beer.tres")  # fallback
-	# Просто спавним несколько Node3D-заглушек с лёгким мешем если получится
-	for i in range(7):
-		var can := Node3D.new()
+	var can_mesh := _beer_can_mesh()
+	_can_glow_material = StandardMaterial3D.new()
+	_can_glow_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_can_glow_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_can_glow_material.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_can_glow_material.albedo_color = Color(1.0, 1.0, 1.0, 0.18)
+	_can_glow_material.emission_enabled = true
+	_can_glow_material.emission_energy_multiplier = 1.0
+
+	for i in range(Rules.BEER_COUNT):
+		var can := MeshInstance3D.new()
+		can.mesh = can_mesh
+		can.scale = Vector3.ONE * Rules.BEER_CAN_SCALE
 		_target.get_parent().add_child(can)
-		var angle := TAU * float(i) / 7.0
-		can.position = _origin_position + Vector3(cos(angle) * 0.9, 0.6, sin(angle) * 0.9)
+		var glow := MeshInstance3D.new()
+		glow.name = "Glow"
+		var sphere := SphereMesh.new()
+		sphere.radius = 0.09
+		sphere.height = 0.18
+		glow.mesh = sphere
+		glow.material_override = _can_glow_material
+		can.add_child(glow)
 		_beer_cans.append(can)
 
 func _update_beer_cans(delta: float) -> void:
@@ -317,14 +356,16 @@ func _update_beer_cans(delta: float) -> void:
 		var can: Node3D = _beer_cans[i]
 		if not is_instance_valid(can):
 			continue
-		var angle := _time * 1.8 + TAU * float(i) / 7.0
-		var radius := 0.85 + sin(_time * 3.0 + i) * 0.12
-		can.position = _origin_position + Vector3(
-			cos(angle) * radius,
-			0.55 + sin(_time * 4.0 + i * 0.7) * 0.18,
-			sin(angle) * radius
-		)
+		var angle := _time * 1.8 + TAU * float(i) / float(_beer_cans.size())
+		var radius := Rules.BEER_RADIUS + sin(_time * 3.0 + float(i)) * Rules.BEER_RADIUS_SWING
+		var height := Rules.BEER_HEIGHT + sin(_time * 4.0 + float(i) * 0.7) * Rules.BEER_HEIGHT_SWING + _flash_strength * 0.08
+		can.position = _origin_position + Vector3(cos(angle) * radius, height, sin(angle) * radius)
 		can.rotate_y(delta * 4.0)
+	if _can_glow_material != null:
+		var col := Color.from_hsv(_rainbow_hue, 0.8, 1.0)
+		_can_glow_material.emission = col
+		_can_glow_material.albedo_color = Color(col.r, col.g, col.b, 0.18)
+		_can_glow_material.emission_energy_multiplier = 0.8 + _flash_strength * 2.0
 
 func _make_random_invisible() -> void:
 	if _targets.is_empty():
