@@ -369,7 +369,11 @@ func _on_beat() -> void:
 		if i == 0 and _time >= Rules.SPIN_BOX_START and _time < Rules.CLONE_REVEAL_AT:
 			continue
 		cat.rotate_y(impulse)
-		cat.position.y = _origin_position.y + Rules.lift_at(_time) + hop
+		var h := Rules.lift_at(_time)
+		if _time >= Rules.CLONE_REVEAL_AT:
+			# Бит-подскок не должен пробивать пол 0.32 и потолок хаоса.
+			h = clampf(Rules.cat_height(_time, i) + hop, Rules.LIFT_HEIGHT, Rules.CHAOS_LIFT_CENTER + Rules.CHAOS_LIFT_AMP)
+		cat.position.y = _origin_position.y + h
 
 	_current_scale_mult = _scale_punch
 	_squash = 0.72
@@ -411,8 +415,10 @@ func _process(delta: float) -> void:
 	var merge := _merge_factor()
 	var lift := Rules.lift_at(_time)
 	var bob := 0.0
-	if _time < Rules.SPIN_BOX_START or _time >= Rules.CLONE_REVEAL_AT:
+	if _time < Rules.SPIN_BOX_START:
 		bob = sin(_time * _bob_speed) * _bob_amp * (1.0 - merge)
+	var chaos := Rules.chaos_amount(_time)
+	var orbit := Rules.orbit_scale(_flash_strength, merge)
 
 	_current_scale_mult = lerpf(_current_scale_mult, 1.0, clampf(delta * 8.0, 0.0, 1.0))
 	_squash = lerpf(_squash, 1.0, clampf(delta * 7.0, 0.0, 1.0))
@@ -436,13 +442,17 @@ func _process(delta: float) -> void:
 		if not (i == 0 and facing):
 			cat.rotate_y(spin)
 
-		var off: Vector3 = _offsets[i]
+		var off: Vector3 = _offsets[i] * orbit
+		var jitter: Vector3 = Rules.chaos_offset(i, _time) * chaos
+		var h := lift + bob
+		if _time >= Rules.CLONE_REVEAL_AT:
+			h = Rules.cat_height(_time, i)
 		cat.position = Vector3(
-			_origin_position.x + off.x * (1.0 - merge),
-			_origin_position.y + lift + bob,
-			_origin_position.z + off.z * (1.0 - merge)
+			_origin_position.x + (off.x + jitter.x) * (1.0 - merge),
+			_origin_position.y + h,
+			_origin_position.z + (off.z + jitter.z) * (1.0 - merge)
 		)
-		cat.scale = scale_now
+		cat.scale = scale_now * Rules.scale_wave(_time, i)
 		_apply_rainbow_and_emission(cat, delta)
 
 	# Light & flash — один свет в центре четверки
