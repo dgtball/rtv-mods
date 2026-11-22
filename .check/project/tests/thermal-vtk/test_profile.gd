@@ -99,7 +99,6 @@ class FakeESP extends Node:
 	var p_decay: float = 30.0
 	var p_dist: float = 60.0
 	var p_thickness: float = 0.006
-	var p_body_fill: bool = false
 	var p_fill_alpha: float = 1.0
 	var p_brightness: float = 0.6
 	var p_color_normal: Color = Color(0.9, 0.9, 0.9)
@@ -135,7 +134,6 @@ class FakeESP extends Node:
 	func apply_config(rec: Variant) -> void:
 		p_decay = rec.corpse_decay
 		p_dist = rec.outline_distance
-		p_body_fill = rec.body_fill
 		p_fill_alpha = rec.fill_alpha
 		p_brightness = rec.outline_brightness
 		p_trig = rec.outline_xray
@@ -192,6 +190,7 @@ func t_apply_reads_active_profile() -> void:
 	mod._mcm_apply(ConfigFile.new())
 	ck(absf(esp.p_brightness - 1.23) < 0.001, "the brightness comes from the active profile")
 	ck(esp.get("p_thermal_mix") == null, "ESP has no thermal mix field")
+	ck(esp.get("p_body_fill") == null, "the profile ESP seam has no body fill field")
 	ck(esp.p_decay == 70.0, "a missing ESP setting falls back to the registered default")
 	ck(nvg.set_glow_distance == 60.0, "a missing NVG setting falls back to the registered default")
 	ck(nvg.set_nvg_noise == 0.0, "a missing noise default reaches the NVG side")
