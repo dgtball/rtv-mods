@@ -1,7 +1,10 @@
 [mod]
 name="More cat food"
 id="more-cat-food"
-version="1.0.4"
+version="1.0.5"
 
 [autoload]
 MoreCatFood="res://mods/MoreCatFood/MoreCatFood.gd"
+
+[updates]
+source="vostokmods:01a202e7-ebde-71bd-aa8c-7c12e49cdf63"

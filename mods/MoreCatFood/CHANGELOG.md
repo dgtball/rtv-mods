@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.5] - 2026-11-22
+
+### Fixed
+- Cats no longer flash white during the dance.
+- The dance now ends with the cats gathering, the extra cats disappearing and the cat settling into the box instead of snapping down.
+
 ## [1.0.4] - 2026-11-22
 
 ### Added
