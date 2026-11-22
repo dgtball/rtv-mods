@@ -2,6 +2,13 @@ extends RefCounted
 
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 
+# The outline is the only NPC contour mode. Its three tunables share one
+# default set: the record, the MCM registration, the ESP fields and the live
+# panel all read these constants instead of keeping their own numbers.
+const OUTLINE_THICKNESS := 0.005
+const OUTLINE_BRIGHTNESS := 0.6
+const FILL_ALPHA := 0.2
+
 # Single source of truth for every mod setting. The DESCRIPTORS table drives
 # the MCM registration (labels, ranges, defaults), the profile merge
 # (ThermalVTK._sync_config) and the typed ConfigRec that the feature nodes
@@ -20,7 +27,6 @@ class Rec:
 	var debug_log: bool = false
 	var npc_labels: bool = true
 	var outline_enabled: bool = true
-	var body_fill: bool = true
 	var outline_xray: bool = false
 	var thermal_mines: bool = true
 	var nomad_marker: bool = true
@@ -38,9 +44,9 @@ class Rec:
 	# NPC outlines.
 	var corpse_decay: float = 70.0
 	var outline_distance: float = 60.0
-	var outline_thickness: float = 0.0005
-	var outline_brightness: float = 0.2
-	var fill_alpha: float = 0.35
+	var outline_thickness: float = OUTLINE_THICKNESS
+	var outline_brightness: float = OUTLINE_BRIGHTNESS
+	var fill_alpha: float = FILL_ALPHA
 	# X-ray Triggers: reveal window ranges ("_d") and durations ("_s").
 	var fire_d: float = 80.0
 	var fire_s: float = 2.0
@@ -82,7 +88,6 @@ const DESCRIPTORS: Array[Dictionary] = [
 	# The outline_xray toggle gates only the wall flash: trigger windows
 	# (tags and the debug label countdown) run regardless of it.
 	{"sect": "Bool", "key": "outline_enabled", "name": "NPC ESP", "def": true, "cat": "01. ThermalVision", "pos": 3, "tip": "Draw state-coloured body outlines over NPCs while thermal vision is on. Off = full-screen thermal only."},
-	{"sect": "Bool", "key": "body_fill", "name": "Full body fill", "def": true, "cat": "01. ThermalVision", "pos": 4, "tip": "Paint the whole NPC silhouette instead of a ring. Walls still clip it."},
 	{"sect": "Bool", "key": "outline_xray", "name": "X-ray Triggers", "def": false, "cat": "01. ThermalVision", "pos": 5, "tip": "While on, the NPC ring lights up through walls only while a sound event is live: gunfire, shouts, idle chatter, footsteps, reloads, pain cries or grenade throws. Between events the outline stays a normal ring behind walls. The reveal timers themselves show on the debug labels regardless of this toggle."},
 	{"sect": "Bool", "key": "thermal_mines", "name": "Mine ESP", "def": true, "cat": "01. ThermalVision", "pos": 6, "tip": "Highlight mines while thermal vision is on."},
 	{"sect": "Color", "key": "mine_color", "name": "Mine", "def": States.DEFAULT_MINE, "cat": "01. ThermalVision", "pos": 7, "tip": "Colour the thermal layer paints over a mine. Mines are filled whole, not outlined."},
@@ -96,8 +101,8 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Float", "key": "palette_strength", "name": "Strength", "def": 0.58, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 14, "tip": "Blend strength for world thermal palettes. Higher pushes the background closer to the thermal look."},
 	{"sect": "Float", "key": "red_hold", "name": "Red hold", "def": 0.72, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 15, "tip": "How strongly hot/red highlights are held in thermal palettes. Higher preserves hotter reds on bright/warm sources."},
 	{"sect": "Float", "key": "outline_distance", "name": "Distance", "def": 60.0, "min": 0.0, "max": 300.0, "step": 10.0, "cat": "02. NPC", "pos": 0, "tip": "Maximum distance for an outline. Outlines are hidden past this range."},
-	{"sect": "Float", "key": "outline_thickness", "name": "Thickness", "def": 0.0005, "min": 0.0005, "max": 0.02, "step": 0.0005, "cat": "02. NPC", "pos": 2, "tip": "Outline/rim thickness in direct mode."},
-	{"sect": "Float", "key": "outline_brightness", "name": "Brightness", "def": 0.2, "min": 0.1, "max": 3.0, "step": 0.1, "cat": "02. NPC", "pos": 3, "tip": "Brightness multiplier on the outline/fill colour."},
+	{"sect": "Float", "key": "outline_thickness", "name": "Thickness", "def": OUTLINE_THICKNESS, "min": 0.0005, "max": 0.02, "step": 0.0005, "cat": "02. NPC", "pos": 2, "tip": "Outline/rim thickness in direct mode."},
+	{"sect": "Float", "key": "outline_brightness", "name": "Brightness", "def": OUTLINE_BRIGHTNESS, "min": 0.1, "max": 3.0, "step": 0.1, "cat": "02. NPC", "pos": 3, "tip": "Brightness multiplier on the outline colour."},
 	{"sect": "Float", "key": "corpse_decay", "name": "Cooling time", "def": 70.0, "min": 0.0, "max": 180.0, "step": 1.0, "cat": "02. NPC", "pos": 4, "tip": "Seconds a dead NPC's outline takes to cool from warm to cold."},
 	{"sect": "Float", "key": "trigger_fire_dist", "name": "Gunfire distance", "def": 80.0, "min": 0.0, "max": 300.0, "step": 5.0, "cat": "03. X-ray Triggers", "pos": 0, "tip": "Reveal range for a gun-shot."},
 	{"sect": "Float", "key": "trigger_voice_dist", "name": "Combat voice distance", "def": 5.0, "min": 0.0, "max": 60.0, "step": 1.0, "cat": "03. X-ray Triggers", "pos": 1, "tip": "Reveal range for a combat shout."},
@@ -121,7 +126,7 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Bool", "key": "npc_labels", "name": "NPC labels (debug)", "def": true, "cat": "04. Diagnostics", "pos": 1, "tip": "Draw NPC nametags, health bars and trigger timers while the debug log is on. Works without thermal vision or the NVG helmet, so states can be checked in plain daylight."},
 	{"sect": "Keycode", "key": "key_esp_panel", "name": "Hotkey: ESP panel", "def": KEY_F8, "cat": "04. Diagnostics", "pos": 21, "tip": "Debug tool: opens the live ESP tuning panel; the game pauses while it is open. Turn the debug log on first -- without it the key stays free for the game. The panel saves nothing: slider values live until the helmet comes off or the map changes."},
 	{"sect": "Keycode", "key": "key_live_panel", "name": "Hotkey: NVG panel", "def": KEY_F9, "cat": "04. Diagnostics", "pos": 22, "tip": "Debug tool: opens the live daylight/NVG tuning panel; the game pauses while it is open. Turn the debug log on first -- without it the key stays free for the game. The panel saves nothing: slider values live until the helmet comes off."},
-	{"sect": "Float", "key": "fill_alpha", "name": "fill_alpha", "def": 0.35, "min": 0.05, "max": 1.0, "step": 0.05, "cat": "02. NPC", "pos": 8, "tip": "Alpha/opacity for ESP fill (NVG substitution in FILL mode blends with background). In other modes/paths it may affect fill or contour visibility differently."},
+	{"sect": "Float", "key": "fill_alpha", "name": "fill_alpha", "def": FILL_ALPHA, "min": 0.05, "max": 1.0, "step": 0.05, "cat": "02. NPC", "pos": 8, "tip": "Opacity of the NPC outline: the translucent body and its rim share this value."},
 ]
 
 # The seed MCM copies a fresh profile from: every entry the mod declares, with
@@ -165,7 +170,6 @@ static func read(cfg: ConfigFile) -> Rec:
 	rec.debug_log = bool(_val(cfg, "Bool", "debug_log", rec.debug_log))
 	rec.npc_labels = bool(_val(cfg, "Bool", "npc_labels", rec.npc_labels))
 	rec.outline_enabled = bool(_val(cfg, "Bool", "outline_enabled", rec.outline_enabled))
-	rec.body_fill = bool(_val(cfg, "Bool", "body_fill", rec.body_fill))
 	rec.outline_xray = bool(_val(cfg, "Bool", "outline_xray", rec.outline_xray))
 	rec.thermal_mines = bool(_val(cfg, "Bool", "thermal_mines", rec.thermal_mines))
 	rec.nomad_marker = bool(_val(cfg, "Bool", "nomad_marker", rec.nomad_marker))

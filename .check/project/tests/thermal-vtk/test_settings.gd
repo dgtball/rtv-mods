@@ -24,6 +24,7 @@ func _init() -> void:
 	process_frame.connect(_run)
 
 func _run() -> void:
+	t_unified_outline_defaults_and_no_fill_toggle()
 	t_read_reads_values()
 	t_read_defaults()
 	t_read_coerces_scalars()
@@ -39,6 +40,25 @@ func _run() -> void:
 	else:
 		print("Settings tests failed: ", fails)
 		quit(1)
+
+# The outline has one rendering path, so its three tunables have one default
+# set shared by the settings record and the MCM registration. The removed
+# full-body toggle must not linger in either.
+func t_unified_outline_defaults_and_no_fill_toggle() -> void:
+	ck(absf(Settings.OUTLINE_THICKNESS - 0.005) < 0.000001, "unified thickness default")
+	ck(absf(Settings.OUTLINE_BRIGHTNESS - 0.6) < 0.000001, "unified brightness default")
+	ck(absf(Settings.FILL_ALPHA - 0.2) < 0.000001, "unified fill alpha default")
+	var rec := Settings.Rec.new()
+	ck(rec.get("body_fill") == null, "the record has no full-body fill field")
+	var registered := false
+	for r in Settings.DESCRIPTORS:
+		if str(r["key"]) == "body_fill":
+			registered = true
+	ck(not registered, "no body_fill descriptor remains")
+	ck(not Settings.mcm_config().has_section_key("Bool", "body_fill"), "MCM no longer registers the fill toggle")
+	ck(absf(rec.outline_thickness - Settings.OUTLINE_THICKNESS) < 0.000001, "record thickness uses the constant")
+	ck(absf(rec.outline_brightness - Settings.OUTLINE_BRIGHTNESS) < 0.000001, "record brightness uses the constant")
+	ck(absf(rec.fill_alpha - Settings.FILL_ALPHA) < 0.000001, "record fill alpha uses the constant")
 
 func t_read_reads_values() -> void:
 	var cfg := ConfigFile.new()
@@ -75,9 +95,9 @@ func t_read_defaults() -> void:
 	ck(rec.nvg_noise == 0.0, "missing noise falls back to the registered default")
 	ck(rec.nvg_white == 1.0, "missing NVG brightness falls back to the registered default")
 	ck(rec.world == 1.70, "missing world brightness falls back to the registered default")
-	ck(absf(rec.outline_thickness - 0.0005) < 0.000001, "missing thickness falls back to the registered default")
-	ck(absf(rec.outline_brightness - 0.2) < 0.001, "missing brightness falls back to the registered default")
-	ck(absf(rec.fill_alpha - 0.35) < 0.001, "missing fill alpha falls back to the registered default")
+	ck(absf(rec.outline_thickness - 0.005) < 0.000001, "missing thickness falls back to the registered default")
+	ck(absf(rec.outline_brightness - 0.6) < 0.001, "missing brightness falls back to the registered default")
+	ck(absf(rec.fill_alpha - 0.2) < 0.001, "missing fill alpha falls back to the registered default")
 	ck(rec.fire_d == 80.0 and rec.fire_s == 2.0, "trigger defaults: fire 80 m / 2 s")
 	ck(rec.idle_d == 5.0 and rec.idle_s == 1.0, "trigger defaults: idle voice 5 m / 1 s")
 	ck(rec.move_d == 5.0 and rec.move_s == 1.0, "trigger defaults: walk 5 m / 1 s")
@@ -87,7 +107,7 @@ func t_read_defaults() -> void:
 	ck(rec.pain_d == 10.0 and rec.pain_s == 2.0, "trigger defaults: pain 10 m / 2 s")
 	ck(rec.nade_d == 50.0 and rec.nade_s == 2.0, "trigger defaults: grenade 50 m / 2 s")
 	ck(rec.corpse_decay == 70.0, "cooling time default 70 s")
-	ck(rec.outline_enabled and rec.body_fill and rec.thermal_mines and rec.nomad_marker, "toggles default on")
+	ck(rec.outline_enabled and rec.thermal_mines and rec.nomad_marker, "toggles default on")
 	ck(rec.outline_xray == false, "x-ray trigger default off")
 	ck(rec.daylight_compensation, "daylight compensation defaults on")
 	ck(rec.debug_log == false, "debug log defaults off")
@@ -130,10 +150,10 @@ func t_mcm_config_shape() -> void:
 	ck(cfg.has_section_key("Color", "mine_color"), "the mine colour is declared")
 	var bright = cfg.get_value("Float", "outline_brightness", {})
 	ck(bright.get("name") == "Brightness", "the registration carries the label")
-	ck(absf(float(bright.get("default")) - 0.2) < 0.001, "the registration carries the default")
+	ck(absf(float(bright.get("default")) - 0.6) < 0.001, "the registration carries the default")
 	ck(float(bright.get("minRange")) == 0.1 and float(bright.get("maxRange")) == 3.0 and float(bright.get("step")) == 0.1, "the registration carries the float range")
 	var fill = cfg.get_value("Float", "fill_alpha", {})
-	ck(absf(float(fill.get("default")) - 0.35) < 0.001, "fill alpha default is registered")
+	ck(absf(float(fill.get("default")) - 0.2) < 0.001, "fill alpha default is registered")
 	ck(float(fill.get("minRange")) == 0.05 and float(fill.get("maxRange")) == 1.0, "fill alpha range is registered")
 	var tint = cfg.get_value("Color", "state_defend", {})
 	ck(bool(tint.get("allowAlpha")) == false, "colour entries forbid alpha")
@@ -173,8 +193,7 @@ func t_esp_apply_maps_fields() -> void:
 	rec.outline_distance = 35.0
 	rec.outline_thickness = 0.009
 	rec.outline_brightness = 1.5
-	rec.body_fill = true
-	rec.fill_alpha = 0.35
+	rec.fill_alpha = 0.2
 	rec.outline_xray = false
 	rec.fire_d = 90.0
 	rec.fire_s = 4.0
@@ -197,8 +216,7 @@ func t_esp_apply_maps_fields() -> void:
 	ck(esp.p_dist == 35.0, "ESP maps outline_distance")
 	ck(esp.p_thickness == 0.009, "ESP maps outline_thickness")
 	ck(absf(esp.p_brightness - 1.5) < 0.001, "ESP maps outline_brightness")
-	ck(esp.p_body_fill == true, "ESP maps body_fill")
-	ck(absf(esp.p_fill_alpha - 0.35) < 0.001, "ESP maps fill_alpha")
+	ck(absf(esp.p_fill_alpha - 0.2) < 0.001, "ESP maps fill_alpha")
 	ck(esp.get("p_thermal_mix") == null, "ESP has no thermal mix field")
 	ck(esp.p_trig == false, "ESP maps the x-ray toggle")
 	ck(esp.p_fire_d == 90.0 and esp.p_fire_s == 4.0, "ESP maps the fire window")

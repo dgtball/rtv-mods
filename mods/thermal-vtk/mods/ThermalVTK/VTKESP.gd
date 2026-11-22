@@ -195,7 +195,6 @@ func apply_config(rec) -> void:
 	p_decay = rec.corpse_decay
 	p_dist = rec.outline_distance
 	p_nomad_marker = rec.nomad_marker
-	p_body_fill = rec.body_fill
 	p_fill_alpha = rec.fill_alpha
 	p_npc_labels = rec.npc_labels
 	p_color_normal = rec.color_normal
