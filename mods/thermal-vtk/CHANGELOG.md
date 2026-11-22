@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.10.36] - 2026-11-22
+
+### Changed
+- NPC contours now always use the outline view; the full-body fill option is gone.
+- Outline thickness, brightness and fill opacity start at 0.005, 0.6 and 0.2. Existing saved values are kept until settings are reset.
+
 ## [2.10.31] - 2026-11-21
 
 ### Changed
