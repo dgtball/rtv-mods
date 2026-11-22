@@ -293,7 +293,6 @@ func _clear_cat_look(node: Node) -> void:
 			for i in range(count):
 				mesh.set_surface_override_material(i, null)
 		_clear_cat_look(child)
-	_material_cache.clear()
 
 func _do_flash() -> void:
 	_flash_strength = 1.0
@@ -503,10 +502,10 @@ func _process(delta: float) -> void:
 		var count := 0
 		for cat in _targets:
 			if is_instance_valid(cat):
-				center += (cat as Node3D).position
+				center += (cat as Node3D).global_position
 				count += 1
 		if count > 0:
-			_light.position = center / float(count) + Vector3(0.0, 0.45, 0.0)
+			_light.global_position = center / float(count) + Vector3(0.0, 0.45, 0.0)
 		_light.light_energy = lerpf(_light.light_energy, 0.5 + _flash_strength * 6.0 + _emission_strength * 0.4, clampf(delta * 9.0, 0.0, 1.0))
 
 func stop_oiia() -> void:
@@ -518,66 +517,78 @@ func stop_oiia() -> void:
 	if _audio != null:
 		_audio.stop()
 
+	# Capture this run's nodes and transforms before the await: another beer
+	# fed during the final 0.9 s starts a new run and overwrites the fields.
+	var run_target: Node3D = _target
+	var run_origin_position: Vector3 = _origin_position
+	var run_origin_rotation: Vector3 = _origin_rotation
+	var run_origin_scale: Vector3 = _origin_scale
+	var run_clones: Array = _clones.duplicate()
+	var run_cans: Array = _beer_cans.duplicate()
+	var run_light: OmniLight3D = _light
+	var run_particles: GPUParticles3D = _particles
+
 	# === Final look at camera + ForceMeow (only original) ===
-	if is_instance_valid(_target):
-		_target.visible = true
+	if is_instance_valid(run_target):
+		run_target.visible = true
 		# Face the player camera if possible
 		var cam := get_viewport().get_camera_3d()
 		if cam:
-			var dir := cam.global_position - _target.global_position
+			var dir := cam.global_position - run_target.global_position
 			dir.y = 0.0
 			if dir.length() > 0.01:
-				_target.look_at(_target.global_position + dir, Vector3.UP)
+				run_target.look_at(run_target.global_position + dir, Vector3.UP)
 
 		# Meow
-		if _target.has_method("ForceMeow"):
-			_target.call("ForceMeow")
+		if run_target.has_method("ForceMeow"):
+			run_target.call("ForceMeow")
 		else:
-			var meow_node = _target.get_node_or_null("Meow") or _target
+			var meow_node = run_target.get_node_or_null("Meow") or run_target
 			if meow_node and meow_node.has_method("ForceMeow"):
 				meow_node.call("ForceMeow")
 
 		# Final flash
 		_do_flash()
-		if _particles:
-			_particles.amount = 70
-			_particles.emitting = true
+		if run_particles:
+			run_particles.amount = 70
+			run_particles.emitting = true
 
 	# Small delay so the final moment can be seen
 	await get_tree().create_timer(0.9).timeout
 
-	# Cleanup
-	if is_instance_valid(_target):
-		_clear_cat_look(_target)
-		_target.rotation = _origin_rotation
-		_target.position = _origin_position
-		_target.scale = _origin_scale
-		var animator := _target.get_node_or_null("Animator") as AnimationTree
+	var same_run := (_light == run_light)
+	# Restore the ending run unless a new run reused the very same cat.
+	if is_instance_valid(run_target) and (same_run or _target != run_target):
+		_clear_cat_look(run_target)
+		run_target.rotation = run_origin_rotation
+		run_target.position = run_origin_position
+		run_target.scale = run_origin_scale
+		var animator := run_target.get_node_or_null("Animator") as AnimationTree
 		if animator != null:
 			animator.set("active", true)
-		_target.set("currentState", Rules.STATE_IDLE)
+		run_target.set("currentState", Rules.STATE_IDLE)
 
-	for cat in _clones:
+	for cat in run_clones:
 		if is_instance_valid(cat):
-			cat.queue_free()
-	_clones.clear()
-
-	for can in _beer_cans:
+			(cat as Node).queue_free()
+	for can in run_cans:
 		if is_instance_valid(can):
-			can.queue_free()
+			(can as Node).queue_free()
+	if is_instance_valid(run_light):
+		run_light.queue_free()
+	if is_instance_valid(run_particles):
+		run_particles.queue_free()
+
+	_clones.clear()
 	_beer_cans.clear()
-
-	if is_instance_valid(_light):
-		_light.queue_free()
-	if is_instance_valid(_particles):
-		_particles.queue_free()
-
-	_targets.clear()
-	_offsets.clear()
-	_invisible_until.clear()
-	_clones_spawned = false
-	_hidden = false
-	_last_state = -1
-	_target = null
+	if same_run:
+		_material_cache.clear()
+		_targets.clear()
+		_offsets.clear()
+		_invisible_until.clear()
+		_clones_spawned = false
+		_hidden = false
+		_last_state = -1
+		_target = null
 
 	print("OIIA ended")
