@@ -255,6 +255,20 @@ func _merge_factor() -> float:
 		return 0.0
 	return Rules.smooth01((_time - Rules.MERGE_START) / (Rules.MERGE_END - Rules.MERGE_START))
 
+# Слияние закончено — копий больше нет, остаётся только исходный кот.
+func _clear_clones() -> void:
+	for cat in _clones:
+		if not is_instance_valid(cat):
+			continue
+		_clear_cat_look(cat)
+		(cat as Node).queue_free()
+	if not _targets.is_empty():
+		(_targets[0] as Node3D).visible = true
+	_targets.resize(1)
+	_offsets.resize(1)
+	_clones.clear()
+	_invisible_until.clear()
+
 # ---------- Effects helpers ----------
 
 # Оверрайд меша один на все поверхности — для него одна запись на меш;
@@ -402,6 +416,8 @@ func _process(delta: float) -> void:
 
 	_apply_state()
 	_update_invisibility()
+	if _time >= Rules.CLONE_CLEAR_AT and not _clones.is_empty():
+		_clear_clones()
 
 	# Light-only glow grows toward peak (clamp weight: lerpf extrapolates on large deltas)
 	if _time > 26.0 and _time < 55.0:
@@ -444,6 +460,8 @@ func _process(delta: float) -> void:
 		var h := lift + bob
 		if _time >= Rules.CLONE_REVEAL_AT:
 			h = Rules.cat_height(_time, i)
+		if i == 0:
+			h = lerpf(h, 0.0, Rules.descent_factor(_time))
 		cat.position = Vector3(
 			_origin_position.x + (off.x + jitter.x) * (1.0 - merge),
 			_origin_position.y + h,
@@ -478,7 +496,6 @@ func stop_oiia() -> void:
 	# Capture this run's nodes and transforms before the await: another beer
 	# fed during the final 0.9 s starts a new run and overwrites the fields.
 	var run_target: Node3D = _target
-	var run_origin_position: Vector3 = _origin_position
 	var run_origin_rotation: Vector3 = _origin_rotation
 	var run_origin_scale: Vector3 = _origin_scale
 	var run_clones: Array = _clones.duplicate()
@@ -518,7 +535,6 @@ func stop_oiia() -> void:
 	if is_instance_valid(run_target) and (same_run or _target != run_target):
 		_clear_cat_look(run_target)
 		run_target.rotation = run_origin_rotation
-		run_target.position = run_origin_position
 		run_target.scale = run_origin_scale
 		var animator := run_target.get_node_or_null("Animator") as AnimationTree
 		if animator != null:

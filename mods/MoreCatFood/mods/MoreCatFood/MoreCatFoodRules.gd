@@ -33,8 +33,11 @@ const SPIN_SLOW_FACTOR := 0.2
 const SPIN_BOX_END := 32.0
 const SPIN_FAST_END := 35.0
 const SPIN_FAST_FACTOR := 2.0
-const MERGE_START := 58.0
-const MERGE_END := 60.0
+const MERGE_START := 56.0
+const MERGE_END := 58.0
+const CLONE_CLEAR_AT := 58.0
+const DESCENT_START := 59.0
+const DESCENT_END := 60.0
 
 # Состояния Cat.gd
 const STATE_SIT_START := 27.0
@@ -114,11 +117,19 @@ static func smooth01(k: float) -> float:
 	var x := clampf(k, 0.0, 1.0)
 	return x * x * (3.0 - 2.0 * x)
 
+# Финальный спуск в коробку: держим кота до 59 с, затем плавно опускаем за 1 с.
+static func descent_factor(t: float) -> float:
+	if t <= DESCENT_START:
+		return 0.0
+	if t >= DESCENT_END:
+		return 1.0
+	return smooth01((t - DESCENT_START) / (DESCENT_END - DESCENT_START))
+
 static func is_beer_path(path: String) -> bool:
 	return path == BEER_PATH
 
-# Насколько сильный хаос в данный момент: 0 до 33 с, 1 на 35–58 с,
-# плавный спад к нулю на слиянии 58–60 с.
+# Насколько сильный хаос в данный момент: 0 до 33 с, 1 на 35–56 с,
+# плавный спад к нулю на слиянии 56–58 с.
 static func chaos_amount(t: float) -> float:
 	if t < CHAOS_START:
 		return 0.0
