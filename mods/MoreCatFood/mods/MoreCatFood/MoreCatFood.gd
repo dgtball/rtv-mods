@@ -290,11 +290,15 @@ func _apply_cat_look(node: Node) -> void:
 		_apply_cat_look(child)
 
 func _tint_cached_material(mesh: MeshInstance3D, key: String, channel: String, surface: int, original: Material) -> void:
+	var base: Material = original
+	if base == null:
+		base = mesh.get_active_material(surface)
+	# Игровой шейдер не трогаем: подмена его пустым StandardMaterial3D
+	# сжирает текстуру и альфу — отсюда белая маска на морде кота.
+	if base is ShaderMaterial:
+		return
 	var entry = _material_cache.get(key)
 	if entry == null:
-		var base: Material = original
-		if base == null:
-			base = mesh.get_active_material(surface)
 		var tinted: StandardMaterial3D
 		if base is StandardMaterial3D:
 			tinted = (base as StandardMaterial3D).duplicate() as StandardMaterial3D
