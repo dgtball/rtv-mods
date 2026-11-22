@@ -264,8 +264,8 @@ func _apply_rainbow_and_emission(cat: Node3D, delta: float) -> void:
 
 # Оверрайд меша один на все поверхности — для него одна запись на меш;
 # поверхностные оверрайды — по записи на поверхность. Копируем исходный
-# материал один раз и трогаем только подсветку краёв: текстуры и альбедо
-# кота остаются ванильными.
+# материал один раз и добавляем только слабое свечение: текстуры и альбедо
+# кота остаются ванильными. Rim выключен — при ярком OmniLight он белит мех.
 func _apply_cat_look(node: Node, color: Color, emission: float) -> void:
 	for child in node.get_children():
 		if child is MeshInstance3D:
@@ -301,9 +301,7 @@ func _tint_cached_material(mesh: MeshInstance3D, key: String, channel: String, s
 		_material_cache[key] = entry
 		_set_cached_material(mesh, channel, surface, tinted)
 	var mat: StandardMaterial3D = entry["tinted"] as StandardMaterial3D
-	mat.rim_enabled = emission > 0.01
-	mat.rim = clampf(emission * 0.12, 0.0, 0.3)
-	mat.rim_tint = 0.0
+	mat.rim_enabled = false
 	mat.emission_enabled = emission > 0.01
 	mat.emission = color
 	mat.emission_energy_multiplier = clampf(emission * 0.08, 0.0, 0.25)

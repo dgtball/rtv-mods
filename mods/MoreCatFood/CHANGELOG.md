@@ -3,7 +3,6 @@
 ## [1.0.4] - 2026-11-22
 
 ### Added
-- A soft colored rim highlights the dancing cats on every beat.
 - A colored flash pulses from the middle of the group on every beat.
 - The cats sway, drift and pulse in slightly different rhythms after the reveal.
 
