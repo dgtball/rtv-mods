@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.9] - 2026-11-23
+
+### Fixed
+- Beer is no longer accepted by the Cat Bed tray and no longer starts the dance from it.
+
 ## [1.0.8] - 2026-11-23
 
 ### Added
@@ -9,8 +14,7 @@
 ## [1.0.7] - 2026-11-23
 
 ### Added
-- The special foods can now be placed into the Cat Bed food tray.
-- Beer starts the dance right away when put into the tray; the other special foods simply fill it.
+- Three of the special foods can be placed into the Cat Bed food tray.
 
 ## [1.0.6] - 2026-11-22
 
