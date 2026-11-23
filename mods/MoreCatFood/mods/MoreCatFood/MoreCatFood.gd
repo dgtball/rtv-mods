@@ -271,6 +271,7 @@ func _cb_bed_gate(catbed: Node, bed: Node, grid: Node) -> bool:
 # take/pet/recall logic. Short press is filled in by the feeding branch below.
 func _cb_finish_bed_press(held: bool) -> void:
 	var bed: Node = _cb_bed
+	var slot: Node = _cb_slot
 	_cb_bed = null
 	_cb_slot = null
 	if bed == null or not is_instance_valid(bed):
@@ -278,9 +279,56 @@ func _cb_finish_bed_press(held: bool) -> void:
 	var catbed := _cb_catbed()
 	if catbed == null:
 		return
-	if held and catbed.has_method("_finish_bed_press"):
-		catbed.set("_hold_bed", bed)
-		catbed.call("_finish_bed_press", true)
+	if held:
+		if catbed.has_method("_finish_bed_press"):
+			catbed.set("_hold_bed", bed)
+			catbed.call("_finish_bed_press", true)
+		return
+
+	var iface := _cb_interface()
+	var grid = iface.get("inventoryGrid") if iface != null else null
+	if grid == null:
+		return
+	if slot == null or not is_instance_valid(slot) or not grid.is_ancestor_of(slot):
+		slot = _cb_find_food(grid)
+		if slot == null:
+			return
+
+	var path := CatBed.food_path_for_slot(slot)
+	var food_name := ""
+	var data = slot.get("slotData")
+	if data != null and is_instance_valid(data):
+		var item = data.get("itemData")
+		if item != null and is_instance_valid(item):
+			food_name = str(item.get("name"))
+
+	if grid.has_method("Pick"):
+		grid.call("Pick", slot)
+	elif slot.get_parent() == grid:
+		grid.remove_child(slot)
+	slot.queue_free()
+
+	var gd = catbed.get("gameData")
+	if gd != null:
+		gd.set("cat", 100.0)
+	if iface != null and iface.has_method("UpdateStats"):
+		iface.call("UpdateStats", false)
+	_cb_msg(catbed, "Cat Fed (" + food_name + ")", Color.GREEN)
+	catbed.set("_bed_eating", true)
+	catbed.set("_wander_trigger", true)
+
+	var seconds := 20.0
+	var script = catbed.get_script()
+	if script != null:
+		seconds = float(script.get_script_constant_map().get("BED_FEED_SECONDS", 20.0))
+	if catbed.has_method("_wake_cat_on_bed"):
+		catbed.call("_wake_cat_on_bed", seconds, "Cat_Eat")
+
+	if CatBed.is_beer_path(path) and not _cb_cat_dead(catbed):
+		var cat: Node3D = null
+		if catbed.has_method("_find_cat_node"):
+			cat = catbed.call("_find_cat_node")
+		start_oiia(null, cat)
 
 # Short press stocks our food; hold keeps cat-bed's "take a can back".
 func _cb_finish_press(held: bool) -> void:
