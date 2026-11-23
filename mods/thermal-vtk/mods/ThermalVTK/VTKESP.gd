@@ -48,17 +48,16 @@ var contour_layer: bool = false
 var xray_layer: bool = false
 # MCM-driven params.
 var p_decay := 30.0
-var p_dist := 60.0
+var p_dist := Settings.OUTLINE_DISTANCE
 var p_nomad_marker: bool = true
-var p_body_fill: bool = false
-var p_fill_alpha: float = 0.4
+var p_fill_alpha: float = Settings.FILL_ALPHA
 # NPC nametags: their own switch under Diagnostics, so the diagnostic overlay
 # can stay on without the log and without the NVG helmet.
 var p_npc_labels: bool = false
 var p_color_normal: Color = States.DEFAULT_NORMAL
 var p_color_combat: Color = States.DEFAULT_COMBAT
 var p_color_defend: Color = States.DEFAULT_DEFEND
-var p_brightness: float = 0.6
+var p_brightness: float = Settings.OUTLINE_BRIGHTNESS
 
 # The X-ray Triggers toggle state: on = a live trigger window swaps that bot's
 # ring to the x-ray shader (through walls). Off = windows are still tagged,
@@ -79,7 +78,7 @@ var p_pain_s := 3.0
 var p_pain_d := 15.0
 var p_nade_s := 6.0
 var p_nade_d := 60.0
-var p_thickness := 0.006
+var p_thickness := Settings.OUTLINE_THICKNESS
 
 var _entries: Dictionary = {}
 var _ids_frame: Array = []
@@ -219,7 +218,6 @@ func apply_config(rec) -> void:
 	p_decay = rec.corpse_decay
 	p_dist = rec.outline_distance
 	p_nomad_marker = rec.nomad_marker
-	p_body_fill = rec.body_fill
 	p_fill_alpha = rec.fill_alpha
 	p_npc_labels = rec.npc_labels
 	p_color_normal = rec.color_normal
@@ -926,16 +924,12 @@ func _fill_opts(opts: Dictionary, e: Dictionary, now: float) -> void:
 	elif cat == States.DEFEND:
 		color = p_color_defend
 	opts["color"] = color
-	var bright: float = p_brightness
-	if p_body_fill:
-		bright = minf(bright, 1.0)
-	opts["brightness"] = bright
+	opts["brightness"] = p_brightness
 	opts["fill_alpha"] = p_fill_alpha
 	opts["cool"] = cool
 	opts["grow"] = p_thickness
 	opts["band"] = _band_for(float(e.get("dist", 0.0)))
 	opts["xray"] = xray
-	opts["fill"] = p_body_fill
 
 
 

@@ -28,7 +28,8 @@ $mods = @(
     @{ Slug = "jcm-freeze";     Folder = "jcm-freeze"; Artifact = "Freeze.vmz";       VersionFile = $false },
     @{ Slug = "knife-or-pistol"; Folder = "KnifeOrPistol"; Artifact = "KnifeOrPistol.vmz"; VersionFile = $false },
     @{ Slug = "stop-spitting";   Folder = "StopSpitting";  Artifact = "StopSpitting.vmz";  VersionFile = $false },
-    @{ Slug = "battery-extractor"; Folder = "BatteryExtractor"; Artifact = "BatteryExtractor.vmz"; VersionFile = $false }
+    @{ Slug = "battery-extractor"; Folder = "BatteryExtractor"; Artifact = "BatteryExtractor.vmz"; VersionFile = $false },
+    @{ Slug = "MoreCatFood";       Folder = "MoreCatFood";     Artifact = "MoreCatFood.vmz";     VersionFile = $false }
 )
 
 if (-not $OutDir) { $OutDir = Join-Path $PSScriptRoot "dist" }
@@ -82,7 +83,7 @@ foreach ($m in $selected) {
 
     $entries = @(Get-ChildItem -LiteralPath $src -Recurse -File |
         Where-Object {
-            ($_.Name -in @("mod.txt", "version.txt") -or $_.Extension -in @(".gd", ".tres", ".tscn", ".gdshader", ".webp", ".png")) -and
+            ($_.Name -in @("mod.txt", "version.txt") -or $_.Extension -in @(".gd", ".tres", ".tscn", ".gdshader", ".webp", ".png", ".ogg")) -and
             ($_.FullName.Substring($src.Length).TrimStart([char[]]"\/") -notmatch '^(assets|tests)[\\/]')
         } |
         ForEach-Object { $_.FullName.Substring($src.Length).TrimStart([char[]]"\/") -replace "\\", "/" } |

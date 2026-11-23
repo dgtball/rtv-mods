@@ -1,6 +1,7 @@
 ﻿extends SceneTree
 
 const ESP = preload("res://mods/ThermalVTK/VTKESP.gd")
+const Settings = preload("res://mods/ThermalVTK/VTKSettings.gd")
 const S = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Outline = preload("res://mods/ThermalVTK/VTKOutline.gd")
 const Sh = preload("res://mods/ThermalVTK/VTKShaders.gd")
@@ -46,11 +47,11 @@ func _run() -> void:
 	t_distance_crops()
 	t_label_suffix_independent()
 	t_opts_contour_key()
-	t_fill_opts_carry_fill_flag()
+	t_outline_opts_use_unified_defaults()
 	t_opts_brightness_thermal_mix()
 	t_band_is_zero_at_every_distance()
 	t_outline_ring_matches_body()
-	t_fullbody_xray_no_ring()
+	t_outline_xray_keeps_ring()
 	t_no_through_walls_opt()
 	t_dead_node_marks_entry()
 	t_los_excludes_self()
@@ -273,7 +274,6 @@ func t_label_suffix_independent() -> void:
 	ck(resp._entries.size() == 1, "residue bot discovered")
 	resp.p_trig = true
 	resp.p_dist = 5.0
-	resp.p_body_fill = false
 	rbot.global_position = Vector3(0.0, 0.0, -50.0)
 	var rid := rbot.get_instance_id()
 	var rnow := float(Time.get_ticks_msec()) / 1000.0
@@ -306,8 +306,9 @@ func t_opts_contour_key() -> void:
 	ck(not hostile.has("direct"), "contour opts carry no direct flag")
 	ck(not hostile.has("state_key"), "the old detector key name is gone")
 	ck(not hostile.has("nomad"), "nomad is not duplicated into the contour opts")
-	for k in ["cat", "color", "brightness", "fill_alpha", "grow", "cool", "xray", "fill"]:
+	for k in ["cat", "color", "brightness", "fill_alpha", "grow", "cool", "xray"]:
 		ck(hostile.has(k), "contour opts include %s" % k)
+	ck(not hostile.has("fill"), "contour opts carry no fill mode flag")
 	ck(not hostile.has("alpha"), "the contour opts carry no alpha to blend the key with")
 	ck(not hostile.has("rim"), "the ring has no rim falloff")
 	ck(not hostile.has("fill_grow"), "fill grow lives in the shader, not in opts")
@@ -320,19 +321,23 @@ func t_opts_contour_key() -> void:
 	ck(not esp.has_method("render_to_buffer"), "render_to_buffer accessor removed in overlay-only baseline")
 	esp.free()
 
-# The fill flag and configured fill alpha/brightness travel in opts.
-func t_fill_opts_carry_fill_flag() -> void:
+# One contour path: the shared defaults drive ESP, and brightness is never
+# capped by a mode that no longer exists.
+func t_outline_opts_use_unified_defaults() -> void:
 	var esp = ESP.new()
-	esp.name = "VTKESP_fill"
+	esp.name = "VTKESP_outline_defaults"
 	root.add_child(esp)
-	esp.p_body_fill = true
-	esp.p_fill_alpha = 0.55
+	ck(absf(esp.p_thickness - Settings.OUTLINE_THICKNESS) < 0.000001, "ESP thickness starts from the shared default")
+	ck(absf(esp.p_brightness - Settings.OUTLINE_BRIGHTNESS) < 0.000001, "ESP brightness starts from the shared default")
+	ck(absf(esp.p_fill_alpha - Settings.FILL_ALPHA) < 0.000001, "ESP fill alpha starts from the shared default")
+	ck(esp.get("p_body_fill") == null, "ESP has no body fill field")
+	esp.p_brightness = 1.2
 	var opts := opts_of(esp, {"cat": S.COMBAT, "nomad": false})
-	ck(opts.get("color") == S.DEFAULT_COMBAT, "fill opts keep the display color")
-	ck(bool(opts.get("fill", false)) == true, "fill opts carry the fill flag")
-	ck(not opts.has("alpha"), "fill opts carry no alpha field")
-	ck(absf(float(opts.get("fill_alpha", -1.0)) - 0.55) < 0.001, "fill opts carry fill_alpha")
-	ck(opts.has("brightness"), "fill opts carry brightness")
+	ck(opts.get("color") == S.DEFAULT_COMBAT, "outline opts keep the display color")
+	ck(not opts.has("fill"), "no fill flag is emitted")
+	ck(not opts.has("alpha"), "outline opts carry no alpha field")
+	ck(absf(float(opts.get("brightness", -1.0)) - 1.2) < 0.000001, "brightness above one is not clamped")
+	ck(absf(float(opts.get("fill_alpha", -1.0)) - Settings.FILL_ALPHA) < 0.000001, "opts carry the shared fill alpha")
 	ck(esp.get("p_thermal_mix") == null, "ESP has no thermal mix field")
 	esp.free()
 
@@ -342,7 +347,6 @@ func t_opts_brightness_thermal_mix() -> void:
 	root.add_child(esp)
 	esp.p_fill_alpha = 0.5
 	esp.p_brightness = 1.2
-	esp.p_body_fill = false
 	var opts := opts_of(esp, {"cat": S.NORMAL, "nomad": false})
 	ck(not opts.has("alpha"), "fill strength is not a per-entry alpha")
 	ck(absf(float(opts.get("fill_alpha", -1.0)) - 0.5) < 0.001, "fill_alpha comes from ESP field")
@@ -350,9 +354,6 @@ func t_opts_brightness_thermal_mix() -> void:
 	esp.p_fill_alpha = 0.8
 	opts = opts_of(esp, {"cat": S.NORMAL, "nomad": false})
 	ck(absf(float(opts.get("fill_alpha", -1.0)) - 0.8) < 0.001, "fill_alpha tracks ESP field")
-	esp.p_body_fill = true
-	opts = opts_of(esp, {"cat": S.NORMAL, "nomad": false})
-	ck(absf(float(opts.get("brightness", 0.0)) - 1.0) < 0.001, "body fill caps brightness at 1.0")
 	esp.free()
 
 # The band is the distance-compensated extra ring inflation. With it pinned at
@@ -370,11 +371,10 @@ func t_band_is_zero_at_every_distance() -> void:
 	esp.free()
 
 # With the band pinned at zero the ring must sit on the body silhouette, so a
-# distant NPC cannot grow an outward halo. FILL has no ring either way.
+# distant NPC cannot grow an outward halo.
 func t_outline_ring_matches_body() -> void:
 	var esp = ESP.new()
 	root.add_child(esp)
-	esp.p_body_fill = false
 	esp.p_thickness = 0.012
 	var opts := opts_of(esp, {"cat": S.NORMAL, "nomad": false, "dist": 30.0})
 	var bot := Node3D.new()
@@ -394,11 +394,11 @@ func t_outline_ring_matches_body() -> void:
 	esp.free()
 	bot.free()
 
-func t_fullbody_xray_no_ring() -> void:
+func t_outline_xray_keeps_ring() -> void:
 	var scene := Node3D.new()
-	scene.name = "Map_fill_xray"
+	scene.name = "Map_outline_xray"
 	var bot := FakeBot.new()
-	bot.name = "AI_Bandit_fill_xray"
+	bot.name = "AI_Bandit_outline_xray"
 	var mesh := MeshInstance3D.new()
 	mesh.mesh = BoxMesh.new()
 	bot.add_child(mesh)
@@ -407,22 +407,21 @@ func t_fullbody_xray_no_ring() -> void:
 	current_scene = scene
 	bot.global_position = Vector3(0.0, 0.0, -3.0)
 	var esp = ESP.new()
-	esp.name = "VTKESP_fill_xray"
+	esp.name = "VTKESP_outline_xray"
 	root.add_child(esp)
 	esp.set_layers(true, true)
-	esp.p_body_fill = true
 	esp.p_trig = true
 	esp.p_dist = 60.0
 	var id := bot.get_instance_id()
 	var now := esp._now()
 	Tracker.tag_trig(esp._entries[id], "fire", 100.0, now + 60.0, 60.0)
 	esp._draw(Vector3.ZERO)
-	ck(esp._outline.has(id), "full-body xray reveal draws")
+	ck(esp._outline.has(id), "outline xray reveal draws")
 	var entry: Dictionary = esp._outline._items[id]
 	var mat: ShaderMaterial = entry["mat"]
-	ck(mat != null and mat.shader == Sh.body_xray(), "full-body xray uses body xray shader")
-	ck(entry.get("ring") == null, "full-body xray has no ring")
-	ck(mat.shader != Sh.ring_xray(), "full-body xray is not ring xray")
+	ck(mat != null and mat.shader == Sh.body_xray(), "outline xray uses body xray shader")
+	ck(entry.get("ring") != null, "outline xray keeps its ring")
+	ck(mat.shader != Sh.ring_xray(), "the body material stays distinct from the ring")
 	esp.free()
 	scene.queue_free()
 
@@ -616,7 +615,6 @@ func t_xray_layer_without_contour() -> void:
 	esp.name = "VTKESP_xray_layer"
 	root.add_child(esp)
 	esp.p_dist = 5.0
-	esp.p_body_fill = false
 	esp.p_trig = true
 	esp.set_layers(false, true)
 	var id := bot.get_instance_id()

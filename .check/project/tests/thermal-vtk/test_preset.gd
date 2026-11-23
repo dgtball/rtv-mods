@@ -20,8 +20,10 @@ func _init() -> void:
 	process_frame.connect(_run)
 
 func _run() -> void:
+	t_no_fill_toggle()
 	t_fill_keys_present()
 	t_thickness_and_decay_defaults()
+	t_panel_has_no_fill_mode()
 	t_single_state_source()
 	t_mcm_labels()
 	print("")
@@ -32,15 +34,19 @@ func _run() -> void:
 		print("Preset tests failed: ", fails)
 		quit(1)
 
-# Full-body fill is configurable: ESP carries fill mode/alpha and MCM registers
-# body_fill and fill_alpha.
+func t_no_fill_toggle() -> void:
+	var set_src := FileAccess.get_file_as_string(SET_SRC)
+	ck(not set_src.contains("\"body_fill\""), "MCM drops the full-body fill toggle")
+	ck(set_src.contains("OUTLINE_THICKNESS"), "thickness default comes from the shared constant")
+	ck(set_src.contains("OUTLINE_BRIGHTNESS"), "brightness default comes from the shared constant")
+	ck(set_src.contains("FILL_ALPHA"), "fill alpha default comes from the shared constant")
+
+# ESP carries the shared outline opacity and MCM registers it.
 func t_fill_keys_present() -> void:
 	var esp = ESP.new()
-	ck(esp.get("p_body_fill") != null, "ESP has a p_body_fill field")
 	ck(esp.get("p_fill_alpha") != null, "ESP has a p_fill_alpha field")
 	esp.free()
 	var set_src := FileAccess.get_file_as_string(SET_SRC)
-	ck(set_src.contains("\"body_fill\""), "MCM registers body_fill")
 	ck(set_src.contains("\"fill_alpha\""), "MCM registers fill_alpha")
 	ck(not set_src.contains("PRESET_FILL_ALPHA"), "PRESET_FILL_ALPHA is gone")
 	ck(not FileAccess.get_file_as_string(SRC).contains("_apply_style_preset"), "the fill preset is gone")
@@ -59,7 +65,7 @@ func t_thickness_and_decay_defaults() -> void:
 	ck(not (src + set_src).contains("outline_style"), "MCM drops the outline_style dropdown")
 	ck(_descr("outline_rim").is_empty(), "the Rim setting is gone")
 	var thick := _descr("outline_thickness")
-	ck(absf(float(thick.get("def", -1.0)) - 0.0005) < 0.000001 and absf(float(thick.get("step", -1.0)) - 0.0005) < 0.000001
+	ck(absf(float(thick.get("def", -1.0)) - 0.005) < 0.000001 and absf(float(thick.get("step", -1.0)) - 0.0005) < 0.000001
 		and absf(float(thick.get("max", -1.0)) - 0.02) < 0.000001, "outline_thickness default/step/max match settings")
 	var decay := _descr("corpse_decay")
 	ck(absf(float(decay.get("def", -1.0)) - 70.0) < 0.001 and absf(float(decay.get("max", -1.0)) - 180.0) < 0.001,
@@ -68,6 +74,17 @@ func t_thickness_and_decay_defaults() -> void:
 # The thermal toggle and the world palette live in our own state file only.
 # A second source of truth (an MCM checkbox or dropdown) fought the hotkey on
 # every menu round-trip, so both MCM entries are gone.
+func t_panel_has_no_fill_mode() -> void:
+	var panel_src := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKEspPanel.gd")
+	ck(not panel_src.contains("_fill_mode"), "the panel has no mode widget")
+	ck(not panel_src.contains("FILL (flat body)"), "the panel has no FILL option")
+	ck(not panel_src.contains("p_body_fill"), "the panel does not touch the removed field")
+	ck(not panel_src.contains("mode="), "the log snapshot has no mode field")
+	ck(not panel_src.contains("Mode:"), "the status has no mode label")
+	ck(panel_src.contains("Settings.OUTLINE_THICKNESS"), "thickness slider uses the shared default")
+	ck(panel_src.contains("Settings.OUTLINE_BRIGHTNESS"), "brightness slider uses the shared default")
+	ck(panel_src.contains("Settings.FILL_ALPHA"), "fill alpha slider uses the shared default")
+
 func t_single_state_source() -> void:
 	var src := FileAccess.get_file_as_string(SRC)
 	ck(not src.contains("\"thermal_enabled\", {"), "MCM drops the thermal_enabled entry")

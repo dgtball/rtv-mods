@@ -26,7 +26,7 @@ var set_nvg_white: float = 1.0
 var set_thermal: bool = false
 var set_mines: bool = true
 # Mirrors the MCM outline distance; gates mine glow.
-var set_glow_distance: float = 60.0
+var set_glow_distance: float = Settings.OUTLINE_DISTANCE
 var set_palette: int = 0
 var set_world: float = 1.70
 # Daylight highlight rolloff knee (shader "highlightKnee"); 1.0 = off.

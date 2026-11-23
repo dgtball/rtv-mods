@@ -22,8 +22,8 @@ Everything a Vostok run needs in one mod: loadout presets, dynamic seasons, fast
 ## Installation
 
 1. Install Metro Mod Loader for Road to Vostok.
-2. Download `VostokToolkit.vmz` from [Releases](https://github.com/dgtball/rtv-mods/releases).
-3. Delete the old `Loadouts.vmz` from `Road to Vostok\mods\` if you have one: 5.4.0 renamed the archive, and two copies load the mod twice.
+2. Download `VostokToolkit.vmz`
+3. Drop it into `Road to Vostok\mods\`
 4. Launch the game.
 
 ## Usage
@@ -55,6 +55,7 @@ VTK exposes its kill observation through a documented, versioned surface. A mod 
 - [Juuzoz' Cheat Menu - JCM](https://vostokmods.net/mod/juuzoz-cheat-menu-jcm) by juuzoz_ — the starting point for the loadout idea
 - [Partial Task Hand-In](https://modworkshop.net/mod/56789) by Ryujiro — inspired partial task hand-in
 - [Season Expansion System](https://modworkshop.net/mod/56781) by Peter Master — I believe he will return and update his mods.
+- [NPC Mines](https://modworkshop.net/mod/56575) by r1pchen 
 
 ## Development note
 

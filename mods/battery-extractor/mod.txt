@@ -9,3 +9,6 @@ BatteryExtractor="res://mods/BatteryExtractor/BatteryExtractor.gd"
 [hooks]
 res://Scripts/Context.gd = Update
 res://Scripts/Interface.gd = Release
+
+[updates]
+source="vostokmods:01a1f46e-44f4-7425-aca8-8db6a9476477"

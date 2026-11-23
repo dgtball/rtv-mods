@@ -38,7 +38,7 @@ never jam, unbreakable gear, frost resistance and slower battery drain.
 | ---------------------------------- | -------------- | -------------- | ---------------|
 | damage                             | 1–5%           | 6–10%          | 10–20%         |
 | recoil                             | −1–−5%         | −6–−10%        | −10–−20%       |
-| wear                               | 5–10%          | 10–15%         | 20–50%         |
+| Wear Resistance                    | 5–10%          | 10–15%         | 20–50%         |
 | low_hp_damage                      | 5–10%          | 10–15%         | 20–50%         |
 | ammo_save                          | 5–10%          | 10–15%         | 20–50%         |
 | never_jam                          | —              | Yes            | Yes            |

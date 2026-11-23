@@ -113,9 +113,16 @@ func t_band_contract() -> void:
 	ck(outline.contains("outline_color"), "VTKOutline drives direct display color")
 	ck(outline.contains("brightness"), "VTKOutline drives direct display brightness")
 	ck(outline.contains("fill_alpha"), "VTKOutline drives direct display alpha")
+<<<<<<< HEAD
 	ck(outline.contains("func set_buffer_mode"), "VTKOutline exposes buffer mode control")
 	ck(outline.contains("func buffer_mode"), "VTKOutline reports buffer mode state")
 	ck(outline.contains("VTKESPBuffer"), "VTKOutline routes contours through the ESP buffer")
+=======
+	ck(not outline.contains("func set_buffer_mode"), "VTKOutline has no buffer mode control")
+	ck(not outline.contains("SHELL_META"), "VTKOutline has no shell geometry markers")
+	ck(not outline.contains("fill_mode"), "VTKOutline has no fill mode flag")
+	ck(not outline.contains("\"fill\""), "VTKOutline has no fill opts key")
+>>>>>>> outline-only
 
 # NVG overlay palettizes/tints the background, then composites the ESP buffer
 # over it with its own display colours. No screen-space key substitution remains.
