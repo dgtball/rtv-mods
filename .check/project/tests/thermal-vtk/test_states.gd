@@ -56,10 +56,10 @@ func t_display_defaults() -> void:
 		ck(c.a > 0.99, "state display colour %s is opaque" % str(c))
 
 func t_palette_hexes() -> void:
-	ck(S.DEFAULT_NORMAL == Color8(17, 240, 4), "normal default is #11f004")
+	ck(S.DEFAULT_NORMAL == Color8(255, 233, 0), "normal default is #ffe900")
 	ck(S.DEFAULT_COMBAT == Color8(242, 46, 38), "combat default is #f22e26")
-	ck(S.DEFAULT_DEFEND == Color8(223, 245, 28), "defend default is #dff51c")
-	ck(S.DEFAULT_MINE == Color8(9, 46, 246), "mine default is #092ef6")
+	ck(S.DEFAULT_DEFEND == Color8(0, 46, 255), "defend default is #002eff")
+	ck(S.DEFAULT_MINE == Color8(205, 0, 255), "mine default is #cd00ff")
 
 func t_state_names() -> void:
 	ck(S.STATE_NAMES.size() == 17, "all AI states are named")

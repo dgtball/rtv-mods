@@ -1,6 +1,7 @@
 extends SceneTree
 
 const NVG = preload("res://mods/ThermalVTK/VTKNVG.gd")
+const S = preload("res://mods/ThermalVTK/VTKStates.gd")
 
 var fails := 0
 
@@ -75,6 +76,7 @@ func t_off_upkeep_clears_dead_mines() -> void:
 func t_mine_color_stored_and_applied() -> void:
 	var nvg = NVG.new()
 	root.add_child(nvg)
+	ck(nvg.mine_color() == S.DEFAULT_MINE, "a fresh NVG starts with the declared mine default")
 	nvg.set_mine_color(Color(0.2, 0.4, 0.9))
 	ck(nvg.mine_color() == Color(0.2, 0.4, 0.9), "mine colour is stored")
 	var sm := nvg._mat_mine as StandardMaterial3D

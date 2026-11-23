@@ -122,7 +122,7 @@ func t_read_defaults() -> void:
 	ck(rec.color_normal == States.DEFAULT_NORMAL, "normal colour default")
 	ck(rec.color_combat == States.DEFAULT_COMBAT, "combat colour default")
 	ck(rec.color_defend == States.DEFAULT_DEFEND, "defend colour default")
-	ck(rec.color_mine == Color8(9, 46, 246), "mine colour default")
+	ck(rec.color_mine == Color8(205, 0, 255), "mine colour default")
 
 # Hand-written scalars (a bare value instead of the {..: ..} entry) must still
 # land: the profile file is player-writable.
