@@ -144,8 +144,8 @@ func _patch(feeder: Node) -> void:
 # ===================== Cat Bed tray shim =====================
 # cat-bed replaces the feeding box with a tray of its own and feeds from a
 # hardcoded list, so our foods never reach the vanilla feeder patch. When the
-# CatBedTray autoload is present, intercept the tray press first, stock our food
-# as a regular can, and start OIIA right away for Beer.
+# CatBedTray autoload is present, intercept the tray press first and stock our
+# food as a regular can. Beer is not stocked here: cat-bed rejects it.
 
 func _physics_process(delta: float) -> void:
 	if not InputMap.has_action(INTERACT_ACTION):
@@ -199,7 +199,7 @@ func _cb_on_press(tray: Node) -> bool:
 	var grid = iface.get("inventoryGrid")
 	if grid == null:
 		return false
-	var slot := _cb_find_food(grid)
+	var slot := _cb_find_food(grid, false)
 	if slot == null:
 		return false
 	_cb_active = true
@@ -359,7 +359,7 @@ func _cb_finish_press(held: bool) -> void:
 	if slot != null and is_instance_valid(slot) and grid.is_ancestor_of(slot):
 		path = CatBed.food_path_for_slot(slot)
 	if path == "":
-		slot = _cb_find_food(grid)
+		slot = _cb_find_food(grid, false)
 		if slot == null:
 			# The food vanished during the hold: let cat-bed do its normal pass.
 			if catbed.has_method("TrayAdd"):
@@ -396,24 +396,22 @@ func _cb_finish_press(held: bool) -> void:
 	if catbed.has_method("_play_pickup"):
 		catbed.call("_play_pickup")
 
-	if CatBed.is_beer_path(path) and not _cb_cat_dead(catbed):
-		var cat: Node3D = null
-		if catbed.has_method("_find_cat_node"):
-			cat = catbed.call("_find_cat_node")
-		start_oiia(null, cat)
-
 func _cb_catbed() -> Node:
 	return get_node_or_null(CATBED_PATH)
 
 func _cb_interface() -> Node:
 	return get_node_or_null(UI_PATH)
 
-func _cb_find_food(grid: Node) -> Node:
+func _cb_find_food(grid: Node, beer_allowed := true) -> Node:
 	for child in grid.get_children():
 		if child == null or not is_instance_valid(child):
 			continue
-		if CatBed.food_path_for_slot(child) != "":
-			return child
+		var path := CatBed.food_path_for_slot(child)
+		if path == "":
+			continue
+		if not beer_allowed and CatBed.is_beer_path(path):
+			continue
+		return child
 	return null
 
 func _cb_feed_blocked(catbed: Node) -> bool:
