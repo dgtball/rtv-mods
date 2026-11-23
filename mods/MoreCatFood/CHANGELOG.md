@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.8] - 2026-11-23
+
+### Added
+- The special foods can now feed the cat from the Cat Bed.
+- Beer starts the dance when fed from the Cat Bed; the other special foods just feed the cat.
+
 ## [1.0.7] - 2026-11-23
 
 ### Added
