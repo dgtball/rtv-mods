@@ -7,6 +7,7 @@ extends RefCounted
 const Rules = preload("res://mods/MoreCatFood/MoreCatFoodRules.gd")
 
 const TRAY_GROUP := "CatBedTrayTray"
+const BED_GROUP := "CatBedTrayBed"
 const INTERACTABLE_GROUP := "Interactable"
 const CAN_CODE := "F"
 
@@ -31,6 +32,12 @@ static func tray_codes_after_add(codes: String) -> String:
 	return codes + CAN_CODE
 
 static func looked_tray(interactor: Node) -> Node:
+	return _looked_station(interactor, TRAY_GROUP)
+
+static func looked_bed(interactor: Node) -> Node:
+	return _looked_station(interactor, BED_GROUP)
+
+static func _looked_station(interactor: Node, group: String) -> Node:
 	if interactor == null or not is_instance_valid(interactor):
 		return null
 	var target = interactor.get("target")
@@ -41,6 +48,6 @@ static func looked_tray(interactor: Node) -> Node:
 	var station = target.get("owner")
 	if station == null or not is_instance_valid(station) or not (station is Node):
 		return null
-	if not station.is_in_group(TRAY_GROUP):
+	if not station.is_in_group(group):
 		return null
 	return station
