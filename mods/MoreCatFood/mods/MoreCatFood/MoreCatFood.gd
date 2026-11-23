@@ -1,9 +1,15 @@
 extends Node
 
 const Rules = preload("res://mods/MoreCatFood/MoreCatFoodRules.gd")
+const CatBed = preload("res://mods/MoreCatFood/MoreCatFoodCatBed.gd")
 const FEEDER_SCRIPT_PATH := "res://Scripts/CatFeeder.gd"
 const FEEDER_SUBCLASS_PATH := "res://mods/MoreCatFood/MoreCatFoodFeeder.gd"
 const PATCH_META := "mcf_patched"
+const CATBED_PATH := "/root/CatBedTray"
+const INTERACTOR_PATH := "/root/Map/Core/Camera/Interactor"
+const UI_PATH := "/root/Map/Core/UI/Interface"
+const INTERACT_ACTION := "interact"
+const HOLD_SECONDS := 0.5
 
 # --- Core ---
 var _spinning := false
@@ -43,6 +49,13 @@ var _glow_strength := 0.0
 var _material_cache: Dictionary = {}
 var _invisible_until: Dictionary = {}  # cat -> time when becomes visible again
 
+# --- Cat Bed tray shim ---
+var _cb_active := false
+var _cb_swallow := false
+var _cb_hold_time := 0.0
+var _cb_tray: Node
+var _cb_slot: Node
+
 func _ready() -> void:
 	_audio = AudioStreamPlayer.new()
 	add_child(_audio)
@@ -64,6 +77,11 @@ func _ready() -> void:
 
 	get_tree().node_added.connect(_on_node_added)
 	call_deferred("_sweep_tree")
+
+	# Cat Bed runs its press/hold logic at -1000; one step earlier lets the
+	# shim hide a tray press that carries our food before cat-bed sees it.
+	process_physics_priority = -1001
+	set_physics_process(true)
 
 func _on_node_added(node: Node) -> void:
 	var script = node.get_script()
@@ -122,6 +140,203 @@ func _patch(feeder: Node) -> void:
 
 	feeder.set_meta(PATCH_META, true)
 
+# ===================== Cat Bed tray shim =====================
+# cat-bed replaces the feeding box with a tray of its own and feeds from a
+# hardcoded list, so our foods never reach the vanilla feeder patch. When the
+# CatBedTray autoload is present, intercept the tray press first, stock our food
+# as a regular can, and start OIIA right away for Beer.
+
+func _physics_process(delta: float) -> void:
+	if not InputMap.has_action(INTERACT_ACTION):
+		return
+	if _cb_active:
+		_cb_hold_time += delta
+		# Keyboard auto-repeat re-arms the action while the key is down.
+		if Input.is_action_just_pressed(INTERACT_ACTION):
+			Input.action_release(INTERACT_ACTION)
+		if not _interact_physically_held():
+			_cb_finish_press(false)
+		elif _cb_hold_time >= HOLD_SECONDS:
+			_cb_finish_press(true)
+		return
+	if _cb_swallow:
+		if _interact_physically_held():
+			if Input.is_action_just_pressed(INTERACT_ACTION):
+				Input.action_release(INTERACT_ACTION)
+			return
+		_cb_swallow = false
+	if not Input.is_action_just_pressed(INTERACT_ACTION):
+		return
+	var catbed := _cb_catbed()
+	if catbed == null or _cb_feed_blocked(catbed) or not _cb_interaction_ok(catbed):
+		return
+	var interactor := get_node_or_null(INTERACTOR_PATH)
+	if interactor == null:
+		return
+	var tray := CatBed.looked_tray(interactor)
+	if tray == null:
+		return
+	_cb_on_press(tray)
+
+# Takes the press when the player looks at a cat-bed tray and carries one of
+# our foods. Returns true when the press was hidden from cat-bed.
+func _cb_on_press(tray: Node) -> bool:
+	var catbed := _cb_catbed()
+	if catbed == null or tray == null or not is_instance_valid(tray):
+		return false
+	if _cb_feed_blocked(catbed) or not _cb_interaction_ok(catbed):
+		return false
+	var iface := _cb_interface()
+	if iface == null:
+		return false
+	var grid = iface.get("inventoryGrid")
+	if grid == null:
+		return false
+	var slot := _cb_find_food(grid)
+	if slot == null:
+		return false
+	_cb_active = true
+	_cb_swallow = true
+	_cb_hold_time = 0.0
+	_cb_tray = tray
+	_cb_slot = slot
+	if InputMap.has_action(INTERACT_ACTION):
+		Input.action_release(INTERACT_ACTION)
+	return true
+
+# Short press stocks our food; hold keeps cat-bed's "take a can back".
+func _cb_finish_press(held: bool) -> void:
+	_cb_active = false
+	var tray: Node = _cb_tray
+	var slot: Node = _cb_slot
+	_cb_tray = null
+	_cb_slot = null
+	if tray == null or not is_instance_valid(tray):
+		return
+	var catbed := _cb_catbed()
+	if catbed == null:
+		return
+	if held:
+		if catbed.has_method("TrayTake"):
+			catbed.call("TrayTake", tray)
+		return
+
+	var iface := _cb_interface()
+	var grid = iface.get("inventoryGrid") if iface != null else null
+	if grid == null:
+		return
+
+	var path := ""
+	if slot != null and is_instance_valid(slot) and grid.is_ancestor_of(slot):
+		path = CatBed.food_path_for_slot(slot)
+	if path == "":
+		slot = _cb_find_food(grid)
+		if slot == null:
+			# The food vanished during the hold: let cat-bed do its normal pass.
+			if catbed.has_method("TrayAdd"):
+				catbed.call("TrayAdd", tray)
+			return
+		path = CatBed.food_path_for_slot(slot)
+
+	var codes := str(catbed.call("TrayCodes", tray)) if catbed.has_method("TrayCodes") else ""
+	var capacity := int(catbed.call("Capacity")) if catbed.has_method("Capacity") else 6
+	var stock := codes.length()
+	if stock >= capacity:
+		_cb_msg(catbed, "The tray is full [" + str(stock) + "/" + str(capacity) + "]", Color.RED)
+		if iface != null and iface.has_method("PlayError"):
+			iface.call("PlayError")
+		return
+
+	var food_name := ""
+	var data = slot.get("slotData")
+	if data != null and is_instance_valid(data):
+		var item = data.get("itemData")
+		if item != null and is_instance_valid(item):
+			food_name = str(item.get("name"))
+
+	if grid.has_method("Pick"):
+		grid.call("Pick", slot)
+	elif slot.get_parent() == grid:
+		grid.remove_child(slot)
+	slot.queue_free()
+
+	catbed.call("_set_tray_codes", tray, CatBed.tray_codes_after_add(codes))
+	if iface != null and iface.has_method("UpdateStats"):
+		iface.call("UpdateStats", false)
+	_cb_msg(catbed, "Tray stocked: " + food_name + " [" + str(stock + 1) + "/" + str(capacity) + "]", Color.GREEN)
+	if catbed.has_method("_play_pickup"):
+		catbed.call("_play_pickup")
+
+	if CatBed.is_beer_path(path) and not _cb_cat_dead(catbed):
+		var cat: Node3D = null
+		if catbed.has_method("_find_cat_node"):
+			cat = catbed.call("_find_cat_node")
+		start_oiia(null, cat)
+
+func _cb_catbed() -> Node:
+	return get_node_or_null(CATBED_PATH)
+
+func _cb_interface() -> Node:
+	return get_node_or_null(UI_PATH)
+
+func _cb_find_food(grid: Node) -> Node:
+	for child in grid.get_children():
+		if child == null or not is_instance_valid(child):
+			continue
+		if CatBed.food_path_for_slot(child) != "":
+			return child
+	return null
+
+func _cb_feed_blocked(catbed: Node) -> bool:
+	var gd = catbed.get("gameData")
+	if gd == null:
+		return false
+	for key in ["decor", "freeze", "isPlacing", "isOccupied"]:
+		var value = gd.get(key)
+		if value != null and bool(value):
+			return true
+	return false
+
+func _cb_interaction_ok(catbed: Node) -> bool:
+	var gd = catbed.get("gameData")
+	if gd == null:
+		return true
+	var value = gd.get("interaction")
+	return value == null or bool(value)
+
+func _cb_cat_dead(catbed: Node) -> bool:
+	var gd = catbed.get("gameData")
+	if gd == null:
+		return false
+	var value = gd.get("catDead")
+	return value != null and bool(value)
+
+func _cb_msg(catbed: Node, text: String, color: Color) -> void:
+	if catbed != null and catbed.has_method("_msg"):
+		catbed.call("_msg", text, color)
+
+# Input.action_release hides the press from the game, after which the action
+# reads as released until the next key event, so the hold is read from the
+# physical key/button bound to it (same trick as cat-bed).
+func _interact_physically_held() -> bool:
+	if not InputMap.has_action(INTERACT_ACTION):
+		return false
+	for event in InputMap.action_get_events(INTERACT_ACTION):
+		if event is InputEventKey:
+			var code: int = int(event.physical_keycode)
+			if code != KEY_NONE and Input.is_physical_key_pressed(code):
+				return true
+			code = int(event.keycode)
+			if code != KEY_NONE and Input.is_key_pressed(code):
+				return true
+		elif event is InputEventMouseButton:
+			if Input.is_mouse_button_pressed(event.button_index):
+				return true
+		elif event is InputEventJoypadButton:
+			if Input.is_joy_button_pressed(event.device, event.button_index):
+				return true
+	return false
+
 # ===================== OIIA =====================
 
 func start_oiia(feeder: Node = null, direct_cat: Node3D = null) -> void:
@@ -129,9 +344,7 @@ func start_oiia(feeder: Node = null, direct_cat: Node3D = null) -> void:
 		return
 
 	var cat_node: Variant = direct_cat
-	if cat_node == null or not is_instance_valid(cat_node) or not (cat_node is Node3D):
-		if feeder == null or not is_instance_valid(feeder):
-			return
+	if not (cat_node is Node3D) and feeder != null and is_instance_valid(feeder):
 		cat_node = feeder.get("cat")
 	if cat_node == null or not (cat_node is Node3D):
 		var cats = get_tree().get_nodes_in_group("Cat")
