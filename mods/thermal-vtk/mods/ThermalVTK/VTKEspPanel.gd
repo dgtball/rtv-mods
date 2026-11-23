@@ -136,7 +136,7 @@ func _restore_snapshot() -> void:
 	_esp.p_thickness = float(_saved.get("thickness", Settings.OUTLINE_THICKNESS))
 	_esp.p_brightness = float(_saved.get("brightness", Settings.OUTLINE_BRIGHTNESS))
 	_esp.p_fill_alpha = float(_saved.get("fill_alpha", Settings.FILL_ALPHA))
-	_esp.p_dist = float(_saved.get("dist", 60.0))
+	_esp.p_dist = float(_saved.get("dist", Settings.OUTLINE_DISTANCE))
 	_esp.p_decay = float(_saved.get("decay", 90.0))
 	_esp.p_trig = bool(_saved.get("trig", true))
 	_esp.p_nomad_marker = bool(_saved.get("nomad", true))
@@ -309,7 +309,7 @@ func _build_ui() -> void:
 	_thickness = _add_slider(v, "Thickness (rim/offset)", 0.0005, 0.02, 0.0005, Settings.OUTLINE_THICKNESS)
 	_brightness = _add_slider(v, "Brightness", 0.1, 3.0, 0.1, Settings.OUTLINE_BRIGHTNESS)
 	_fill_alpha = _add_slider(v, "fill_alpha", 0.05, 1.0, 0.05, Settings.FILL_ALPHA)
-	_distance = _add_slider(v, "Distance", 0.0, 300.0, 10.0, 60.0)
+	_distance = _add_slider(v, "Distance", 0.0, 300.0, 10.0, Settings.OUTLINE_DISTANCE)
 	_cooling = _add_slider(v, "Cooling time (s)", 0.0, 180.0, 1.0, 70.0)
 
 	v.add_child(HSeparator.new())

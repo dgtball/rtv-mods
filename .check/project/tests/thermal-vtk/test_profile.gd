@@ -192,7 +192,7 @@ func t_apply_reads_active_profile() -> void:
 	ck(esp.get("p_thermal_mix") == null, "ESP has no thermal mix field")
 	ck(esp.get("p_body_fill") == null, "the profile ESP seam has no body fill field")
 	ck(esp.p_decay == 70.0, "a missing ESP setting falls back to the registered default")
-	ck(nvg.set_glow_distance == 60.0, "a missing NVG setting falls back to the registered default")
+	ck(nvg.set_glow_distance == 90.0, "a missing NVG setting falls back to the registered default")
 	ck(nvg.set_nvg_noise == 0.0, "a missing noise default reaches the NVG side")
 	mod.free()
 	esp.free()

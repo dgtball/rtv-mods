@@ -91,7 +91,13 @@ func t_read_defaults() -> void:
 				hit = r
 		ck(typeof(hit.get("min", null)) == TYPE_FLOAT and float(hit["min"]) == 0.0,
 			"%s min range is 0 (source off)" % rk)
-	ck(rec.outline_distance == 60.0, "missing distance falls back to the registered default")
+	ck(rec.outline_distance == 90.0, "missing distance falls back to the registered default")
+	ck(Settings.OUTLINE_DISTANCE == 90.0, "the declared distance default is 90")
+	var drow := {}
+	for r in Settings.DESCRIPTORS:
+		if r["key"] == "outline_distance":
+			drow = r
+	ck(drow.get("def") == Settings.OUTLINE_DISTANCE, "the distance descriptor default matches the constant")
 	ck(rec.nvg_noise == 0.0, "missing noise falls back to the registered default")
 	ck(rec.nvg_white == 1.0, "missing NVG brightness falls back to the registered default")
 	ck(rec.world == 1.70, "missing world brightness falls back to the registered default")
@@ -122,7 +128,7 @@ func t_read_defaults() -> void:
 	ck(rec.color_normal == States.DEFAULT_NORMAL, "normal colour default")
 	ck(rec.color_combat == States.DEFAULT_COMBAT, "combat colour default")
 	ck(rec.color_defend == States.DEFAULT_DEFEND, "defend colour default")
-	ck(rec.color_mine == Color8(9, 46, 246), "mine colour default")
+	ck(rec.color_mine == Color8(205, 0, 255), "mine colour default")
 
 # Hand-written scalars (a bare value instead of the {..: ..} entry) must still
 # land: the profile file is player-writable.
@@ -132,8 +138,10 @@ func t_read_coerces_scalars() -> void:
 	cfg.set_value("Bool", "thermal_mines", false)
 	cfg.set_value("Keycode", "key_palette_cycle", KEY_F1)
 	cfg.set_value("Color", "state_normal", Color(0.1, 0.2, 0.3))
+	cfg.set_value("Float", "outline_distance", 35.0)
 	var rec = Settings.read(cfg)
 	ck(absf(rec.outline_thickness - 0.0125) < 0.001, "a bare float value still reads")
+	ck(rec.outline_distance == 35.0, "a saved distance still overrides the new default")
 	ck(rec.thermal_mines == false, "a bare bool value still reads")
 	ck(rec.key_palette_cycle == KEY_F1, "a bare hotkey still reads")
 	ck(rec.color_normal == Color(0.1, 0.2, 0.3), "a bare colour still reads")

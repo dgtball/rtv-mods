@@ -48,7 +48,7 @@ var contour_layer: bool = false
 var xray_layer: bool = false
 # MCM-driven params.
 var p_decay := 30.0
-var p_dist := 60.0
+var p_dist := Settings.OUTLINE_DISTANCE
 var p_nomad_marker: bool = true
 var p_fill_alpha: float = Settings.FILL_ALPHA
 # NPC nametags: their own switch under Diagnostics, so the diagnostic overlay

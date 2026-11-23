@@ -2,12 +2,13 @@ extends RefCounted
 
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 
-# The outline is the only NPC contour mode. Its three tunables share one
+# The outline is the only NPC contour mode. Its four tunables share one
 # default set: the record, the MCM registration, the ESP fields and the live
 # panel all read these constants instead of keeping their own numbers.
 const OUTLINE_THICKNESS := 0.005
 const OUTLINE_BRIGHTNESS := 0.6
 const FILL_ALPHA := 0.2
+const OUTLINE_DISTANCE := 90.0
 
 # Single source of truth for every mod setting. The DESCRIPTORS table drives
 # the MCM registration (labels, ranges, defaults), the profile merge
@@ -43,7 +44,7 @@ class Rec:
 	var red_hold: float = 0.72
 	# NPC outlines.
 	var corpse_decay: float = 70.0
-	var outline_distance: float = 60.0
+	var outline_distance: float = OUTLINE_DISTANCE
 	var outline_thickness: float = OUTLINE_THICKNESS
 	var outline_brightness: float = OUTLINE_BRIGHTNESS
 	var fill_alpha: float = FILL_ALPHA
@@ -100,7 +101,7 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Float", "key": "thermal_highlight_knee", "name": "Highlight softness", "def": 0.55, "min": 0.3, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 13, "tip": "In daylight, background pixels brighter than this (snow, sky, clouds) bend into a softer highlight and keep their detail instead of washing out. Lower = stronger trim. Night is unaffected; 1.0 disables it."},
 	{"sect": "Float", "key": "palette_strength", "name": "Strength", "def": 0.58, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 14, "tip": "Blend strength for world thermal palettes. Higher pushes the background closer to the thermal look."},
 	{"sect": "Float", "key": "red_hold", "name": "Red hold", "def": 0.72, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 15, "tip": "How strongly hot/red highlights are held in thermal palettes. Higher preserves hotter reds on bright/warm sources."},
-	{"sect": "Float", "key": "outline_distance", "name": "Distance", "def": 60.0, "min": 0.0, "max": 300.0, "step": 10.0, "cat": "02. NPC", "pos": 0, "tip": "Maximum distance for an outline. Outlines are hidden past this range."},
+	{"sect": "Float", "key": "outline_distance", "name": "Distance", "def": OUTLINE_DISTANCE, "min": 0.0, "max": 300.0, "step": 10.0, "cat": "02. NPC", "pos": 0, "tip": "Maximum distance for an outline. Outlines are hidden past this range."},
 	{"sect": "Float", "key": "outline_thickness", "name": "Thickness", "def": OUTLINE_THICKNESS, "min": 0.0005, "max": 0.02, "step": 0.0005, "cat": "02. NPC", "pos": 2, "tip": "Outline/rim thickness in direct mode."},
 	{"sect": "Float", "key": "outline_brightness", "name": "Brightness", "def": OUTLINE_BRIGHTNESS, "min": 0.1, "max": 3.0, "step": 0.1, "cat": "02. NPC", "pos": 3, "tip": "Brightness multiplier on the outline colour."},
 	{"sect": "Float", "key": "corpse_decay", "name": "Cooling time", "def": 70.0, "min": 0.0, "max": 180.0, "step": 1.0, "cat": "02. NPC", "pos": 4, "tip": "Seconds a dead NPC's outline takes to cool from warm to cold."},
