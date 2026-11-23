@@ -204,23 +204,9 @@ func _set_esp_layers_for_preview(xray_triggers: bool) -> void:
 	_sync_nvg_esp()
 
 func _sync_nvg_esp() -> void:
-	# The buffer/composite is gated on NVG + thermal inside VTKNVG; the
-	# coordinator only says whether contours are wanted right now. This keeps
-	# the worn/thermal gating in _apply_mode unchanged.
-	var want: bool = _esp != null and is_instance_valid(_esp) and _esp.contour_layer
-	# Render mode follows the same demand: on moves the contour chain onto shells
-	# the composite can read, off restores the direct overlay. Do this before the
-	# NVG guard so a lost NVG also returns the outline to the baseline path.
-	if _esp != null and is_instance_valid(_esp) and _esp.has_method("set_buffer_mode"):
-		_esp.set_buffer_mode(want)
-	if _nvg == null or not is_instance_valid(_nvg):
-		return
-	# An install (or a test double) without the compositor API keeps the direct
-	# overlay path: sync never requires the buffer plumbing to exist.
-	if _nvg.has_method("set_esp_demand"):
-		_nvg.set_esp_demand(want)
-	if _esp != null and is_instance_valid(_esp) and _nvg.has_method("set_occluder_exclusions"):
-		_nvg.set_occluder_exclusions(_esp.occluder_exclusions())
+	# 2.10.x baseline: direct overlay contour path only (no NVG ESP buffer/
+	# compositor).
+	pass
 
 func _nvg_active() -> bool:
 	if _nvg == null or not is_instance_valid(_nvg):
