@@ -1,12 +1,13 @@
 # More cat food
 
-**Version:** 1.0.6
+**Version:** 1.0.7
 
 A small mod that adds a 60-second OIIA dance to cat feeding stations.
 
 ## What it does
 
 - Feeding a station with the special item starts a choreographed dance with music.
+- The special foods also work in the Cat Bed food tray: Beer starts the dance right away, the others simply fill the tray.
 - The cat lifts off, spins, sits and lies back down on the beat.
 - Halfway through, three more cats appear and the four of them dance in a square.
 - Colored flashes pulse from the middle of the group.

@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.7] - 2026-11-23
+
+### Added
+- The special foods can now be placed into the Cat Bed food tray.
+- Beer starts the dance right away when put into the tray; the other special foods simply fill it.
+
 ## [1.0.6] - 2026-11-22
 
 ### Fixed

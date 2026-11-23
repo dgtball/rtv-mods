@@ -1,7 +1,7 @@
 [mod]
 name="More cat food"
 id="more-cat-food"
-version="1.0.6"
+version="1.0.7"
 
 [autoload]
 MoreCatFood="res://mods/MoreCatFood/MoreCatFood.gd"
