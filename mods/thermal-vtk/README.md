@@ -1,10 +1,6 @@
 # ThermalVTK
 
-<<<<<<< HEAD
-**Version:** 2.10.35
-=======
 **Version:** 2.10.37
->>>>>>> outline-only
 
 Standalone NVG / thermal-vision mod for Road to Vostok. It is the thermal
 feature of Vostok Toolkit, packaged on its own.

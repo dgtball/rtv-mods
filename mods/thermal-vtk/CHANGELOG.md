@@ -1,6 +1,17 @@
 # Changelog
 
-<<<<<<< HEAD
+## [2.10.37] - 2026-11-23
+
+### Changed
+- Default marker colours are now yellow for idle NPCs, red for combat, blue for defending, and magenta for mines.
+- Outlines now reach 90 metres by default. Existing saved values are kept until settings are reset.
+
+## [2.10.36] - 2026-11-22
+
+### Changed
+- NPC contours now always use the outline view; the full-body fill option is gone.
+- Outline thickness, brightness and fill opacity start at 0.005, 0.6 and 0.2. Existing saved values are kept until settings are reset.
+
 ## [2.10.35] - 2026-11-21
 
 ### Fixed
@@ -25,19 +36,6 @@
 ### Changed
 
 - Minor performance improvements.
-=======
-## [2.10.37] - 2026-11-23
-
-### Changed
-- Default marker colours are now yellow for idle NPCs, red for combat, blue for defending, and magenta for mines.
-- Outlines now reach 90 metres by default. Existing saved values are kept until settings are reset.
-
-## [2.10.36] - 2026-11-22
-
-### Changed
-- NPC contours now always use the outline view; the full-body fill option is gone.
-- Outline thickness, brightness and fill opacity start at 0.005, 0.6 and 0.2. Existing saved values are kept until settings are reset.
->>>>>>> outline-only
 
 ## [2.10.31] - 2026-11-21
 

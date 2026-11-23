@@ -158,12 +158,6 @@ func set_layers(contour: bool, xray: bool, reason: String = "") -> void:
 	elif not any_before and is_inside_tree():
 		_reseed(get_tree().current_scene)
 
-# The coordinator drives render mode with the same contour demand it pushes to
-# NVG. Off keeps the direct overlay path; on moves the same display chain onto
-# shells the ESP composite can see.
-func set_buffer_mode(enabled: bool) -> void:
-	_outline.set_buffer_mode(enabled)
-
 func _any_layer() -> bool:
 	return contour_layer or xray_layer
 
@@ -171,24 +165,6 @@ func _any_layer() -> bool:
 # wanted this frame (overlay content is needed). Kept for test/introspection.
 func wants_contour() -> bool:
 	return _any_layer() and not _want.is_empty()
-
-
-# NPC roots/meshes carrying contour shells must not get depth-only occluders in
-# the ESP buffer, or the contour would hide behind its own world copy.
-func occluder_exclusions() -> Dictionary:
-	var out := {}
-	for id in _outline._items.keys():
-		var e = _outline._items.get(id)
-		if not (e is Dictionary):
-			continue
-		var d: Dictionary = e
-		var node = d.get("node")
-		if node != null and is_instance_valid(node):
-			out[node.get_instance_id()] = true
-		for m in d.get("meshes", []):
-			if m != null and is_instance_valid(m):
-				out[m.get_instance_id()] = true
-	return out
 
 # Live panel helper: reapply current opts to all outlined entries so changes
 # (thickness/fill/colors/distance effects via opts) show immediately while the

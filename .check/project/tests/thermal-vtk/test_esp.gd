@@ -63,7 +63,6 @@ func _run() -> void:
 	t_xray_layer_without_contour()
 	t_layers_drive_marker()
 	t_wants_contour()
-	t_buffer_mode_delegates()
 	t_weapon_runs_without_contour()
 	t_subject_is_nearest_candidate()
 	t_no_perframe_subject_log()
@@ -691,19 +690,6 @@ func t_wants_contour() -> void:
 	ck(not esp.wants_contour(), "layers off demands nothing")
 	esp.free()
 	scene.queue_free()
-
-# The coordinator drives render mode through ESP, which owns the outline.
-# Direct overlay must be restored when the demand goes away.
-func t_buffer_mode_delegates() -> void:
-	var esp = ESP.new()
-	esp.name = "VTKESP_buffer_mode"
-	root.add_child(esp)
-	ck(not esp._outline.buffer_mode(), "outline starts on the direct path")
-	esp.set_buffer_mode(true)
-	ck(esp._outline.buffer_mode(), "ESP switches the outline to buffer shells")
-	esp.set_buffer_mode(false)
-	ck(not esp._outline.buffer_mode(), "ESP returns the outline to direct overlay")
-	esp.free()
 
 func t_weapon_runs_without_contour() -> void:
 	var scene := Node3D.new()

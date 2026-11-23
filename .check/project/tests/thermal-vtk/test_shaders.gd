@@ -7,7 +7,6 @@ const BODY_LOS_RES := "res://mods/ThermalVTK/VTKEspBody.gdshader"
 const BODY_XRAY_RES := "res://mods/ThermalVTK/VTKEspBodyXray.gdshader"
 const RING_LOS_RES := "res://mods/ThermalVTK/VTKEspRing.gdshader"
 const RING_XRAY_RES := "res://mods/ThermalVTK/VTKEspRingXray.gdshader"
-const OCCLUDER_RES := "res://mods/ThermalVTK/VTKEspOccluder.gdshader"
 
 var fails := 0
 
@@ -23,7 +22,6 @@ func _init() -> void:
 
 func _run() -> void:
 	t_esp_shaders_compile()
-	t_occluder_contract()
 	t_body_contracts()
 	t_ring_contracts()
 	t_band_contract()
@@ -69,18 +67,6 @@ func t_esp_shaders_compile() -> void:
 	for ring in [Sh.ring_los(), Sh.ring_xray()]:
 		ck(_uniform_names(ring).has("rim_power"), "ring shader exposes rim_power")
 
-func t_occluder_contract() -> void:
-	var code := FileAccess.get_file_as_string(OCCLUDER_RES)
-	ck(code.contains("depth_draw_always"), "world occluder writes depth")
-	ck(code.contains("ALPHA = 0.0"), "world occluder leaves no colour in the buffer")
-	ck(not code.contains("depth_test_disabled"), "world occluder keeps depth test")
-	var store := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKShaders.gd")
-	ck(store.contains("func occluder"), "shader store exposes the world occluder")
-	var nvg_owner := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKNVG.gd")
-	ck(nvg_owner.contains("render_priority = -128"), "occluder draws before contour shells")
-	var outline := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKOutline.gd")
-	ck(outline.contains("render_priority = -127"), "contour body draws after world occluders")
-
 func t_body_contracts() -> void:
 	var los := FileAccess.get_file_as_string(BODY_LOS_RES)
 	var xray := FileAccess.get_file_as_string(BODY_XRAY_RES)
@@ -105,45 +91,30 @@ func t_ring_contracts() -> void:
 	ck(not los.contains("depth_test_disabled"), "los ring keeps depth test")
 	ck(xray.contains("depth_test_disabled"), "xray ring disables depth test")
 
-# Direct overlay stays the default, but the contour chain can also be routed
-# through ESP-buffer shells without changing its shaders or display uniforms.
+# Overlay-only baseline: direct display materials are applied as source overlays.
+# Outline keeps the stencil/ring chain and display uniforms.
 func t_band_contract() -> void:
 	var outline := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKOutline.gd")
 	ck(outline.contains("material_overlay"), "VTKOutline keeps overlay path")
 	ck(outline.contains("outline_color"), "VTKOutline drives direct display color")
 	ck(outline.contains("brightness"), "VTKOutline drives direct display brightness")
 	ck(outline.contains("fill_alpha"), "VTKOutline drives direct display alpha")
-<<<<<<< HEAD
-	ck(outline.contains("func set_buffer_mode"), "VTKOutline exposes buffer mode control")
-	ck(outline.contains("func buffer_mode"), "VTKOutline reports buffer mode state")
-	ck(outline.contains("VTKESPBuffer"), "VTKOutline routes contours through the ESP buffer")
-=======
 	ck(not outline.contains("func set_buffer_mode"), "VTKOutline has no buffer mode control")
 	ck(not outline.contains("SHELL_META"), "VTKOutline has no shell geometry markers")
 	ck(not outline.contains("fill_mode"), "VTKOutline has no fill mode flag")
 	ck(not outline.contains("\"fill\""), "VTKOutline has no fill opts key")
->>>>>>> outline-only
 
-# NVG overlay palettizes/tints the background, then composites the ESP buffer
-# over it with its own display colours. No screen-space key substitution remains.
+# NVG overlay palettizes/tints the background (no ESP compositor/buffer path in
+# 2.10.x baseline). No screen-space key detection/substitution remains.
 func t_nvg_compositor_contract() -> void:
 	var code := FileAccess.get_file_as_string(NVG_SHADER_RES)
 	ck(code.contains("uniform sampler2D screen_texture"), "overlay declares the screen sampler")
 	ck(code.contains("texture(screen_texture, SCREEN_UV)"), "overlay samples the frame itself")
-	ck(code.contains("uniform sampler2D espTex"), "overlay declares ESP buffer sampler")
-	ck(code.contains("uniform bool espComposite"), "overlay declares ESP composite flag")
-	ck(code.contains("texture(espTex, SCREEN_UV)"), "overlay samples ESP buffer")
-	ck(code.contains("color.rgb = esp.rgb + color.rgb * (1.0 - clamp(esp.a, 0.0, 1.0))"), "ESP composite uses premultiplied-over blending")
-	ck(not code.contains("mix(color.rgb, esp.rgb"), "ESP composite no longer double-blends the alpha")
-	var palette_at := code.find("mix(pixelColor.rgb, backgroundColor, clamp(paletteStrength")
-	var esp_at := code.find("if (espComposite)")
-	var mask_at := code.find("COLOR = mix(vec4(0.0, 0.0, 0.0, 1.0), color, goggleMask)")
-	ck(palette_at >= 0 and esp_at > palette_at and mask_at > esp_at, "ESP composite runs after palette and before the goggle mask")
+	ck(not code.contains("uniform sampler2D espTex"), "overlay has no ESP buffer sampler")
+	ck(not code.contains("uniform bool espComposite"), "overlay has no ESP composite flag")
+	ck(not code.contains("espComposite"), "overlay has no ESP compositing path")
 	for bad in ["uniform bool espOn", "stNormalKey", "stCombatKey", "stDefendKey", "mineKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineColor", "stateBright", "scopeRotate", "espFillAlpha", "espBodyFill", "orbitDist", "DET_TOL_CORE", "dCore", "dMine"]:
 		ck(not code.contains(bad), "overlay has no substitution token %s" % bad)
-	for key in ["minePassthroughOn", "minePassthroughColor", "isMine"]:
-		ck(not code.contains(key), "overlay has no mine key token %s" % key)
-	ck(code.contains("uniform float dayFactor"), "overlay keeps the daylight heat factor")
 
 func t_palette_modes() -> void:
 	var code := FileAccess.get_file_as_string(NVG_SHADER_RES)
@@ -169,25 +140,17 @@ func t_nvg_shader_compiles() -> void:
 		return
 	var names := _uniform_names(sh)
 	ck(names.size() > 0, "NVG shader compiled (uniform list not empty)")
-	for u in ["dayMix", "thermalMode", "thermalDarken", "worldPaletteMode", "highlightKnee", "nvgWhite", "paletteStrength", "redHold", "noise", "tint", "espTex", "espComposite"]:
+	for u in ["dayMix", "thermalMode", "thermalDarken", "worldPaletteMode", "highlightKnee", "nvgWhite", "paletteStrength", "redHold", "noise", "tint"]:
 		ck(names.has(u), "compiled shader exposes %s" % u)
-	for bad in ["espOn", "stNormalKey", "stCombatKey", "stDefendKey", "mineKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineColor", "stateBright", "scopeRotate", "espFillAlpha", "espBodyFill", "minePassthroughOn", "minePassthroughColor"]:
+	for bad in ["espTex", "espComposite", "espOn", "stNormalKey", "stCombatKey", "stDefendKey", "mineKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineColor", "stateBright", "scopeRotate", "espFillAlpha", "espBodyFill"]:
 		ck(not names.has(bad), "compiled shader does not expose substitution uniform %s" % bad)
 
 func t_runtime_contract() -> void:
 	var owner := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKNVG.gd")
 	ck(owner.contains("func set_mine_color"), "VTKNVG owns mine display colour")
 	ck(owner.contains("func mine_color"), "VTKNVG exposes mine display colour")
-	for api in ["set_esp_demand", "esp_composite_active", "esp_buffer_viewport", "painted_mine_count", "LAYER_BIT"]:
-		ck(owner.contains(api), "VTKNVG exposes %s" % api)
-	for bad in ["set_esp_layer", "func esp_buffer_layer", "MINE_KEY", "DET_ST_NORMAL", "DET_ST_COMBAT", "DET_ST_DEFEND", "DET_MINE", "set_esp_fill", "set_state_colors", "set_esp_brightness", "set_esp_on", "vtk_key_gain"]:
-		ck(not owner.contains(bad), "VTKNVG has no substitution token %s" % bad)
-	var coordinator := FileAccess.get_file_as_string("res://mods/ThermalVTK/ThermalVTK.gd")
-	var sync_at := coordinator.find("func _sync_nvg_esp")
-	var demand_at := coordinator.find("_nvg.set_esp_demand(", sync_at)
-	ck(sync_at >= 0 and demand_at > sync_at, "coordinator pushes contour demand from _sync_nvg_esp")
-	var mode_at := coordinator.find("_esp.set_buffer_mode(", sync_at)
-	ck(sync_at >= 0 and mode_at > sync_at, "coordinator switches outline render mode from _sync_nvg_esp")
+	for bad in ["set_esp_layer", "set_esp_demand", "func esp_buffer_layer", "func esp_composite_active", "func esp_buffer_viewport", "espTex", "espComposite", "MINE_KEY", "DET_ST_NORMAL", "DET_ST_COMBAT", "DET_ST_DEFEND", "DET_MINE", "set_esp_fill", "set_state_colors", "set_esp_brightness", "set_esp_on", "vtk_key_gain"]:
+		ck(not owner.contains(bad), "VTKNVG has no compositor/substitution token %s" % bad)
 	var store := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKShaders.gd")
 	ck(store.contains("func body_los"), "shader store exposes body_los")
 	ck(store.contains("func body_xray"), "shader store exposes body_xray")

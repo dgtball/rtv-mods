@@ -1,11 +1,7 @@
 ﻿[mod]
 name="ThermalVTK"
 id="thermal-vtk"
-<<<<<<< HEAD
-version="2.10.35"
-=======
 version="2.10.37"
->>>>>>> outline-only
 
 [autoload]
 ThermalVTK="res://mods/ThermalVTK/ThermalVTK.gd"
