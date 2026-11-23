@@ -124,11 +124,15 @@ func _patch(feeder: Node) -> void:
 
 # ===================== OIIA =====================
 
-func start_oiia(feeder: Node) -> void:
-	if _spinning or feeder == null or not is_instance_valid(feeder):
+func start_oiia(feeder: Node = null, direct_cat: Node3D = null) -> void:
+	if _spinning:
 		return
 
-	var cat_node = feeder.get("cat")
+	var cat_node: Variant = direct_cat
+	if cat_node == null or not is_instance_valid(cat_node) or not (cat_node is Node3D):
+		if feeder == null or not is_instance_valid(feeder):
+			return
+		cat_node = feeder.get("cat")
 	if cat_node == null or not (cat_node is Node3D):
 		var cats = get_tree().get_nodes_in_group("Cat")
 		if cats.size() > 0 and cats[0] is Node3D:
