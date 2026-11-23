@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.10.37] - 2026-11-23
+
+### Changed
+- Default marker colours are now yellow for idle NPCs, red for combat, blue for defending, and magenta for mines.
+- Outlines now reach 90 metres by default. Existing saved values are kept until settings are reset.
+
 ## [2.10.36] - 2026-11-22
 
 ### Changed

@@ -2,7 +2,7 @@ extends RefCounted
 
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 
-# The outline is the only NPC contour mode. Its three tunables share one
+# The outline is the only NPC contour mode. Its four tunables share one
 # default set: the record, the MCM registration, the ESP fields and the live
 # panel all read these constants instead of keeping their own numbers.
 const OUTLINE_THICKNESS := 0.005
