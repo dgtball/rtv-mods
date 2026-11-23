@@ -54,6 +54,7 @@ var _cb_active := false
 var _cb_swallow := false
 var _cb_hold_time := 0.0
 var _cb_tray: Node
+var _cb_bed: Node
 var _cb_slot: Node
 
 func _ready() -> void:
@@ -174,9 +175,15 @@ func _physics_process(delta: float) -> void:
 	if interactor == null:
 		return
 	var tray := CatBed.looked_tray(interactor)
-	if tray == null:
+	if tray != null:
+		_cb_on_press(tray)
 		return
-	_cb_on_press(tray)
+	var bed := CatBed.looked_bed(interactor)
+	if bed == null:
+		return
+	if catbed.has_method("IsCatOnBed") and not bool(catbed.call("IsCatOnBed", bed)):
+		return
+	_cb_on_bed_press(bed)
 
 # Takes the press when the player looks at a cat-bed tray and carries one of
 # our foods. Returns true when the press was hidden from cat-bed.
@@ -204,9 +211,83 @@ func _cb_on_press(tray: Node) -> bool:
 		Input.action_release(INTERACT_ACTION)
 	return true
 
+# Takes the press when the player looks at a cat-bed with the cat on it and we
+# carry one of our foods. Cat-bed's own food lookup never sees those items, so
+# without this it would swallow the press as a pat.
+func _cb_on_bed_press(bed: Node) -> bool:
+	var catbed := _cb_catbed()
+	if catbed == null or bed == null or not is_instance_valid(bed):
+		return false
+	var iface := _cb_interface()
+	if iface == null:
+		return false
+	var grid = iface.get("inventoryGrid")
+	if grid == null:
+		return false
+	if not _cb_bed_gate(catbed, bed, grid):
+		return false
+	var slot := _cb_find_food(grid)
+	if slot == null:
+		return false
+	_cb_active = true
+	_cb_swallow = true
+	_cb_hold_time = 0.0
+	_cb_tray = null
+	_cb_bed = bed
+	_cb_slot = slot
+	if InputMap.has_action(INTERACT_ACTION):
+		Input.action_release(INTERACT_ACTION)
+	return true
+
+# Mirrors the conditions under which cat-bed leaves a bed press to the vanilla
+# Interactor. When it is mid-meal we also show its message and hide the press.
+func _cb_bed_gate(catbed: Node, bed: Node, grid: Node) -> bool:
+	if _cb_feed_blocked(catbed) or not _cb_interaction_ok(catbed) or _cb_cat_dead(catbed):
+		return false
+	if catbed.has_method("IsCatOnBed") and not bool(catbed.call("IsCatOnBed", bed)):
+		return false
+	var hold = catbed.get("_hold_active")
+	if hold != null and bool(hold):
+		return false
+	var swallow = catbed.get("_swallow_presses")
+	if swallow != null and bool(swallow):
+		return false
+	var cooldown = catbed.get("_take_cooldown")
+	if cooldown != null and float(cooldown) > 0.0:
+		return false
+	var awake = catbed.get("_awake_timer")
+	var eating = catbed.get("_bed_eating")
+	if awake != null and eating != null and float(awake) > 0.0 and bool(eating):
+		_cb_msg(catbed, "Cat is eating, do not disturb", Color.WHITE)
+		if InputMap.has_action(INTERACT_ACTION):
+			Input.action_release(INTERACT_ACTION)
+		_cb_swallow = true
+		return false
+	if catbed.has_method("_find_food_in_grid") and catbed.call("_find_food_in_grid", grid) != null:
+		return false
+	return true
+
+# Hold on a bed keeps our food and hands the press back to cat-bed's own
+# take/pet/recall logic. Short press is filled in by the feeding branch below.
+func _cb_finish_bed_press(held: bool) -> void:
+	var bed: Node = _cb_bed
+	_cb_bed = null
+	_cb_slot = null
+	if bed == null or not is_instance_valid(bed):
+		return
+	var catbed := _cb_catbed()
+	if catbed == null:
+		return
+	if held and catbed.has_method("_finish_bed_press"):
+		catbed.set("_hold_bed", bed)
+		catbed.call("_finish_bed_press", true)
+
 # Short press stocks our food; hold keeps cat-bed's "take a can back".
 func _cb_finish_press(held: bool) -> void:
 	_cb_active = false
+	if _cb_bed != null:
+		_cb_finish_bed_press(held)
+		return
 	var tray: Node = _cb_tray
 	var slot: Node = _cb_slot
 	_cb_tray = null
