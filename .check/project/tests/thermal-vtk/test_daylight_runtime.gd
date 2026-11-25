@@ -43,7 +43,7 @@ func _init() -> void:
 	process_frame.connect(_run)
 
 func _run() -> void:
-	t_day_lowers_exposure()
+	t_day_lowers_the_input_gain()
 	t_night_is_untouched()
 	t_dark_scene_is_untouched()
 	t_overbright_hits_the_floor()
@@ -52,24 +52,19 @@ func _run() -> void:
 	t_shelter_short_circuits()
 	t_missing_world_keeps_vanilla()
 	t_snapshot_reads_world()
-	t_vanilla_rewrite_rebaselines()
-	t_toggle_restores_exposure()
 	t_day_trim_from_mix()
 	t_snow_trim_ignores_indoor()
 	t_refresh_snaps_without_lag()
-	t_day_frame_keeps_source_a()
-	t_ceiling_releases_the_cave()
 	t_night_gate_is_vanilla()
 	t_sun_down_from_snapshot()
-	t_probe_measured_stores_frame()
-	t_probe_measured_adapts_cadence()
-	t_sync_probe_rests_at_night()
-	t_sync_probe_stays_off_without_thermal()
 	t_time_scale_applies_while_live()
 	t_time_scale_clamps_to_the_range()
 	t_time_scale_resets_when_not_live()
 	t_time_scale_rolls_over_hhmm()
 	t_reset_returns_levers()
+	t_power_tier_stops_moving_the_picture()
+	t_bad_exposure_is_a_guard()
+	t_exposure_is_read_only()
 	print("")
 	if fails == 0:
 		print("Daylight runtime tests passed")
@@ -110,7 +105,7 @@ func _world() -> Dictionary:
 	return {"map": map, "world": world, "env": env, "sim": sim, "nvg": nvg}
 
 # Seed the cached scene level directly and park the sim cadence so the tick
-# under test does NOT re-read the world: these tests drive the exposure from a
+# under test does NOT re-read the world: these tests drive the model from a
 # known E, and only the snapshot test touches the tree itself.
 func _reset(nvg, env: Environment, sim: FakeSim, e: float, season: int = 1) -> void:
 	sim.season = season
@@ -119,31 +114,28 @@ func _reset(nvg, env: Environment, sim: FakeSim, e: float, season: int = 1) -> v
 	nvg._sim_shelter = false
 	nvg._sim_cd = 999.0
 	nvg._light_est = e
-	nvg._last_exposure = -1.0
 	nvg._day_factor = 1.0
 	nvg._day_mix = 0.0
+	nvg._day_seeded = false
 	nvg._factor_a = 1.0
-	nvg._frame_l = 0.0
 	nvg._sun_down = false
-	nvg._ceiling = 1.0
-	nvg._u = 0.0
-	nvg._vanilla_exposure = 3.0
+	nvg._input_gain = 1.0
 	nvg.set_day_target = Daylight.TARGET
 	nvg.set_day_floor = Daylight.FLOOR
 	nvg.set_day_trim = Daylight.DAY_TRIM
-	nvg.set_frame_level = Daylight.DAY_LEVEL
-	env.tonemap_exposure = 3.0
+	env.tonemap_exposure = 2.0
 
-func t_day_lowers_exposure() -> void:
+func t_day_lowers_the_input_gain() -> void:
 	var w := _world()
 	var nvg = w["nvg"]
 	var env: Environment = w["env"]
 	var sim: FakeSim = w["sim"]
 	_reset(nvg, env, sim, 1.0)
 	nvg._daylight_tick(1.0)
-	ck(absf(env.tonemap_exposure - 0.66) < 0.005, "a bright scene lowers exposure to 22%")
+	ck(is_equal_approx(env.tonemap_exposure, 2.0), "a bright scene leaves the exposure alone")
 	ck(absf(nvg._day_factor - 0.22) < 0.001, "the day factor lands on TARGET")
-	ck(absf(nvg._day_mix - 1.0) < 0.001, "the shader curve runs at full strength")
+	var want: float = nvg.set_world * nvg._snow_trim * nvg._day_trim * 0.22
+	ck(absf(nvg._input_gain - want) < 0.001, "the input gain folds world, trims and the day factor")
 	w["map"].free()
 
 func t_night_is_untouched() -> void:
@@ -153,8 +145,9 @@ func t_night_is_untouched() -> void:
 	var sim: FakeSim = w["sim"]
 	_reset(nvg, env, sim, 0.03)
 	nvg._daylight_tick(1.0)
-	ck(is_equal_approx(env.tonemap_exposure, 3.0), "night keeps the vanilla exposure")
+	ck(is_equal_approx(env.tonemap_exposure, 2.0), "night leaves the exposure alone")
 	ck(is_equal_approx(nvg._day_mix, 0.0), "night leaves the curve off")
+	ck(absf(nvg._input_gain - nvg.set_world) < 0.001, "night gain is the world brightness")
 	w["map"].free()
 
 func t_dark_scene_is_untouched() -> void:
@@ -164,8 +157,9 @@ func t_dark_scene_is_untouched() -> void:
 	var sim: FakeSim = w["sim"]
 	_reset(nvg, env, sim, 0.15)
 	nvg._daylight_tick(1.0)
-	ck(is_equal_approx(env.tonemap_exposure, 3.0), "a scene below TARGET is not touched")
+	ck(is_equal_approx(env.tonemap_exposure, 2.0), "a scene below TARGET is not touched")
 	ck(is_equal_approx(nvg._day_factor, 1.0), "a scene below TARGET keeps factor 1.0")
+	ck(absf(nvg._input_gain - nvg.set_world) < 0.001, "the gain stays at world brightness")
 	w["map"].free()
 
 func t_overbright_hits_the_floor() -> void:
@@ -175,8 +169,10 @@ func t_overbright_hits_the_floor() -> void:
 	var sim: FakeSim = w["sim"]
 	_reset(nvg, env, sim, 2.0)
 	nvg._daylight_tick(1.0)
-	ck(absf(env.tonemap_exposure - 0.36) < 0.005, "a blinding scene bottoms out at the floor")
+	ck(is_equal_approx(env.tonemap_exposure, 2.0), "a blinding scene leaves the exposure alone")
 	ck(absf(nvg._day_factor - Daylight.FLOOR) < 0.001, "the day factor stops at the floor")
+	var want: float = nvg.set_world * nvg._snow_trim * nvg._day_trim * Daylight.FLOOR
+	ck(absf(nvg._input_gain - want) < 0.001, "the gain bottoms out with the factor")
 	w["map"].free()
 
 func t_target_lever_moves_the_day() -> void:
@@ -187,8 +183,9 @@ func t_target_lever_moves_the_day() -> void:
 	_reset(nvg, env, sim, 1.0)
 	nvg.set_day_target = 0.40
 	nvg._daylight_tick(1.0)
-	ck(absf(env.tonemap_exposure - 1.20) < 0.005, "a higher target raises the noon exposure")
 	ck(absf(nvg._day_factor - 0.40) < 0.001, "the day factor follows the target lever")
+	var want: float = nvg.set_world * nvg._snow_trim * nvg._day_trim * 0.40
+	ck(absf(nvg._input_gain - want) < 0.001, "the gain follows the target lever")
 	w["map"].free()
 
 func t_strength_zero_keeps_vanilla() -> void:
@@ -199,8 +196,9 @@ func t_strength_zero_keeps_vanilla() -> void:
 	_reset(nvg, env, sim, 1.0)
 	nvg.set_strength = 0.0
 	nvg._daylight_tick(1.0)
-	ck(is_equal_approx(env.tonemap_exposure, 3.0), "strength 0 keeps the vanilla exposure")
+	ck(is_equal_approx(env.tonemap_exposure, 2.0), "strength 0 keeps the exposure")
 	ck(is_equal_approx(nvg._day_mix, 0.0), "strength 0 leaves the curve off")
+	ck(absf(nvg._input_gain - nvg.set_world) < 0.001, "strength 0 leaves the plain world gain")
 	w["map"].free()
 
 func t_shelter_short_circuits() -> void:
@@ -209,7 +207,7 @@ func t_shelter_short_circuits() -> void:
 	var env: Environment = w["env"]
 	var world: FakeWorld = w["world"]
 	_reset(nvg, env, w["sim"], 1.0)
-	# A bright outdoor scene would land on 0.66; the shelter gate must win.
+	# A bright outdoor scene would land on the day factor; the shelter gate wins.
 	env.ambient_light_color = Color(1, 1, 1)
 	env.ambient_light_energy = 1.0
 	env.background_energy_multiplier = 0.0
@@ -217,7 +215,7 @@ func t_shelter_short_circuits() -> void:
 	world.shelter = true
 	nvg._sim_cd = 0.0
 	nvg._daylight_tick(1.0)
-	ck(is_equal_approx(env.tonemap_exposure, 3.0), "a shelter keeps the vanilla exposure")
+	ck(is_equal_approx(env.tonemap_exposure, 2.0), "a shelter keeps the exposure")
 	ck(nvg._sim_shelter == true, "the shelter flag is read from the world")
 	ck(nvg._light_est == 0.0, "the shelter estimate is zero")
 	w["map"].free()
@@ -231,12 +229,12 @@ func t_missing_world_keeps_vanilla() -> void:
 	nvg.set_process(false)
 	nvg._installed = true
 	nvg._game_data = FakeData.new()
-	nvg._last_exposure = -1.0
 	nvg._day_factor = 1.0
 	nvg._sim_cd = 0.0
 	nvg._daylight_tick(1.0)
 	ck(nvg._day_factor == 1.0, "no environment: the day factor stays vanilla")
 	ck(nvg._light_est == 0.0, "no environment: the estimate is zero")
+	ck(absf(nvg._input_gain - nvg.set_world) < 0.001, "no environment: the gain falls back to the reference exposure")
 	nvg.free()
 
 func t_snapshot_reads_world() -> void:
@@ -270,31 +268,6 @@ func t_snapshot_reads_world() -> void:
 	ck(absf(Daylight.estimate_light(snap)) < 0.01, "shelter short-circuits the estimate")
 	w["map"].free()
 
-func t_vanilla_rewrite_rebaselines() -> void:
-	var w := _world()
-	var nvg = w["nvg"]
-	var env: Environment = w["env"]
-	var sim: FakeSim = w["sim"]
-	_reset(nvg, env, sim, 1.0)
-	nvg._daylight_tick(1.0)
-	env.tonemap_exposure = 2.5
-	nvg._daylight_tick(0.016)
-	ck(absf(nvg._vanilla_exposure - 2.5) < 0.001, "vanilla ResetCheck rewrites become the baseline")
-	ck(absf(env.tonemap_exposure - 0.55) < 0.005, "the rewrite is compensated from the new baseline")
-	w["map"].free()
-
-func t_toggle_restores_exposure() -> void:
-	var w := _world()
-	var nvg = w["nvg"]
-	var env: Environment = w["env"]
-	var sim: FakeSim = w["sim"]
-	_reset(nvg, env, sim, 1.0)
-	nvg._daylight_tick(1.0)
-	nvg._restore_exposure()
-	ck(is_equal_approx(env.tonemap_exposure, 3.0), "toggle off hands the exposure back")
-	ck(nvg._last_exposure < 0.0, "toggle off forgets the written value")
-	w["map"].free()
-
 func t_day_trim_from_mix() -> void:
 	var w := _world()
 	var nvg = w["nvg"]
@@ -326,12 +299,16 @@ func t_refresh_snaps_without_lag() -> void:
 	data.NVG = true
 	_reset(nvg, env, sim, 1.0)
 	nvg._daylight_tick(1.0)
-	ck(absf(env.tonemap_exposure - 0.66) < 0.005, "a bright scene settles at 22% exposure")
+	var settled: float = nvg._input_gain
+	ck(absf(nvg._day_factor - 0.22) < 0.001, "a bright scene settles on TARGET")
 	nvg.set_day_target = 0.5
 	nvg._daylight_tick(0.016)
-	ck(absf(env.tonemap_exposure - 0.66) < 0.02, "a bare tick only creeps toward the new target")
+	ck(nvg._input_gain > settled, "a bare tick only creeps toward the new target")
+	ck(nvg._day_factor < 0.5, "the creeping factor has not arrived yet")
 	nvg.refresh_daylight_now()
-	ck(absf(env.tonemap_exposure - 1.50) < 0.005, "refresh snaps to the new target at once")
+	ck(absf(nvg._day_factor - 0.5) < 0.001, "refresh snaps to the new target at once")
+	var want: float = nvg.set_world * nvg._snow_trim * nvg._day_trim * 0.5
+	ck(absf(nvg._input_gain - want) < 0.001, "the gain follows the snapped factor")
 	w["map"].free()
 
 func t_reset_returns_levers() -> void:
@@ -342,50 +319,13 @@ func t_reset_returns_levers() -> void:
 	_reset(nvg, env, sim, 1.0, 2)
 	nvg.set_day_target = 0.5
 	nvg.set_day_trim = 0.5
-	nvg.set_frame_level = 0.25
 	nvg._daylight_tick(1.0)
 	nvg._reset_daylight()
 	ck(absf(nvg.set_day_target - Daylight.TARGET) < 0.001, "reset returns the target lever to the constant")
 	ck(absf(nvg.set_day_floor - Daylight.FLOOR) < 0.001, "reset returns the floor lever to the constant")
 	ck(absf(nvg.set_day_trim - Daylight.DAY_TRIM) < 0.001, "reset returns the trim lever to the constant")
-	ck(absf(nvg.set_frame_level - Daylight.DAY_LEVEL) < 0.001, "reset returns the frame level to the constant")
-	ck(absf(nvg.set_frame_cadence - Daylight.FRAME_CADENCE) < 0.001, "reset returns the probe cadence to the constant")
 	ck(absf(nvg._day_trim - 1.0) < 0.001, "reset clears the applied day trim")
-	w["map"].free()
-
-func t_day_frame_keeps_source_a() -> void:
-	var w := _world()
-	var nvg = w["nvg"]
-	var env: Environment = w["env"]
-	var sim: FakeSim = w["sim"]
-	var data: FakeData = nvg._game_data
-	data.NVG = true
-	_reset(nvg, env, sim, 1.0)
-	nvg._frame_l = 0.151
-	nvg._day_factor = 0.22
-	nvg._sun_down = false
-	nvg.refresh_daylight_now()
-	ck(absf(nvg._day_factor - 0.22) < 0.001, "a day-level frame leaves source A in charge")
-	ck(absf(env.tonemap_exposure - 0.66) < 0.005, "the day exposure is bit-identical to 2.6.0")
-	w["map"].free()
-
-func t_ceiling_releases_the_cave() -> void:
-	var w := _world()
-	var nvg = w["nvg"]
-	var env: Environment = w["env"]
-	var sim: FakeSim = w["sim"]
-	var data: FakeData = nvg._game_data
-	data.NVG = true
-	_reset(nvg, env, sim, 3.367)
-	nvg._frame_l = 0.031
-	nvg._day_factor = 0.12
-	nvg._sun_down = false
-	nvg.refresh_daylight_now()
-	ck(absf(nvg._factor_a - Daylight.FLOOR) < 0.001, "a global noon level pins source A on the floor")
-	ck(absf(nvg._u - 0.258) < 0.005, "the ceiling reads the frame uncompensated")
-	ck(nvg._ceiling > 0.35 and nvg._ceiling < 0.45, "the dark frame lifts the ceiling off the floor")
-	ck(absf(nvg._day_factor - nvg._ceiling) < 0.001, "the ceiling takes over source A")
-	ck(env.tonemap_exposure > 1.0, "the cave lands between the floor and the vanilla exposure")
+	ck(absf(nvg._input_gain - nvg.set_world) < 0.001, "reset refreshes the gain to the plain world brightness")
 	w["map"].free()
 
 func t_night_gate_is_vanilla() -> void:
@@ -396,13 +336,13 @@ func t_night_gate_is_vanilla() -> void:
 	var data: FakeData = nvg._game_data
 	data.NVG = true
 	_reset(nvg, env, sim, 1.209)
-	nvg._frame_l = 0.149
 	nvg._day_factor = 0.18
 	nvg._sun_down = true
 	nvg.refresh_daylight_now()
-	ck(is_equal_approx(env.tonemap_exposure, 3.0), "a sunless sky restores the vanilla night exposure")
-	ck(is_equal_approx(nvg._day_mix, 0.0), "night leaves the shader curve off")
+	ck(is_equal_approx(env.tonemap_exposure, 2.0), "a sunless sky leaves the exposure alone")
+	ck(is_equal_approx(nvg._day_mix, 0.0), "night leaves the curve off")
 	ck(is_equal_approx(nvg._day_trim, 1.0), "night leaves the palette trim off")
+	ck(absf(nvg._input_gain - nvg.set_world) < 0.001, "night gain is the world brightness")
 	w["map"].free()
 
 func t_sun_down_from_snapshot() -> void:
@@ -412,64 +352,6 @@ func t_sun_down_from_snapshot() -> void:
 	ck(not nvg._compute_sun_down({"sun_present": true, "sun_mask": 1048575}), "a live sun is up")
 	ck(nvg._compute_sun_down({"moon_mask": 1}), "without a sun the lit moon means night")
 	ck(not nvg._compute_sun_down({"moon_mask": 0}), "without any light the gate stays silent")
-	w["map"].free()
-
-func t_probe_measured_stores_frame() -> void:
-	var w := _world()
-	var nvg = w["nvg"]
-	_reset(nvg, w["env"], w["sim"], 1.0)
-	nvg._on_probe_measured({"p50": 0.25})
-	ck(absf(nvg._frame_l - 0.25) < 0.001, "a measurement lands in _frame_l")
-	nvg._on_probe_measured({})
-	ck(absf(nvg._frame_l - 0.25) < 0.001, "an empty measurement leaves the frame alone")
-	w["map"].free()
-
-func t_sync_probe_rests_at_night() -> void:
-	var w := _world()
-	var nvg = w["nvg"]
-	var data: FakeData = nvg._game_data
-	data.NVG = true
-	_reset(nvg, w["env"], w["sim"], 1.209)
-	nvg._sun_down = true
-	nvg._sync_probe()
-	ck(nvg._probe == null, "the probe stays off while the sun is down")
-	w["map"].free()
-
-func t_probe_measured_adapts_cadence() -> void:
-	var w := _world()
-	var nvg = w["nvg"]
-	var env: Environment = w["env"]
-	var sim: FakeSim = w["sim"]
-	_reset(nvg, env, sim, 1.0)
-	nvg.set_frame_cadence = 1.0
-	nvg._probe_interval = 1.0
-	nvg._frame_l_prev = 0.0
-	nvg._probe_stable = 0
-	nvg._on_probe_measured({"p50": 0.25})
-	ck(absf(nvg._frame_l - 0.25) < 0.001, "a measurement lands in _frame_l")
-	ck(absf(nvg._probe_interval - 1.0) < 0.001, "the first measurement arms the base cadence")
-	nvg._on_probe_measured({"p50": 0.25})
-	ck(absf(nvg._probe_interval - 2.0) < 0.001, "a stable frame doubles the cadence")
-	nvg._on_probe_measured({"p50": 0.25})
-	ck(absf(nvg._probe_interval - 2.0) < 0.001, "the cadence holds while the frame stays stable")
-	nvg._on_probe_measured({"p50": 0.26})
-	ck(absf(nvg._probe_interval - 1.0) < 0.001, "a real frame change re-arms the base cadence")
-	w["map"].free()
-
-func t_sync_probe_stays_off_without_thermal() -> void:
-	var w := _world()
-	var nvg = w["nvg"]
-	var env: Environment = w["env"]
-	var sim: FakeSim = w["sim"]
-	var data: FakeData = nvg._game_data
-	data.NVG = true
-	_reset(nvg, env, sim, 1.209)
-	nvg.set_thermal = false
-	nvg._sync_probe()
-	ck(nvg._probe == null, "the probe stays off while the thermal overlay is off")
-	nvg.set_thermal = true
-	nvg._sync_probe()
-	ck(nvg._probe != null, "the probe arms again once the thermal overlay is on")
 	w["map"].free()
 
 func t_time_scale_applies_while_live() -> void:
@@ -568,3 +450,40 @@ func t_snow_trim_ignores_indoor() -> void:
 	nvg2._daylight_tick(1.0)
 	ck(absf(nvg2._snow_trim - Daylight.SNOW_TRIM_NIGHT) < 0.001, "a winter night indoors takes the night trim")
 	w2["map"].free()
+
+func t_power_tier_stops_moving_the_picture() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	var sim: FakeSim = w["sim"]
+	_reset(nvg, env, sim, 0.03)
+	env.tonemap_exposure = 2.0
+	nvg._daylight_tick(1.0)
+	var at_two: float = nvg._input_gain
+	env.tonemap_exposure = 3.0
+	nvg._daylight_tick(1.0)
+	var at_three: float = nvg._input_gain
+	ck(at_two > at_three, "a brighter tier lowers the gain")
+	ck(absf(at_three - at_two * (2.0 / 3.0)) < 0.001, "the gain follows the tier by the exposure ratio")
+	ck(is_equal_approx(env.tonemap_exposure, 3.0), "the tier value is left untouched")
+	w["map"].free()
+
+func t_bad_exposure_is_a_guard() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	_reset(nvg, env, w["sim"], 1.0)
+	env.tonemap_exposure = 0.0
+	nvg._daylight_tick(1.0)
+	ck(is_finite(nvg._input_gain) and nvg._input_gain > 0.0, "a zero exposure cannot poison the gain")
+	w["map"].free()
+
+func t_exposure_is_read_only() -> void:
+	var w := _world()
+	var nvg = w["nvg"]
+	var env: Environment = w["env"]
+	_reset(nvg, env, w["sim"], 1.0)
+	env.tonemap_exposure = 1.5
+	nvg._daylight_tick(1.0)
+	ck(is_equal_approx(env.tonemap_exposure, 1.5), "the daylight model never writes the exposure")
+	w["map"].free()

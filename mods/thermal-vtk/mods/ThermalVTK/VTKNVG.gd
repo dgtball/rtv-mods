@@ -39,12 +39,10 @@ var set_strength: float = 1.0
 var set_day_target: float = Daylight.TARGET
 var set_day_floor: float = Daylight.FLOOR
 var set_day_trim: float = Daylight.DAY_TRIM
-var set_frame_level: float = Daylight.DAY_LEVEL
-var set_frame_cadence: float = Daylight.FRAME_CADENCE
 # Time acceleration of the day/night cycle (F9 "Time scale" lever; testing).
 var set_time_scale: float = 1.0
+# TRANSITIONAL: removed in 2.11.0, when the palette becomes total.
 var set_palette_strength: float = 0.58
-var set_red_hold: float = 0.72
 
 # Direct display colour of mine shells (MCM "Mine" colour).
 var _mine_color: Color = States.DEFAULT_MINE
@@ -68,45 +66,27 @@ var _scene_ref: Node = null
 # прошлое значение on, нужно ровно для перехода on->off (снять покраску один раз).
 var _was_on: bool = false
 
-# Daylight compensation. `_last_exposure` is the value WE last wrote; if the
-# environment reads something else, the vanilla ResetCheck has written it and
-# that value becomes the new vanilla baseline.
+# Daylight compensation is read-only: the vanilla exposure tier is folded into
+# _input_gain, never written back to Environment. The game owns that value.
 var _day_factor: float = 1.0
+var _day_seeded: bool = false
 var _day_mix: float = 0.0
 # The single number the shader multiplies the frame by before the shoulder.
-# Task 5 folds the vanilla exposure norm in here; the mod never writes it.
 var _input_gain: float = 1.7
-var _key_gain: float = 1.0
-# Source A: the scene level folded from the game's light state (see _snapshot)
-# and the RAW factor it produced -- no strength here, strength is applied once
-# in _target_factor. _factor_a is kept current under every source so the panel
-# can show what source A would give.
+# Scene level folded from the game's light state (see _snapshot) and the raw
+# factor it produces; strength is applied once in _target_factor.
 var _light_est: float = 0.0
 var _factor_a: float = 1.0
-# The last measured frame level (raw p50, our compensation included). Kept
-# current under every source so the panel can show what the ceiling would give.
-var _frame_l: float = 0.0
-# Hybrid layer: the night gate (the game culls the sun) and the frame ceiling
-# (releases the factor so the uncompensated frame level never drops below
-# DAY_LEVEL). `_u` is the uncompensated frame level the panel reads.
+# Night gate: when the game culls the sun the vanilla picture is handed back.
 var _sun_down: bool = false
-var _ceiling: float = 1.0
-var _u: float = 0.0
-var _probe: Node = null
-var _probe_interval: float = Daylight.FRAME_CADENCE
-var _frame_l_prev: float = 0.0
-var _probe_stable: int = 0
 var _sim_cd: float = 0.0
 var _sim_season: int = 1
 var _sim_indoor: bool = false
-
 var _sim_shelter: bool = false
 # Winter snow trim on the background (see VTKDaylight.snow_trim).
 var _snow_trim: float = 1.0
 # Daylight trim currently applied (see VTKDaylight.day_trim); 1.0 = off.
 var _day_trim: float = 1.0
-var _vanilla_exposure: float = 3.0
-var _last_exposure: float = -1.0
 var _was_worn: bool = false
 var _sim: Node = null
 var _world: Node = null
@@ -275,10 +255,15 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("inputKnee", lerpf(1.0, set_highlight_knee, _day_mix))
 
 
-# One number feeds the palette: world brightness, the day/snow trims and the
-# smoothed day factor. Task 5 folds the vanilla exposure in here.
+# One number feeds the palette: world brightness, the day/snow trims, the
+# smoothed day factor and the vanilla exposure tier read back from the game.
+# The mod never writes Environment.tonemap_exposure.
 func _refresh_input_gain() -> void:
-	var gain := set_world * _snow_trim * _day_trim * _day_factor
+	var env := _environment()
+	var exposure := Daylight.EXPOSURE_REF
+	if env != null:
+		exposure = env.tonemap_exposure
+	var gain := set_world * _snow_trim * _day_trim * _day_factor * Daylight.exposure_norm(exposure)
 	if absf(gain - _input_gain) > 0.0005:
 		_input_gain = gain
 		_dirty = true
@@ -329,8 +314,6 @@ func _process(delta: float) -> void:
 			_reset_daylight()
 	if worn:
 		_daylight_tick(delta)
-	if worn or set_daylight or (_probe != null and is_instance_valid(_probe)):
-		_sync_probe()
 	# Player position, fetched once per frame.
 	var ppos := _player_pos()
 
@@ -406,17 +389,10 @@ func _compute_sun_down(snap: Dictionary) -> bool:
 
 func _refresh_daylight_state() -> void:
 	_factor_a = Daylight.factor_for_light(_light_est, set_day_target, set_day_floor)
-	if _frame_l > 0.0:
-		_u = _frame_l / maxf(_day_factor, Daylight.EPS)
-		_ceiling = Daylight.frame_ceiling(_frame_l, _day_factor, set_frame_level, set_day_floor)
-	else:
-		_u = 0.0
-		_ceiling = _factor_a
 
 
 func _target_factor() -> float:
-	var raw := maxf(_factor_a, _ceiling)
-	return Daylight.strength_factor(Daylight.night_gate(raw, _sun_down), set_strength)
+	return Daylight.strength_factor(Daylight.night_gate(_factor_a, _sun_down), set_strength)
 
 
 const SIM_MINUTES_PER_REAL_SEC := 1.0 / 6.0
@@ -474,42 +450,16 @@ func _apply_time_scale(delta: float) -> void:
 		sim.set("day", int(sim.get("day")) + day_inc)
 
 
+# The F9 Measure button owns the probe now; there is no auto cadence and no
+# signal back into the daylight model. SceneProbe names itself in _ready, so
+# the child lookup keeps one probe per NVG without a cached field.
 func _ensure_probe() -> Node:
-	if _probe != null and is_instance_valid(_probe):
-		return _probe
-	_probe = SceneProbe.new()
-	_probe.measured.connect(_on_probe_measured)
-	add_child(_probe)
-	return _probe
-
-
-func _on_probe_measured(stats: Dictionary) -> void:
-	if stats.is_empty():
-		return
-	var measured := float(stats.get("p50", 0.0))
-	_frame_l = measured
-	_adapt_probe(measured)
-
-
-func _adapt_probe(measured: float) -> void:
-	if _frame_l_prev <= 0.0 or absf(measured - _frame_l_prev) > Daylight.PROBE_STABLE_TOL:
-		_probe_stable = 1
-		_probe_interval = set_frame_cadence
-	else:
-		_probe_stable += 1
-	if _probe_stable >= Daylight.PROBE_STABLE_FRAMES:
-		_probe_interval = Daylight.adaptive_interval(set_frame_cadence, _probe_stable, _probe_interval)
-		_probe_stable = 0
-	_frame_l_prev = measured
-
-
-func _sync_probe() -> void:
-	var want := set_daylight and set_thermal and not _sun_down and _installed and _nvg_active()
-	if not want:
-		if _probe != null and is_instance_valid(_probe):
-			_probe.set_auto(0.0)
-		return
-	_ensure_probe().set_auto(_probe_interval)
+	var existing := get_node_or_null("VTKSceneProbe")
+	if existing != null and is_instance_valid(existing):
+		return existing
+	var probe := SceneProbe.new()
+	add_child(probe)
+	return probe
 
 
 func measure_frame() -> Dictionary:
@@ -521,16 +471,12 @@ func measure_frame() -> Dictionary:
 
 func _daylight_tick(delta: float) -> void:
 	_apply_time_scale(delta)
-	_refresh_input_gain()
 	if not set_daylight or not _installed:
+		_refresh_input_gain()
 		return
-	var env := _environment()
-	if env == null:
+	if _environment() == null:
+		_refresh_input_gain()
 		return
-	var cur := env.tonemap_exposure
-	if _last_exposure < 0.0 or absf(cur - _last_exposure) > 0.002:
-		if cur >= 1.9:
-			_vanilla_exposure = cur
 	_sim_cd -= delta
 	if _sim_cd <= 0.0:
 		_sim_cd = 0.25
@@ -545,20 +491,11 @@ func _daylight_tick(delta: float) -> void:
 			Dbg.log("DAY", "sunDown=%d E=%.3f indoor=%d" % [1 if _sun_down else 0, _light_est, 1 if _sim_indoor else 0])
 	_refresh_daylight_state()
 	var target := _target_factor()
-	_day_factor = target if _last_exposure < 0.0 else Daylight.step(_day_factor, target, delta)
-	_daylight_apply(env, cur)
+	_day_factor = target if not _day_seeded else Daylight.step(_day_factor, target, delta)
+	_day_seeded = true
+	_day_mix = Daylight.day_mix(_day_factor)
 	_push_daylight_trims(_day_mix)
 	_refresh_input_gain()
-
-
-func _daylight_apply(env: Environment, cur: float) -> void:
-	var want := _vanilla_exposure * _day_factor
-	if absf(want - cur) > 0.002:
-		env.tonemap_exposure = want
-	_last_exposure = want
-	var mix := Daylight.day_mix(_day_factor)
-	if absf(mix - _day_mix) > 0.001:
-		_day_mix = mix
 
 
 func _push_daylight_trims(mix: float) -> void:
@@ -581,27 +518,23 @@ func refresh_daylight_now() -> void:
 		return
 	_refresh_daylight_state()
 	_day_factor = _target_factor()
-	_daylight_apply(env, env.tonemap_exposure)
+	_day_seeded = true
+	_day_mix = Daylight.day_mix(_day_factor)
 	_push_daylight_trims(_day_mix)
+	_refresh_input_gain()
 	_dirty = true
 	_apply_uniforms()
 
 
 func _reset_daylight() -> void:
-	_last_exposure = -1.0
 	_day_factor = 1.0
+	_day_seeded = false
 	_day_mix = 0.0
 	_snow_trim = 1.0
 	_day_trim = 1.0
 	_light_est = 0.0
 	_factor_a = 1.0
-	_frame_l = 0.0
-	_probe_interval = Daylight.FRAME_CADENCE
-	_probe_stable = 0
-	_frame_l_prev = 0.0
 	_sun_down = false
-	_ceiling = 1.0
-	_u = 0.0
 	_sim_cd = 0.0
 	_sim = null
 	_world = null
@@ -609,25 +542,14 @@ func _reset_daylight() -> void:
 	set_day_target = Daylight.TARGET
 	set_day_floor = Daylight.FLOOR
 	set_day_trim = Daylight.DAY_TRIM
-	set_frame_level = Daylight.DAY_LEVEL
-	set_frame_cadence = Daylight.FRAME_CADENCE
 	set_time_scale = 1.0
 	Engine.time_scale = 1.0
 	if has_meta("_vtk_time_frozen"):
 		remove_meta("_vtk_time_frozen")
 		remove_meta("_vtk_frozen_time")
 		remove_meta("_vtk_frozen_day")
-	_day_factor = 1.0
 	_refresh_input_gain()
 	_dirty = true
-
-
-func _restore_exposure() -> void:
-	if _last_exposure >= 0.0:
-		var env := _environment()
-		if env != null and absf(env.tonemap_exposure - _last_exposure) <= 0.004:
-			env.tonemap_exposure = _vanilla_exposure
-	_reset_daylight()
 
 
 func _environment() -> Environment:
@@ -885,7 +807,9 @@ func apply_config(rec) -> void:
 	var was_daylight := set_daylight
 	set_daylight = rec.daylight_compensation
 	if was_daylight and not set_daylight:
-		_restore_exposure()
+		_reset_daylight()
+	elif not was_daylight and set_daylight:
+		_day_seeded = false
 	set_strength = rec.daylight_strength
 	set_nvg_noise = rec.nvg_noise
 	set_nvg_white = rec.nvg_white
@@ -895,7 +819,6 @@ func apply_config(rec) -> void:
 	set_mines = rec.thermal_mines
 	set_mine_color(rec.color_mine)
 	set_palette_strength = rec.palette_strength
-	set_red_hold = rec.red_hold
 	_dirty = true
 	_tick_cd = 0.0
 
@@ -906,22 +829,6 @@ func set_palette_mode(mode: int) -> void:
 	_tick_cd = 0.0
 
 
-func set_palette_tuning(strength: float, hold: float) -> void:
-	set_palette_strength = clampf(strength, 0.0, 1.0)
-	set_red_hold = clampf(hold, 0.0, 1.0)
-	_dirty = true
-	_tick_cd = 0.0
-
-
 func _exit_tree() -> void:
 	_clear_mine_state()
 
-# Hide the NVG overlay for a single frame. The overlay paints the thermal
-# palette (or the green tint) over the whole frame, so a screen readback of a
-# key pixel shows the painted colour, not the scene colour the key detector
-# compares against. Hiding the rect leaves the raw scene visible.
-func set_overlay_visible(v: bool) -> void:
-	if _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
-		return
-	if _nvg_mat_node is CanvasItem:
-		(_nvg_mat_node as CanvasItem).visible = v
