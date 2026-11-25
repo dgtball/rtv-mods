@@ -168,4 +168,3 @@ static func step(current: float, target: float, delta: float, response: float = 
 		return target
 	var k := 1.0 - exp(-maxf(delta, 0.0) / response)
 	return lerpf(current, target, clampf(k, 0.0, 1.0))
-

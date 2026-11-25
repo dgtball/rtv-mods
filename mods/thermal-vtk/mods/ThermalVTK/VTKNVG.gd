@@ -831,4 +831,3 @@ func set_palette_mode(mode: int) -> void:
 
 func _exit_tree() -> void:
 	_clear_mine_state()
-
