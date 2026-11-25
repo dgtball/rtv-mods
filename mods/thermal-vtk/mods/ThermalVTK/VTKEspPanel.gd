@@ -43,7 +43,6 @@ var _c_combat: ColorPickerButton = null
 var _c_defend: ColorPickerButton = null
 var _c_mine: ColorPickerButton = null
 var _palette_strength: HSlider = null
-var _red_hold: HSlider = null
 
 var _suppress: bool = false
 var _last_change_log_ms: int = -100000
@@ -125,10 +124,8 @@ func _snapshot() -> void:
 		_saved["c_mine"] = States.DEFAULT_MINE
 	if _nvg != null and is_instance_valid(_nvg):
 		_saved["palette_strength"] = float(_nvg.get("set_palette_strength")) if _nvg.get("set_palette_strength") != null else 0.58
-		_saved["red_hold"] = float(_nvg.get("set_red_hold")) if _nvg.get("set_red_hold") != null else 0.72
 	else:
 		_saved["palette_strength"] = 0.58
-		_saved["red_hold"] = 0.72
 
 func _restore_snapshot() -> void:
 	if _esp == null or not is_instance_valid(_esp):
@@ -146,11 +143,7 @@ func _restore_snapshot() -> void:
 	_esp.p_color_defend = Color(_saved.get("c_defend", States.DEFAULT_DEFEND))
 	_apply_mine_color(Color(_saved.get("c_mine", States.DEFAULT_MINE)))
 	if _nvg != null and is_instance_valid(_nvg):
-		if _nvg.has_method("set_palette_tuning"):
-			_nvg.set_palette_tuning(float(_saved.get("palette_strength", 0.58)), float(_saved.get("red_hold", 0.72)))
-		else:
-			_nvg.set("set_palette_strength", float(_saved.get("palette_strength", 0.58)))
-			_nvg.set("set_red_hold", float(_saved.get("red_hold", 0.72)))
+		_nvg.set("set_palette_strength", float(_saved.get("palette_strength", 0.58)))
 	_sync_from_runtime()
 	if _esp_enabled != null:
 		_esp_enabled.button_pressed = bool(_saved.get("esp_preview_on", true))
@@ -184,12 +177,6 @@ func _sync_from_runtime() -> void:
 			_palette_strength.value = float(vs) if vs != null else 0.58
 		else:
 			_palette_strength.value = 0.58
-	if _red_hold != null:
-		if _nvg != null and is_instance_valid(_nvg):
-			var vh = _nvg.get("set_red_hold")
-			_red_hold.value = float(vh) if vh != null else 0.72
-		else:
-			_red_hold.value = 0.72
 	_suppress = false
 
 func _apply_mine_color(c: Color) -> void:
@@ -213,12 +200,7 @@ func _on_changed(_v = null) -> void:
 	_apply_mine_color(Color(_c_mine.color) if _c_mine != null else States.DEFAULT_MINE)
 	if _nvg != null and is_instance_valid(_nvg):
 		var vs := float(_palette_strength.value) if _palette_strength != null else 0.58
-		var vh := float(_red_hold.value) if _red_hold != null else 0.72
-		if _nvg.has_method("set_palette_tuning"):
-			_nvg.set_palette_tuning(vs, vh)
-		else:
-			_nvg.set("set_palette_strength", vs)
-			_nvg.set("set_red_hold", vh)
+		_nvg.set("set_palette_strength", vs)
 	_refresh_status()
 	_apply_live()
 	var now_ms := Time.get_ticks_msec()
@@ -330,8 +312,8 @@ func _build_ui() -> void:
 	var wl := Label.new()
 	wl.text = "World palette (NVG, runtime only)"
 	v.add_child(wl)
+	# TRANSITIONAL: the whole slider goes in 2.11.0.
 	_palette_strength = _add_slider(v, "Strength", 0.0, 1.0, 0.05, 0.58)
-	_red_hold = _add_slider(v, "Red hold", 0.0, 1.0, 0.05, 0.72)
 
 	v.add_child(HSeparator.new())
 	var row := HBoxContainer.new()
@@ -427,8 +409,6 @@ func _log_snapshot() -> void:
 	parts.append("mine=%s" % _color_hex(mine_c))
 	if _palette_strength != null:
 		parts.append("palette_strength=%.3f" % float(_palette_strength.value))
-	if _red_hold != null:
-		parts.append("red_hold=%.3f" % float(_red_hold.value))
 	VTKDebug.log("ESP_PANEL", "snapshot " + " ".join(parts))
 	if _esp.has_method("dump_distance_debug"):
 		_esp.dump_distance_debug("panel_snapshot")

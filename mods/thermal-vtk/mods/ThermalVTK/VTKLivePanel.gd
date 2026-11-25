@@ -1,16 +1,13 @@
 extends CanvasLayer
 # The F9 live tuning panel: a daylight calibration instrument, not a settings
-# surface. Nine levers over the VTKNVG runtime fields, a readout of the live
-# state, and a Measure button that renders one probe frame and logs the frame
+# surface. Levers over the VTKNVG runtime fields, a readout of the live state,
+# and a Measure button that renders one probe frame and logs the frame
 # percentiles as a PANEL line for the fitting session.
 #
-# The hybrid picture is two layers. The night gate hands the vanilla exposure
-# back whenever the game culls the sun, so night is never compensated at all.
-# The frame ceiling raises the factor until the uncompensated frame level
-# reaches DAY_LEVEL, which is what makes a dark scene under a live sun (a cave
-# at 9:00) readable again -- and it is silent by day, where source A already
-# sits lower. Both are runtime state, not settings: the panel shows them, the
-# MCM never learns about them.
+# The night gate hands the vanilla picture back whenever the game culls the
+# sun, so night is never compensated at all. By day the model folds the light
+# state into one gain and one knee; both are runtime state, not settings: the
+# panel shows them, the MCM never learns about them.
 #
 # The panel persists nothing. The slider values live in the NVG fields until
 # the helmet comes off or the map changes (VTKNVG._reset_daylight returns the
@@ -75,8 +72,6 @@ func setup(nvg: Node, owner: Node) -> void:
 	_add_slider(box, "Day target", 0.05, 1.0, 0.01, "set_day_target")
 	_add_slider(box, "Day floor", 0.01, 1.0, 0.01, "set_day_floor")
 	_add_slider(box, "Day trim", 0.40, 1.0, 0.01, "set_day_trim")
-	_add_slider(box, "Frame level", 0.02, 0.30, 0.01, "set_frame_level")
-	_add_slider(box, "Probe cadence", 0.25, 5.0, 0.25, "set_frame_cadence")
 	_add_slider(box, "Time scale", 0.0, 10.0, 0.1, "set_time_scale")
 	_add_slider(box, "Highlight knee", 0.30, 1.0, 0.05, "set_highlight_knee")
 	_add_slider(box, "World brightness", 1.0, 4.0, 0.05, "set_world")
@@ -90,8 +85,8 @@ func setup(nvg: Node, owner: Node) -> void:
 	_measure_label = Label.new()
 	_measure_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_measure_label)
-	# The probe belongs to VTKNVG (the ceiling rides on it in a normal game);
-	# the panel just asks for a measurement through measure_frame().
+	# The probe belongs to VTKNVG; the panel just asks for a measurement
+	# through measure_frame().
 	visible = false
 
 # The ThermalKey _add_slider pattern: a caption label that live-updates with
@@ -202,15 +197,14 @@ func _refresh_readout() -> void:
 	var snap: Dictionary = _nvg._snapshot()
 	var terms: Dictionary = Daylight.estimate_terms(snap)
 	var sim: Dictionary = _nvg.debug_sim_state() if _nvg.has_method("debug_sim_state") else {}
-	_readout.text = "%s\nE %.3f (sky %.2f amb %.2f sun %.2f moon %.2f fog %.2f)\nsunDown %d indoor %d shelter %d | factor %.3f (A %.3f ceil %.3f) u %.3f frame %.3f\nmix %.2f bgTrim %.2f exp %s | world %.2f knee %.2f strength %.2f helmet %d thermal %d" % [
+	_readout.text = "%s\nE %.3f (sky %.2f amb %.2f sun %.2f moon %.2f fog %.2f)\nsunDown %d indoor %d shelter %d | factor %.3f (A %.3f) gain %.3f\nmix %.2f bgTrim %.2f exp %s | world %.2f knee %.2f strength %.2f helmet %d thermal %d" % [
 		_sim_line(sim),
 		float(_nvg.get("_light_est")),
 		float(terms["sky"]), float(terms["amb"]), float(terms["sun"]), float(terms["moon"]), float(terms["fog"]),
 		1 if bool(_nvg.get("_sun_down")) else 0,
 		1 if bool(_nvg.get("_sim_indoor")) else 0,
 		1 if bool(_nvg.get("_sim_shelter")) else 0,
-		float(_nvg.get("_day_factor")), float(_nvg.get("_factor_a")), float(_nvg.get("_ceiling")),
-		float(_nvg.get("_u")), float(_nvg.get("_frame_l")),
+		float(_nvg.get("_day_factor")), float(_nvg.get("_factor_a")), float(_nvg.get("_input_gain")),
 		float(_nvg.get("_day_mix")),
 		float(_nvg.get("_snow_trim")) * float(_nvg.get("_day_trim")), e_txt,
 		float(_nvg.get("set_world")), float(_nvg.get("set_highlight_knee")), float(_nvg.get("set_strength")),
@@ -323,18 +317,14 @@ func _on_measure() -> void:
 	_measure_label.text = line
 	Dbg.log("PANEL", line)
 
-# light/factor/mix/trims/exp are the daylight state the levers produced;
-# `u` is the uncompensated frame level and `ceiling` the factor it asks for
-# (its input is `measured`); sunDown is the night-gate input, indoor/shelter are
-# state readouts that no longer feed the trims; raw p*
-# are the probe frame percentiles BEFORE the thermal curve; pal p* push the
-# same percentiles through the palette-input mirror at the current levers,
-# i.e. where the palette would put them.
+# light/factor/mix/trims/exp are the daylight state the levers produced; gain
+# is the single number the palette receives. sunDown is the night-gate input,
+# indoor/shelter are state readouts that no longer feed the trims; raw p* are
+# the probe frame percentiles BEFORE the thermal curve.
 func _panel_line(stats: Dictionary) -> String:
 	var snow: float = float(_nvg.get("_snow_trim"))
 	var day: float = float(_nvg.get("_day_trim"))
 	var mix: float = float(_nvg.get("_day_mix"))
-	var darken: float = float(_nvg.get("set_world")) * snow * day
 	var knee: float = float(_nvg.get("set_highlight_knee"))
 	var snap: Dictionary = _nvg._snapshot()
 	var terms: Dictionary = Daylight.estimate_terms(snap)
@@ -345,22 +335,19 @@ func _panel_line(stats: Dictionary) -> String:
 	var ttxt := _fmt_time(maxf(t, 0.0)) if t >= 0.0 else "--:--"
 	var wtxt := _fmt_weather(sim.get("weather", {}))
 	var wfield := (" " + wtxt) if wtxt != "" else ""
-	return "t=%s raw=%s day=%d season=%s%s E=%.3f sunDown=%d indoor=%d shelter=%d u=%.3f ceiling=%.2f factor=%.2f measured=%.3f mix=%.2f snowTrim=%.2f dayTrim=%.2f exp=%.2f helmet=%d thermal=%d | Esky=%.3f Eamb=%.3f Esun=%.3f Emoon=%.3f Efog=%.3f | raw p05=%.3f p25=%.3f p50=%.3f p75=%.3f p95=%.3f mean=%.3f black=%.3f cream=%.3f n=%d | pal p05=%.3f p50=%.3f p95=%.3f" % [
+	return "t=%s raw=%s day=%d season=%s%s E=%.3f sunDown=%d indoor=%d shelter=%d factor=%.2f gain=%.3f knee=%.2f mix=%.2f snowTrim=%.2f dayTrim=%.2f exp=%.2f helmet=%d thermal=%d | Esky=%.3f Eamb=%.3f Esun=%.3f Emoon=%.3f Efog=%.3f | raw p05=%.3f p25=%.3f p50=%.3f p75=%.3f p95=%.3f mean=%.3f black=%.3f cream=%.3f n=%d" % [
 		ttxt, _trim_num(t), day_n, _fmt_season(season), wfield,
 		float(_nvg.get("_light_est")),
 		1 if bool(_nvg.get("_sun_down")) else 0,
 		1 if bool(_nvg.get("_sim_indoor")) else 0,
 		1 if bool(_nvg.get("_sim_shelter")) else 0,
-		float(_nvg.get("_u")), float(_nvg.get("_ceiling")),
-		float(_nvg.get("_day_factor")), float(_nvg.get("_frame_l")), mix, snow, day, _exposure(),
+		float(_nvg.get("_day_factor")), float(_nvg.get("_input_gain")),
+		knee, mix, snow, day, _exposure(),
 		1 if _nvg.nvg_active() else 0,
 		1 if bool(_nvg.get("set_thermal")) else 0,
 		float(terms["sky"]), float(terms["amb"]), float(terms["sun"]), float(terms["moon"]), float(terms["fog"]),
 		float(stats.p05), float(stats.p25), float(stats.p50), float(stats.p75), float(stats.p95),
 		float(stats.mean), float(stats.black_share), float(stats.cream_share), int(stats.count),
-		Daylight.palette_input(float(stats.p05), darken, knee, mix),
-		Daylight.palette_input(float(stats.p50), darken, knee, mix),
-		Daylight.palette_input(float(stats.p95), darken, knee, mix),
 	]
 
 # Reset puts every lever back: the MCM snapshot the autoload caches (the
@@ -374,8 +361,6 @@ func _on_reset() -> void:
 	_nvg.set("set_day_target", Daylight.TARGET)
 	_nvg.set("set_day_floor", Daylight.FLOOR)
 	_nvg.set("set_day_trim", Daylight.DAY_TRIM)
-	_nvg.set("set_frame_level", Daylight.DAY_LEVEL)
-	_nvg.set("set_frame_cadence", Daylight.FRAME_CADENCE)
 	_nvg.set("set_time_scale", 1.0)
 	_nvg.refresh_daylight_now()
 	_nvg.set("_dirty", true)
