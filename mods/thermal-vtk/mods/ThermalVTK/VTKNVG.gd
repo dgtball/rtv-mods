@@ -2,6 +2,7 @@
 const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
 const Settings = preload("res://mods/ThermalVTK/VTKSettings.gd")
 const Daylight = preload("res://mods/ThermalVTK/VTKDaylight.gd")
+const Palettes = preload("res://mods/ThermalVTK/VTKPalettes.gd")
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 const SceneProbe = preload("res://mods/ThermalVTK/VTKSceneProbe.gd")
@@ -28,7 +29,7 @@ var set_mines: bool = true
 var set_glow_distance: float = Settings.OUTLINE_DISTANCE
 var set_palette: int = 0
 var set_world: float = 1.70
-# Daylight highlight rolloff knee (shader "highlightKnee"); 1.0 = off.
+# Daylight highlight rolloff knee (shader "inputKnee"); 1.0 = off.
 var set_highlight_knee: float = 0.55
 var set_daylight: bool = true
 var set_strength: float = 1.0
@@ -72,6 +73,9 @@ var _was_on: bool = false
 # that value becomes the new vanilla baseline.
 var _day_factor: float = 1.0
 var _day_mix: float = 0.0
+# The single number the shader multiplies the frame by before the shoulder.
+# Task 5 folds the vanilla exposure norm in here; the mod never writes it.
+var _input_gain: float = 1.7
 var _key_gain: float = 1.0
 # Source A: the scene level folded from the game's light state (see _snapshot)
 # and the RAW factor it produced -- no strength here, strength is applied once
@@ -241,6 +245,7 @@ func _try_install_shader() -> void:
 
 
 func _apply_uniforms() -> void:
+	_refresh_input_gain()
 	_dirty = false
 	_refresh_mine_material()
 	if not _installed or _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
@@ -255,16 +260,28 @@ func _apply_uniforms() -> void:
 	var thermal_on := set_thermal and _nvg_active()
 	nvg_mat.set_shader_parameter("noise", set_nvg_noise)
 	nvg_mat.set_shader_parameter("thermalMode", thermal_on)
-	nvg_mat.set_shader_parameter("thermalDarken", set_world * _snow_trim * _day_trim)
-	nvg_mat.set_shader_parameter("dayMix", _day_mix)
-	nvg_mat.set_shader_parameter("worldPaletteMode", set_palette)
-	nvg_mat.set_shader_parameter("highlightKnee", set_highlight_knee)
 	nvg_mat.set_shader_parameter("nvgWhite", set_nvg_white)
 	nvg_mat.set_shader_parameter("paletteStrength", set_palette_strength)
-	nvg_mat.set_shader_parameter("redHold", set_red_hold)
 	nvg_mat.set_shader_parameter("minePassthroughOn", thermal_on and set_mines)
 	nvg_mat.set_shader_parameter("minePassthroughColor", _mine_color)
-	nvg_mat.set_shader_parameter("dayFactor", _day_factor)
+	var pal := Palettes.stops(set_palette)
+	nvg_mat.set_shader_parameter("paletteStop0", pal[0])
+	nvg_mat.set_shader_parameter("paletteStop1", pal[1])
+	nvg_mat.set_shader_parameter("paletteStop2", pal[2])
+	nvg_mat.set_shader_parameter("paletteStop3", pal[3])
+	nvg_mat.set_shader_parameter("paletteStop4", pal[4])
+	nvg_mat.set_shader_parameter("paletteOut", Palettes.output())
+	nvg_mat.set_shader_parameter("inputGain", _input_gain)
+	nvg_mat.set_shader_parameter("inputKnee", lerpf(1.0, set_highlight_knee, _day_mix))
+
+
+# One number feeds the palette: world brightness, the day/snow trims and the
+# smoothed day factor. Task 5 folds the vanilla exposure in here.
+func _refresh_input_gain() -> void:
+	var gain := set_world * _snow_trim * _day_trim * _day_factor
+	if absf(gain - _input_gain) > 0.0005:
+		_input_gain = gain
+		_dirty = true
 
 
 # Direct display colour of mine shells. Stored even before the overlay material
@@ -504,6 +521,7 @@ func measure_frame() -> Dictionary:
 
 func _daylight_tick(delta: float) -> void:
 	_apply_time_scale(delta)
+	_refresh_input_gain()
 	if not set_daylight or not _installed:
 		return
 	var env := _environment()
@@ -530,6 +548,7 @@ func _daylight_tick(delta: float) -> void:
 	_day_factor = target if _last_exposure < 0.0 else Daylight.step(_day_factor, target, delta)
 	_daylight_apply(env, cur)
 	_push_daylight_trims(_day_mix)
+	_refresh_input_gain()
 
 
 func _daylight_apply(env: Environment, cur: float) -> void:
@@ -540,7 +559,6 @@ func _daylight_apply(env: Environment, cur: float) -> void:
 	var mix := Daylight.day_mix(_day_factor)
 	if absf(mix - _day_mix) > 0.001:
 		_day_mix = mix
-		_push_day_mix()
 
 
 func _push_daylight_trims(mix: float) -> void:
@@ -600,7 +618,7 @@ func _reset_daylight() -> void:
 		remove_meta("_vtk_frozen_time")
 		remove_meta("_vtk_frozen_day")
 	_day_factor = 1.0
-	_push_day_mix()
+	_refresh_input_gain()
 	_dirty = true
 
 
@@ -610,17 +628,6 @@ func _restore_exposure() -> void:
 		if env != null and absf(env.tonemap_exposure - _last_exposure) <= 0.004:
 			env.tonemap_exposure = _vanilla_exposure
 	_reset_daylight()
-
-
-func _push_day_mix() -> void:
-	if not _nvg_active() or not _installed or _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
-		if _nvg_mat_node != null and not is_instance_valid(_nvg_mat_node):
-			_nvg_mat_node = null
-			_installed = false
-		return
-	var mat = _nvg_mat_node.get("material")
-	if mat is ShaderMaterial:
-		(mat as ShaderMaterial).set_shader_parameter("dayMix", _day_mix)
 
 
 func _environment() -> Environment:

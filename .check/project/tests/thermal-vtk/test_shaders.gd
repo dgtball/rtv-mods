@@ -26,7 +26,7 @@ func _run() -> void:
 	t_ring_contracts()
 	t_band_contract()
 	t_nvg_compositor_contract()
-	t_palette_modes()
+	t_palette_ramp()
 	t_nvg_shader_compiles()
 	t_runtime_contract()
 	t_daylight_contract()
@@ -116,22 +116,18 @@ func t_nvg_compositor_contract() -> void:
 	for bad in ["uniform bool espOn", "stNormalKey", "stCombatKey", "stDefendKey", "mineKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineColor", "stateBright", "scopeRotate", "espFillAlpha", "espBodyFill", "orbitDist", "DET_TOL_CORE", "dCore", "dMine"]:
 		ck(not code.contains(bad), "overlay has no substitution token %s" % bad)
 
-func t_palette_modes() -> void:
+func t_palette_ramp() -> void:
 	var code := FileAccess.get_file_as_string(NVG_SHADER_RES)
-	var n := 0
-	for i in [1, 2, 3]:
-		if code.contains("worldPaletteMode == %d" % i):
-			n += 1
-	ck(n == 3, "palette modes 1..3 are present (got %d)" % n)
-	for i in [4, 5, 6]:
-		ck(not code.contains("worldPaletteMode == %d" % i), "palette mode %d removed" % i)
-	ck(code.contains("amber_palette"), "amber palette function present")
-	ck(code.contains("forest_palette"), "forest palette function present")
-	ck(code.contains("red_palette"), "red/classic palette function present")
-	ck(code.contains("day_palette"), "blue/ice palette function present")
-	ck(not code.contains("vrcets_night_palette"), "unused night/auto palette removed")
-	ck(not code.contains("vrcets"), "shader has no vrcets identifiers")
-	ck(not code.contains("worldPaletteMode >= 4"), "palette path no longer gated to modes >= 4")
+	for i in 5:
+		ck(code.contains("paletteStop%d" % i), "overlay declares paletteStop%d" % i)
+	ck(not code.contains("worldPaletteMode"), "overlay has no palette mode branch")
+	for bad in ["red_heat", "held_heat", "redHold", "dayMix", "thermalDarken"]:
+		ck(not code.contains(bad), "overlay has no %s" % bad)
+	for edge in ["smoothstep(0.0, 0.25", "smoothstep(0.25, 0.5", "smoothstep(0.5, 0.75", "smoothstep(0.75, 1.0"]:
+		ck(code.contains(edge), "ramp uses the fixed ladder edge %s" % edge)
+	ck(code.contains("inputGain") and code.contains("inputKnee") and code.contains("paletteOut"), "overlay declares the three stage uniforms")
+	ck(code.contains("paletteStrength"), "paletteStrength stays until 2.11.0")
+	ck(code.contains("minePassthroughOn"), "mine passthrough stays until 2.11.0")
 
 func t_nvg_shader_compiles() -> void:
 	var sh = load(NVG_SHADER_RES)
@@ -140,7 +136,7 @@ func t_nvg_shader_compiles() -> void:
 		return
 	var names := _uniform_names(sh)
 	ck(names.size() > 0, "NVG shader compiled (uniform list not empty)")
-	for u in ["dayMix", "thermalMode", "thermalDarken", "worldPaletteMode", "highlightKnee", "nvgWhite", "paletteStrength", "redHold", "noise", "tint"]:
+	for u in ["inputGain", "inputKnee", "paletteOut", "paletteStop0", "paletteStop4", "thermalMode", "nvgWhite", "paletteStrength", "minePassthroughOn", "noise", "tint"]:
 		ck(names.has(u), "compiled shader exposes %s" % u)
 	for bad in ["espTex", "espComposite", "espOn", "stNormalKey", "stCombatKey", "stDefendKey", "mineKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineColor", "stateBright", "scopeRotate", "espFillAlpha", "espBodyFill"]:
 		ck(not names.has(bad), "compiled shader does not expose substitution uniform %s" % bad)
@@ -161,8 +157,8 @@ func t_runtime_contract() -> void:
 
 func t_daylight_contract() -> void:
 	var nvg := FileAccess.get_file_as_string(NVG_SHADER_RES)
-	ck(nvg.contains("uniform float dayMix"), "overlay declares the day curve strength")
-	ck(nvg.contains("mix(luminance, lifted, dayMix)"), "overlay blends the day curve into the background")
+	ck(nvg.contains("uniform float inputGain"), "overlay declares the input gain")
+	ck(not nvg.contains("dayMix"), "overlay has no day curve uniform")
 	var owner := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKNVG.gd")
 	ck(owner.contains("_daylight_tick"), "VTKNVG applies the daylight model per frame")
 	ck(FileAccess.file_exists("res://mods/ThermalVTK/VTKDaylight.gd"), "daylight model exists")

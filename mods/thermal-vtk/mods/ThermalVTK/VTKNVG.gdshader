@@ -3,6 +3,11 @@ shader_type canvas_item;
 // NVG / thermal overlay. Replaces the vanilla NVG ColorRect shader (see
 // VTKNVG.gd for why the swap is safe). The thermal palette is applied to the
 // background sampled from the screen.
+//
+// THE PIPELINE: inputGain -> shoulder(inputKnee) -> ramp -> paletteOut. The
+// stops arrive as uniforms from VTKPalettes; there is no palette mode branch
+// and no mirrored curve here. Everything the mod draws in the main 3D pass
+// (outlines, mines, nomad marker) is outside this image.
 
 // filter_linear, not filter_linear_mipmap: the screen is sampled 1:1 through
 // SCREEN_UV, so mip 0 is the only one ever read. Requesting mipmaps makes the
@@ -17,28 +22,27 @@ uniform float goggleAspect : hint_range(0.0, 2.0, 0.1) = 1.6;
 uniform float goggleOutline : hint_range(0.0, 0.1, 0.01) = 0.05;
 
 uniform bool thermalMode = false;
-uniform float thermalDarken : hint_range(1.0, 4.0, 0.01) = 1.70;
-// 0 at night, 1 at full daylight. Daylight compensation lowers the exposure
-// (keeping snow/sky below the tonemap ceiling); this curve then lifts the now
-// darker background into the palette so the image stays readable.
-uniform float dayMix : hint_range(0.0, 1.0, 0.01) = 0.0;
-// Highlight rolloff knee for daylight: background brighter than this (snow,
-// sky, cloud decks) bends into a soft shoulder below white before the palette,
-// so it keeps gradient instead of clipping into one flat colour. 1.0 = off.
-// Night is unaffected either way: the shoulder only engages with daylight mix.
-uniform float highlightKnee : hint_range(0.3, 1.0, 0.05) = 0.55;
-uniform int worldPaletteMode = 0;
+// One number holds world brightness, the day/snow trims and the daylight
+// factor. The knee is the night-disabled version of the old daylight shoulder.
+uniform float inputGain : hint_range(0.05, 8.0, 0.01) = 1.7;
+uniform float inputKnee : hint_range(0.3, 1.0, 0.01) = 1.0;
 // Final image brightness while NVG is on. Applied to the composited overlay.
 uniform float nvgWhite : hint_range(0.05, 1.0, 0.05) = 1.0;
+// The five stops of the active 2.4.6 palette and its output factor. Pushed
+// from VTKPalettes; 0 = darkest, 4 = cream.
+uniform vec3 paletteStop0 : source_color = vec3(0.00, 0.00, 0.03);
+uniform vec3 paletteStop1 : source_color = vec3(0.24, 0.10, 0.38);
+uniform vec3 paletteStop2 : source_color = vec3(0.65, 0.00, 0.10);
+uniform vec3 paletteStop3 : source_color = vec3(0.90, 0.65, 0.00);
+uniform vec3 paletteStop4 : source_color = vec3(1.00, 1.00, 0.80);
+uniform float paletteOut : hint_range(0.1, 1.0, 0.01) = 0.7;
+// TRANSITIONAL: removed in 2.11.0, when the palette becomes total.
 uniform float paletteStrength : hint_range(0.0, 1.0, 0.01) = 0.58;
-uniform float redHold : hint_range(0.0, 1.0, 0.01) = 0.72;
 // Mine highlights are 3D shells in the main pass; bypass thermal remapping so
 // the configured mine colour stays readable and does not react to palettes.
+// TRANSITIONAL: removed in 2.11.0.
 uniform bool minePassthroughOn = false;
 uniform vec3 minePassthroughColor : source_color = vec3(0.035, 0.18, 0.965);
-// Daylight compensation scales scene exposure; use it to keep heat/mine
-// detection stable across lighting conditions.
-uniform float dayFactor : hint_range(0.05, 2.0, 0.01) = 1.0;
 
 float Goggles(vec2 uv)
 {
@@ -49,85 +53,13 @@ float Goggles(vec2 uv)
 	return min(G1Distance, G2Distance);
 }
 
-// 0 = Classic (red), 1 = Amber, 2 = Forest, 3 = Ice (blue).
-vec3 day_palette(float v) {
-	vec3 cold = vec3(0.025, 0.075, 0.24);
-	vec3 cool = vec3(0.045, 0.17, 0.46);
-	vec3 neutral = vec3(0.10, 0.24, 0.38);
-	vec3 warm = vec3(0.34, 0.16, 0.07);
-	vec3 hot = vec3(0.92, 0.16, 0.035);
-	vec3 color = mix(cold, cool, smoothstep(0.04, 0.35, v));
-	color = mix(color, neutral, smoothstep(0.30, 0.76, v));
-	color = mix(color, warm, smoothstep(0.84, 0.96, v));
-	color = mix(color, hot, smoothstep(0.965, 1.0, v));
-	return color;
-}
-
-vec3 red_palette(float v) {
-	vec3 cold = vec3(0.05, 0.015, 0.11);
-	vec3 mid = vec3(0.34, 0.035, 0.10);
-	vec3 warm = vec3(0.92, 0.10, 0.025);
-	vec3 hot = vec3(1.0, 0.40, 0.06);
-	vec3 color = mix(cold, mid, smoothstep(0.05, 0.42, v));
-	color = mix(color, warm, smoothstep(0.28, 0.80, v));
-	color = mix(color, hot, smoothstep(0.72, 1.0, v));
-	return color;
-}
-
-vec3 amber_palette(float v) {
-	vec3 cold = vec3(0.10, 0.05, 0.01);
-	vec3 cool = vec3(0.30, 0.14, 0.02);
-	vec3 mid = vec3(0.62, 0.32, 0.04);
-	vec3 warm = vec3(0.92, 0.56, 0.10);
-	vec3 hot = vec3(1.00, 0.84, 0.26);
-	vec3 color = mix(cold, cool, smoothstep(0.04, 0.35, v));
-	color = mix(color, mid, smoothstep(0.30, 0.60, v));
-	color = mix(color, warm, smoothstep(0.55, 0.82, v));
-	color = mix(color, hot, smoothstep(0.78, 1.0, v));
-	return color;
-}
-
-vec3 forest_palette(float v) {
-	vec3 cold = vec3(0.01, 0.08, 0.04);
-	vec3 cool = vec3(0.03, 0.22, 0.10);
-	vec3 mid = vec3(0.08, 0.42, 0.18);
-	vec3 warm = vec3(0.28, 0.68, 0.26);
-	vec3 hot = vec3(0.72, 0.96, 0.46);
-	vec3 color = mix(cold, cool, smoothstep(0.04, 0.35, v));
-	color = mix(color, mid, smoothstep(0.30, 0.60, v));
-	color = mix(color, warm, smoothstep(0.55, 0.82, v));
-	color = mix(color, hot, smoothstep(0.78, 1.0, v));
-	return color;
-}
-
-float red_heat(vec3 src) {
-	float rh = smoothstep(0.10, 0.55, src.r) * (1.0 - smoothstep(src.r * 0.58, src.r * 0.94, max(src.g, src.b)));
-	return clamp(rh, 0.0, 1.0);
-}
-
-vec3 held_heat(float luma) {
-	return mix(vec3(0.95, 0.08, 0.025), vec3(1.0, 0.32, 0.04), clamp(luma, 0.0, 1.0));
-}
-
-vec3 ThermalPalette(float t)
+// C1 highlight shoulder: luminance above the knee bends down toward a bounded
+// top, so the palette never receives a flat clipped value for the brightest
+// part of the frame. Must run on the UNCLAMPED luminance. Knee 1.0 is a
+// pass-through, which is the night case.
+float shoulder(float x, float knee)
 {
-	t = clamp(t, 0.0, 1.0);
-	if (worldPaletteMode == 1) {
-		return amber_palette(t);
-	} else if (worldPaletteMode == 2) {
-		return forest_palette(t);
-	} else if (worldPaletteMode == 3) {
-		return day_palette(t);
-	}
-	return red_palette(t);
-}
-
-// C1 highlight shoulder for daylight: luminance above the knee bends down
-// toward a bounded top, so the palette never receives a flat clipped value for
-// the brightest part of the frame. Must run on the UNCLAMPED luminance.
-float hiShoulder(float x, float knee, float strength)
-{
-	float k = mix(1.0, knee, strength);
+	float k = knee;
 	if (k >= 0.999 || x <= k) {
 		return x;
 	}
@@ -138,6 +70,17 @@ float hiShoulder(float x, float knee, float strength)
 		return k + (x - k) * slope;
 	}
 	return top + (cap - top) * (1.0 - exp(-(x - 1.0) * slope / (cap - top)));
+}
+
+// Fixed 2.4.6 ladder. The edges are constants, not data: only the colours
+// move with the selected palette.
+vec3 ramp(float t)
+{
+	vec3 c = mix(paletteStop0, paletteStop1, smoothstep(0.0, 0.25, t));
+	c = mix(c, paletteStop2, smoothstep(0.25, 0.5, t));
+	c = mix(c, paletteStop3, smoothstep(0.5, 0.75, t));
+	c = mix(c, paletteStop4, smoothstep(0.75, 1.0, t));
+	return c;
 }
 
 void fragment()
@@ -165,28 +108,14 @@ void fragment()
 		if (isMine) {
 			color = vec4(minePassthroughColor, pixelColor.a);
 		} else {
-			float rawLuminance = dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114));
-			float luminance = clamp(hiShoulder(rawLuminance * thermalDarken, highlightKnee, dayMix), 0.0, 1.0);
-			if (dayMix > 0.0) {
-				float lifted = 1.0 - pow(1.0 - luminance, 1.6);
-				luminance = mix(luminance, lifted, dayMix);
-			}
-			vec3 backgroundColor = ThermalPalette(luminance) * 0.7;
-			vec3 srcForHeat = pixelColor.rgb / max(dayFactor, 0.05);
-			float rh = red_heat(srcForHeat) * redHold;
-			backgroundColor = mix(backgroundColor, held_heat(clamp(rawLuminance / max(dayFactor, 0.05), 0.0, 1.0)), clamp(rh, 0.0, 1.0));
-			// Blend toward thermal palette (background only).
-			backgroundColor = mix(pixelColor.rgb, backgroundColor, clamp(paletteStrength, 0.0, 1.0));
-			color = vec4(backgroundColor, pixelColor.a);
+			float v = dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114));
+			v = clamp(shoulder(v * inputGain, inputKnee), 0.0, 1.0);
+			vec3 pal = ramp(v) * paletteOut;
+			// TRANSITIONAL: removed in 2.11.0.
+			color = vec4(mix(pixelColor.rgb, pal, clamp(paletteStrength, 0.0, 1.0)), pixelColor.a);
 		}
 	} else {
 		color = pixelColor * tint;
-		if (dayMix > 0.0) {
-			float tintLum = max(dot(color.rgb, vec3(0.299, 0.587, 0.114)), 0.0001);
-			tintLum = hiShoulder(tintLum, highlightKnee, dayMix);
-			float liftedLum = 1.0 - pow(1.0 - min(tintLum, 1.0), 1.6);
-			color.rgb *= mix(1.0, liftedLum / tintLum, dayMix);
-		}
 	}
 	color.rgb *= nvgWhite;
 	if (!isMine) {
