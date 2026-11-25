@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.10.38] - 2026-11-25
+
+### Changed
+- World thermal palettes use the classic 2.4.6 colour ramps.
+- The thermal picture no longer changes with the night-vision power setting.
+- Daylight compensation no longer alters the game's exposure.
+
+### Removed
+- The Red hold setting.
+
+### Fixed
+- Minor performance improvements.
+
 ## [2.10.37] - 2026-11-23
 
 ### Changed
