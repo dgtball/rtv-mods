@@ -33,6 +33,7 @@ func _run() -> void:
 	t_distance_tooltip_is_honest()
 	t_esp_apply_maps_fields()
 	t_nvg_apply_maps_fields()
+	t_red_hold_is_gone()
 	print("")
 	if fails == 0:
 		print("Settings tests passed")
@@ -124,7 +125,6 @@ func t_read_defaults() -> void:
 	ck(absf(rec.daylight_strength - 1.0) < 0.001, "daylight strength defaults to 1.0")
 	ck(absf(rec.highlight_knee - 0.55) < 0.001, "highlight knee defaults to 0.55")
 	ck(absf(rec.palette_strength - 0.58) < 0.001, "palette strength default")
-	ck(absf(rec.red_hold - 0.72) < 0.001, "red hold default")
 	ck(rec.color_normal == States.DEFAULT_NORMAL, "normal colour default")
 	ck(rec.color_combat == States.DEFAULT_COMBAT, "combat colour default")
 	ck(rec.color_defend == States.DEFAULT_DEFEND, "defend colour default")
@@ -250,7 +250,6 @@ func t_nvg_apply_maps_fields() -> void:
 	rec.daylight_strength = 0.5
 	rec.highlight_knee = 0.4
 	rec.palette_strength = 0.33
-	rec.red_hold = 0.44
 	rec.color_combat = Color(0.0, 1.0, 0.0)
 	rec.color_mine = Color(0.25, 0.5, 0.75)
 	var nvg = NVG.new()
@@ -264,6 +263,18 @@ func t_nvg_apply_maps_fields() -> void:
 	ck(nvg.set_strength == 0.5, "NVG maps daylight strength")
 	ck(absf(nvg.set_highlight_knee - 0.4) < 0.001, "NVG maps highlight knee")
 	ck(absf(nvg.set_palette_strength - 0.33) < 0.001, "NVG maps palette strength")
-	ck(absf(nvg.set_red_hold - 0.44) < 0.001, "NVG maps red hold")
 	ck(nvg.mine_color() == Color(0.25, 0.5, 0.75), "NVG maps the mine colour")
 	nvg.free()
+
+func t_red_hold_is_gone() -> void:
+	var keys := []
+	for r in Settings.DESCRIPTORS:
+		keys.append(r["key"])
+	ck(not keys.has("red_hold"), "red_hold is not registered")
+	ck(keys.has("palette_strength"), "palette_strength stays until 2.11.0")
+	var rec = Settings.Rec.new()
+	ck(not "red_hold" in rec, "the record has no red_hold field")
+	# The dead migration pair must go with the setting: with no descriptor the
+	# rename can never fire, and leaving it behind would contradict the removal.
+	var src := FileAccess.get_file_as_string("res://mods/ThermalVTK/ThermalVTK.gd")
+	ck(not src.contains("vrcets_red_hold"), "no dead red-hold migration pair")

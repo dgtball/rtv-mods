@@ -334,7 +334,6 @@ func _sync_config(cfg: ConfigFile, path: String) -> void:
 func _migrate_renamed_keys(existing: ConfigFile, cfg: ConfigFile) -> void:
 	var pairs := [
 		["Float", "vrcets_thermal_strength", "palette_strength"],
-		["Float", "vrcets_red_hold", "red_hold"],
 	]
 	for p in pairs:
 		var sect: String = p[0]
