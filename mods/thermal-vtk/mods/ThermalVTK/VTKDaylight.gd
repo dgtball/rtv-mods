@@ -1,6 +1,6 @@
 extends RefCounted
-# Pure daylight model for NVG exposure compensation. No scene access, no
-# load(), no paths into the game, so it runs headless (test_daylight.gd).
+# Pure daylight model for the thermal input gain. No scene access, no load(),
+# no paths into the game, so it runs headless (test_daylight.gd).
 #
 # The vanilla NVG raises Environment.tonemap_exposure to 2.0/2.5/3.0 whenever
 # the helmet is worn. That is tuned for darkness: in daylight the frame hits
@@ -8,10 +8,10 @@ extends RefCounted
 #
 # The model normalises the LEVEL of the frame, not a guessed time-of-day: the
 # game's own light state is folded into one scalar E (roughly the median
-# luminance the scene would have), and the exposure is scaled by
+# luminance the scene would have), and the input gain is scaled by
 # `factor = clamp(TARGET / E, FLOOR, 1.0)`. Every daytime scene -- clear noon,
 # overcast, fog, snow, dusk -- then lands on the same palette position, and
-# the compensation is one-sided: it only ever LOWERS the exposure, so night
+# the compensation is one-sided: it only ever LOWERS the gain, so night
 # (E <= TARGET) is exactly vanilla.
 
 const TARGET := 0.22
@@ -20,14 +20,6 @@ const FLOOR := 0.12
 # normalised to the lowest tier, so the picture no longer changes with the
 # setting; higher tiers only brighten, so the gain only ever comes down.
 const EXPOSURE_REF := 2.0
-# Uncompensated frame level the ceiling releases the factor to. Below the
-# measured day reference 0.151 (so the ceiling is guaranteed silent by day)
-# and above the measured cave frame 0.031 (so it is guaranteed to speak in a
-# cave).
-const DAY_LEVEL := 0.10
-# Division guard for `u` and the ceiling. Not a "no measurement" guard: that
-# one lives in VTKNVG, which never computes a ceiling without a frame.
-const EPS := 0.0001
 # Winter background trim. Night is the 2026-10-24 Minefield snow-field
 # measurement; day is fitted 2026-11-11 from the owner's PANEL measurements
 # (winter noon snow field, raw p50 0.679) so the winter day palette sits
@@ -43,17 +35,6 @@ const SNOW_TRIM_NIGHT := 0.60
 const DAY_TRIM := 0.62
 
 const RESPONSE := 1.5
-# Cadence of the frame probe that feeds the ceiling (the panel's `Probe
-# cadence` lever).
-const FRAME_CADENCE := 1.0
-# Adaptive auto-probe cadence (source B): while the measured frame level holds
-# still for PROBE_STABLE_FRAMES frames within PROBE_STABLE_TOL, the cadence
-# doubles up to PROBE_MAX_MULT x base -- a quiet scene needs no GPU sync per base
-# beat anymore -- and a frame change restarts the run at the base.
-const PROBE_GROWTH := 2.0
-const PROBE_MAX_MULT := 4.0
-const PROBE_STABLE_TOL := 0.005
-const PROBE_STABLE_FRAMES := 2
 
 # Weights of the source-A light terms. Unit for now: the fit against the
 # owner's PANEL measurements is a follow-up commit, so the instrument starts
@@ -80,8 +61,9 @@ static func lum(c: Variant) -> float:
 	return 0.299 * col.r + 0.587 * col.g + 0.114 * col.b
 
 # The compensation factor for a scene whose level is `e`. One-sided: at or
-# below TARGET the vanilla exposure stays (1.0), above it the factor drops
-# toward FLOOR. A non-positive `e` is night, never a division by zero.
+# below TARGET the gain stays at the vanilla reference (1.0), above it the
+# factor drops toward FLOOR. A non-positive `e` is night, never a division by
+# zero.
 static func factor_for_light(e: float, target := TARGET, floor_value := FLOOR) -> float:
 	if e <= 0.0:
 		return 1.0
@@ -113,17 +95,7 @@ static func estimate_terms(snap: Dictionary) -> Dictionary:
 	var fog := lum(snap.get("fog_emission", Color.BLACK)) * float(snap.get("fog_density", 0.0))
 	return {"sky": sky, "amb": amb, "sun": sun, "moon": moon, "fog": fog}
 
-# Uncompensated frame level: the probe sees the frame through the game's
-# Environment, our applied exposure included, so the measurement must be
-# divided by `applied` (the current smoothed _day_factor) -- otherwise the
-# loop catches itself. The division is guarded by EPS: a zero measurement
-# gives u -> 0 and the ceiling pins at 1.0, which is why the "no measurement"
-# guard lives in VTKNVG, not here.
-static func frame_ceiling(measured: float, applied: float, level := DAY_LEVEL, floor_value := FLOOR) -> float:
-	var u := measured / maxf(applied, EPS)
-	return clampf(level / maxf(u, EPS), floor_value, 1.0)
-
-# Night gate: the sun is culled -> vanilla exposure. One line, but it is the
+# Night gate: the sun is culled -> vanilla reference gain. One line, but it is the
 # single place "night = vanilla" lives (and the one its test targets).
 static func night_gate(factor: float, sun_down: bool) -> float:
 	return 1.0 if sun_down else factor
@@ -132,11 +104,11 @@ static func night_gate(factor: float, sun_down: bool) -> float:
 # amplified light than any summer surface, so the whole winter frame lands in
 # the red-to-cream third of the palette: probes measured night dirt at
 # luminance 0.365 (t 0.62, red) and bright snow at 0.559 (t 0.95, cream) --
-# no cold colors left on screen. The trim multiplies the effective
-# thermalDarken so the same range re-spreads down the ladder: at night 0.60
-# the dirt reads t 0.37 (purple) and the snow tops out near t 0.57 (amber);
-# by day 0.48 (2026-11-11 calibration, riding DAY_TRIM 0.62) the noon snow
-# field reads p50 0.49 mid-ladder instead of pinned on the ceiling. Keys
+# no cold colors left on screen. The trim multiplies the input gain so the
+# same range re-spreads down the ladder: at night 0.60 the dirt reads t 0.37
+# (purple) and the snow tops out near t 0.57 (amber); by day 0.48 (2026-11-11
+# calibration, riding DAY_TRIM 0.62) the noon snow field reads p50 0.49
+# mid-ladder instead of pinned at the top. Keys
 # are unaffected: substitution happens before the palette. Blended by the
 # same day mix that drives the palette.
 #
@@ -148,10 +120,10 @@ static func night_gate(factor: float, sun_down: bool) -> float:
 # than they were, by the same factor the outdoors already was. The constants
 # themselves were not recalibrated here.
 #
-# `factor` is the effective exposure factor: in dim/overcast winter days the
+# `factor` is the effective daylight factor: in dim/overcast winter days the
 # strong bright-snow compression (trim_day) crushes mids, so the day target
 # eases back toward trim_night as the scene gets dimmer (factor lifted above
-# the bright-day TARGET by the ceiling).
+# the bright-day TARGET by the light estimate).
 static func snow_trim(season: int, mix: float, trim_night := SNOW_TRIM_NIGHT, trim_day := SNOW_TRIM_DAY, factor := FLOOR) -> float:
 	if season != SEASON_WINTER:
 		return 1.0
@@ -168,16 +140,16 @@ static func snow_trim(season: int, mix: float, trim_night := SNOW_TRIM_NIGHT, tr
 static func day_trim(mix: float, day := DAY_TRIM) -> float:
 	return lerpf(1.0, day, clampf(mix, 0.0, 1.0))
 
-# 0 at night, 1 at full daylight: how hard the shader tone curve should lift
-# the background before the thermal palette. The denominator is guarded: a
-# target of 1.0 must yield 0.0, not NaN.
+# 0 at night, 1 at full daylight: the blend for the background trims and the
+# shader's highlight knee. The denominator is guarded: a target of 1.0 must
+# yield 0.0, not NaN.
 static func day_mix(factor: float, target := TARGET) -> float:
 	var d := maxf(1.0 - target, 0.05)
 	return clampf((1.0 - factor) / d, 0.0, 1.0)
 
-# Daylight strength: 0 leaves the vanilla exposure untouched, 1 applies the
-# model in full. Everything downstream (gain, day mix) must use this one
-# effective factor, or the palette drifts from the exposure.
+# Daylight strength: 0 leaves the vanilla reference gain untouched, 1 applies
+# the model in full. Everything downstream (gain, day mix) must use this one
+# effective factor, or the palette drifts from the fitted day picture.
 static func strength_factor(factor: float, strength: float) -> float:
 	return lerpf(1.0, factor, clampf(strength, 0.0, 1.0))
 
@@ -196,16 +168,4 @@ static func step(current: float, target: float, delta: float, response: float = 
 		return target
 	var k := 1.0 - exp(-maxf(delta, 0.0) / response)
 	return lerpf(current, target, clampf(k, 0.0, 1.0))
-
-
-# The cadence for the next auto measurement of the frame probe. While the frame
-# run is still younger than PROBE_STABLE_FRAMES the base wins; afterwards the
-# interval doubles, capped at base x PROBE_MAX_MULT. Pure inputs, so the whole
-# adaptive decision lives in this module and stays headless-testable.
-static func adaptive_interval(base: float, stable: int, interval: float) -> float:
-	if base <= 0.0 or interval <= 0.0:
-		return 0.0
-	if stable < PROBE_STABLE_FRAMES:
-		return base
-	return minf(interval * PROBE_GROWTH, base * PROBE_MAX_MULT)
 

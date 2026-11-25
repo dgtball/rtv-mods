@@ -21,14 +21,12 @@ func _run() -> void:
 	t_factor_for_light()
 	t_estimate_light()
 	t_estimate_terms()
-	t_frame_ceiling()
 	t_night_gate()
 	t_day_mix_target()
 	t_day_trim_mix()
 	t_snow_trim_mix()
 	t_exposure_norm()
 	t_smoothing()
-	t_adaptive_interval()
 	t_clamps()
 	print("")
 	if fails == 0:
@@ -63,19 +61,6 @@ func t_estimate_light() -> void:
 	ck(near(D.estimate_light({"moon_color": Color(1, 1, 1), "moon_energy": 1.0, "moon_mask": 1}), 1.0), "an active moon adds its energy")
 	ck(near(D.estimate_light({"fog_emission": Color(1, 1, 1), "fog_density": 0.5}), 0.5), "fog emission scales by density")
 	ck(near(D.estimate_light({"ambient_color": Color(1, 1, 1), "ambient_energy": 1.0, "sky_color": Color(1, 1, 1), "background_energy": 1.0}), 2.0), "the terms sum with unit weights")
-
-func t_frame_ceiling() -> void:
-	# u = measured / applied -- несжатый уровень кадра. Потолок отпускает ровно
-	# до DAY_LEVEL и никогда выше ванили.
-	ck(near(D.frame_ceiling(0.03, 0.12), 0.40, 0.01), "a cave frame lifts the ceiling to DAY_LEVEL / u")
-	ck(near(D.frame_ceiling(0.03, 1.0), 1.0), "an uncompensated dark frame hits the vanilla ceiling")
-	ck(near(D.frame_ceiling(0.20, 0.12), D.FLOOR), "a bright frame hits the floor")
-	ck(near(D.frame_ceiling(0.10, 0.12), D.FLOOR, 0.005), "a frame on DAY_LEVEL lands on the floor")
-	ck(near(D.frame_ceiling(0.03, 0.12, 0.20), 0.80, 0.01), "an explicit level moves the ceiling")
-	ck(near(D.frame_ceiling(0.03, 0.12, 0.10, 1.0), 1.0), "floor 1.0 disables the release")
-	ck(D.frame_ceiling(0.151, 0.22) < 0.22, "a day-level frame keeps the ceiling under source A")
-	ck(not is_nan(D.frame_ceiling(0.03, 0.0)), "zero applied never divides by zero")
-	ck(D.frame_ceiling(0.03, 0.0) >= D.FLOOR, "a degenerate division stops at the floor")
 
 func t_night_gate() -> void:
 	ck(near(D.night_gate(0.12, true), 1.0), "a sunless sky restores the vanilla exposure")
@@ -117,12 +102,12 @@ func t_snow_trim_mix() -> void:
 	ck(near(D.snow_trim(2, 1.0, 0.5, 0.9), 0.9), "explicit winter trims are honoured")
 	ck(near(D.snow_trim(2, -1.0), D.SNOW_TRIM_NIGHT), "a mix below zero clamps to night")
 	ck(near(D.snow_trim(2, 2.0), D.SNOW_TRIM_DAY), "a mix above one clamps to day")
-	# Brightness-aware dimming: when the ceiling lifts the factor above the
-	# bright-day TARGET, the scene is genuinely dimmer and the winter trim eases
-	# back toward the night trim instead of crushing mids.
+	# Brightness-aware dimming: when the light estimate lifts the factor above
+	# the bright-day TARGET, the scene is genuinely dimmer and the winter trim
+	# eases back toward the night trim instead of crushing mids.
 	ck(near(D.snow_trim(2, 1.0, D.SNOW_TRIM_NIGHT, D.SNOW_TRIM_DAY, D.TARGET), D.SNOW_TRIM_DAY), "bright winter day at TARGET keeps the day trim")
 	ck(near(D.snow_trim(2, 1.0, D.SNOW_TRIM_NIGHT, D.SNOW_TRIM_DAY, 1.0), D.SNOW_TRIM_NIGHT), "very dim winter day eases to the night trim")
-	ck(near(D.snow_trim(2, 1.0, D.SNOW_TRIM_NIGHT, D.SNOW_TRIM_DAY, 0.38), D.SNOW_TRIM_DAY + (D.SNOW_TRIM_NIGHT - D.SNOW_TRIM_DAY) * ((0.38 - D.TARGET) / (1.0 - D.TARGET))), "a ceiling-lifted factor eases the winter trim")
+	ck(near(D.snow_trim(2, 1.0, D.SNOW_TRIM_NIGHT, D.SNOW_TRIM_DAY, 0.38), D.SNOW_TRIM_DAY + (D.SNOW_TRIM_NIGHT - D.SNOW_TRIM_DAY) * ((0.38 - D.TARGET) / (1.0 - D.TARGET))), "a dimmer-day factor eases the winter trim")
 	ck(near(D.snow_trim(2, 0.5, D.SNOW_TRIM_NIGHT, D.SNOW_TRIM_DAY, 1.0), D.SNOW_TRIM_NIGHT), "dim winter half-mix stays at the night trim")
 
 func t_exposure_norm() -> void:
@@ -142,14 +127,6 @@ func t_smoothing() -> void:
 	ck(near(D.step(1.0, 0.33, 5.0, 0.0), 0.33), "zero response snaps")
 	ck(near(D.step(0.5, 0.5, 1.0), 0.5), "equal values stay put")
 	ck(near(D.step(0.5, 1.0, 100.0), 1.0, 0.001), "a long delta converges")
-
-func t_adaptive_interval() -> void:
-	ck(near(D.adaptive_interval(0.0, 2, 1.0), 0.0), "a zero base arms nothing")
-	ck(near(D.adaptive_interval(1.0, 1, 1.0), 1.0), "a young frame run stays on the base")
-	ck(near(D.adaptive_interval(1.0, 2, 1.0), 2.0), "a stable run doubles the cadence")
-	ck(near(D.adaptive_interval(1.0, 2, 2.0), 4.0), "the growth doubles up to the cap")
-	ck(near(D.adaptive_interval(1.0, 2, 4.0), 4.0), "the cadence never exceeds the cap")
-	ck(near(D.adaptive_interval(0.5, 2, 0.5), 1.0), "the cap scales with the base")
 
 func t_clamps() -> void:
 	ck(D.factor_for_light(1.0) >= D.FLOOR, "the factor never drops below the floor")

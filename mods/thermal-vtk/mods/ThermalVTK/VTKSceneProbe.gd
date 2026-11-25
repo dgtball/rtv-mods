@@ -1,27 +1,18 @@
 extends Node
-# The daylight calibration instrument: a tiny 64x36 SubViewport that shares
-# the game's World3D, so it sees exactly the picture the screen shader
-# paints over. measure() mirrors the picture camera, renders one frame,
-# reads it back and hands the image to VTKStats. At rest the viewport is
-# dark: 3D off, no updates, zero cost until a measurement is asked for.
+# The F9 instrument's manual frame readback: a tiny 64x36 SubViewport that
+# shares the game's World3D, so it sees exactly the picture the palette paints
+# over. measure() mirrors the picture camera, renders one frame, reads it back
+# and hands the image to VTKStats. Nothing runs until the panel asks, and the
+# viewport rests dark afterwards: no cadence, no signal, no per-frame cost.
 #
-# The probe camera carries NO Environment of its own on purpose: it
-# inherits the game's WorldEnvironment through the shared world, which is
-# the whole point -- the measured luminance must include the NVG tonemap
-# exposure the shader compensates for. A private Environment would measure
-# a different picture than the one on screen.
+# The probe camera carries NO Environment of its own on purpose: it inherits
+# the game's WorldEnvironment through the shared world, so the measured pixels
+# include the vanilla exposure tier the palette normalises against. A private
+# Environment would measure a different picture than the one on screen.
 #
-# ESP shells live on the ESP shell layer and are excluded from the probe's
-# cull mask: the instrument measures the world, not the overlay. The game
-# camera's own mask is the world's; this module only reads it.
-#
-# Auto mode exists for daylight source B in a normal game, so the owner is
-# VTKNVG: it arms set_auto(cadence) while the measured-frame source is live
-# and disarms it otherwise. The F9 panel only calls measure() on a button
-# press. One measurement runs at a time: the auto tick fires without awaiting,
-# and _busy turns a second request away.
-
-signal measured(stats: Dictionary)
+# The probe mirrors the game camera's cull mask exactly: it measures the frame
+# as the player sees it. One measurement runs at a time; _busy turns a second
+# request away.
 
 const Stats = preload("res://mods/ThermalVTK/VTKStats.gd")
 
@@ -31,39 +22,11 @@ const SIZE := Vector2i(64, 36)
 
 var _vp: SubViewport = null
 var _cam: Camera3D = null
-# Auto mode: <= 0.0 is off (the rest state). While armed the probe measures on
-# its own cadence and emits `measured`; the first tick waits one interval, and a
-# cadence change restarts the countdown at the new value.
-var _auto_interval: float = 0.0
-var _auto_cd: float = 0.0
 # One measurement at a time (see the header).
 var _busy: bool = false
 
-func set_auto(interval: float) -> void:
-	if interval == _auto_interval:
-		return
-	_auto_interval = interval
-	_auto_cd = interval if interval > 0.0 else 0.0
-
 func is_busy() -> bool:
 	return _busy
-
-func _process(delta: float) -> void:
-	if _auto_interval <= 0.0 or _busy:
-		return
-	_auto_cd -= delta
-	if _auto_cd > 0.0:
-		return
-	_auto_cd = _auto_interval
-	_auto_tick()
-
-# The auto tick is a coroutine that owns itself: _process cannot await, and
-# _busy keeps a slow readback from stacking up. get_tree().root is the main
-# Viewport (not the probe's own SubViewport), so the automatic measurement
-# mirrors the same picture camera the panel measures.
-func _auto_tick() -> void:
-	var stats: Dictionary = await measure(get_tree().root)
-	measured.emit(stats)
 
 func _ready() -> void:
 	name = "VTKSceneProbe"
