@@ -16,6 +16,10 @@ extends RefCounted
 
 const TARGET := 0.22
 const FLOOR := 0.12
+# The vanilla NVG raises exposure to 2.0/2.5/3.0 by power tier. The palette is
+# normalised to the lowest tier, so the picture no longer changes with the
+# setting; higher tiers only brighten, so the gain only ever comes down.
+const EXPOSURE_REF := 2.0
 # Uncompensated frame level the ceiling releases the factor to. Below the
 # measured day reference 0.151 (so the ceiling is guaranteed silent by day)
 # and above the measured cave frame 0.031 (so it is guaranteed to speak in a
@@ -172,16 +176,19 @@ static func day_mix(factor: float, target := TARGET) -> float:
 	return clampf((1.0 - factor) / d, 0.0, 1.0)
 
 # Daylight strength: 0 leaves the vanilla exposure untouched, 1 applies the
-# model in full. Everything downstream (exposure, key gain, day mix) must use
-# this one effective factor, or the ring colour drifts from the exposure.
+# model in full. Everything downstream (gain, day mix) must use this one
+# effective factor, or the palette drifts from the exposure.
 static func strength_factor(factor: float, strength: float) -> float:
 	return lerpf(1.0, factor, clampf(strength, 0.0, 1.0))
 
-# Restores a key's pre-tonemap radiance: exposure is multiplied by `factor`,
-# so the emitted key is divided by it. At alpha 1 the on-screen key is then
-# exactly the night-time value, which keeps the detector calibration valid.
-static func key_gain(factor: float) -> float:
-	return 1.0 / maxf(factor, 0.01)
+# Exposure tiers above the reference only brighten the frame. Folding that
+# into the input gain keeps the palette identical across power tiers while the
+# mod never writes Environment.tonemap_exposure. Guards cover a missing or
+# broken value from the game; a tier below the reference changes nothing.
+static func exposure_norm(exposure: float) -> float:
+	if not is_finite(exposure) or exposure <= 0.0:
+		return 1.0
+	return clampf(EXPOSURE_REF / exposure, 0.1, 1.0)
 
 # One-pole smoothing; `delta` is the frame time.
 static func step(current: float, target: float, delta: float, response: float = RESPONSE) -> float:
@@ -202,25 +209,3 @@ static func adaptive_interval(base: float, stable: int, interval: float) -> floa
 		return base
 	return minf(interval * PROBE_GROWTH, base * PROBE_MAX_MULT)
 
-# Mirror of the thermal branch in VTKNVG.gdshader: hiShoulder over the
-# unclamped raw luminance, the clamp, then the soft lift. The shader is the
-# SOURCE OF TRUTH -- copy it verbatim, no extra clamps of our own, because
-# the instrument must agree with the shader even in its sharp corners. When
-# the shader changes, this mirror and its control-point tests move in the
-# same commit.
-static func palette_input(raw_l: float, darken: float, knee: float, mix_value: float) -> float:
-	var k := lerpf(1.0, knee, mix_value)
-	var x := raw_l * darken
-	if k < 0.999 and x > k:
-		var slope := 0.75
-		var top := k + slope * (1.0 - k)
-		var cap := minf(0.98, top + 0.18)
-		if x <= 1.0:
-			x = k + (x - k) * slope
-		else:
-			x = top + (cap - top) * (1.0 - exp(-(x - 1.0) * slope / (cap - top)))
-	var lum := clampf(x, 0.0, 1.0)
-	if mix_value > 0.0:
-		var lifted := 1.0 - pow(1.0 - lum, 1.6)
-		lum = lerpf(lum, lifted, mix_value)
-	return lum

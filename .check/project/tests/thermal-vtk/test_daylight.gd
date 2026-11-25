@@ -26,9 +26,8 @@ func _run() -> void:
 	t_day_mix_target()
 	t_day_trim_mix()
 	t_snow_trim_mix()
-	t_key_gain()
+	t_exposure_norm()
 	t_smoothing()
-	t_palette_input()
 	t_adaptive_interval()
 	t_clamps()
 	print("")
@@ -126,27 +125,14 @@ func t_snow_trim_mix() -> void:
 	ck(near(D.snow_trim(2, 1.0, D.SNOW_TRIM_NIGHT, D.SNOW_TRIM_DAY, 0.38), D.SNOW_TRIM_DAY + (D.SNOW_TRIM_NIGHT - D.SNOW_TRIM_DAY) * ((0.38 - D.TARGET) / (1.0 - D.TARGET))), "a ceiling-lifted factor eases the winter trim")
 	ck(near(D.snow_trim(2, 0.5, D.SNOW_TRIM_NIGHT, D.SNOW_TRIM_DAY, 1.0), D.SNOW_TRIM_NIGHT), "dim winter half-mix stays at the night trim")
 
-func t_palette_input() -> void:
-	ck(near(D.palette_input(0.5, 1.7, 0.6, 0.0), 0.85), "mix 0: shoulder and lift off, raw darken only")
-	ck(near(D.palette_input(0.2, 1.0, 0.6, 1.0), 1.0 - pow(0.8, 1.6)), "below the knee: full lift")
-	ck(near(D.palette_input(0.8, 1.0, 0.6, 1.0), 1.0 - pow(0.25, 1.6)), "above the knee: shoulder then lift")
-	ck(near(D.palette_input(1.0, 1.0, 0.6, 1.0), 1.0 - pow(0.1, 1.6)), "the x = 1.0 boundary takes the linear shoulder")
-	var prev := -1.0
-	var mono := true
-	var raw := 0.0
-	while raw <= 1.2 + 0.0001:
-		var out: float = D.palette_input(raw, 1.2, 0.6, 0.5)
-		if out < prev - 0.0001:
-			mono = false
-		prev = out
-		raw += 0.05
-	ck(mono, "output never decreases across the 0..1.2 sweep")
-
-func t_key_gain() -> void:
-	ck(near(D.key_gain(1.0), 1.0), "night key gain is 1")
-	ck(near(D.key_gain(0.33), 3.0303, 0.001), "full daylight gain restores the key")
-	ck(near(D.key_gain(0.0), 100.0, 0.001), "zero factor is clamped, not divided by zero")
-	ck(near(D.key_gain(0.5), 2.0), "half exposure doubles the key")
+func t_exposure_norm() -> void:
+	ck(near(D.exposure_norm(2.0), 1.0), "the reference tier normalises to 1")
+	ck(near(D.exposure_norm(2.5), 0.8), "2.5 normalises to 0.8")
+	ck(near(D.exposure_norm(3.0), 2.0 / 3.0), "3.0 normalises to two thirds")
+	ck(near(D.exposure_norm(1.0), 1.0), "below the reference the norm stops at 1")
+	ck(near(D.exposure_norm(0.0), 1.0), "zero exposure is a guard, not a division")
+	ck(near(D.exposure_norm(-1.0), 1.0), "negative exposure is a guard")
+	ck(near(D.exposure_norm(NAN), 1.0), "NaN exposure is a guard")
 
 func t_smoothing() -> void:
 	var one := D.step(1.0, 0.33, 1.5, 1.5)
