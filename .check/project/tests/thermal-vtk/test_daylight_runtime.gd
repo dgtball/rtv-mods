@@ -134,8 +134,8 @@ func t_day_lowers_the_input_gain() -> void:
 	nvg._daylight_tick(1.0)
 	ck(is_equal_approx(env.tonemap_exposure, 2.0), "a bright scene leaves the exposure alone")
 	ck(absf(nvg._day_factor - 0.22) < 0.001, "the day factor lands on TARGET")
-	var want: float = nvg.set_world * nvg._snow_trim * nvg._day_trim * 0.22
-	ck(absf(nvg._input_gain - want) < 0.001, "the input gain folds world, trims and the day factor")
+	var want: float = nvg.set_world * nvg._snow_trim * nvg._day_trim * Daylight.QUAD_FLOOR
+	ck(absf(nvg._input_gain - want) < 0.001, "the input gain folds world, trims and the linear-stage floor")
 	w["map"].free()
 
 func t_night_is_untouched() -> void:
@@ -171,8 +171,8 @@ func t_overbright_hits_the_floor() -> void:
 	nvg._daylight_tick(1.0)
 	ck(is_equal_approx(env.tonemap_exposure, 2.0), "a blinding scene leaves the exposure alone")
 	ck(absf(nvg._day_factor - Daylight.FLOOR) < 0.001, "the day factor stops at the floor")
-	var want: float = nvg.set_world * nvg._snow_trim * nvg._day_trim * Daylight.FLOOR
-	ck(absf(nvg._input_gain - want) < 0.001, "the gain bottoms out with the factor")
+	var want: float = nvg.set_world * nvg._snow_trim * nvg._day_trim * Daylight.QUAD_FLOOR
+	ck(absf(nvg._input_gain - want) < 0.001, "the quad gain bottoms out at the shallower linear-stage floor")
 	w["map"].free()
 
 func t_target_lever_moves_the_day() -> void:
@@ -181,11 +181,11 @@ func t_target_lever_moves_the_day() -> void:
 	var env: Environment = w["env"]
 	var sim: FakeSim = w["sim"]
 	_reset(nvg, env, sim, 1.0)
-	nvg.set_day_target = 0.40
+	nvg.set_day_target = 0.80
 	nvg._daylight_tick(1.0)
-	ck(absf(nvg._day_factor - 0.40) < 0.001, "the day factor follows the target lever")
-	var want: float = nvg.set_world * nvg._snow_trim * nvg._day_trim * 0.40
-	ck(absf(nvg._input_gain - want) < 0.001, "the gain follows the target lever")
+	ck(absf(nvg._day_factor - 0.80) < 0.001, "the day factor follows the target lever")
+	var want: float = nvg.set_world * nvg._snow_trim * nvg._day_trim * 0.80
+	ck(absf(nvg._input_gain - want) < 0.001, "the quad gain follows a target above its floor")
 	w["map"].free()
 
 func t_strength_zero_keeps_vanilla() -> void:

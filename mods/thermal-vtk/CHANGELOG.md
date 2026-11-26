@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.10.41] - 2026-11-26
+
+### Changed
+- The world palette now sits behind optical sights, so scopes and collimators stay clear instead of looking half-transparent.
+- NPC outlines and mine markers stay visible through optical sights.
+- Bright daylight keeps more heat instead of flattening the picture into the dark end of the palette.
+
+### Removed
+- The Palette mix setting and slider. The palette is now always applied in full.
+
+### Fixed
+- Putting the night-vision helmet back on no longer flashes a different thermal picture for one frame.
+
 ## [2.10.40] - 2026-11-26
 
 ### Added

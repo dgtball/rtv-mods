@@ -16,6 +16,11 @@ extends RefCounted
 
 const TARGET := 0.22
 const FLOOR := 0.12
+# The spatial quad samples the LINEAR pre-tonemap frame, while FLOOR was fitted
+# against the old post-tonemap canvas. Reusing 0.12 there crushed daylight to
+# the darkest palette stop and removed all visible heat before the ramp. The
+# quad gets its own one-sided floor; the trims below keep their old calibration.
+const QUAD_FLOOR := 0.50
 # The vanilla NVG raises exposure to 2.0/2.5/3.0 by power tier. The palette is
 # normalised to the lowest tier, so the picture no longer changes with the
 # setting; higher tiers only brighten, so the gain only ever comes down.
@@ -68,6 +73,14 @@ static func factor_for_light(e: float, target := TARGET, floor_value := FLOOR) -
 	if e <= 0.0:
 		return 1.0
 	return clampf(target / e, floor_value, 1.0)
+
+# Input gain for the spatial palette quad. FLOOR/DAY_TRIM/SNOW_TRIM still shape
+# the frame the old canvas saw; only the final one-sided level trim differs,
+# because the quad reads a linear frame before tonemapping. `base` already
+# carries world brightness, exposure tier and the calibrated trims.
+static func quad_gain(base: float, e: float, sun_down: bool, target := TARGET, floor_value := QUAD_FLOOR, strength := 1.0) -> float:
+	var factor := strength_factor(factor_for_light(e, target, floor_value), strength)
+	return base * night_gate(factor, sun_down)
 
 # Fold the game's light state into one level scalar. The snapshot keys and
 # their defaults are the contract with VTKNVG._snapshot. Shelter and intro

@@ -17,7 +17,6 @@ func _init() -> void:
 
 func _run() -> void:
 	t_dirty_batches_setters()
-	t_palette_strength_is_live()
 	t_quad_attaches_to_camera()
 	t_quad_uniforms()
 	t_quad_runtime_contract()
@@ -47,34 +46,6 @@ func t_dirty_batches_setters() -> void:
 	ck(nvg._dirty, "thermal toggle marks dirty")
 	nvg.free()
 
-# The F8 palette Strength slider used to write a plain field, so the shader
-# uniform stayed at its old value until an unrelated event marked _dirty.
-# The contract is the uniform itself: after the live write, the next tick must
-# push the new value into the quad material without a palette switch or a
-# re-equip. The ramp moved out of the canvas shader in the quad release.
-func t_palette_strength_is_live() -> void:
-	var nvg = NVG.new()
-	root.add_child(nvg)
-	ck(nvg.has_method("apply_palette_strength"), "NVG exposes a live strength setter")
-	if not nvg.has_method("apply_palette_strength"):
-		nvg.free()
-		return
-	var Quad = preload("res://mods/ThermalVTK/VTKPaletteQuad.gd")
-	var quad = Quad.new()
-	quad.apply([Color.BLACK, Color(0.24, 0.10, 0.38), Color(0.65, 0.0, 0.1), Color(0.9, 0.65, 0.0), Color.WHITE], 0.7, 0.9, 1.7, 0.55)
-	nvg._quad = quad
-	# Old value is already on the material and nothing else is dirty: this is
-	# the state while the F8 panel is open and the slider has not moved yet.
-	nvg.set_palette_strength = 0.9
-	nvg._dirty = false
-	nvg._tick_cd = 0.0
-	nvg.apply_palette_strength(0.31)
-	ck(nvg._dirty, "live strength marks the uniforms dirty")
-	nvg._process(0.016)
-	ck(is_equal_approx(float(quad.material().get_shader_parameter("paletteStrength")), 0.31), "the next tick pushes live strength into the quad")
-	quad.free()
-	nvg.free()
-
 func t_quad_attaches_to_camera() -> void:
 	var Quad = preload("res://mods/ThermalVTK/VTKPaletteQuad.gd")
 	var q = Quad.new()
@@ -82,7 +53,7 @@ func t_quad_attaches_to_camera() -> void:
 	root.add_child(cam)
 	q.attach(cam)
 	ck(q.material() != null, "quad owns a ShaderMaterial")
-	ck(q.material().render_priority == 12, "quad draws above vanilla optics but below ESP overlays")
+	ck(q.material().render_priority == -128, "quad palettizes the world before optics and ESP draw on top")
 	ck(cam.get_child_count() == 1, "quad is parented to the camera, never culled")
 	q.set_enabled(false)
 	ck(not cam.get_child(0).visible, "quad hides cleanly when thermal is off")
@@ -92,7 +63,7 @@ func t_quad_attaches_to_camera() -> void:
 func t_quad_uniforms() -> void:
 	var Quad = preload("res://mods/ThermalVTK/VTKPaletteQuad.gd")
 	var q = Quad.new()
-	q.apply([Color.BLACK, Color(0.24, 0.10, 0.38), Color(0.65, 0.0, 0.10), Color(0.9, 0.65, 0.0), Color.WHITE], 0.7, 1.0, 1.7, 0.55)
+	q.apply([Color.BLACK, Color(0.24, 0.10, 0.38), Color(0.65, 0.0, 0.10), Color(0.9, 0.65, 0.0), Color.WHITE], 0.7, 1.7, 0.55)
 	ck(q.material().get_shader_parameter("paletteStop2") == Color(0.65, 0.0, 0.10), "live stops reach the quad material")
 	ck(is_equal_approx(float(q.material().get_shader_parameter("inputGain")), 1.7), "live gain reaches the quad material")
 	q.free()
@@ -100,7 +71,12 @@ func t_quad_uniforms() -> void:
 func t_quad_runtime_contract() -> void:
 	var src := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKNVG.gd")
 	ck(src.contains("VTKPaletteQuad"), "NVG owns the palette quad")
-	ck(src.contains("apply_palette_strength"), "F8 strength still has a live setter")
+	ck(not src.contains("apply_palette_strength"), "F8 palette mix is gone, so no live setter remains")
+	ck(src.contains("quad_gain"), "quad input uses the linear-stage daylight model")
+	# Definition plus the one call in the scene-change branch. Unequipping the
+	# helmet and toggling daylight in MCM must not re-seed the model: both used
+	# to produce one bright frame before the next tick cut the heat again.
+	ck(src.split("_reset_daylight()").size() == 3, "daylight resets only on map change, not on NVG unequip")
 	ck(not src.contains("minePassthrough"), "no colour passthrough in the runtime owner")
 	ck(not src.contains("hide()"), "mod never hides the vanilla ColorRect")
 

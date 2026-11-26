@@ -11,7 +11,7 @@ const PaletteQuad = preload("res://mods/ThermalVTK/VTKPaletteQuad.gd")
 # Owns the NVG overlay shader, the world palette quad and mine highlighting.
 #
 # The palette is a spatial fullscreen quad in the main 3D view, drawn before
-# contours and mine shells so those overlays keep their exact colours. The NVG
+# optics, contours and mine shells so they keep their own colours. The NVG
 # canvas shader only carries the vanilla tint, noise and goggle mask. Mines are
 # highlighted with main-view shell meshes carrying the configured display colour;
 # contours are handled by VTKOutline/VTKESP in the same view.
@@ -43,9 +43,6 @@ var set_day_floor: float = Daylight.FLOOR
 var set_day_trim: float = Daylight.DAY_TRIM
 # Time acceleration of the day/night cycle (F9 "Time scale" lever; testing).
 var set_time_scale: float = 1.0
-# F8/MCM "Palette mix": linear blend of the finished palette into the frame.
-var set_palette_strength: float = 1.0
-
 # Direct display colour of mine shells (MCM "Mine" colour).
 var _mine_color: Color = States.DEFAULT_MINE
 var _game_data: Resource = null
@@ -257,7 +254,7 @@ func _apply_uniforms() -> void:
 	# the overlay guards, otherwise a missing ColorRect would freeze the palette
 	# while the F8/F9 panels are still changing it.
 	if _quad != null:
-		_quad.apply(Palettes.stops(set_palette), Palettes.output(), set_palette_strength, _input_gain, lerpf(1.0, set_highlight_knee, _day_mix))
+		_quad.apply(Palettes.stops(set_palette), Palettes.output(), _input_gain, lerpf(1.0, set_highlight_knee, _day_mix))
 	if not _installed or _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
 		if _nvg_mat_node != null and not is_instance_valid(_nvg_mat_node):
 			_nvg_mat_node = null
@@ -283,7 +280,12 @@ func _refresh_input_gain() -> void:
 	var exposure := Daylight.EXPOSURE_REF
 	if env != null:
 		exposure = env.tonemap_exposure
-	var gain := set_world * _snow_trim * _day_trim * _day_factor * Daylight.exposure_norm(exposure)
+	var base := set_world * _snow_trim * _day_trim * Daylight.exposure_norm(exposure)
+	# FLOOR/DAY_TRIM/SNOW_TRIM stay on their canvas-era calibration; only the
+	# quad's linear-stage level trim is different. Strength 0 (or daylight off)
+	# hands the vanilla gain back without a first-frame re-seed.
+	var strength := set_strength if set_daylight else 0.0
+	var gain := Daylight.quad_gain(base, _light_est, _sun_down, set_day_target, Daylight.QUAD_FLOOR, strength)
 	if absf(gain - _input_gain) > 0.0005:
 		_input_gain = gain
 		_dirty = true
@@ -330,11 +332,12 @@ func _process(delta: float) -> void:
 		_was_worn = worn
 		_dirty = true
 		if not worn:
-			# NVG overlay can be torn down by the game on unequip; avoid touching it.
+			# NVG overlay can be torn down by the game on unequip; avoid touching
+			# it. The daylight state stays warm: re-seeding here made the first
+			# frame after putting the helmet back on flash, then cut the heat.
 			if _nvg_mat_node != null and not is_instance_valid(_nvg_mat_node):
 				_nvg_mat_node = null
 				_installed = false
-			_reset_daylight()
 	if worn:
 		_daylight_tick(delta)
 	# Player position, fetched once per frame.
@@ -827,12 +830,7 @@ func set_thermal_enabled(on: bool) -> void:
 # MCM snapshot in, settings out. Headless-safe: every setter here is a var
 # write, and _apply_uniforms guards against the missing tree.
 func apply_config(rec) -> void:
-	var was_daylight := set_daylight
 	set_daylight = rec.daylight_compensation
-	if was_daylight and not set_daylight:
-		_reset_daylight()
-	elif not was_daylight and set_daylight:
-		_day_seeded = false
 	set_strength = rec.daylight_strength
 	set_nvg_noise = rec.nvg_noise
 	set_nvg_white = rec.nvg_white
@@ -841,22 +839,12 @@ func apply_config(rec) -> void:
 	set_glow_distance = rec.outline_distance
 	set_mines = rec.thermal_mines
 	set_mine_color(rec.color_mine)
-	set_palette_strength = rec.palette_strength
 	_dirty = true
 	_tick_cd = 0.0
 
 
 func set_palette_mode(mode: int) -> void:
 	set_palette = posmod(mode, 4)
-	_dirty = true
-	_tick_cd = 0.0
-
-
-# The F8 panel writes this live, so the field alone is not enough -- a plain
-# assignment used to leave the shader uniform stale until some unrelated event
-# marked the uniforms dirty (up to several seconds).
-func apply_palette_strength(value: float) -> void:
-	set_palette_strength = clampf(value, 0.0, 1.0)
 	_dirty = true
 	_tick_cd = 0.0
 

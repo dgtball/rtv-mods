@@ -6,7 +6,7 @@ separate `.vmz` archives and can be installed on their own — there is no share
 | Mod | What it does | Version | README |
 |---|---|---|---|
 | **Vostok Toolkit** (`vostok-toolkit`) | Loadout presets, dynamic seasons, partial task hand-in, Notes icon rows, kill stats and killfeed with mine kills, fast travel | 5.7.0 | [mods/vostok-toolkit/README.md](mods/vostok-toolkit/README.md) |
-| **ThermalVTK** (`thermal-vtk`) | Standalone thermal vision / NVG overlay with heat glow and ESP, plus an in-game ESP tuning panel | 2.10.1 | [mods/thermal-vtk/README.md](mods/thermal-vtk/README.md) |
+| **ThermalVTK** (`thermal-vtk`) | Standalone thermal vision / NVG overlay with heat glow and ESP, plus an in-game ESP tuning panel | 2.10.41 | [mods/thermal-vtk/README.md](mods/thermal-vtk/README.md) |
 | **Gimme the Loot** (`gimme-the-loot`) | Per-instance rarity tiers and affixes for looted weapons, clothing and gadgets | 1.2.4 | [mods/gimme-the-loot/README.md](mods/gimme-the-loot/README.md) |
 | **Freeze for JCM** (`jcm-freeze`) | Freezes NPCs, the BTR and the helicopter on demand (JCM addon) | 1.3.0 | [mods/jcm-freeze/README.md](mods/jcm-freeze/README.md) |
 | **Knife or Pistol** (`knife-or-pistol`) | Third weapon slot: the knife slot takes a knife or a pistol, and the pistol works normally when drawn | 1.0.1 | [mods/knife-or-pistol/README.md](mods/knife-or-pistol/README.md) |

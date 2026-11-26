@@ -313,8 +313,6 @@ func _sync_config(cfg: ConfigFile, path: String) -> void:
 	var existing := ConfigFile.new()
 	if FileAccess.file_exists(path):
 		existing.load(path)
-		# Migrate renamed keys so user values survive descriptor renames.
-		_migrate_renamed_keys(existing, cfg)
 		var stale_sections := []
 		for s in existing.get_sections():
 			if s != "Info" and not cfg.has_section(s):
@@ -352,37 +350,6 @@ func _sync_config(cfg: ConfigFile, path: String) -> void:
 		existing.save(path)
 	if not FileAccess.file_exists(path):
 		cfg.save(path)
-
-# Carry values from old key names into renamed keys before stale-key removal.
-func _migrate_renamed_keys(existing: ConfigFile, cfg: ConfigFile) -> void:
-	var pairs := [
-		["Float", "vrcets_thermal_strength", "palette_strength"],
-	]
-	for p in pairs:
-		var sect: String = p[0]
-		var old_k: String = p[1]
-		var new_k: String = p[2]
-		if not existing.has_section_key(sect, old_k) or not cfg.has_section_key(sect, new_k):
-			continue
-		if existing.has_section_key(sect, new_k):
-			continue
-		var old_v = existing.get_value(sect, old_k, null)
-		if old_v == null:
-			continue
-		var new_v = cfg.get_value(sect, new_k, {})
-		if typeof(old_v) == TYPE_DICTIONARY and typeof(new_v) == TYPE_DICTIONARY:
-			var merged = old_v.duplicate()
-			merged["name"] = new_v.get("name", merged.get("name", ""))
-			merged["tooltip"] = new_v.get("tooltip", merged.get("tooltip", ""))
-			merged["default"] = new_v.get("default", merged.get("default"))
-			for prop in ["minRange", "maxRange", "step", "category", "menu_pos", "type", "default_type", "allowAlpha"]:
-				if new_v.has(prop):
-					merged[prop] = new_v[prop]
-			if old_v.has("value"):
-				merged["value"] = old_v.get("value")
-			existing.set_value(sect, new_k, merged)
-		else:
-			existing.set_value(sect, new_k, old_v)
 
 # The mod loader can run several profiles and MCM keeps the settings of the
 # active one in "<profile>.ini" next to the default "config.ini". The menu

@@ -2,8 +2,9 @@ shader_type spatial;
 render_mode unshaded, fog_disabled, depth_test_disabled, depth_draw_never, cull_disabled;
 
 // Fullscreen palette pass in the main 3D view. Godot copies the screen after
-// the opaque pass and before transparent geometry, so this quad palettizes the
-// world but not the ESP overlays drawn later at higher render priorities.
+// the opaque pass and before transparent geometry. This quad is the FIRST
+// transparent pass (render_priority -128): it palettizes the world, then
+// vanilla optics, reticles and our exact-colour ESP/mine overlays draw on top.
 
 uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_nearest;
 
@@ -19,10 +20,6 @@ uniform vec3 paletteStop2 : source_color = vec3(0.65, 0.00, 0.10);
 uniform vec3 paletteStop3 : source_color = vec3(0.90, 0.65, 0.00);
 uniform vec3 paletteStop4 : source_color = vec3(1.00, 1.00, 0.80);
 uniform float paletteOut : hint_range(0.1, 1.0, 0.01) = 0.7;
-// F8 "Palette mix": blend of the palette over the live framebuffer. Unlike the
-// old `paletteStrength` there is no hidden daylight multiplier here, so 1.0
-// really means a full palette and 0.0 means the untouched frame.
-uniform float paletteStrength : hint_range(0.0, 1.0, 0.01) = 1.0;
 
 // C1 highlight shoulder: luminance above the knee bends down toward a bounded
 // top, so the palette never receives a flat clipped value for the brightest
@@ -69,10 +66,9 @@ void fragment() {
 	v = pow(v, 1.0 / 2.2);
 	vec3 pal = ramp(v) * paletteOut;
 	ALBEDO = pal;
-	// Blend over the CURRENT framebuffer, which at priority 12 already contains
-	// transparent optics (lenses, reticles). A fully opaque quad would erase
-	// them, so 0.85 is the ceiling: optics are tinted but stay readable. The
-	// screen copy above only supplies the world luminance for the ramp. ESP
-	// contours and mines draw later at 20/21 and keep their exact colours.
-	ALPHA = clamp(paletteStrength, 0.0, 1.0) * 0.85;
+	// The palette is total. Because this pass runs before every transparent
+	// overlay, optics and reticles are never half-washed and ESP/mines drawn at
+	// 20/21 keep their exact colours. The screen copy above only supplies the
+	// world luminance for the ramp.
+	ALPHA = 1.0;
 }

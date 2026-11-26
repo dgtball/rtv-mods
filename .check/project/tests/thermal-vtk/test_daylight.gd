@@ -19,6 +19,7 @@ func _init() -> void:
 
 func _run() -> void:
 	t_factor_for_light()
+	t_quad_gain()
 	t_estimate_light()
 	t_estimate_terms()
 	t_night_gate()
@@ -47,6 +48,18 @@ func t_factor_for_light() -> void:
 	ck(near(D.factor_for_light(1.0, 0.40), 0.40), "an explicit target is the noon factor")
 	ck(near(D.factor_for_light(1.0, 0.22, 1.0), 1.0), "floor 1.0 is the vanilla exposure")
 	ck(not is_nan(D.factor_for_light(0.0)), "zero light stays finite")
+
+func t_quad_gain() -> void:
+	# The spatial quad samples the linear pre-tonemap frame. The old 0.12 floor
+	# was calibrated for the post-tonemap canvas and crushed daylight into the
+	# darkest palette stop; the quad needs a much shallower one-sided trim.
+	ck(D.QUAD_FLOOR > D.FLOOR, "quad floor is shallower than the retired canvas floor")
+	ck(near(D.quad_gain(1.7, 3.4, false), 1.7 * D.QUAD_FLOOR), "bright day keeps a mid-ladder gain")
+	ck(near(D.quad_gain(1.7, 1.0, false), 1.7 * D.QUAD_FLOOR), "the quad floor dominates the retired target on lit days")
+	ck(near(D.quad_gain(1.7, 0.2, false), 1.7), "dim scene keeps the vanilla gain")
+	ck(near(D.quad_gain(1.7, 1.0, false, 0.8), 1.7 * 0.8), "a target lever above the floor still moves the quad gain")
+	ck(near(D.quad_gain(1.7, 3.4, false, D.TARGET, D.QUAD_FLOOR, 0.0), 1.7), "daylight strength off keeps the vanilla quad gain")
+	ck(near(D.quad_gain(1.7, 3.4, true), 1.7), "night gate wins over the daylight estimate")
 
 func t_estimate_light() -> void:
 	ck(near(D.estimate_light({}), 0.0), "an empty snapshot estimates nothing")

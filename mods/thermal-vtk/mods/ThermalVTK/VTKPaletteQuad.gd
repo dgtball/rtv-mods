@@ -2,11 +2,11 @@ extends Node
 ## Fullscreen spatial quad that palettizes the world after the opaque pass.
 ##
 ## Godot copies the screen texture after opaque geometry and before transparent
-## geometry. This quad lives in the main 3D view just above vanilla optics
-## (render_priority 12), so ESP contours and mine
-## shells at 20/21 keep their exact colours outside the palettized frame. The mesh
-## is parented to the current camera and its vertex shader writes clip space
-## directly, so it always covers the viewport and is never frustum-culled.
+## geometry. This quad is the first transparent pass (render_priority -128):
+## vanilla optics (0/11), ESP contours and mine shells (20/21) all draw on top
+## with their own colours. The mesh is parented to the current camera and its
+## vertex shader writes clip space directly, so it always covers the viewport
+## and is never frustum-culled.
 
 const Shaders = preload("res://mods/ThermalVTK/VTKShaders.gd")
 
@@ -18,11 +18,10 @@ func material() -> ShaderMaterial:
 	if _mat == null:
 		_mat = ShaderMaterial.new()
 		_mat.shader = Shaders.palette()
-		# Above optic lenses/reticles (vanilla Alpha/Objective surfaces use 0 and
-		# 11) but still below contour shells and mine markers at 20. The shader
-	# blends over the live framebuffer, so optics drawn before the quad are
-	# tinted instead of erasing the reticle; later ESP overlays stay exact.
-	_mat.render_priority = 12
+		# First transparent pass: the world is already palettized when vanilla
+		# optics (0/11) and exact-colour ESP/mines (20/21) draw on top. Painting
+		# after optics made scopes look half-transparent and washed out ESP.
+		_mat.render_priority = -128
 	return _mat
 
 
@@ -52,12 +51,11 @@ func set_enabled(on: bool) -> void:
 		_mesh.visible = on
 
 
-func apply(stops: Array, out: float, strength: float, gain: float, knee: float) -> void:
+func apply(stops: Array, out: float, gain: float, knee: float) -> void:
 	var mat := material()
 	for i in 5:
 		var c: Color = stops[i] if i < stops.size() and stops[i] is Color else Color.BLACK
 		mat.set_shader_parameter("paletteStop%d" % i, c)
 	mat.set_shader_parameter("paletteOut", out)
-	mat.set_shader_parameter("paletteStrength", strength)
 	mat.set_shader_parameter("inputGain", gain)
 	mat.set_shader_parameter("inputKnee", knee)

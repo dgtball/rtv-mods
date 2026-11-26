@@ -124,7 +124,6 @@ func t_read_defaults() -> void:
 	ck(rec.key_live_panel == KEY_F9, "live panel key defaults to F9")
 	ck(absf(rec.daylight_strength - 1.0) < 0.001, "daylight strength defaults to 1.0")
 	ck(absf(rec.highlight_knee - 0.55) < 0.001, "highlight knee defaults to 0.55")
-	ck(absf(rec.palette_strength - 1.0) < 0.001, "palette mix defaults to full")
 	ck(rec.color_normal == States.DEFAULT_NORMAL, "normal colour default")
 	ck(rec.color_combat == States.DEFAULT_COMBAT, "combat colour default")
 	ck(rec.color_defend == States.DEFAULT_DEFEND, "defend colour default")
@@ -249,7 +248,6 @@ func t_nvg_apply_maps_fields() -> void:
 	rec.daylight_compensation = false
 	rec.daylight_strength = 0.5
 	rec.highlight_knee = 0.4
-	rec.palette_strength = 0.33
 	rec.color_combat = Color(0.0, 1.0, 0.0)
 	rec.color_mine = Color(0.25, 0.5, 0.75)
 	var nvg = NVG.new()
@@ -262,7 +260,7 @@ func t_nvg_apply_maps_fields() -> void:
 	ck(nvg.set_daylight == false, "NVG maps the daylight toggle")
 	ck(nvg.set_strength == 0.5, "NVG maps daylight strength")
 	ck(absf(nvg.set_highlight_knee - 0.4) < 0.001, "NVG maps highlight knee")
-	ck(absf(nvg.set_palette_strength - 0.33) < 0.001, "NVG maps palette strength")
+	ck(not "set_palette_strength" in nvg, "NVG has no palette mix field")
 	ck(nvg.mine_color() == Color(0.25, 0.5, 0.75), "NVG maps the mine colour")
 	nvg.free()
 
@@ -271,10 +269,14 @@ func t_red_hold_is_gone() -> void:
 	for r in Settings.DESCRIPTORS:
 		keys.append(r["key"])
 	ck(not keys.has("red_hold"), "red_hold is not registered")
-	ck(keys.has("palette_mix"), "palette mix is a fresh key, not the old Strength value")
+	ck(not keys.has("palette_mix"), "palette mix is fixed at 1, not an MCM key")
 	ck(not keys.has("palette_strength"), "the stale Strength key is gone")
+	var panel := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKEspPanel.gd")
+	ck(not panel.contains("Palette mix"), "F8 has no palette mix slider")
+	ck(not panel.contains("_palette_strength"), "F8 has no palette mix state")
 	var rec = Settings.Rec.new()
 	ck(not "red_hold" in rec, "the record has no red_hold field")
+	ck(not "palette_strength" in rec, "the record has no palette mix field")
 	# The dead migration pair must go with the setting: with no descriptor the
 	# rename can never fire, and leaving it behind would contradict the removal.
 	var src := FileAccess.get_file_as_string("res://mods/ThermalVTK/ThermalVTK.gd")
