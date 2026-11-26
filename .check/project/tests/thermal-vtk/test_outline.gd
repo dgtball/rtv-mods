@@ -33,6 +33,7 @@ func _run() -> void:
 	t_recollect_detects_deep_mesh_replacement()
 	t_recollect_clears_detached_mesh_overlay()
 	t_clear_not_in()
+	t_draw_priorities()
 	print("")
 	if fails == 0:
 		print("Outline tests passed")
@@ -102,8 +103,8 @@ func t_overlay_outline_chain_and_uniforms() -> void:
 	ck(body.shader == Sh.body_los(), "outline body uses body_los shader")
 	ck(ring != null and ring.shader == Sh.ring_los(), "outline body has ring_los next_pass")
 	ck(is_equal_approx(float(body.get_shader_parameter("alpha")), 0.8), "outline body carries the fill alpha")
-	ck(body.render_priority == -128, "outline body draws before every other transparent")
-	ck(ring.render_priority == 127, "outline ring draws after every other transparent")
+	ck(body.render_priority == 0, "outline body draws above the palette quad")
+	ck(ring.render_priority == 1, "outline ring draws above the body")
 	ck(body.get_shader_parameter("outline_color") == S.DEFAULT_COMBAT, "outline body carries display color")
 	ck(is_equal_approx(float(body.get_shader_parameter("brightness")), 1.2), "outline body brightness set")
 	ck(is_equal_approx(float(body.get_shader_parameter("grow")), 0.01), "outline body grow set")
@@ -403,3 +404,9 @@ func t_clear_not_in() -> void:
 	a.free()
 	b.free()
 	c.free()
+
+func t_draw_priorities() -> void:
+	var src := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKOutline.gd")
+	ck(src.contains("body_mat.render_priority = 0"), "contour body draws above the palette")
+	ck(src.contains("ring_mat.render_priority = 1"), "contour ring draws above the body")
+	ck(not src.contains("render_priority = -128"), "no stale palette-floor priority in outline")

@@ -27,6 +27,7 @@ func _run() -> void:
 	t_band_contract()
 	t_nvg_compositor_contract()
 	t_palette_ramp()
+	t_palette_quad_contract()
 	t_nvg_shader_compiles()
 	t_runtime_contract()
 	t_daylight_contract()
@@ -118,16 +119,26 @@ func t_nvg_compositor_contract() -> void:
 
 func t_palette_ramp() -> void:
 	var code := FileAccess.get_file_as_string(NVG_SHADER_RES)
-	for i in 5:
-		ck(code.contains("paletteStop%d" % i), "overlay declares paletteStop%d" % i)
 	ck(not code.contains("worldPaletteMode"), "overlay has no palette mode branch")
 	for bad in ["red_heat", "held_heat", "redHold", "dayMix", "thermalDarken"]:
 		ck(not code.contains(bad), "overlay has no %s" % bad)
-	for edge in ["smoothstep(0.0, 0.25", "smoothstep(0.25, 0.5", "smoothstep(0.5, 0.75", "smoothstep(0.75, 1.0"]:
-		ck(code.contains(edge), "ramp uses the fixed ladder edge %s" % edge)
-	ck(code.contains("inputGain") and code.contains("inputKnee") and code.contains("paletteOut"), "overlay declares the three stage uniforms")
-	ck(code.contains("paletteStrength"), "paletteStrength stays until 2.11.0")
-	ck(code.contains("minePassthroughOn"), "mine passthrough stays until 2.11.0")
+	for bad in ["paletteStop0", "paletteOut", "inputGain", "inputKnee", "paletteStrength", "minePassthroughOn"]:
+		ck(not code.contains(bad), "canvas shader no longer declares %s" % bad)
+
+func t_palette_quad_contract() -> void:
+	var res := "res://mods/ThermalVTK/VTKPalette.gdshader"
+	ck(FileAccess.file_exists(res), "palette quad shader exists")
+	var src := FileAccess.get_file_as_string(res)
+	ck(src.contains("shader_type spatial"), "palette quad is a spatial shader")
+	var shader: Shader = load(res)
+	ck(shader != null and not shader.get_shader_uniform_list().is_empty(), "palette quad shader compiles")
+	ck(src.contains("uniform sampler2D screen_texture : hint_screen_texture"), "quad samples the screen copy")
+	ck(src.contains("POSITION = vec4(VERTEX.xy, 1.0, 1.0)"), "quad uses clip-space fullscreen position")
+	ck(src.contains("texture(screen_texture, SCREEN_UV)"), "quad samples with SCREEN_UV")
+	ck(src.contains("depth_test_disabled") and src.contains("depth_draw_never"), "quad never reads or writes depth")
+	for u in ["inputGain", "inputKnee", "paletteOut", "paletteStop0", "paletteStop4", "paletteStrength"]:
+		ck(src.contains(u), "quad declares %s" % u)
+	ck(not src.contains("minePassthrough"), "quad has no colour passthrough")
 
 func t_nvg_shader_compiles() -> void:
 	var sh = load(NVG_SHADER_RES)
@@ -136,7 +147,7 @@ func t_nvg_shader_compiles() -> void:
 		return
 	var names := _uniform_names(sh)
 	ck(names.size() > 0, "NVG shader compiled (uniform list not empty)")
-	for u in ["inputGain", "inputKnee", "paletteOut", "paletteStop0", "paletteStop4", "thermalMode", "nvgWhite", "paletteStrength", "minePassthroughOn", "noise", "tint"]:
+	for u in ["thermalMode", "nvgWhite", "noise", "tint"]:
 		ck(names.has(u), "compiled shader exposes %s" % u)
 	for bad in ["espTex", "espComposite", "espOn", "stNormalKey", "stCombatKey", "stDefendKey", "mineKey", "stNormalColor", "stCombatColor", "stDefendColor", "mineColor", "stateBright", "scopeRotate", "espFillAlpha", "espBodyFill"]:
 		ck(not names.has(bad), "compiled shader does not expose substitution uniform %s" % bad)
@@ -156,9 +167,9 @@ func t_runtime_contract() -> void:
 		ck(not store.contains(bad), "shader store has no key-variant token %s" % bad)
 
 func t_daylight_contract() -> void:
-	var nvg := FileAccess.get_file_as_string(NVG_SHADER_RES)
-	ck(nvg.contains("uniform float inputGain"), "overlay declares the input gain")
-	ck(not nvg.contains("dayMix"), "overlay has no day curve uniform")
+	var quad := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKPalette.gdshader")
+	ck(quad.contains("uniform float inputGain"), "palette quad declares the input gain")
+	ck(not quad.contains("dayMix"), "quad has no day curve uniform")
 	var owner := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKNVG.gd")
 	ck(owner.contains("_daylight_tick"), "VTKNVG applies the daylight model per frame")
 	ck(FileAccess.file_exists("res://mods/ThermalVTK/VTKDaylight.gd"), "daylight model exists")
