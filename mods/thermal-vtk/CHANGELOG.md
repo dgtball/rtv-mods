@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.10.40] - 2026-11-26
+
+### Added
+- With the debug log on, F10 cycles the outline colour of the NPC under the crosshair.
+
+### Changed
+- NPC outlines and mine markers now keep their exact colours in every world palette.
+- The thermal picture is drawn over the world instead of mixing with it, so all four palettes stay readable.
+
 ## [2.10.39] - 2026-11-26
 
 ### Fixed
