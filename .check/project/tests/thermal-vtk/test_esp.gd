@@ -66,6 +66,7 @@ func _run() -> void:
 	t_weapon_runs_without_contour()
 	t_subject_is_nearest_candidate()
 	t_no_perframe_subject_log()
+	t_crosshair_target()
 	print("")
 	if fails == 0:
 		print("ESP tests passed")
@@ -813,3 +814,19 @@ func t_parked_trigger_does_not_register() -> void:
 	ck(esp._entries.has(bot.get_instance_id()), "a live layer registers the caller again")
 	esp.free()
 	scene.queue_free()
+
+# F10 needs the bot under the crosshair, not the nearest bot in Euclidean
+# range: a bot far off to the side must not steal the key from the one the
+# player is looking at.
+func t_crosshair_target() -> void:
+	root.size = Vector2i(800, 600)
+	var cam := Camera3D.new()
+	root.add_child(cam)
+	var center := cam.unproject_position(Vector3(0.0, 0.0, -10.0))
+	var candidates := [
+		{"id": 1, "pos": Vector3(0.0, 0.0, -10.0)},
+		{"id": 2, "pos": Vector3(20.0, 0.0, -10.0)},
+	]
+	ck(ESP.pick_target_id(candidates, cam, center, 80.0) == 1, "bot under the crosshair wins")
+	ck(ESP.pick_target_id([], cam, center, 80.0) == -1, "empty candidate list has no target")
+	cam.free()

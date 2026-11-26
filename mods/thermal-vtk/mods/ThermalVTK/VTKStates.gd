@@ -37,6 +37,17 @@ static func category_of(state: int) -> int:
 	_build()
 	return int(_map.get(state, NORMAL))
 
+# Debug-only instrument: F10 walks the three display categories in one fixed
+# order. It is deliberately a pure mapping with no scene state or persistence.
+static func next_debug_state(cat: int) -> int:
+	match cat:
+		COMBAT:
+			return DEFEND
+		DEFEND:
+			return NORMAL
+		_:
+			return COMBAT
+
 const STATE_NAMES: Array[String] = [
 	"Idle", "Wander", "Loot", "Guard", "Patrol", "Cover", "Hide", "Ambush",
 	"Combat", "Hunt", "Defend", "Attack", "Vantage", "Grenade", "Lurk",

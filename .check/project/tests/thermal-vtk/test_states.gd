@@ -23,6 +23,7 @@ func _run() -> void:
 	t_palette_hexes()
 	t_state_names()
 	t_mine_colour_differs()
+	t_debug_state_cycle()
 	print("")
 	if fails == 0:
 		print("States tests passed")
@@ -72,3 +73,8 @@ func t_mine_colour_differs() -> void:
 	ck(S.DEFAULT_MINE != S.DEFAULT_NORMAL and S.DEFAULT_MINE != S.DEFAULT_COMBAT and S.DEFAULT_MINE != S.DEFAULT_DEFEND,
 		"the mine colour differs from every state colour")
 	ck(S.DEFAULT_MINE.a > 0.99, "the mine colour is opaque")
+
+func t_debug_state_cycle() -> void:
+	ck(S.next_debug_state(S.NORMAL) == S.COMBAT, "F10 normal -> combat")
+	ck(S.next_debug_state(S.COMBAT) == S.DEFEND, "F10 combat -> defend")
+	ck(S.next_debug_state(S.DEFEND) == S.NORMAL, "F10 defend -> normal")

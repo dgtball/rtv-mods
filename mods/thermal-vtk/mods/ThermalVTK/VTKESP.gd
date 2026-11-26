@@ -655,6 +655,57 @@ func _apply_state_held(e: Dictionary, state: int, now: float) -> void:
 		e["cat_since"] = now
 	e["cat"] = before
 
+# F10 debug tool: pick the tracked bot whose head is closest to the crosshair
+# in screen space. Screen space matters here -- the nearest bot in world space
+# can be far off to the side of what the player is looking at.
+static func pick_target_id(candidates: Array, cam: Camera3D, center: Vector2, radius_px: float) -> int:
+	if cam == null or not is_instance_valid(cam):
+		return -1
+	var best := -1
+	var best_d2 := maxf(radius_px, 0.0) * maxf(radius_px, 0.0)
+	for item in candidates:
+		if not (item is Dictionary):
+			continue
+		var c: Dictionary = item
+		if not c.has("id") or not c.has("pos"):
+			continue
+		var scr: Vector2 = cam.unproject_position(c["pos"])
+		var d2 := scr.distance_squared_to(center)
+		if d2 <= best_d2:
+			best_d2 = d2
+			best = int(c["id"])
+	return best
+
+# Write the next category straight into the existing entry. cat_pend/cat_since
+# are advanced together so the normal hysteresis does not undo the manual
+# assignment on the very next read. No override table, no persistence.
+func cycle_state_under_crosshair() -> int:
+	var cam := _camera()
+	if cam == null:
+		return -1
+	var vp := get_viewport()
+	if vp == null:
+		return -1
+	var center: Vector2 = vp.get_visible_rect().size * 0.5
+	var candidates: Array = []
+	for id in _entries:
+		var e: Dictionary = _entries[id]
+		if e == null or bool(e.get("dead", false)):
+			continue
+		var node = e.get("node")
+		if node == null or not is_instance_valid(node):
+			continue
+		candidates.append({"id": int(id), "pos": _head_world(node)})
+	var id := pick_target_id(candidates, cam, center, 80.0)
+	if id < 0 or not _entries.has(id):
+		return -1
+	var target: Dictionary = _entries[id]
+	var next: int = States.next_debug_state(int(target.get("cat", States.NORMAL)))
+	target["cat"] = next
+	target["cat_pend"] = next
+	target["cat_since"] = _now() - CAT_HOLD
+	return next
+
 func _ids_for_frame() -> Array:
 	if _ids_stamp != _frame:
 		_ids_frame = _entries.keys()

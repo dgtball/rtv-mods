@@ -23,6 +23,7 @@ var _key_thermal_toggle: int = 0
 var _key_palette_cycle: int = KEY_F6
 var _key_esp_panel: int = KEY_F8
 var _key_live_panel: int = KEY_F9
+var _key_state_cycle: int = KEY_F10
 var _thermal_enabled: bool = false
 var _outline_enabled: bool = true
 var _xray_enabled: bool = true
@@ -78,6 +79,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			_toggle_live_panel()
 			get_viewport().set_input_as_handled()
 		return
+	if _key_state_cycle != 0 and (k.keycode == _key_state_cycle or k.physical_keycode == _key_state_cycle):
+		# Debug-only instrument: with the log off the key stays free for the
+		# game, just like F8/F9, and no state is written.
+		if VTKDebug.enabled:
+			_cycle_debug_state()
+			get_viewport().set_input_as_handled()
+		return
 	if _key_thermal_toggle == 0:
 		return
 	if k.keycode == _key_thermal_toggle or k.physical_keycode == _key_thermal_toggle:
@@ -107,6 +115,21 @@ func _cycle_palette() -> void:
 	_nvg.set_palette_mode(mode)
 	_notify("World palette: " + PALETTE_NAMES[mode], Color(0.6, 0.8, 1.0))
 	_save_state("world_palette", mode)
+
+# F10 assigns the next display category to the bot under the crosshair. It is
+# a palette-testing instrument only: no MCM key, no saved state, no override
+# table, and the debug log gate lives in _unhandled_input.
+const DEBUG_STATE_NAMES: Array[String] = ["Normal", "Combat", "Defend"]
+
+func _cycle_debug_state() -> void:
+	_ensure_esp()
+	var cat := -1
+	if _esp != null and is_instance_valid(_esp):
+		cat = _esp.cycle_state_under_crosshair()
+	if cat >= 0 and cat < DEBUG_STATE_NAMES.size():
+		_notify("ESP state: " + DEBUG_STATE_NAMES[cat], Color(0.6, 0.8, 1.0))
+	else:
+		_notify("ESP state: No target", Color(0.7, 0.7, 0.7))
 
 # The NVG live panel exists only while the debug log is on: the autoload owns it,
 # so the gate lives here, not inside the panel. The panel itself is a pure
