@@ -6,13 +6,15 @@ const Palettes = preload("res://mods/ThermalVTK/VTKPalettes.gd")
 const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 const SceneProbe = preload("res://mods/ThermalVTK/VTKSceneProbe.gd")
+const PaletteQuad = preload("res://mods/ThermalVTK/VTKPaletteQuad.gd")
 
-# Owns the NVG overlay shader and mine highlighting.
+# Owns the NVG overlay shader, the world palette quad and mine highlighting.
 #
-# The NVG overlay palettizes/tints the background (screen_texture). Mines are
+# The palette is a spatial fullscreen quad in the main 3D view, drawn before
+# contours and mine shells so those overlays keep their exact colours. The NVG
+# canvas shader only carries the vanilla tint, noise and goggle mask. Mines are
 # highlighted with main-view shell meshes carrying the configured display colour;
-# contours are handled by VTKOutline/VTKESP in the main view (overlay-only
-# baseline).
+# contours are handled by VTKOutline/VTKESP in the same view.
 
 const GAME_DATA_RES := Paths.GAME_DATA
 const NVG_SCRIPT_SUFFIX := "NVG.gd"
@@ -51,6 +53,7 @@ var _shader: Shader = null
 var _nvg_root: Node = null
 var _nvg_mat_node: Node = null
 var _installed: bool = false
+var _quad = null
 
 var _mat_mine: StandardMaterial3D = null
 
@@ -107,6 +110,11 @@ func _ready() -> void:
 	# Direct mine display material for main-view shells.
 	_mat_mine = _mine_display_material(_mine_color)
 
+	# The quad node stays ours; only its mesh is parented to the live camera.
+	_quad = PaletteQuad.new()
+	add_child(_quad)
+	_attach_quad()
+
 	get_tree().node_added.connect(_on_node_added)
 	_scene_ref = get_tree().current_scene
 	_reseed(get_tree().current_scene)
@@ -115,7 +123,21 @@ func _ready() -> void:
 func _reseed(scene: Node) -> void:
 	if scene == null:
 		return
+	_attach_quad()
 	_scan_node(scene)
+
+
+# The camera is recreated on every map load. Reattach lazily: when no camera is
+# current yet the old mesh goes with its parent and attach() rebuilds it.
+func _attach_quad() -> void:
+	if _quad == null:
+		return
+	var vp := get_viewport()
+	if vp == null:
+		return
+	var cam := vp.get_camera_3d()
+	if cam != null:
+		_quad.attach(cam)
 
 
 func _scan_node(n: Node) -> void:
@@ -136,6 +158,9 @@ func _mine_display_material(c: Color) -> StandardMaterial3D:
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.albedo_color = c
 	m.emission_enabled = false
+	# Above the palette quad (-128), below contour rings; same depth test as
+	# ordinary world geometry so walls still occlude mine shells.
+	m.render_priority = 0
 	return m
 
 
@@ -228,6 +253,11 @@ func _apply_uniforms() -> void:
 	_refresh_input_gain()
 	_dirty = false
 	_refresh_mine_material()
+	# The quad is independent of the canvas material: push its uniforms before
+	# the overlay guards, otherwise a missing ColorRect would freeze the palette
+	# while the F8/F9 panels are still changing it.
+	if _quad != null:
+		_quad.apply(Palettes.stops(set_palette), Palettes.output(), set_palette_strength, _input_gain, lerpf(1.0, set_highlight_knee, _day_mix))
 	if not _installed or _nvg_mat_node == null or not is_instance_valid(_nvg_mat_node):
 		if _nvg_mat_node != null and not is_instance_valid(_nvg_mat_node):
 			_nvg_mat_node = null
@@ -241,18 +271,8 @@ func _apply_uniforms() -> void:
 	nvg_mat.set_shader_parameter("noise", set_nvg_noise)
 	nvg_mat.set_shader_parameter("thermalMode", thermal_on)
 	nvg_mat.set_shader_parameter("nvgWhite", set_nvg_white)
-	nvg_mat.set_shader_parameter("paletteStrength", set_palette_strength)
-	nvg_mat.set_shader_parameter("minePassthroughOn", thermal_on and set_mines)
-	nvg_mat.set_shader_parameter("minePassthroughColor", _mine_color)
-	var pal := Palettes.stops(set_palette)
-	nvg_mat.set_shader_parameter("paletteStop0", pal[0])
-	nvg_mat.set_shader_parameter("paletteStop1", pal[1])
-	nvg_mat.set_shader_parameter("paletteStop2", pal[2])
-	nvg_mat.set_shader_parameter("paletteStop3", pal[3])
-	nvg_mat.set_shader_parameter("paletteStop4", pal[4])
-	nvg_mat.set_shader_parameter("paletteOut", Palettes.output())
-	nvg_mat.set_shader_parameter("inputGain", _input_gain)
-	nvg_mat.set_shader_parameter("inputKnee", lerpf(1.0, set_highlight_knee, _day_mix))
+	# All palette math moved to the spatial quad; the canvas pass keeps only
+	# the vanilla tint, noise, goggle mask and final NVG brightness.
 
 
 # One number feeds the palette: world brightness, the day/snow trims, the
@@ -301,8 +321,11 @@ func _process(delta: float) -> void:
 		_reseed(_scene_ref)
 		_tick_cd = 0.0
 		_reset_daylight()
+	_attach_quad()
 	var worn := _nvg_active()
 	var on := set_thermal and worn
+	if _quad != null:
+		_quad.set_enabled(on)
 	if worn != _was_worn:
 		_was_worn = worn
 		_dirty = true
