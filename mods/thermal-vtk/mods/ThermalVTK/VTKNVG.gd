@@ -829,5 +829,14 @@ func set_palette_mode(mode: int) -> void:
 	_tick_cd = 0.0
 
 
+# TRANSITIONAL: the F8 panel writes this live, so the field alone is not
+# enough -- a plain assignment used to leave the shader uniform stale until
+# some unrelated event marked the uniforms dirty (up to several seconds).
+func apply_palette_strength(value: float) -> void:
+	set_palette_strength = clampf(value, 0.0, 1.0)
+	_dirty = true
+	_tick_cd = 0.0
+
+
 func _exit_tree() -> void:
 	_clear_mine_state()

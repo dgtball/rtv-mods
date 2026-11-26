@@ -143,7 +143,7 @@ func _restore_snapshot() -> void:
 	_esp.p_color_defend = Color(_saved.get("c_defend", States.DEFAULT_DEFEND))
 	_apply_mine_color(Color(_saved.get("c_mine", States.DEFAULT_MINE)))
 	if _nvg != null and is_instance_valid(_nvg):
-		_nvg.set("set_palette_strength", float(_saved.get("palette_strength", 0.58)))
+		_nvg.apply_palette_strength(float(_saved.get("palette_strength", 0.58)))
 	_sync_from_runtime()
 	if _esp_enabled != null:
 		_esp_enabled.button_pressed = bool(_saved.get("esp_preview_on", true))
@@ -200,7 +200,7 @@ func _on_changed(_v = null) -> void:
 	_apply_mine_color(Color(_c_mine.color) if _c_mine != null else States.DEFAULT_MINE)
 	if _nvg != null and is_instance_valid(_nvg):
 		var vs := float(_palette_strength.value) if _palette_strength != null else 0.58
-		_nvg.set("set_palette_strength", vs)
+		_nvg.apply_palette_strength(vs)
 	_refresh_status()
 	_apply_live()
 	var now_ms := Time.get_ticks_msec()

@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.10.39] - 2026-11-26
+
+### Fixed
+- The F8 Strength slider now changes the thermal picture immediately.
+
 ## [2.10.38] - 2026-11-25
 
 ### Changed

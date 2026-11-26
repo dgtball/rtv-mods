@@ -17,6 +17,7 @@ func _init() -> void:
 
 func _run() -> void:
 	t_dirty_batches_setters()
+	t_palette_strength_is_live()
 	t_mine_retry_is_bounded()
 	t_off_upkeep_clears_dead_mines()
 	t_mine_color_stored_and_applied()
@@ -41,6 +42,42 @@ func t_dirty_batches_setters() -> void:
 	ck(not nvg._dirty, "a push clears the flag")
 	nvg.set_thermal_enabled(true)
 	ck(nvg._dirty, "thermal toggle marks dirty")
+	nvg.free()
+
+# The F8 palette Strength slider used to write a plain field, so the shader
+# uniform stayed at its old value until an unrelated event marked _dirty.
+# The contract is the uniform itself: after the live write, the next tick must
+# push the new value into the material without a palette switch or a re-equip.
+func t_palette_strength_is_live() -> void:
+	var nvg = NVG.new()
+	root.add_child(nvg)
+	ck(nvg.has_method("apply_palette_strength"), "NVG exposes a live strength setter")
+	if not nvg.has_method("apply_palette_strength"):
+		nvg.free()
+		return
+	var shader: Shader = load("res://mods/ThermalVTK/VTKNVG.gdshader")
+	ck(shader != null, "the NVG shader loads in the stand")
+	if shader == null:
+		nvg.free()
+		return
+	var mat := ShaderMaterial.new()
+	mat.shader = shader
+	var probe := ColorRect.new()
+	probe.material = mat
+	root.add_child(probe)
+	nvg._nvg_mat_node = probe
+	nvg._installed = true
+	# Old value is already on the material and nothing else is dirty: this is
+	# the state while the F8 panel is open and the slider has not moved yet.
+	mat.set_shader_parameter("paletteStrength", 0.9)
+	nvg.set_palette_strength = 0.9
+	nvg._dirty = false
+	nvg._tick_cd = 0.0
+	nvg.apply_palette_strength(0.31)
+	ck(nvg._dirty, "live strength marks the uniforms dirty")
+	nvg._process(0.016)
+	ck(is_equal_approx(float(mat.get_shader_parameter("paletteStrength")), 0.31), "the next tick pushes live strength into the shader")
+	probe.free()
 	nvg.free()
 
 # A mine whose visual never appears used to be swept on every tick forever.
