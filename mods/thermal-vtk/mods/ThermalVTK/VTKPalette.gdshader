@@ -19,8 +19,10 @@ uniform vec3 paletteStop2 : source_color = vec3(0.65, 0.00, 0.10);
 uniform vec3 paletteStop3 : source_color = vec3(0.90, 0.65, 0.00);
 uniform vec3 paletteStop4 : source_color = vec3(1.00, 1.00, 0.80);
 uniform float paletteOut : hint_range(0.1, 1.0, 0.01) = 0.7;
-// TRANSITIONAL: removed in 2.11.0, when the palette becomes total.
-uniform float paletteStrength : hint_range(0.0, 1.0, 0.01) = 0.58;
+// F8 "Palette mix": blend of the palette over the live framebuffer. Unlike the
+// old `paletteStrength` there is no hidden daylight multiplier here, so 1.0
+// really means a full palette and 0.0 means the untouched frame.
+uniform float paletteStrength : hint_range(0.0, 1.0, 0.01) = 1.0;
 
 // C1 highlight shoulder: luminance above the knee bends down toward a bounded
 // top, so the palette never receives a flat clipped value for the brightest
@@ -62,10 +64,15 @@ void fragment() {
 	vec4 pixelColor = texture(screen_texture, SCREEN_UV);
 	float v = dot(pixelColor.rgb, vec3(0.299, 0.587, 0.114));
 	v = clamp(shoulder(v * inputGain, inputKnee), 0.0, 1.0);
+	// The quad samples the linear pre-tonemap frame. Apply display gamma before
+	// the ramp, otherwise the dark end of the old canvas pipeline stays black.
+	v = pow(v, 1.0 / 2.2);
 	vec3 pal = ramp(v) * paletteOut;
-	// TRANSITIONAL: removed in 2.11.0.
-	ALBEDO = mix(pixelColor.rgb, pal, clamp(paletteStrength, 0.0, 1.0));
-	// Alpha keeps this draw in the transparent queue, where the screen copy
-	// has already happened; ESP overlays use higher render priorities.
-	ALPHA = 1.0;
+	ALBEDO = pal;
+	// Blend over the CURRENT framebuffer, which at priority 12 already contains
+	// transparent optics (lenses, reticles). A fully opaque quad would erase
+	// them, so 0.85 is the ceiling: optics are tinted but stay readable. The
+	// screen copy above only supplies the world luminance for the ramp. ESP
+	// contours and mines draw later at 20/21 and keep their exact colours.
+	ALPHA = clamp(paletteStrength, 0.0, 1.0) * 0.85;
 }

@@ -123,9 +123,9 @@ func _snapshot() -> void:
 	else:
 		_saved["c_mine"] = States.DEFAULT_MINE
 	if _nvg != null and is_instance_valid(_nvg):
-		_saved["palette_strength"] = float(_nvg.get("set_palette_strength")) if _nvg.get("set_palette_strength") != null else 0.58
+		_saved["palette_strength"] = float(_nvg.get("set_palette_strength")) if _nvg.get("set_palette_strength") != null else 1.0
 	else:
-		_saved["palette_strength"] = 0.58
+		_saved["palette_strength"] = 1.0
 
 func _restore_snapshot() -> void:
 	if _esp == null or not is_instance_valid(_esp):
@@ -143,7 +143,7 @@ func _restore_snapshot() -> void:
 	_esp.p_color_defend = Color(_saved.get("c_defend", States.DEFAULT_DEFEND))
 	_apply_mine_color(Color(_saved.get("c_mine", States.DEFAULT_MINE)))
 	if _nvg != null and is_instance_valid(_nvg):
-		_nvg.apply_palette_strength(float(_saved.get("palette_strength", 0.58)))
+		_nvg.apply_palette_strength(float(_saved.get("palette_strength", 1.0)))
 	_sync_from_runtime()
 	if _esp_enabled != null:
 		_esp_enabled.button_pressed = bool(_saved.get("esp_preview_on", true))
@@ -174,9 +174,9 @@ func _sync_from_runtime() -> void:
 	if _palette_strength != null:
 		if _nvg != null and is_instance_valid(_nvg):
 			var vs = _nvg.get("set_palette_strength")
-			_palette_strength.value = float(vs) if vs != null else 0.58
+			_palette_strength.value = float(vs) if vs != null else 1.0
 		else:
-			_palette_strength.value = 0.58
+			_palette_strength.value = 1.0
 	_suppress = false
 
 func _apply_mine_color(c: Color) -> void:
@@ -199,7 +199,7 @@ func _on_changed(_v = null) -> void:
 	_esp.p_color_defend = Color(_c_defend.color)
 	_apply_mine_color(Color(_c_mine.color) if _c_mine != null else States.DEFAULT_MINE)
 	if _nvg != null and is_instance_valid(_nvg):
-		var vs := float(_palette_strength.value) if _palette_strength != null else 0.58
+		var vs := float(_palette_strength.value) if _palette_strength != null else 1.0
 		_nvg.apply_palette_strength(vs)
 	_refresh_status()
 	_apply_live()
@@ -312,8 +312,8 @@ func _build_ui() -> void:
 	var wl := Label.new()
 	wl.text = "World palette (NVG, runtime only)"
 	v.add_child(wl)
-	# TRANSITIONAL: the whole slider goes in 2.11.0.
-	_palette_strength = _add_slider(v, "Strength", 0.0, 1.0, 0.05, 0.58)
+	# Readout only: set through the F8 panel now; MCM keeps the persisted key.
+	_palette_strength = _add_slider(v, "Palette mix", 0.0, 1.0, 0.05, 1.0)
 
 	v.add_child(HSeparator.new())
 	var row := HBoxContainer.new()

@@ -43,8 +43,8 @@ var set_day_floor: float = Daylight.FLOOR
 var set_day_trim: float = Daylight.DAY_TRIM
 # Time acceleration of the day/night cycle (F9 "Time scale" lever; testing).
 var set_time_scale: float = 1.0
-# TRANSITIONAL: removed in 2.11.0, when the palette becomes total.
-var set_palette_strength: float = 0.58
+# F8/MCM "Palette mix": linear blend of the finished palette into the frame.
+var set_palette_strength: float = 1.0
 
 # Direct display colour of mine shells (MCM "Mine" colour).
 var _mine_color: Color = States.DEFAULT_MINE
@@ -158,9 +158,9 @@ func _mine_display_material(c: Color) -> StandardMaterial3D:
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.albedo_color = c
 	m.emission_enabled = false
-	# Above the palette quad (-128), below contour rings; same depth test as
+	# Above the palette quad (12), below contour rings; same depth test as
 	# ordinary world geometry so walls still occlude mine shells.
-	m.render_priority = 0
+	m.render_priority = 20
 	return m
 
 
@@ -852,9 +852,9 @@ func set_palette_mode(mode: int) -> void:
 	_tick_cd = 0.0
 
 
-# TRANSITIONAL: the F8 panel writes this live, so the field alone is not
-# enough -- a plain assignment used to leave the shader uniform stale until
-# some unrelated event marked the uniforms dirty (up to several seconds).
+# The F8 panel writes this live, so the field alone is not enough -- a plain
+# assignment used to leave the shader uniform stale until some unrelated event
+# marked the uniforms dirty (up to several seconds).
 func apply_palette_strength(value: float) -> void:
 	set_palette_strength = clampf(value, 0.0, 1.0)
 	_dirty = true

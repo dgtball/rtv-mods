@@ -67,6 +67,7 @@ func _run() -> void:
 	t_subject_is_nearest_candidate()
 	t_no_perframe_subject_log()
 	t_crosshair_target()
+	t_debug_state_is_sticky()
 	print("")
 	if fails == 0:
 		print("ESP tests passed")
@@ -824,9 +825,30 @@ func t_crosshair_target() -> void:
 	root.add_child(cam)
 	var center := cam.unproject_position(Vector3(0.0, 0.0, -10.0))
 	var candidates := [
-		{"id": 1, "pos": Vector3(0.0, 0.0, -10.0)},
-		{"id": 2, "pos": Vector3(20.0, 0.0, -10.0)},
+		{"id": 1, "pos": Vector3(0.0, 0.0, -10.0), "head": Vector3(0.0, 1.9, -10.0)},
+		{"id": 2, "pos": Vector3(20.0, 0.0, -10.0), "head": Vector3(20.0, 1.9, -10.0)},
 	]
 	ck(ESP.pick_target_id(candidates, cam, center, 80.0) == 1, "bot under the crosshair wins")
+	# The old head-only pick missed this: the crosshair is on the torso while
+	# the head projects well above the 80 px radius.
+	var lower := {"id": 3, "pos": Vector3(0.0, 0.0, -10.0), "head": Vector3(0.0, 6.0, -10.0)}
+	ck(ESP.pick_target_id([lower], cam, center, 80.0) == 3, "torso hit works when the head is off-centre")
 	ck(ESP.pick_target_id([], cam, center, 80.0) == -1, "empty candidate list has no target")
 	cam.free()
+
+func t_debug_state_is_sticky() -> void:
+	var esp = ESP.new()
+	root.add_child(esp)
+	var bot := FakeBot.new()
+	root.add_child(bot)
+	esp._register(bot)
+	var id := bot.get_instance_id()
+	var e: Dictionary = esp._entries[id]
+	e["debug_held"] = true
+	e["debug_cat"] = S.COMBAT
+	e["cat"] = S.COMBAT
+	esp._apply_state_held(e, S.NORMAL, esp._now() + 10.0)
+	ck(int(e["cat"]) == S.COMBAT, "F10 assignment survives the normal state reader")
+	ck(int(e["cat"]) != S.NORMAL, "the live AI state cannot undo a held debug state")
+	bot.free()
+	esp.free()

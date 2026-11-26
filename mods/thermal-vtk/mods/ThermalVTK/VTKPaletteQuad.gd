@@ -2,9 +2,9 @@ extends Node
 ## Fullscreen spatial quad that palettizes the world after the opaque pass.
 ##
 ## Godot copies the screen texture after opaque geometry and before transparent
-## geometry. This quad lives in the main 3D view at the transparent floor
-## (render_priority -128), so ESP contours and mine shells drawn at higher
-## priorities keep their exact colours outside the palettized frame. The mesh
+## geometry. This quad lives in the main 3D view just above vanilla optics
+## (render_priority 12), so ESP contours and mine
+## shells at 20/21 keep their exact colours outside the palettized frame. The mesh
 ## is parented to the current camera and its vertex shader writes clip space
 ## directly, so it always covers the viewport and is never frustum-culled.
 
@@ -18,7 +18,11 @@ func material() -> ShaderMaterial:
 	if _mat == null:
 		_mat = ShaderMaterial.new()
 		_mat.shader = Shaders.palette()
-		_mat.render_priority = -128
+		# Above optic lenses/reticles (vanilla Alpha/Objective surfaces use 0 and
+		# 11) but still below contour shells and mine markers at 20. The shader
+	# blends over the live framebuffer, so optics drawn before the quad are
+	# tinted instead of erasing the reticle; later ESP overlays stay exact.
+	_mat.render_priority = 12
 	return _mat
 
 

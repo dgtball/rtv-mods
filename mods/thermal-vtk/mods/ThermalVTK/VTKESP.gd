@@ -640,6 +640,14 @@ func _scope_probe(delta: float) -> void:
 # Hysteresis for the state colour: a one-frame flicker between combat and
 # cover must not repaint the NPC.
 func _apply_state_held(e: Dictionary, state: int, now: float) -> void:
+	# An F10 assignment is sticky until the next F10: the diagnostic instrument
+	# must not be eaten by the normal state reader half a second later. No
+	# override table or save -- the flag lives on the tracked entry only.
+	if bool(e.get("debug_held", false)):
+		e["cat"] = int(e.get("debug_cat", States.NORMAL))
+		e["cat_pend"] = int(e["cat"])
+		e["cat_since"] = now
+		return
 	var before: int = int(e.get("cat", States.NORMAL))
 	Tracker.apply_state(e, state)
 	var fresh: int = int(e.get("cat", States.NORMAL))
@@ -655,9 +663,10 @@ func _apply_state_held(e: Dictionary, state: int, now: float) -> void:
 		e["cat_since"] = now
 	e["cat"] = before
 
-# F10 debug tool: pick the tracked bot whose head is closest to the crosshair
-# in screen space. Screen space matters here -- the nearest bot in world space
-# can be far off to the side of what the player is looking at.
+# F10 debug tool: pick the tracked bot closest to the crosshair in screen space.
+# Screen space matters here -- the nearest bot in world space can be far off to
+# the side of what the player is looking at. Both the body centre and the head
+# count: aiming at the torso must not miss because the head sits higher up.
 static func pick_target_id(candidates: Array, cam: Camera3D, center: Vector2, radius_px: float) -> int:
 	if cam == null or not is_instance_valid(cam):
 		return -1
@@ -667,18 +676,36 @@ static func pick_target_id(candidates: Array, cam: Camera3D, center: Vector2, ra
 		if not (item is Dictionary):
 			continue
 		var c: Dictionary = item
-		if not c.has("id") or not c.has("pos"):
+		if not c.has("id"):
 			continue
-		var scr: Vector2 = cam.unproject_position(c["pos"])
-		var d2 := scr.distance_squared_to(center)
-		if d2 <= best_d2:
-			best_d2 = d2
-			best = int(c["id"])
+		var points: Array = []
+		if c.has("pos"):
+			points.append(c["pos"])
+		if c.has("head"):
+			points.append(c["head"])
+		for p in points:
+			if not (p is Vector3):
+				continue
+			var d2 := cam.unproject_position(p).distance_squared_to(center)
+			if d2 <= best_d2:
+				best_d2 = d2
+				best = int(c["id"])
 	return best
 
-# Write the next category straight into the existing entry. cat_pend/cat_since
-# are advanced together so the normal hysteresis does not undo the manual
-# assignment on the very next read. No override table, no persistence.
+# A body-centre anchor derived from the bot mesh AABB. The old head-only pick
+# missed whenever the player aimed at the torso, especially through a scope.
+func _body_world(node: Node) -> Vector3:
+	var anchor: Vector3 = (node as Node3D).global_position
+	var mesh = node.get("mesh")
+	if mesh is Node3D:
+		var m := mesh as Node3D
+		var box: AABB = m.get_aabb()
+		return m.global_position + Vector3(0.0, (box.position.y + box.end.y) * 0.5, 0.0)
+	return anchor + Vector3(0.0, 0.9, 0.0)
+
+# Write the next category straight into the existing entry and hold it. The
+# normal state reader is bypassed while debug_held is set, so the assigned
+# colour stays until the next F10 press. No save, no override table.
 func cycle_state_under_crosshair() -> int:
 	var cam := _camera()
 	if cam == null:
@@ -695,15 +722,17 @@ func cycle_state_under_crosshair() -> int:
 		var node = e.get("node")
 		if node == null or not is_instance_valid(node):
 			continue
-		candidates.append({"id": int(id), "pos": _head_world(node)})
-	var id := pick_target_id(candidates, cam, center, 80.0)
+		candidates.append({"id": int(id), "pos": _body_world(node), "head": _head_world(node)})
+	var id := pick_target_id(candidates, cam, center, 140.0)
 	if id < 0 or not _entries.has(id):
 		return -1
 	var target: Dictionary = _entries[id]
 	var next: int = States.next_debug_state(int(target.get("cat", States.NORMAL)))
 	target["cat"] = next
 	target["cat_pend"] = next
-	target["cat_since"] = _now() - CAT_HOLD
+	target["cat_since"] = _now()
+	target["debug_held"] = true
+	target["debug_cat"] = next
 	return next
 
 func _ids_for_frame() -> Array:

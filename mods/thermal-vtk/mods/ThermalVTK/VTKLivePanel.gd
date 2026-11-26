@@ -68,7 +68,7 @@ func setup(nvg: Node, owner: Node) -> void:
 	_readout = Label.new()
 	_readout.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(_readout)
-	_add_slider(box, "Strength", 0.0, 1.0, 0.05, "set_strength")
+	_add_slider(box, "Daylight comp", 0.0, 1.0, 0.05, "set_strength")
 	_add_slider(box, "Day target", 0.05, 1.0, 0.01, "set_day_target")
 	_add_slider(box, "Day floor", 0.01, 1.0, 0.01, "set_day_floor")
 	_add_slider(box, "Day trim", 0.40, 1.0, 0.01, "set_day_trim")
@@ -197,7 +197,7 @@ func _refresh_readout() -> void:
 	var snap: Dictionary = _nvg._snapshot()
 	var terms: Dictionary = Daylight.estimate_terms(snap)
 	var sim: Dictionary = _nvg.debug_sim_state() if _nvg.has_method("debug_sim_state") else {}
-	_readout.text = "%s\nE %.3f (sky %.2f amb %.2f sun %.2f moon %.2f fog %.2f)\nsunDown %d indoor %d shelter %d | factor %.3f (A %.3f) gain %.3f\nmix %.2f bgTrim %.2f exp %s | world %.2f knee %.2f strength %.2f helmet %d thermal %d" % [
+	_readout.text = "%s\nE %.3f (sky %.2f amb %.2f sun %.2f moon %.2f fog %.2f)\nsunDown %d indoor %d shelter %d | factor %.3f (A %.3f) gain %.3f\nmix %.2f bgTrim %.2f exp %s | world %.2f knee %.2f dayComp %.2f helmet %d thermal %d" % [
 		_sim_line(sim),
 		float(_nvg.get("_light_est")),
 		float(terms["sky"]), float(terms["amb"]), float(terms["sun"]), float(terms["moon"]), float(terms["fog"]),

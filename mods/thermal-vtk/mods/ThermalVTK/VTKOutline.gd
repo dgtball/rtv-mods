@@ -129,13 +129,13 @@ func _valid_meshes(meshes: Array) -> Array:
 func _material_for(xray: bool) -> Material:
 	var body_mat := ShaderMaterial.new()
 	body_mat.shader = Shaders.body_xray() if xray else Shaders.body_los()
-	# The palette quad owns the transparent floor (-128). Explicit priorities
-	# put the translucent body above it and the ring band above the body:
-	# next_pass alone does not guarantee adjacency in the transparent queue.
-	body_mat.render_priority = 0
+	# The palette quad sits at priority 12, above vanilla optics. Explicit
+	# priorities put the translucent body above it and the ring band above the
+	# body: next_pass alone does not guarantee adjacency in the transparent queue.
+	body_mat.render_priority = 20
 	var ring_mat := ShaderMaterial.new()
 	ring_mat.shader = Shaders.ring_xray() if xray else Shaders.ring_los()
-	ring_mat.render_priority = 1
+	ring_mat.render_priority = 21
 	body_mat.next_pass = ring_mat
 	return body_mat
 

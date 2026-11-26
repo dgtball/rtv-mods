@@ -41,7 +41,7 @@ class Rec:
 	var highlight_knee: float = 0.55
 	# World thermal palette tuning.
 	# TRANSITIONAL: removed in 2.11.0, when the palette becomes total.
-	var palette_strength: float = 0.58
+	var palette_strength: float = 1.0
 	# NPC outlines.
 	var corpse_decay: float = 70.0
 	var outline_distance: float = OUTLINE_DISTANCE
@@ -99,8 +99,7 @@ const DESCRIPTORS: Array[Dictionary] = [
 	{"sect": "Bool", "key": "daylight_compensation", "name": "Daylight compensation", "def": true, "cat": "01. ThermalVision", "pos": 11, "tip": "In bright daylight, lower the game's exposure so snow and sky keep detail instead of washing out. At night the unmodified night-vision exposure is kept, so the picture matches vanilla. Dark places seen in daylight stay readable."},
 	{"sect": "Float", "key": "daylight_strength", "name": "Daylight strength", "def": 1.0, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 12, "tip": "How much daylight compensation is applied at all. 0 = vanilla NVG exposure, 1 = full compensation."},
 	{"sect": "Float", "key": "thermal_highlight_knee", "name": "Highlight softness", "def": 0.55, "min": 0.3, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 13, "tip": "In daylight, background pixels brighter than this (snow, sky, clouds) bend into a softer highlight and keep their detail instead of washing out. Lower = stronger trim. Night is unaffected; 1.0 disables it."},
-	# TRANSITIONAL: the whole Strength setting goes in 2.11.0.
-	{"sect": "Float", "key": "palette_strength", "name": "Strength", "def": 0.58, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 14, "tip": "Blend strength for world thermal palettes. Higher pushes the background closer to the thermal look."},
+	{"sect": "Float", "key": "palette_mix", "name": "Palette mix", "def": 1.0, "min": 0.0, "max": 1.0, "step": 0.05, "cat": "01. ThermalVision", "pos": 14, "tip": "How much of the thermal palette is mixed into the world. 1 = full palette, 0 = original colours."},
 	{"sect": "Float", "key": "outline_distance", "name": "Distance", "def": OUTLINE_DISTANCE, "min": 0.0, "max": 300.0, "step": 10.0, "cat": "02. NPC", "pos": 0, "tip": "Maximum distance for an outline. Outlines are hidden past this range."},
 	{"sect": "Float", "key": "outline_thickness", "name": "Thickness", "def": OUTLINE_THICKNESS, "min": 0.0005, "max": 0.02, "step": 0.0005, "cat": "02. NPC", "pos": 2, "tip": "Outline/rim thickness in direct mode."},
 	{"sect": "Float", "key": "outline_brightness", "name": "Brightness", "def": OUTLINE_BRIGHTNESS, "min": 0.1, "max": 3.0, "step": 0.1, "cat": "02. NPC", "pos": 3, "tip": "Brightness multiplier on the outline colour."},
@@ -180,10 +179,9 @@ static func read(cfg: ConfigFile) -> Rec:
 	rec.world = float(_val(cfg, "Float", "thermal_world", rec.world))
 	rec.daylight_strength = float(_val(cfg, "Float", "daylight_strength", rec.daylight_strength))
 	rec.highlight_knee = float(_val(cfg, "Float", "thermal_highlight_knee", rec.highlight_knee))
-	var pstr = _val(cfg, "Float", "palette_strength", null)
-	if pstr == null:
-		pstr = _val(cfg, "Float", "vrcets_thermal_strength", rec.palette_strength)
-	rec.palette_strength = float(pstr)
+	# New key so an old install's 0.58 "Strength" cannot silently keep the
+	# palette half-mixed. The stale key is removed by the MCM section sync.
+	rec.palette_strength = float(_val(cfg, "Float", "palette_mix", rec.palette_strength))
 	rec.corpse_decay = float(_val(cfg, "Float", "corpse_decay", rec.corpse_decay))
 	rec.outline_distance = float(_val(cfg, "Float", "outline_distance", rec.outline_distance))
 	rec.outline_thickness = float(_val(cfg, "Float", "outline_thickness", rec.outline_thickness))

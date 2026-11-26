@@ -8,6 +8,9 @@
 ### Changed
 - NPC outlines and mine markers now keep their exact colours in every world palette.
 - The thermal picture is drawn over the world instead of mixing with it, so all four palettes stay readable.
+- Optical sights are now tinted by the world palette while their reticles stay visible.
+- The dark end of the palette is brighter, so the thermal picture no longer turns nearly black at full strength.
+- The F8 slider is now called Palette mix and the F9 slider is called Daylight comp; they no longer share the Strength name.
 
 ## [2.10.39] - 2026-11-26
 

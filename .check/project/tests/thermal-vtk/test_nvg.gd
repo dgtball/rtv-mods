@@ -82,7 +82,7 @@ func t_quad_attaches_to_camera() -> void:
 	root.add_child(cam)
 	q.attach(cam)
 	ck(q.material() != null, "quad owns a ShaderMaterial")
-	ck(q.material().render_priority == -128, "quad draws below every ESP overlay")
+	ck(q.material().render_priority == 12, "quad draws above vanilla optics but below ESP overlays")
 	ck(cam.get_child_count() == 1, "quad is parented to the camera, never culled")
 	q.set_enabled(false)
 	ck(not cam.get_child(0).visible, "quad hides cleanly when thermal is off")
@@ -92,7 +92,7 @@ func t_quad_attaches_to_camera() -> void:
 func t_quad_uniforms() -> void:
 	var Quad = preload("res://mods/ThermalVTK/VTKPaletteQuad.gd")
 	var q = Quad.new()
-	q.apply([Color.BLACK, Color(0.24, 0.10, 0.38), Color(0.65, 0.0, 0.10), Color(0.9, 0.65, 0.0), Color.WHITE], 0.7, 0.58, 1.7, 0.55)
+	q.apply([Color.BLACK, Color(0.24, 0.10, 0.38), Color(0.65, 0.0, 0.10), Color(0.9, 0.65, 0.0), Color.WHITE], 0.7, 1.0, 1.7, 0.55)
 	ck(q.material().get_shader_parameter("paletteStop2") == Color(0.65, 0.0, 0.10), "live stops reach the quad material")
 	ck(is_equal_approx(float(q.material().get_shader_parameter("inputGain")), 1.7), "live gain reaches the quad material")
 	q.free()

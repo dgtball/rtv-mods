@@ -139,6 +139,8 @@ func t_palette_quad_contract() -> void:
 	for u in ["inputGain", "inputKnee", "paletteOut", "paletteStop0", "paletteStop4", "paletteStrength"]:
 		ck(src.contains(u), "quad declares %s" % u)
 	ck(not src.contains("minePassthrough"), "quad has no colour passthrough")
+	ck(src.contains("pow(v, 1.0 / 2.2)"), "quad applies display gamma before the ramp")
+	ck(src.contains("ALPHA = clamp(paletteStrength, 0.0, 1.0) * 0.85"), "quad blends over optics instead of erasing their reticles")
 
 func t_nvg_shader_compiles() -> void:
 	var sh = load(NVG_SHADER_RES)

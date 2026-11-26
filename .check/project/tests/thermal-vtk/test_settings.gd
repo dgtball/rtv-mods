@@ -124,7 +124,7 @@ func t_read_defaults() -> void:
 	ck(rec.key_live_panel == KEY_F9, "live panel key defaults to F9")
 	ck(absf(rec.daylight_strength - 1.0) < 0.001, "daylight strength defaults to 1.0")
 	ck(absf(rec.highlight_knee - 0.55) < 0.001, "highlight knee defaults to 0.55")
-	ck(absf(rec.palette_strength - 0.58) < 0.001, "palette strength default")
+	ck(absf(rec.palette_strength - 1.0) < 0.001, "palette mix defaults to full")
 	ck(rec.color_normal == States.DEFAULT_NORMAL, "normal colour default")
 	ck(rec.color_combat == States.DEFAULT_COMBAT, "combat colour default")
 	ck(rec.color_defend == States.DEFAULT_DEFEND, "defend colour default")
@@ -271,7 +271,8 @@ func t_red_hold_is_gone() -> void:
 	for r in Settings.DESCRIPTORS:
 		keys.append(r["key"])
 	ck(not keys.has("red_hold"), "red_hold is not registered")
-	ck(keys.has("palette_strength"), "palette_strength stays until 2.11.0")
+	ck(keys.has("palette_mix"), "palette mix is a fresh key, not the old Strength value")
+	ck(not keys.has("palette_strength"), "the stale Strength key is gone")
 	var rec = Settings.Rec.new()
 	ck(not "red_hold" in rec, "the record has no red_hold field")
 	# The dead migration pair must go with the setting: with no descriptor the
