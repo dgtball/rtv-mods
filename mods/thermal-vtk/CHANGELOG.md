@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.10.50] - 2026-11-27
+
+### Fixed
+- Optical sight bodies now take the thermal palette colour, like the rest of the weapon.
+
 ## [2.10.49] - 2026-11-27
 
 ### Fixed

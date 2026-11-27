@@ -15,9 +15,13 @@ func _init() -> void:
 	process_frame.connect(_run)
 
 func _run() -> void:
-	t_stub_api_and_noop()
+	t_api_is_safe()
 	t_scope_debug_fields()
-	t_optics_are_never_touched()
+	t_scope_body_leaves_transparent_pass()
+	t_other_optic_surfaces_keep_vanilla_materials()
+	t_patch_restores_on_reset()
+	t_resweep_repairs_a_reassigned_material()
+	t_shader_without_alpha_is_left_alone()
 	print("")
 	if fails == 0:
 		print("Weapon tests passed")
@@ -26,15 +30,14 @@ func _run() -> void:
 		print("Weapon tests failed: ", fails)
 		quit(1)
 
-# Optics render exactly like the base game: the module is an explicit no-op.
 # Callers and VTKScopeDebug rely only on the stable API and safe debug fields.
-func t_stub_api_and_noop() -> void:
+func t_api_is_safe() -> void:
 	var o = WeaponOcclusion.new()
 	ck(o != null, "weapon occlusion constructs")
 	ck(o.has_method("tick"), "tick exists")
 	ck(o.has_method("set_scope_mode"), "set_scope_mode exists")
 	ck(o.has_method("set_buffer_occlusion"), "set_buffer_occlusion exists")
-	# No-op calls must be safe in any order/state.
+	# Calls must be safe in any order/state.
 	o.tick()
 	o.set_scope_mode(true, false)
 	o.set_scope_mode(false, true)
@@ -43,16 +46,16 @@ func t_stub_api_and_noop() -> void:
 	o.set_buffer_occlusion(true, 1 << 19)
 	o.set_buffer_occlusion(false, 1 << 19)
 	o.tick()
-	ck(int(o.get("_dbg_patched")) == 0, "stub reports no patched surfaces")
-	ck(int(o.get("_dbg_layer_skip")) == 0, "stub reports no layer skips")
+	ck(int(o.get("_dbg_patched")) == 0, "no rig means no patched surfaces")
+	ck(int(o.get("_dbg_layer_skip")) == 0, "buffer occluders stay disabled")
 
 func t_scope_debug_fields() -> void:
 	var o = WeaponOcclusion.new()
 	# VTKScopeDebug reads these fields for diagnostics; keep them present/safe.
-	ck("_mgr" in o, "stub exposes _mgr for scope debug")
-	ck(o.get("_mgr") == null, "stub manager is null")
-	ck("_dbg_patched" in o, "stub exposes _dbg_patched for scope debug")
-	ck("_dbg_layer_skip" in o, "stub exposes _dbg_layer_skip for scope debug")
+	ck("_mgr" in o, "exposes _mgr for scope debug")
+	ck(o.get("_mgr") == null, "manager is null before the first tick")
+	ck("_dbg_patched" in o, "exposes _dbg_patched for scope debug")
+	ck("_dbg_layer_skip" in o, "exposes _dbg_layer_skip for scope debug")
 	ck(int(o.get("_dbg_patched")) == 0, "dbg_patched defaults to 0")
 	ck(int(o.get("_dbg_layer_skip")) == 0, "dbg_layer_skip defaults to 0")
 
@@ -113,35 +116,77 @@ func _optic_rig() -> MeshInstance3D:
 	mi.set_surface_override_material(4, reticle2)
 	return mi
 
-# The regression that started the whole chain: swapping the Mask, hiding the
-# post-mask layers or rewriting the Objective lens made the sight show junk and
-# broke the zoom with PIP on. No scope state may change a single material now.
-func t_optics_are_never_touched() -> void:
+func _code_of(mat: Material) -> String:
+	if mat == null or not (mat is ShaderMaterial):
+		return ""
+	var sm := mat as ShaderMaterial
+	if sm.shader == null:
+		return ""
+	return sm.shader.code
+
+# The sight body is the only surface that changes: it must leave the
+# transparent pipeline (no ALPHA write) while keeping its depth write, because
+# that is what puts it into the opaque copy the palette samples.
+func t_scope_body_leaves_transparent_pass() -> void:
+	var mi := _optic_rig()
+	var vanilla := mi.get_surface_override_material(0)
+	var o = WeaponOcclusion.new()
+	o.tick()
+	var body := mi.get_surface_override_material(0)
+	ck(body != vanilla, "scope body gets its own runtime material")
+	ck("ALPHA = 1.0;" not in _code_of(body), "scope body no longer writes alpha")
+	ck("depth_draw_always" in _code_of(body), "scope body keeps its depth write")
+	ck(int(o.get("_dbg_patched")) == 1, "one surface reported as patched")
+
+func t_other_optic_surfaces_keep_vanilla_materials() -> void:
 	var mi := _optic_rig()
 	var before: Array = []
-	for i in 5:
+	for i in range(1, 5):
 		before.append(mi.get_surface_override_material(i))
 	var o = WeaponOcclusion.new()
 	o.tick()
-	var states := [
-		[true, false],
-		[true, true],
-		[false, true],
-		[false, false],
-	]
-	var clean := true
-	for s in states:
-		o.set_scope_mode(bool(s[0]), bool(s[1]))
-		for i in 5:
-			if mi.get_surface_override_material(i) != before[i]:
-				clean = false
-	ck(clean, "no scope state replaces an optic material")
-	var shaders := true
-	for i in 5:
-		var mat := mi.get_surface_override_material(i) as ShaderMaterial
-		if mat == null or mat.shader == null:
-			shaders = false
-			continue
-		if mat.shader.resource_path.find("res://Shaders/") == -1:
-			shaders = false
-	ck(shaders, "every optic surface still runs its vanilla shader")
+	o.set_scope_mode(true, false)
+	var same := true
+	for i in range(1, 5):
+		if mi.get_surface_override_material(i) != before[i - 1]:
+			same = false
+	ck(same, "reticle, mask, objective and tube keep their vanilla materials")
+	ck("ALPHA" in _code_of(mi.get_surface_override_material(1)), "the reticle stays transparent")
+
+func t_patch_restores_on_reset() -> void:
+	var mi := _optic_rig()
+	var vanilla := mi.get_surface_override_material(0)
+	var o = WeaponOcclusion.new()
+	o.tick()
+	ck(mi.get_surface_override_material(0) != vanilla, "body is patched while the rig lives")
+	var mgr := _manager_of(mi)
+	var parent: Node = mgr.get_parent()
+	parent.remove_child(mgr)
+	o.tick()
+	ck(mi.get_surface_override_material(0) == vanilla, "manager loss restores the vanilla body")
+	ck(int(o.get("_dbg_patched")) == 0, "restored rig reports no patched surfaces")
+
+func t_resweep_repairs_a_reassigned_material() -> void:
+	var mi := _optic_rig()
+	var vanilla := mi.get_surface_override_material(0)
+	var o = WeaponOcclusion.new()
+	o.tick()
+	# Vanilla optics can put its own material back when the sight is rebuilt.
+	mi.set_surface_override_material(0, vanilla)
+	for i in 95:
+		o.tick()
+	ck(mi.get_surface_override_material(0) != vanilla, "resweep patches a reassigned body again")
+
+func t_shader_without_alpha_is_left_alone() -> void:
+	var src := Shader.new()
+	src.code = "shader_type spatial;\nvoid fragment() {\n\tALBEDO = vec3(1.0);\n}\n"
+	var o = WeaponOcclusion.new()
+	ck(o._scope_shader(src) == null, "a shader without the alpha line is never rewritten")
+
+func _manager_of(node: Node) -> Node:
+	var n: Node = node.get_parent()
+	while n != null:
+		if n.name == "Manager":
+			return n
+		n = n.get_parent()
+	return null
