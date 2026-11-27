@@ -72,6 +72,7 @@ func _run() -> void:
 	t_scope_opts_from_view_flags()
 	t_pip_opts_compensate_color()
 	t_live_panel_refresh_keeps_compensation()
+	t_flags_refresh_before_early_return()
 	print("")
 	if fails == 0:
 		print("ESP tests passed")
@@ -873,6 +874,8 @@ func t_scope_opts_from_view_flags() -> void:
 	ck(bool(o.get("depth_bypass", false)), "scoped without PIP asks for depth bypass")
 	ck(not bool(o.get("pip_compensate", false)), "no PIP colour compensation without PIP")
 	ck(o.get("color") == S.DEFAULT_NORMAL, "outside the lens the colour stays literal")
+	ck(absf(float(o.get("fill_alpha", 0.0)) - esp.p_fill_alpha) < 0.0001,
+		"without PIP the configured opacity stays")
 	esp.free()
 
 func t_pip_opts_compensate_color() -> void:
@@ -880,10 +883,12 @@ func t_pip_opts_compensate_color() -> void:
 	var o := opts_for(esp, true, true)
 	ck(bool(o.get("pip_compensate", false)), "PIP asks for colour compensation")
 	ck(not bool(o.get("depth_bypass", false)), "PIP keeps the vanilla depth barrier")
-	var want := OPTIC.inverse(S.DEFAULT_NORMAL)
+	var want := OPTIC.compensate(S.DEFAULT_NORMAL)
 	var got: Color = o.get("color", Color.BLACK)
 	ck(absf(got.r - want.r) < 0.0001 and absf(got.g - want.g) < 0.0001 and absf(got.b - want.b) < 0.0001,
-		"PIP opts carry the inverse-transformed colour")
+		"PIP opts carry the compensated colour")
+	ck(absf(float(o.get("fill_alpha", 0.0)) - 0.9) < 0.0001,
+		"PIP lifts contour opacity so the palette backdrop cannot set the hue")
 	esp.free()
 
 # The tuning panel can refresh outlines while the game is paused, outside the
@@ -902,5 +907,14 @@ func t_live_panel_refresh_keeps_compensation() -> void:
 	esp.view_pip = false
 	esp._fill_opts(opts, e, 0.0)
 	ck(opts["color"] == S.DEFAULT_NORMAL, "leaving the scope restores the literal colour")
+	ck(absf(float(opts["fill_alpha"]) - esp.p_fill_alpha) < 0.0001,
+		"leaving the scope restores the configured opacity")
 	ck(not bool(opts["depth_bypass"]) and not bool(opts["pip_compensate"]), "leaving the scope clears both flags")
 	esp.free()
+
+func t_flags_refresh_before_early_return() -> void:
+	var src := FileAccess.get_file_as_string("res://mods/ThermalVTK/VTKESP.gd")
+	var at_read := src.find("view_scoped = scoped")
+	var at_return := src.find("if not _any_layer() and not _labels_on()")
+	ck(at_read > 0 and at_return > 0 and at_read < at_return,
+		"view flags are refreshed before the no-content early return")

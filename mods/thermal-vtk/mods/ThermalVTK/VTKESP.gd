@@ -38,6 +38,9 @@ const PAIN_MIN_GAP := 0.4
 const OUTLINE_BAND_PX := 0.0
 const OUTLINE_BAND_MIN := 0.0
 const OUTLINE_BAND_MAX := 0.5
+# Inside a PIP lens the rest of the contour pixel is the lens backdrop, which
+# the palette tints. Below this opacity that backdrop decides the visible hue.
+const PIP_MIN_ALPHA := 0.9
 # The overlay runs in the main 3D pass, so the shells need no dedicated camera
 # and no reach clip: the depth test of the source mesh does the clipping
 # (walls, weapon, sight glass), and the demand below only says whether any
@@ -460,6 +463,12 @@ func _process(delta: float) -> void:
 	if _hook_ids.is_empty() and _hook_wait_cd <= 0.0:
 		_hook_wait_cd = 0.5
 		_register_hooks()
+	# Refresh the cached optic state before any early return: the paused live
+	# panel and the opts built on a later frame must not read a stale lens mode.
+	var scoped := _scoped_now()
+	var pip := _pip_now()
+	view_scoped = scoped
+	view_pip = pip
 	if not _any_layer() and not _labels_on():
 		_weapon.set_scope_mode(false, false)
 		if not _pending.is_empty():
@@ -472,10 +481,6 @@ func _process(delta: float) -> void:
 				_entries[id].erase("hp")
 		return
 	_weapon.tick()
-	var scoped := _scoped_now()
-	var pip := _pip_now()
-	view_scoped = scoped
-	view_pip = pip
 	_weapon.set_scope_mode(scoped and _any_layer(), pip)
 	_scope_probe(delta)
 	_frame += 1
@@ -993,10 +998,10 @@ func _fill_opts(opts: Dictionary, e: Dictionary, now: float) -> void:
 		color = p_color_defend
 	var pip_compensate := view_scoped and view_pip
 	if pip_compensate:
-		color = OPTIC.inverse(color)
+		color = OPTIC.compensate(color)
 	opts["color"] = color
 	opts["brightness"] = p_brightness
-	opts["fill_alpha"] = p_fill_alpha
+	opts["fill_alpha"] = maxf(p_fill_alpha, PIP_MIN_ALPHA) if pip_compensate else p_fill_alpha
 	opts["cool"] = cool
 	opts["grow"] = p_thickness
 	opts["band"] = _band_for(float(e.get("dist", 0.0)))
