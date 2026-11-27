@@ -294,8 +294,9 @@ func scope_opts(depth_bypass: bool, xray: bool = false) -> Dictionary:
 	return {"xray": xray, "depth_bypass": depth_bypass, "color": S.DEFAULT_NORMAL,
 		"brightness": 1.0, "fill_alpha": 0.4, "grow": 0.01, "band": 0.0, "cool": 0.0, "rim": 2.0}
 
-# In an optic without PIP the body and ring must both ignore the vanilla
-# depth barrier; leaving the scope restores the ordinary pair on the same mesh.
+# In an optic without PIP the body and ring must both bypass the vanilla
+# Mask barrier while still discarding fragments behind opaque walls; leaving
+# the scope restores the ordinary pair on the same mesh.
 func t_scope_bypass_swaps_and_restores_pair() -> void:
 	var host := Node3D.new()
 	var mesh := MeshInstance3D.new()
@@ -304,8 +305,8 @@ func t_scope_bypass_swaps_and_restores_pair() -> void:
 	var o = Outline.new()
 	o.apply(401, host, scope_opts(true))
 	var body: ShaderMaterial = o._items[401]["mat"]
-	ck(body.shader == Sh.body_xray(), "scope without PIP uses the depth-test-disabled body")
-	ck((body.next_pass as ShaderMaterial).shader == Sh.ring_xray(), "scope without PIP uses the xray ring")
+	ck(body.shader == Sh.body_scoped(), "scope without PIP uses the depth-checked scoped body")
+	ck((body.next_pass as ShaderMaterial).shader == Sh.ring_scoped(), "scope without PIP uses the scoped ring")
 	o.refresh(401, scope_opts(false))
 	var back: ShaderMaterial = o._items[401]["mat"]
 	ck(back.shader == Sh.body_los(), "leaving the scope restores the LOS body")
@@ -338,7 +339,7 @@ func t_xray_flag_independent_from_depth_bypass() -> void:
 	o.apply(403, host, scope_opts(false, true))
 	ck(o._items[403]["mat"].shader == Sh.body_xray(), "the x-ray trigger alone still uses xray")
 	o.refresh(403, scope_opts(true, false))
-	ck(o._items[403]["mat"].shader == Sh.body_xray(), "depth bypass alone uses xray")
+	ck(o._items[403]["mat"].shader == Sh.body_scoped(), "depth bypass alone uses the scoped shader")
 	o.refresh(403, scope_opts(false, false))
 	ck(o._items[403]["mat"].shader == Sh.body_los(), "both flags off restores LOS")
 	o.clear(403)

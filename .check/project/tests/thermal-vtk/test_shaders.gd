@@ -7,6 +7,8 @@ const BODY_LOS_RES := "res://mods/ThermalVTK/VTKEspBody.gdshader"
 const BODY_XRAY_RES := "res://mods/ThermalVTK/VTKEspBodyXray.gdshader"
 const RING_LOS_RES := "res://mods/ThermalVTK/VTKEspRing.gdshader"
 const RING_XRAY_RES := "res://mods/ThermalVTK/VTKEspRingXray.gdshader"
+const BODY_SCOPED_RES := "res://mods/ThermalVTK/VTKEspBodyScoped.gdshader"
+const RING_SCOPED_RES := "res://mods/ThermalVTK/VTKEspRingScoped.gdshader"
 const PaletteQuad = preload("res://mods/ThermalVTK/VTKPaletteQuad.gd")
 
 var fails := 0
@@ -25,6 +27,7 @@ func _run() -> void:
 	t_esp_shaders_compile()
 	t_body_contracts()
 	t_ring_contracts()
+	t_scoped_depth_contract()
 	t_band_contract()
 	t_nvg_compositor_contract()
 	t_palette_ramp()
@@ -55,6 +58,8 @@ func t_esp_shaders_compile() -> void:
 		["body_xray", Sh.body_xray(), BODY_XRAY_RES],
 		["ring_los", Sh.ring_los(), RING_LOS_RES],
 		["ring_xray", Sh.ring_xray(), RING_XRAY_RES],
+		["body_scoped", Sh.body_scoped(), BODY_SCOPED_RES],
+		["ring_scoped", Sh.ring_scoped(), RING_SCOPED_RES],
 	]
 	for pair in pairs:
 		var sh: Shader = pair[1]
@@ -65,9 +70,9 @@ func t_esp_shaders_compile() -> void:
 		ck(names.has("alpha"), "esp %s shader exposes alpha" % pair[0])
 		ck(names.has("grow"), "esp %s shader exposes grow" % pair[0])
 		ck(names.has("cool"), "esp %s shader exposes cool" % pair[0])
-	for body in [Sh.body_los(), Sh.body_xray()]:
+	for body in [Sh.body_los(), Sh.body_xray(), Sh.body_scoped()]:
 		ck(_uniform_names(body).has("rim_power"), "body shader exposes rim falloff")
-	for ring in [Sh.ring_los(), Sh.ring_xray()]:
+	for ring in [Sh.ring_los(), Sh.ring_xray(), Sh.ring_scoped()]:
 		ck(_uniform_names(ring).has("rim_power"), "ring shader exposes rim_power")
 
 func t_body_contracts() -> void:
@@ -93,6 +98,16 @@ func t_ring_contracts() -> void:
 		ck(src.contains("ALPHA = rim * alpha * (1.0 - cool)"), "ring shader applies rim, alpha and cool")
 	ck(not los.contains("depth_test_disabled"), "los ring keeps depth test")
 	ck(xray.contains("depth_test_disabled"), "xray ring disables depth test")
+
+func t_scoped_depth_contract() -> void:
+	for path in [BODY_SCOPED_RES, RING_SCOPED_RES]:
+		var src := FileAccess.get_file_as_string(path)
+		ck(src.contains("hint_depth_texture"), "scoped shader samples opaque depth")
+		ck(src.contains("INV_PROJECTION_MATRIX") and src.contains("FRAGCOORD.z"),
+			"scoped shader compares linear depths")
+		ck(src.contains("discard"), "scoped shader discards fragments behind walls")
+		ck(src.contains("depth_test_disabled") and src.contains("depth_draw_never"),
+			"scoped shader keeps the mask bypass and writes no depth")
 
 # Overlay-only baseline: direct display materials are applied as source overlays.
 # Outline keeps the stencil/ring chain and display uniforms.

@@ -127,17 +127,27 @@ func _valid_meshes(meshes: Array) -> Array:
 	return out
 
 func _material_for(xray: bool, depth_bypass: bool) -> Material:
-	# A scoped view without PIP keeps the vanilla Mask depth barrier in the
-	# lens, so the contour has to cross it exactly like the x-ray trigger does.
-	var use_xray := xray or depth_bypass
+	# A scoped view without PIP must cross the vanilla Mask barrier but still
+	# hide behind real walls: that pair does the depth check in the shader.
+	# The separate x-ray trigger keeps its unrestricted through-wall pair.
 	var body_mat := ShaderMaterial.new()
-	body_mat.shader = Shaders.body_xray() if use_xray else Shaders.body_los()
+	if depth_bypass:
+		body_mat.shader = Shaders.body_scoped()
+	elif xray:
+		body_mat.shader = Shaders.body_xray()
+	else:
+		body_mat.shader = Shaders.body_los()
 	# The palette quad is the first transparent pass at -128, before vanilla
 	# optics. Explicit priorities put the translucent body above it and the ring
 	# band above the body: next_pass alone does not guarantee adjacency.
 	body_mat.render_priority = 20
 	var ring_mat := ShaderMaterial.new()
-	ring_mat.shader = Shaders.ring_xray() if use_xray else Shaders.ring_los()
+	if depth_bypass:
+		ring_mat.shader = Shaders.ring_scoped()
+	elif xray:
+		ring_mat.shader = Shaders.ring_xray()
+	else:
+		ring_mat.shader = Shaders.ring_los()
 	ring_mat.render_priority = 21
 	body_mat.next_pass = ring_mat
 	return body_mat
