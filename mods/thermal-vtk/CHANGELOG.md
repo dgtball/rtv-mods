@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.10.42] - 2026-11-27
+
+### Changed
+- The amber, forest and ice palettes now show heat as a colour change instead of only a brightness change.
+
+### Fixed
+- NPC outlines and mine markers are visible again through ACOG, HMR and VDU sights when PIP is off.
+
 ## [2.10.41] - 2026-11-26
 
 ### Changed

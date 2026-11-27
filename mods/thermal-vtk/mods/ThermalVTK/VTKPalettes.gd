@@ -3,8 +3,10 @@ extends RefCounted
 # receives the active palette's five stops as uniforms and never branches on a
 # palette mode. Static-only, no scene access, no load(), so it runs headless.
 #
-# The colours are verbatim from the 2.4.6 overlay: classic, amber, forest, ice,
-# in the same order as the old worldPaletteMode (F6 still cycles 0..3).
+# Classic is verbatim from the 2.4.6 overlay. Amber, forest and ice keep that
+# five-stop ladder but shift the hot stops in hue at equal luminance, so heat
+# reads as a colour change instead of only a brightness change. Order matches
+# the old worldPaletteMode (F6 still cycles 0..3).
 
 const LADDER: Array[float] = [0.0, 0.25, 0.5, 0.75, 1.0]
 const OUTPUT := 0.7
@@ -15,16 +17,16 @@ const STOPS: Array = [
 		Color(0.90, 0.65, 0.00), Color(1.00, 1.00, 0.80),
 	],
 	[
-		Color(0.02, 0.01, 0.00), Color(0.25, 0.12, 0.02), Color(0.55, 0.30, 0.05),
-		Color(0.80, 0.58, 0.18), Color(1.00, 0.92, 0.70),
+		Color(0.02, 0.01, 0.00), Color(0.32, 0.08, 0.01), Color(0.90, 0.12, 0.02),
+		Color(0.93, 0.55, 0.05), Color(1.00, 0.94, 0.62),
 	],
 	[
-		Color(0.00, 0.02, 0.02), Color(0.05, 0.18, 0.12), Color(0.10, 0.38, 0.22),
-		Color(0.35, 0.62, 0.30), Color(0.80, 0.95, 0.65),
+		Color(0.00, 0.02, 0.02), Color(0.02, 0.20, 0.12), Color(0.20, 0.34, 0.08),
+		Color(0.55, 0.56, 0.12), Color(1.00, 0.90, 0.42),
 	],
 	[
-		Color(0.00, 0.01, 0.04), Color(0.05, 0.12, 0.35), Color(0.10, 0.30, 0.60),
-		Color(0.40, 0.65, 0.85), Color(0.85, 0.95, 1.00),
+		Color(0.00, 0.01, 0.04), Color(0.16, 0.07, 0.38), Color(0.42, 0.14, 0.62),
+		Color(0.85, 0.45, 0.78), Color(0.95, 0.92, 0.85),
 	],
 ]
 

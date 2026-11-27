@@ -595,9 +595,9 @@ func _gd_cached() -> Resource:
 	return _probe_gd
 
 # The scope view itself; PIP rides along in the same read. Both flags go to
-# the outline and the weapon module: with PIP on the optic camera supplies the
-# in-scope picture, and the depth swap keeps the main-camera ring out of the
-# lens, so the picture does not show it twice.
+# the outline and the weapon module: with PIP off the main camera supplies the
+# in-scope picture, so the Mask barrier is lifted to keep ESP/mines visible;
+# with PIP on the optic camera draws its own copy and the vanilla barrier stays.
 func _scoped_now() -> bool:
 	var gd := _gd_cached()
 	if gd == null:

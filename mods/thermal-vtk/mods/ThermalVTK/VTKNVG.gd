@@ -155,7 +155,7 @@ func _mine_display_material(c: Color) -> StandardMaterial3D:
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	m.albedo_color = c
 	m.emission_enabled = false
-	# Above the palette quad (12), below contour rings; same depth test as
+	# Above the palette quad (-128), below contour rings; same depth test as
 	# ordinary world geometry so walls still occlude mine shells.
 	m.render_priority = 20
 	return m
