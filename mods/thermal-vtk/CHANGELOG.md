@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.10.43] - 2026-11-27
+
+### Changed
+- Thermal optics are now coloured by the world palette, like collimator sights.
+- Amber is amber again, with a gentler heat shift.
+
 ## [2.10.42] - 2026-11-27
 
 ### Changed
