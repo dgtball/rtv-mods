@@ -1,9 +1,15 @@
 # Changelog
 
+## [2.10.55] - 2026-11-27
+
+### Fixed
+- NPC outlines inside optical sights no longer show through walls when PIP is off.
+- Outline colours stay readable inside PIP sights across all thermal palettes.
+
 ## [2.10.54] - 2026-11-27
 
 ### Fixed
-- NPC outlines are visible again through optical sights and keep their assigned colour.
+- NPC outlines are visible again through optical sights.
 
 ## [2.10.53] - 2026-11-27
 
