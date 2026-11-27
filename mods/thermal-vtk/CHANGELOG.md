@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.10.45] - 2026-11-27
+
+### Changed
+- Optical sights report their palette and visibility state in the diagnostic log.
+
 ## [2.10.44] - 2026-11-27
 
 ### Changed

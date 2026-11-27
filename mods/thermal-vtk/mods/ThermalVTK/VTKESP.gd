@@ -625,8 +625,13 @@ func _scope_probe(delta: float) -> void:
 	var gd := _gd_cached()
 	if gd == null:
 		return
+	# The palette/optic overlap is visible as soon as a scoped weapon is drawn,
+	# before the player aims. Snapshot then too: the rig carries the Mask and
+	# optic surfaces we need to see, and ADS is only one of the two states.
 	var scoped_v = gd.get("isScoped")
-	if scoped_v == null or not bool(scoped_v):
+	var scoped: bool = scoped_v != null and bool(scoped_v)
+	var weapon_drawn: bool = _weapon != null and _weapon._mgr != null and is_instance_valid(_weapon._mgr)
+	if not scoped and not weapon_drawn:
 		return
 	ScopeDebug.scope_snapshot(gd, get_tree().get_nodes_in_group("Player"), self, _weapon)
 

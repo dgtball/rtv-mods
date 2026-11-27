@@ -27,6 +27,7 @@ static func scope_snapshot(gd: Resource, players: Array, esp: Node, weapon) -> v
 	_snapshot_entries(esp)
 	_snapshot_render(cam, esp)
 	_snapshot_ring(cam, weapon)
+	_snapshot_palette(esp)
 
 # Mesh-level walk between the eye and the crosshair target: every geometry in
 # the scope cone reports its position, shader and render priority, so the
@@ -242,6 +243,31 @@ static func _snapshot_ring(cam: Camera3D, weapon) -> void:
 		Dbg.log("SCOPE", "rig: no camera manager attached")
 		return
 	Dbg.log("SCOPE", "rig children=%d patched=%d skipped=%d" % [mgr.get_child_count(), weapon._dbg_patched, weapon._dbg_layer_skip])
+	# The Mask depth swap is driven entirely by VTKWeaponOcclusion; report its
+	# own state here so a live run tells us whether collection, the scope flags
+	# or the material assignment is what leaves the vanilla depth barrier up.
+	var entries: Array = weapon._mask_entries
+	Dbg.log("SCOPE", "mask entries=%d scoped=%s pip=%s ready=%s" % [
+		entries.size(), str(weapon._scope_scoped), str(weapon._scope_pip), str(weapon._scope_ready),
+	])
+	var shown := 0
+	for e in entries:
+		if shown >= MAX_SURF:
+			break
+		var mesh = e.get("mesh")
+		if mesh == null or not is_instance_valid(mesh):
+			continue
+		shown += 1
+		var idx: int = int(e.get("index"))
+		var mat: Material = mesh.get_surface_override_material(idx)
+		var sp := "(none)"
+		if mat is ShaderMaterial:
+			var sm := mat as ShaderMaterial
+			if sm.shader != null:
+				sp = sm.shader.resource_path if sm.shader.resource_path != "" else "(runtime)"
+		Dbg.log("SCOPE", "mask mesh=%s idx=%d override=%s depthless=%s" % [
+			str((mesh as Node).name), idx, sp, str(mat == e.get("depthless")),
+		])
 	for child in mgr.get_children():
 		_list_front_meshes(child, cam)
 
@@ -259,3 +285,32 @@ static func _list_front_meshes(n: Node, cam: Camera3D) -> void:
 				_mesh_surfaces(mi, "rig")
 	for c in n.get_children():
 		_list_front_meshes(c, cam)
+
+# The two palette quads are camera children, so the physics ray walk does not
+# report them. Log them explicitly: the opaque pass at -128 and the optic tint
+# at 12 are what decide whether the lens looks fully palettized or washed out.
+static func _snapshot_palette(esp: Node) -> void:
+	var tree := esp.get_tree()
+	if tree == null:
+		return
+	_walk_palette(tree.root)
+
+static func _walk_palette(n: Node) -> void:
+	if n == null or not is_instance_valid(n):
+		return
+	if n is MeshInstance3D:
+		var mi := n as MeshInstance3D
+		if mi.name == "VTKPaletteQuad" or mi.name == "VTKPaletteQuadTint":
+			var alpha := -1.0
+			var prio := -1
+			var mat: Material = mi.material_override
+			if mat is ShaderMaterial:
+				var sm := mat as ShaderMaterial
+				prio = sm.render_priority
+				alpha = float(sm.get_shader_parameter("paletteAlpha"))
+			Dbg.log("SCOPE", "palette node=%s vis=%s prio=%d alpha=%.2f parent=%s" % [
+				mi.name, str(mi.is_visible_in_tree()), prio, alpha,
+				mi.get_parent().name if mi.get_parent() != null else "(none)",
+			])
+	for c in n.get_children():
+		_walk_palette(c)
