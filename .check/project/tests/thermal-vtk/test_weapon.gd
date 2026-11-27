@@ -23,7 +23,7 @@ func _run() -> void:
 	t_resweep_repairs_a_reassigned_material()
 	t_shader_without_alpha_is_left_alone()
 	t_scope_body_receives_mask_clip_geometry()
-	t_scope_shader_clips_inside_the_mask_disk()
+	t_scope_shader_reproduces_the_mask_depth_barrier()
 	print("")
 	if fails == 0:
 		print("Weapon tests passed")
@@ -225,16 +225,28 @@ func t_scope_body_receives_mask_clip_geometry() -> void:
 	if radius is float:
 		ck(absf(float(radius) - 0.02) < 0.0001, "mask radius matches the fixture")
 
-func t_scope_shader_clips_inside_the_mask_disk() -> void:
+# The Mask is a depth barrier, not a silhouette: the near rim must stay and only
+# fragments whose ray reaches the disk BEHIND the Mask may be discarded. A plain
+# local XY radius cannot express that (the far wall projects inside the disk).
+func t_scope_shader_reproduces_the_mask_depth_barrier() -> void:
 	var mi := _optic_rig(_mask_clip_mesh())
 	var o = WeaponOcclusion.new()
 	o.tick()
-	var code := _code_of(mi.get_surface_override_material(0))
-	ck("VERTEX" in code, "clip uses the model-space vertex built-in")
+	var mat := mi.get_surface_override_material(0) as ShaderMaterial
+	var code := _code_of(mat)
+	var z = mat.get_shader_parameter("opticMaskZ")
+	ck(z is float, "mask plane depth is published to the body material")
+	if z is float:
+		ck(absf(float(z) - (-0.1)) < 0.0001, "mask plane depth matches the fixture")
+	ck("MODELVIEW_MATRIX" in code, "mask disk is transformed into view space")
+	ck("normalize(VERTEX)" in code, "clip casts a ray from the camera through the fragment")
+	ck("opticPlaneT" in code, "clip intersects the ray with the mask plane")
+	ck("opticPlaneT < length(VERTEX)" in code, "only fragments behind the mask are discarded")
+	ck("length(opticDiskXY) < opticMaskRadius" in code, "only fragments inside the disk are discarded")
+	ck("discard" in code, "clip discards the hidden inner wall")
 	ck("POSITION" not in code, "clip never reads the clip-space output built-in")
-	ck("discard" in code, "clip discards fragments inside the lens")
-	ck("opticMaskRadius" in code, "clip radius comes from the mask geometry")
-	ck("SCREEN_UV" not in code, "clip does not depend on the projection or zoom")
+	ck("SCREEN_UV" not in code, "clip is independent of the projection and zoom")
+	ck("vOpticLocalPos.xy" not in code, "clip no longer compares a bare local radius")
 
 func _manager_of(node: Node) -> Node:
 	var n: Node = node.get_parent()

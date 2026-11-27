@@ -9,11 +9,15 @@ extends RefCounted
 # body now lands in the copy and the palette recolours it like everything else.
 #
 # Going opaque also moves the body ahead of the transparent Mask depth barrier,
-# so the copy discards fragments inside the Mask disk: that is the inner rim the
-# barrier used to hide. The Mask, the Objective lens and the reticle keep their
-# vanilla materials, and no visibility state is rewritten. Vanilla files are
-# never edited: the copy lives only in ShaderMaterial overrides and is restored
-# on reset.
+# so the patched body reproduces that barrier itself. The Mask is a flat disk at
+# the back of the optic, one millimetre behind the reticle: a camera ray through
+# a body fragment is intersected with the disk's plane in view space, and the
+# fragment is discarded only when it lands inside the disk AND lies beyond it.
+# The near rim stays (vanilla shows it); the far inner wall goes away at any
+# zoom, because the ray follows the real projection. The Mask, the Objective
+# lens and the reticle keep their vanilla materials, and no visibility state is
+# rewritten. Vanilla files are never edited: the copy lives only in
+# ShaderMaterial overrides and is restored on reset.
 
 const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
@@ -23,17 +27,19 @@ const MASK_SHADER := "res://Shaders/Mask.gdshader"
 const ALPHA_LINE := "ALPHA = 1.0;"
 const MASK_CENTER := "opticMaskCenter"
 const MASK_RADIUS := "opticMaskRadius"
+const MASK_Z := "opticMaskZ"
 const RESWEEP_FRAMES := 90
 
-# The opaque body is drawn before the transparent Mask depth barrier, so the
-# barrier can no longer hide the inner rim. The Mask is a disk centred on the
-# optic axis; discard body fragments inside that disk in model space. A
-# screen-space projection would only clip one depth, while the inner wall of
-# the tube spans most of the optic's length and every zoom level changes the
-# projected radius. The two percent margin covers the disk's boundary.
-const CLIP_DECL := "uniform vec3 opticMaskCenter;\nuniform float opticMaskRadius;\nvarying vec3 vOpticLocalPos;"
-const CLIP_VERTEX := "\tvOpticLocalPos = VERTEX;"
-const CLIP_FRAGMENT := "\tif (length(vOpticLocalPos.xy - opticMaskCenter.xy) < opticMaskRadius * 1.02) {\n\t\tdiscard;\n\t}"
+# The Mask disk is flat in the optic's local XY plane. Its centre, radius and
+# plane depth come from the Mask surface of the very same mesh, so the ray test
+# uses the same coordinates as the geometry it replaces. Axes and scales carry
+# the model-view transform: the disk is tested in view space, where VERTEX in
+# fragment() is the position of the pixel and normalize(VERTEX) is the camera
+# ray through it. Unlike a local-radius test this keeps the near rim and clips
+# only the far wall that projects inside the disk.
+const CLIP_DECL := "uniform vec3 opticMaskCenter;\nuniform float opticMaskRadius;\nuniform float opticMaskZ;\nvarying vec3 vOpticMaskCenterView;\nvarying vec3 vOpticMaskAxisX;\nvarying vec3 vOpticMaskAxisY;\nvarying vec3 vOpticMaskAxisZ;\nvarying vec2 vOpticMaskScaleXY;"
+const CLIP_VERTEX := "\tvOpticMaskCenterView = (MODELVIEW_MATRIX * vec4(opticMaskCenter.xy, opticMaskZ, 1.0)).xyz;\n\tvOpticMaskAxisX = normalize((MODELVIEW_MATRIX * vec4(1.0, 0.0, 0.0, 0.0)).xyz);\n\tvOpticMaskAxisY = normalize((MODELVIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz);\n\tvOpticMaskAxisZ = normalize((MODELVIEW_MATRIX * vec4(0.0, 0.0, 1.0, 0.0)).xyz);\n\tvOpticMaskScaleXY = vec2(length((MODELVIEW_MATRIX * vec4(1.0, 0.0, 0.0, 0.0)).xyz), length((MODELVIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz));"
+const CLIP_FRAGMENT := "\tvec3 opticRay = normalize(VERTEX);\n\tfloat opticPlaneT = dot(vOpticMaskCenterView, vOpticMaskAxisZ) / dot(opticRay, vOpticMaskAxisZ);\n\tvec3 opticPlaneHit = opticRay * opticPlaneT - vOpticMaskCenterView;\n\tvec2 opticDiskXY = vec2(dot(opticPlaneHit, vOpticMaskAxisX) / max(vOpticMaskScaleXY.x, 0.00001), dot(opticPlaneHit, vOpticMaskAxisY) / max(vOpticMaskScaleXY.y, 0.00001));\n\tif (opticPlaneT > 0.0 && opticPlaneT < length(VERTEX) && length(opticDiskXY) < opticMaskRadius) {\n\t\tdiscard;\n\t}"
 
 var _mgr: Node = null
 var _connected: bool = false
@@ -148,6 +154,7 @@ func _patch_scope(mesh: MeshInstance3D) -> void:
 			continue
 		patched.set_shader_parameter(MASK_CENTER, mask.get("center"))
 		patched.set_shader_parameter(MASK_RADIUS, mask.get("radius"))
+		patched.set_shader_parameter(MASK_Z, mask.get("z"))
 		mesh.set_surface_override_material(i, patched)
 		_record(mesh, i, mat, patched)
 
@@ -238,7 +245,7 @@ func _mask_geometry(node: MeshInstance3D) -> Dictionary:
 			radius = maxf(radius, Vector2(v.x - center.x, v.y - center.y).length())
 		if radius <= 0.0:
 			continue
-		return {"center": center, "radius": radius}
+		return {"center": center, "radius": radius, "z": (lo.z + hi.z) * 0.5}
 	return {}
 
 

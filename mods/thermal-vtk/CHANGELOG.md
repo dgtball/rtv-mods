@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.10.53] - 2026-11-27
+
+### Fixed
+- Optical sight bodies stay tinted by the thermal palette without the extra bright ring inside the lens.
+
 ## [2.10.52] - 2026-11-27
 
 ### Fixed
