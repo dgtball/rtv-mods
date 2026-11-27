@@ -126,15 +126,18 @@ func _valid_meshes(meshes: Array) -> Array:
 			out.append(gi)
 	return out
 
-func _material_for(xray: bool) -> Material:
+func _material_for(xray: bool, depth_bypass: bool) -> Material:
+	# A scoped view without PIP keeps the vanilla Mask depth barrier in the
+	# lens, so the contour has to cross it exactly like the x-ray trigger does.
+	var use_xray := xray or depth_bypass
 	var body_mat := ShaderMaterial.new()
-	body_mat.shader = Shaders.body_xray() if xray else Shaders.body_los()
+	body_mat.shader = Shaders.body_xray() if use_xray else Shaders.body_los()
 	# The palette quad is the first transparent pass at -128, before vanilla
 	# optics. Explicit priorities put the translucent body above it and the ring
 	# band above the body: next_pass alone does not guarantee adjacency.
 	body_mat.render_priority = 20
 	var ring_mat := ShaderMaterial.new()
-	ring_mat.shader = Shaders.ring_xray() if xray else Shaders.ring_los()
+	ring_mat.shader = Shaders.ring_xray() if use_xray else Shaders.ring_los()
 	ring_mat.render_priority = 21
 	body_mat.next_pass = ring_mat
 	return body_mat
@@ -172,7 +175,8 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 	var meshes: Array = []
 	_collect(node, meshes)
 	var xray: bool = bool(opts.get("xray", false))
-	var mat: Material = _material_for(xray)
+	var bypass: bool = bool(opts.get("depth_bypass", false))
+	var mat: Material = _material_for(xray, bypass)
 	# Generation counts material creations for this id across re-applies, so a
 	# mid-session swap is visible in the subject log as a step, not a reset.
 	var prev: Dictionary = _items.get(id, {})
@@ -183,6 +187,7 @@ func apply(id: int, node: Node, opts: Dictionary) -> void:
 		"ring": _ring_of(mat),
 		"mat_gen": int(prev.get("mat_gen", 0)) + 1,
 		"xray": xray,
+		"depth_bypass": bypass,
 		"child_count": _child_count(node),
 		"last_recollect": "",
 		"p_color": null,
@@ -221,9 +226,11 @@ func refresh(id: int, opts: Dictionary) -> void:
 	if entry == null:
 		return
 	var xray: bool = bool(opts.get("xray", false))
-	if bool(entry.get("xray", false)) != xray:
+	var bypass: bool = bool(opts.get("depth_bypass", false))
+	if bool(entry.get("xray", false)) != xray or bool(entry.get("depth_bypass", false)) != bypass:
 		entry["xray"] = xray
-		_set_material(entry, _material_for(xray))
+		entry["depth_bypass"] = bypass
+		_set_material(entry, _material_for(xray, bypass))
 		entry = _items.get(id, entry)
 	var display: Color = opts.get("color", Color(1.0, 0.0, 0.0, 1.0))
 	var brightness: float = float(opts.get("brightness", 1.0))

@@ -28,6 +28,9 @@ func _run() -> void:
 	t_overlay_outline_ignores_stale_fill_flag()
 	t_overlay_xray_preserves_shape()
 	t_toggle_xray_restores_los()
+	t_scope_bypass_swaps_and_restores_pair()
+	t_recollect_keeps_scope_bypass()
+	t_xray_flag_independent_from_depth_bypass()
 	t_overlay_on_mesh()
 	t_recollect_keeps_overlay()
 	t_recollect_detects_deep_mesh_replacement()
@@ -286,6 +289,60 @@ func t_toggle_xray_restores_los() -> void:
 	ck((lbody.next_pass as ShaderMaterial).shader == Sh.ring_los(), "xray off restores ring_los")
 	o.clear(4)
 	root.free()
+
+func scope_opts(depth_bypass: bool, xray: bool = false) -> Dictionary:
+	return {"xray": xray, "depth_bypass": depth_bypass, "color": S.DEFAULT_NORMAL,
+		"brightness": 1.0, "fill_alpha": 0.4, "grow": 0.01, "band": 0.0, "cool": 0.0, "rim": 2.0}
+
+# In an optic without PIP the body and ring must both ignore the vanilla
+# depth barrier; leaving the scope restores the ordinary pair on the same mesh.
+func t_scope_bypass_swaps_and_restores_pair() -> void:
+	var host := Node3D.new()
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	host.add_child(mesh)
+	var o = Outline.new()
+	o.apply(401, host, scope_opts(true))
+	var body: ShaderMaterial = o._items[401]["mat"]
+	ck(body.shader == Sh.body_xray(), "scope without PIP uses the depth-test-disabled body")
+	ck((body.next_pass as ShaderMaterial).shader == Sh.ring_xray(), "scope without PIP uses the xray ring")
+	o.refresh(401, scope_opts(false))
+	var back: ShaderMaterial = o._items[401]["mat"]
+	ck(back.shader == Sh.body_los(), "leaving the scope restores the LOS body")
+	ck((back.next_pass as ShaderMaterial).shader == Sh.ring_los(), "leaving the scope restores the LOS ring")
+	ck(mesh.material_overlay == back, "the restored material is back on the mesh")
+	o.clear(401)
+	host.free()
+
+# Bots can gain a mesh mid-scope: the depth mode must survive that recollection
+# instead of falling back to LOS on the newly drawn part.
+func t_recollect_keeps_scope_bypass() -> void:
+	var host := Node3D.new()
+	host.add_child(MeshInstance3D.new())
+	var o = Outline.new()
+	o.apply(402, host, scope_opts(true))
+	var mat: ShaderMaterial = o._items[402]["mat"]
+	var extra := MeshInstance3D.new()
+	extra.mesh = BoxMesh.new()
+	host.add_child(extra)
+	o.refresh(402, scope_opts(true))
+	ck(o._items[402]["mat"] == mat, "recollect does not swap the scope material")
+	ck(o._items[402]["meshes"].size() == 2, "recollect picked up the new mesh")
+	ck(extra.material_overlay == mat, "the new mesh gets the same xray material")
+	o.clear(402)
+	host.free()
+
+func t_xray_flag_independent_from_depth_bypass() -> void:
+	var host := Node3D.new()
+	var o = Outline.new()
+	o.apply(403, host, scope_opts(false, true))
+	ck(o._items[403]["mat"].shader == Sh.body_xray(), "the x-ray trigger alone still uses xray")
+	o.refresh(403, scope_opts(true, false))
+	ck(o._items[403]["mat"].shader == Sh.body_xray(), "depth bypass alone uses xray")
+	o.refresh(403, scope_opts(false, false))
+	ck(o._items[403]["mat"].shader == Sh.body_los(), "both flags off restores LOS")
+	o.clear(403)
+	host.free()
 
 func t_overlay_on_mesh() -> void:
 	var root := Node3D.new()
