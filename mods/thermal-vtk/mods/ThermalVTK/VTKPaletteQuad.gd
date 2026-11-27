@@ -2,11 +2,11 @@ extends Node
 ## Fullscreen spatial quad that palettizes the world after the opaque pass.
 ##
 ## Godot copies the screen texture after opaque geometry and before transparent
-## geometry. This quad is the first transparent pass (render_priority -128):
-## vanilla optics (0/11), ESP contours and mine shells (20/21) all draw on top
-## with their own colours. The mesh is parented to the current camera and its
-## vertex shader writes clip space directly, so it always covers the viewport
-## and is never frustum-culled.
+## geometry. This quad is the transparent pass after vanilla optics (-128 → 12):
+## it palettizes the optic picture, then ESP contours and mine shells (20/21)
+## still draw on top with their exact colours. The mesh is parented to the
+## current camera and its vertex shader writes clip space directly, so it
+## always covers the viewport and is never frustum-culled.
 
 const Shaders = preload("res://mods/ThermalVTK/VTKShaders.gd")
 
@@ -18,10 +18,9 @@ func material() -> ShaderMaterial:
 	if _mat == null:
 		_mat = ShaderMaterial.new()
 		_mat.shader = Shaders.palette()
-		# First transparent pass: the world is already palettized when vanilla
-		# optics (0/11) and exact-colour ESP/mines (20/21) draw on top. Painting
-		# after optics made scopes look half-transparent and washed out ESP.
-		_mat.render_priority = -128
+		# After vanilla optics (0/11) so the scope picture is palettized too,
+		# before exact-colour ESP/mines (20/21) so they keep their own colours.
+		_mat.render_priority = 12
 	return _mat
 
 

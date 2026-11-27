@@ -2,9 +2,9 @@ shader_type spatial;
 render_mode unshaded, fog_disabled, depth_test_disabled, depth_draw_never, cull_disabled;
 
 // Fullscreen palette pass in the main 3D view. Godot copies the screen after
-// the opaque pass and before transparent geometry. This quad is the FIRST
-// transparent pass (render_priority -128): it palettizes the world, then
-// vanilla optics, reticles and our exact-colour ESP/mine overlays draw on top.
+// the opaque pass and before transparent geometry. This quad draws after
+// vanilla optics (render_priority 12): it palettizes the world and the optic
+// picture, then our exact-colour ESP/mine overlays draw on top.
 
 uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_nearest;
 
@@ -66,9 +66,9 @@ void fragment() {
 	v = pow(v, 1.0 / 2.2);
 	vec3 pal = ramp(v) * paletteOut;
 	ALBEDO = pal;
-	// The palette is total. Because this pass runs before every transparent
-	// overlay, optics and reticles are never half-washed and ESP/mines drawn at
-	// 20/21 keep their exact colours. The screen copy above only supplies the
-	// world luminance for the ramp.
+	// The palette is total. It draws after the vanilla optic surfaces, so the
+	// scope picture is coloured like the collimator sights; ESP/mines at 20/21
+	// still keep their exact colours. The screen copy above only supplies the
+	// luminance for the ramp.
 	ALPHA = 1.0;
 }
