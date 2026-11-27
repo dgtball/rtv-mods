@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.10.44] - 2026-11-27
+
+### Changed
+- Optical sights are visible again and pick up the world palette tint.
+- Amber uses its original, more natural colours.
+
 ## [2.10.43] - 2026-11-27
 
 ### Changed
