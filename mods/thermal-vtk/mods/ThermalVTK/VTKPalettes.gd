@@ -3,12 +3,10 @@ extends RefCounted
 # receives the active palette's five stops as uniforms and never branches on a
 # palette mode. Static-only, no scene access, no load(), so it runs headless.
 #
-# Classic is verbatim from the 2.4.6 overlay. Forest and ice keep that
-# five-stop ladder but shift the hot stops in hue at equal luminance, so heat
-# reads as a colour change instead of only a brightness change. Amber is a
-# gentler midpoint between the old amber ramp and the hot hue shift, so it
-# stays amber instead of turning into a red wash. Order matches the old
-# worldPaletteMode (F6 still cycles 0..3).
+# Classic and amber are verbatim from the 2.4.6 overlay. Forest and ice keep
+# that five-stop ladder but shift the hot stops in hue at equal luminance, so
+# heat reads as a colour change instead of only a brightness change. Order
+# matches the old worldPaletteMode (F6 still cycles 0..3).
 
 const LADDER: Array[float] = [0.0, 0.25, 0.5, 0.75, 1.0]
 const OUTPUT := 0.7
@@ -19,8 +17,8 @@ const STOPS: Array = [
 		Color(0.90, 0.65, 0.00), Color(1.00, 1.00, 0.80),
 	],
 	[
-		Color(0.02, 0.01, 0.00), Color(0.28, 0.10, 0.015), Color(0.72, 0.22, 0.03),
-		Color(0.86, 0.56, 0.11), Color(1.00, 0.93, 0.66),
+		Color(0.02, 0.01, 0.00), Color(0.25, 0.12, 0.02), Color(0.55, 0.30, 0.05),
+		Color(0.80, 0.58, 0.18), Color(1.00, 0.92, 0.70),
 	],
 	[
 		Color(0.00, 0.02, 0.02), Color(0.02, 0.20, 0.12), Color(0.20, 0.34, 0.08),

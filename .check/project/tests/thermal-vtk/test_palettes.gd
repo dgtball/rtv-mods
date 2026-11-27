@@ -17,8 +17,8 @@ func _init() -> void:
 func _run() -> void:
 	t_count()
 	t_classic_matches_246()
-	t_non_classic_heat_hue_shifts_without_brightness_change()
-	t_amber_is_the_approved_midpoint()
+	t_forest_and_ice_heat_hue_shifts_without_brightness_change()
+	t_amber_matches_2041()
 	t_forest_and_ice_stay_untouched()
 	t_every_palette_has_five_stops()
 	t_ladder()
@@ -43,7 +43,7 @@ func t_classic_matches_246() -> void:
 	]
 	ck(P.stops(0) == want, "classic stops are the 2.4.6 ramp")
 
-func t_non_classic_heat_hue_shifts_without_brightness_change() -> void:
+func t_forest_and_ice_heat_hue_shifts_without_brightness_change() -> void:
 	var old: Array = [
 		[
 			Color(0.02, 0.01, 0.00), Color(0.25, 0.12, 0.02), Color(0.55, 0.30, 0.05),
@@ -58,7 +58,7 @@ func t_non_classic_heat_hue_shifts_without_brightness_change() -> void:
 			Color(0.40, 0.65, 0.85), Color(0.85, 0.95, 1.00),
 		],
 	]
-	for i in range(1, 4):
+	for i in range(2, 4):
 		var now: Array[Color] = P.stops(i)
 		var was: Array = old[i - 1]
 		for j in 5:
@@ -67,14 +67,14 @@ func t_non_classic_heat_hue_shifts_without_brightness_change() -> void:
 		ck(now[3].r >= was[3].r + 0.05 and now[3].g <= was[3].g, "palette %d hot top stop shifts warmer" % i)
 
 
-func t_amber_is_the_approved_midpoint() -> void:
+func t_amber_matches_2041() -> void:
 	var want: Array[Color] = [
-		Color(0.02, 0.01, 0.00), Color(0.28, 0.10, 0.015), Color(0.72, 0.22, 0.03),
-		Color(0.86, 0.56, 0.11), Color(1.00, 0.93, 0.66),
+		Color(0.02, 0.01, 0.00), Color(0.25, 0.12, 0.02), Color(0.55, 0.30, 0.05),
+		Color(0.80, 0.58, 0.18), Color(1.00, 0.92, 0.70),
 	]
 	var now: Array[Color] = P.stops(1)
 	for j in 5:
-		ck(now[j] == want[j], "amber stop %d is the approved midpoint" % j)
+		ck(now[j] == want[j], "amber stop %d matches 2.10.41" % j)
 
 
 func t_forest_and_ice_stay_untouched() -> void:
