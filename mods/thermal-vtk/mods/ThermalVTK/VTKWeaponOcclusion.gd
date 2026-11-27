@@ -8,15 +8,32 @@ extends RefCounted
 # that single line makes the surface opaque: the look is unchanged, but the
 # body now lands in the copy and the palette recolours it like everything else.
 #
-# Nothing else is touched. The Mask, the Objective lens, the reticle and the
-# tube keep their vanilla materials, and no visibility state is rewritten.
+# Going opaque also moves the body ahead of the transparent Mask depth barrier,
+# so the copy discards fragments inside the Mask disk: that is the inner rim the
+# barrier used to hide. The Mask, the Objective lens and the reticle keep their
+# vanilla materials, and no visibility state is rewritten. Vanilla files are
+# never edited: the copy lives only in ShaderMaterial overrides and is restored
+# on reset.
 
 const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 
 const SCOPE_SHADER := "res://Shaders/Scope.gdshader"
+const MASK_SHADER := "res://Shaders/Mask.gdshader"
 const ALPHA_LINE := "ALPHA = 1.0;"
+const MASK_CENTER := "opticMaskCenter"
+const MASK_RADIUS := "opticMaskRadius"
 const RESWEEP_FRAMES := 90
+
+# The opaque body is drawn before the transparent Mask depth barrier, so the
+# barrier can no longer hide the inner rim. The Mask is a disk centred on the
+# optic axis; discard body fragments inside that disk in model space. A
+# screen-space projection would only clip one depth, while the inner wall of
+# the tube spans most of the optic's length and every zoom level changes the
+# projected radius. The two percent margin covers the disk's boundary.
+const CLIP_DECL := "uniform vec3 opticMaskCenter;\nuniform float opticMaskRadius;\nvarying vec3 vOpticLocalPos;"
+const CLIP_VERTEX := "\tvOpticLocalPos = POSITION.xyz;"
+const CLIP_FRAGMENT := "\tif (length(vOpticLocalPos.xy - opticMaskCenter.xy) < opticMaskRadius * 1.02) {\n\t\tdiscard;\n\t}"
 
 var _mgr: Node = null
 var _connected: bool = false
@@ -121,9 +138,16 @@ func _patch_scope(mesh: MeshInstance3D) -> void:
 		var sm := mat as ShaderMaterial
 		if sm.shader == null or sm.shader.resource_path.find(SCOPE_SHADER) == -1:
 			continue
+		# Without the Mask geometry there is no disk to restore; leave the
+		# surface alone rather than exposing its inner rim.
+		var mask := _mask_geometry(mesh)
+		if mask.is_empty():
+			continue
 		var patched := _scope_material(sm)
 		if patched == null:
 			continue
+		patched.set_shader_parameter(MASK_CENTER, mask.get("center"))
+		patched.set_shader_parameter(MASK_RADIUS, mask.get("radius"))
 		mesh.set_surface_override_material(i, patched)
 		_record(mesh, i, mat, patched)
 
@@ -170,10 +194,85 @@ func _scope_shader(src: Shader) -> Shader:
 		# feed Godot a copy we no longer understand.
 		Dbg.log("SCOPE", "scope shader has no " + ALPHA_LINE + " line; body stays transparent")
 		return null
+	var clipped := _add_mask_clip("\n".join(kept))
+	if clipped.is_empty():
+		Dbg.log("SCOPE", "scope shader changed; body stays transparent")
+		return null
 	var out := Shader.new()
-	out.code = "\n".join(kept)
+	out.code = clipped
 	_scope_shaders[rid_id] = out
 	return out
+
+
+func _mask_geometry(node: MeshInstance3D) -> Dictionary:
+	if node == null or node.mesh == null:
+		return {}
+	var mesh := node.mesh
+	for i in mesh.get_surface_count():
+		var mat: Material = node.get_surface_override_material(i)
+		if mat == null:
+			mat = mesh.surface_get_material(i)
+		if not (mat is ShaderMaterial):
+			continue
+		var sm := mat as ShaderMaterial
+		if sm.shader == null or sm.shader.resource_path.find(MASK_SHADER) == -1:
+			continue
+		var arrays := mesh.surface_get_arrays(i)
+		if not (arrays[Mesh.ARRAY_VERTEX] is PackedVector3Array):
+			continue
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		if verts.is_empty():
+			continue
+		var lo := Vector3(1e9, 1e9, 1e9)
+		var hi := Vector3(-1e9, -1e9, -1e9)
+		for v in verts:
+			lo.x = minf(lo.x, v.x)
+			lo.y = minf(lo.y, v.y)
+			lo.z = minf(lo.z, v.z)
+			hi.x = maxf(hi.x, v.x)
+			hi.y = maxf(hi.y, v.y)
+			hi.z = maxf(hi.z, v.z)
+		var center := (lo + hi) * 0.5
+		var radius := 0.0
+		for v in verts:
+			radius = maxf(radius, Vector2(v.x - center.x, v.y - center.y).length())
+		if radius <= 0.0:
+			continue
+		return {"center": center, "radius": radius}
+	return {}
+
+
+func _add_mask_clip(code: String) -> String:
+	var lines := code.split("\n")
+	var decl_at := -1
+	var vertex_at := -1
+	var fragment_at := -1
+	for i in lines.size():
+		var t := lines[i].strip_edges()
+		if decl_at == -1 and t == "varying vec3 worldNormal;":
+			decl_at = i
+		elif vertex_at == -1 and t.begins_with("worldNormal = normalize("):
+			vertex_at = i
+		elif fragment_at == -1 and t.begins_with("void fragment()"):
+			if t.ends_with("{"):
+				fragment_at = i
+			elif i + 1 < lines.size() and lines[i + 1].strip_edges() == "{":
+				fragment_at = i + 1
+	if decl_at == -1 or vertex_at == -1 or fragment_at == -1:
+		return ""
+	var decls := CLIP_DECL.split("\n")
+	var vertex := CLIP_VERTEX.split("\n")
+	var fragment := CLIP_FRAGMENT.split("\n")
+	var out := PackedStringArray()
+	for i in lines.size():
+		out.append(lines[i])
+		if i == decl_at:
+			out.append_array(decls)
+		elif i == vertex_at:
+			out.append_array(vertex)
+		elif i == fragment_at:
+			out.append_array(fragment)
+	return "\n".join(out)
 
 
 # Kept for callers: the patch is state-independent, so scope state changes do

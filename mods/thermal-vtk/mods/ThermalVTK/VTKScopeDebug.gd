@@ -243,11 +243,10 @@ static func _snapshot_ring(cam: Camera3D, weapon) -> void:
 		Dbg.log("SCOPE", "rig: no camera manager attached")
 		return
 	Dbg.log("SCOPE", "rig children=%d patched=%d skipped=%d" % [mgr.get_child_count(), weapon._dbg_patched, weapon._dbg_layer_skip])
-	# Optic materials are never patched: VTKWeaponOcclusion is a no-op, so the
-	# Mask keeps its vanilla depth barrier and every sight surface keeps its own
-	# shader. Report that plainly instead of dumping a swap table that no longer
-	# exists.
-	Dbg.log("SCOPE", "mask: vanilla, no optic material patching")
+	# Only the Scope body carries a runtime override; the Mask depth barrier and
+	# every other optic surface keep their vanilla shaders. Report the count
+	# instead of dumping a swap table that would repeat the same entry.
+	Dbg.log("SCOPE", "mask: vanilla, scope bodies patched=%d" % weapon._dbg_patched)
 	for child in mgr.get_children():
 		_list_front_meshes(child, cam)
 

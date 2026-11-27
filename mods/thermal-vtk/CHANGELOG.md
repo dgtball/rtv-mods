@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.10.51] - 2026-11-27
+
+### Fixed
+- The extra bright ring inside optical sights is gone with PIP on and off.
+
 ## [2.10.50] - 2026-11-27
 
 ### Fixed

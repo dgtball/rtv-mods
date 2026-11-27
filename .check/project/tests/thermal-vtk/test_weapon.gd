@@ -22,6 +22,8 @@ func _run() -> void:
 	t_patch_restores_on_reset()
 	t_resweep_repairs_a_reassigned_material()
 	t_shader_without_alpha_is_left_alone()
+	t_scope_body_receives_mask_clip_geometry()
+	t_scope_shader_clips_inside_the_mask_disk()
 	print("")
 	if fails == 0:
 		print("Weapon tests passed")
@@ -77,8 +79,32 @@ func _five_surface_mesh() -> ArrayMesh:
 		m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
 	return m
 
+func _mask_clip_mesh() -> ArrayMesh:
+	var scope := PackedVector3Array()
+	scope.append(Vector3(0.0, 0.05, -0.05))
+	scope.append(Vector3(0.0433, -0.025, -0.05))
+	scope.append(Vector3(-0.0433, -0.025, -0.05))
+	var mask := PackedVector3Array()
+	mask.append(Vector3(0.02, 0.0, -0.1))
+	mask.append(Vector3(0.0, 0.02, -0.1))
+	mask.append(Vector3(0.0, -0.02, -0.1))
+	mask.append(Vector3(0.0, -0.02, -0.1))
+	mask.append(Vector3(0.0, 0.02, -0.1))
+	mask.append(Vector3(-0.02, 0.0, -0.1))
+	var other := PackedVector3Array()
+	other.append(Vector3(-1.0, -1.0, 0.0))
+	other.append(Vector3(1.0, -1.0, 0.0))
+	other.append(Vector3(0.0, 1.0, 0.0))
+	var m := ArrayMesh.new()
+	for arr in [scope, other, mask, other, other]:
+		var a := []
+		a.resize(Mesh.ARRAY_MAX)
+		a[Mesh.ARRAY_VERTEX] = arr
+		m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, a)
+	return m
+
 # Mirrors a real optic: Scope, Reticle, Mask, Objective, second Reticle.
-func _optic_rig() -> MeshInstance3D:
+func _optic_rig(mesh: Mesh = null) -> MeshInstance3D:
 	_clear_rigs()
 	var map := Node.new()
 	map.name = "Map"
@@ -97,7 +123,7 @@ func _optic_rig() -> MeshInstance3D:
 	mgr.add_child(att)
 	var mi := MeshInstance3D.new()
 	mi.name = "Optic"
-	mi.mesh = _five_surface_mesh()
+	mi.mesh = mesh if mesh != null else _five_surface_mesh()
 	att.add_child(mi)
 	var scope := ShaderMaterial.new()
 	scope.shader = load("res://Shaders/Scope.gdshader") as Shader
@@ -182,6 +208,32 @@ func t_shader_without_alpha_is_left_alone() -> void:
 	src.code = "shader_type spatial;\nvoid fragment() {\n\tALBEDO = vec3(1.0);\n}\n"
 	var o = WeaponOcclusion.new()
 	ck(o._scope_shader(src) == null, "a shader without the alpha line is never rewritten")
+
+# The opaque body must still be clipped by the Mask disk, exactly as the
+# transparent body was clipped by the Mask depth barrier before 2.10.50.
+func t_scope_body_receives_mask_clip_geometry() -> void:
+	var mi := _optic_rig(_mask_clip_mesh())
+	var o = WeaponOcclusion.new()
+	o.tick()
+	var body := mi.get_surface_override_material(0)
+	var center = body.get_shader_parameter("opticMaskCenter")
+	var radius = body.get_shader_parameter("opticMaskRadius")
+	ck(center is Vector3, "mask centre is published to the body material")
+	ck(radius is float, "mask radius is published to the body material")
+	if center is Vector3:
+		ck((center as Vector3).distance_to(Vector3(0.0, 0.0, -0.1)) < 0.0001, "mask centre matches the fixture")
+	if radius is float:
+		ck(absf(float(radius) - 0.02) < 0.0001, "mask radius matches the fixture")
+
+func t_scope_shader_clips_inside_the_mask_disk() -> void:
+	var mi := _optic_rig(_mask_clip_mesh())
+	var o = WeaponOcclusion.new()
+	o.tick()
+	var code := _code_of(mi.get_surface_override_material(0))
+	ck("POSITION" in code, "clip uses the local vertex position")
+	ck("discard" in code, "clip discards fragments inside the lens")
+	ck("opticMaskRadius" in code, "clip radius comes from the mask geometry")
+	ck("SCREEN_UV" not in code, "clip does not depend on the projection or zoom")
 
 func _manager_of(node: Node) -> Node:
 	var n: Node = node.get_parent()
