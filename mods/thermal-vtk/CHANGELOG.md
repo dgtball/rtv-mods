@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.10.47] - 2026-11-27
+
+### Fixed
+- Dark bars inside ACOG, HMR and VDU sights are gone while thermal vision is on.
+
 ## [2.10.46] - 2026-11-27
 
 ### Fixed

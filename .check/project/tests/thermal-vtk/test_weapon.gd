@@ -22,6 +22,8 @@ func _run() -> void:
 	t_pip_mask_is_never_touched()
 	t_reset_restores_and_allows_rediscovery()
 	t_scope_reapply_repairs_overwritten_mask()
+	t_optic_extras_hidden_when_scoped_without_pip()
+	t_multiple_masks_keep_reticle_between_them()
 	t_dead_entries_are_pruned()
 	print("")
 	if fails == 0:
@@ -72,6 +74,12 @@ func _clear_rigs() -> void:
 func _fixture_shader() -> Shader:
 	var shader := load("res://Shaders/Mask.gdshader") as Shader
 	ck(shader != null, "mask fixture shader loads")
+	return shader
+
+
+func _scope_fixture_shader() -> Shader:
+	var shader := load("res://Shaders/Scope.gdshader") as Shader
+	ck(shader != null, "scope fixture shader loads")
 	return shader
 
 
@@ -199,6 +207,110 @@ func t_scope_reapply_repairs_overwritten_mask() -> void:
 	mask.set_surface_override_material(0, put_back)
 	o.set_scope_mode(true, false)
 	ck("depth_draw_never" in _mask_code(mask), "an overwritten mask is restored without a scope state change")
+
+func _five_surface_mesh() -> ArrayMesh:
+	var verts := PackedVector3Array()
+	verts.append(Vector3(-1.0, -1.0, 0.0))
+	verts.append(Vector3(1.0, -1.0, 0.0))
+	verts.append(Vector3(0.0, 1.0, 0.0))
+	var arr := []
+	arr.resize(Mesh.ARRAY_MAX)
+	arr[Mesh.ARRAY_VERTEX] = verts
+	var m := ArrayMesh.new()
+	for i in 5:
+		m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	return m
+
+
+func _optic_rig() -> MeshInstance3D:
+	_clear_rigs()
+	var map := Node.new()
+	map.name = "Map"
+	root.add_child(map)
+	var core := Node.new()
+	core.name = "Core"
+	map.add_child(core)
+	var cam := Node.new()
+	cam.name = "Camera"
+	core.add_child(cam)
+	var mgr := Node.new()
+	mgr.name = "Manager"
+	cam.add_child(mgr)
+	var att := Node3D.new()
+	att.name = "Attachments"
+	mgr.add_child(att)
+	var mi := MeshInstance3D.new()
+	mi.name = "Optic"
+	mi.mesh = _five_surface_mesh()
+	att.add_child(mi)
+	var scope := ShaderMaterial.new()
+	scope.shader = _scope_fixture_shader()
+	var reticle := ShaderMaterial.new()
+	reticle.shader = load("res://Shaders/Reticle.gdshader") as Shader
+	var mask := ShaderMaterial.new()
+	mask.shader = _fixture_shader()
+	var objective := ShaderMaterial.new()
+	objective.shader = load("res://Shaders/Objective.gdshader") as Shader
+	var reticle2 := ShaderMaterial.new()
+	reticle2.shader = reticle.shader
+	mi.set_surface_override_material(0, scope)
+	mi.set_surface_override_material(1, reticle)
+	mi.set_surface_override_material(2, mask)
+	mi.set_surface_override_material(3, objective)
+	mi.set_surface_override_material(4, reticle2)
+	return mi
+
+
+func _code_of(mat: Material) -> String:
+	if mat == null or not (mat is ShaderMaterial):
+		return ""
+	var sm := mat as ShaderMaterial
+	if sm.shader == null:
+		return ""
+	return sm.shader.code
+
+
+func _is_hidden(mat: Material) -> bool:
+	return "ALPHA = 0.0" in _code_of(mat)
+
+
+func t_optic_extras_hidden_when_scoped_without_pip() -> void:
+	var mi := _optic_rig()
+	var keep := mi.get_surface_override_material(1)
+	var objective := mi.get_surface_override_material(3)
+	var reticle2 := mi.get_surface_override_material(4)
+	var o = WeaponOcclusion.new()
+	o.tick()
+	o.set_scope_mode(true, false)
+	ck(mi.get_surface_override_material(1) == keep, "the main reticle before the mask stays visible")
+	ck("depth_draw_never" in _code_of(mi.get_surface_override_material(2)), "mask stays depthless in the same state")
+	var hidden_objective := mi.get_surface_override_material(3)
+	ck(hidden_objective != objective, "objective behind the mask is hidden while scoped without PIP")
+	ck(_is_hidden(hidden_objective), "hidden objective uses an invisible surface")
+	ck(_is_hidden(mi.get_surface_override_material(4)), "second reticle behind the mask is hidden")
+	o.set_scope_mode(true, true)
+	ck(mi.get_surface_override_material(3) == objective, "PIP restores the objective surface")
+	ck(mi.get_surface_override_material(4) == reticle2, "PIP restores the second reticle")
+	o.set_scope_mode(false, false)
+	ck(mi.get_surface_override_material(3) == objective, "unscoped restores the objective surface")
+	ck(mi.get_surface_override_material(4) == reticle2, "unscoped restores the second reticle")
+
+
+func t_multiple_masks_keep_reticle_between_them() -> void:
+	var mi := _optic_rig()
+	# A second Mask surface before the reticle must not move the hidden range
+	# onto the main reticle; only layers after the last Mask are extras.
+	var front_mask := ShaderMaterial.new()
+	front_mask.shader = _fixture_shader()
+	mi.set_surface_override_material(0, front_mask)
+	var keep := mi.get_surface_override_material(1)
+	var o = WeaponOcclusion.new()
+	o.tick()
+	o.set_scope_mode(true, false)
+	ck(mi.get_surface_override_material(1) == keep, "reticle between two masks stays visible")
+	ck(_is_hidden(mi.get_surface_override_material(3)), "layers after the last mask are still hidden")
+	ck(_is_hidden(mi.get_surface_override_material(4)), "last layer after two masks is hidden")
+
 
 func t_dead_entries_are_pruned() -> void:
 	_clear_rigs()

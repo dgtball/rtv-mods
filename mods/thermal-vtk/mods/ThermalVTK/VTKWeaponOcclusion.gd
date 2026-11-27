@@ -12,12 +12,16 @@ extends RefCounted
 const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
 
 const MASK_SHADER := "res://Shaders/Mask.gdshader"
+const OBJECTIVE_SHADER := "res://Shaders/Objective.gdshader"
+const RETICLE_SHADER := "res://Shaders/Reticle.gdshader"
 const RESWEEP_FRAMES := 90
 
 var _mgr: Node = null
 var _connected: bool = false
 var _mask_shaders: Dictionary = {}
 var _mask_entries: Array = []
+var _extra_entries: Array = []
+var _hidden_mat: ShaderMaterial = null
 var _scope_scoped: bool = false
 var _scope_pip: bool = false
 var _scope_ready: bool = false
@@ -66,10 +70,20 @@ func _reset() -> void:
 		if mesh.get_surface_override_material(idx) == e.get("depthless"):
 			mesh.set_surface_override_material(idx, e.get("orig"))
 		mesh.remove_meta("VTK_MASK")
+		if mesh.has_meta("VTK_EXTRA_SCAN"):
+			mesh.remove_meta("VTK_EXTRA_SCAN")
+	for e in _extra_entries:
+		var mesh = e.get("mesh")
+		if mesh == null or not is_instance_valid(mesh):
+			continue
+		var idx: int = int(e.get("index"))
+		if mesh.get_surface_override_material(idx) == _hidden_mat:
+			mesh.set_surface_override_material(idx, e.get("orig"))
 	_mgr = null
 	_connected = false
 	_mask_shaders.clear()
 	_mask_entries.clear()
+	_extra_entries.clear()
 	_scope_ready = false
 	_resweep_cd = 0
 
@@ -114,6 +128,7 @@ func _patch_mask(mesh: MeshInstance3D) -> void:
 		return
 	var matched := false
 	var count: int = mesh.mesh.get_surface_count()
+	var mask_indices: Array = []
 	for i in count:
 		var mat: Material = mesh.get_surface_override_material(i)
 		if mat == null:
@@ -131,6 +146,7 @@ func _patch_mask(mesh: MeshInstance3D) -> void:
 			"orig": mat,
 			"depthless": dup,
 		})
+		mask_indices.append(i)
 		matched = true
 		# Discovery can happen after the scope is already up; `_reset` clears
 		# `_scope_ready`, so use the flags themselves, not the received-state flag.
@@ -140,6 +156,48 @@ func _patch_mask(mesh: MeshInstance3D) -> void:
 	# may receive its material later, and the periodic resweep must still see it.
 	if matched:
 		mesh.set_meta("VTK_MASK", true)
+		_scan_optic_extras(mesh, mask_indices, count)
+
+
+func _scan_optic_extras(mesh: MeshInstance3D, mask_indices: Array, count: int) -> void:
+	if mask_indices.is_empty() or mesh.has_meta("VTK_EXTRA_SCAN"):
+		return
+	mesh.set_meta("VTK_EXTRA_SCAN", true)
+	var after := -1
+	for i in mask_indices:
+		after = maxi(after, int(i))
+	# Only surfaces drawn after the mask were hidden by its depth barrier. The
+	# main reticle sits before it and must stay red and visible. Those later
+	# Objective/Reticle layers are the dark bars seen through the lens once the
+	# mask becomes depthless, so hide them in exactly that state.
+	for j in range(after + 1, count):
+		var mat: Material = mesh.get_surface_override_material(j)
+		if mat == null:
+			mat = mesh.mesh.surface_get_material(j)
+		if not (mat is ShaderMaterial):
+			continue
+		var sm := mat as ShaderMaterial
+		if sm.shader == null:
+			continue
+		var path := sm.shader.resource_path
+		if path.find(OBJECTIVE_SHADER) == -1 and path.find(RETICLE_SHADER) == -1:
+			continue
+		_extra_entries.append({
+			"mesh": mesh,
+			"index": j,
+			"orig": mat,
+		})
+		if _scope_scoped and not _scope_pip:
+			mesh.set_surface_override_material(j, _hidden_material())
+
+
+func _hidden_material() -> ShaderMaterial:
+	if _hidden_mat == null:
+		var sh := Shader.new()
+		sh.code = "shader_type spatial;\nrender_mode unshaded, fog_disabled, depth_draw_never, depth_test_disabled, cull_disabled;\nvoid fragment() {\n\tALPHA = 0.0;\n}"
+		_hidden_mat = ShaderMaterial.new()
+		_hidden_mat.shader = sh
+	return _hidden_mat
 
 
 func _mask_shader(src: Shader) -> Shader:
@@ -176,6 +234,20 @@ func set_scope_mode(scoped: bool, pip: bool) -> void:
 		var idx: int = int(e.get("index"))
 		if mesh.get_surface_override_material(idx) != mat:
 			mesh.set_surface_override_material(idx, mat)
+	# The same state decides whether the post-mask lens layers stay hidden.
+	# Reapply every call so a material restored by vanilla optics cannot leave
+	# the dark bars back inside the scope.
+	var live_extra: Array = []
+	for e in _extra_entries:
+		var mesh = e.get("mesh")
+		if mesh == null or not is_instance_valid(mesh):
+			continue
+		live_extra.append(e)
+		var idx: int = int(e.get("index"))
+		var mat: Material = _hidden_material() if depthless else e.get("orig")
+		if mesh.get_surface_override_material(idx) != mat:
+			mesh.set_surface_override_material(idx, mat)
+	_extra_entries = live_extra
 
 
 func set_buffer_occlusion(_enabled: bool, _layer_bit: int = 1 << 19) -> void:
