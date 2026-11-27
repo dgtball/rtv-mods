@@ -22,8 +22,10 @@ func _run() -> void:
 	t_pip_mask_is_never_touched()
 	t_reset_restores_and_allows_rediscovery()
 	t_scope_reapply_repairs_overwritten_mask()
-	t_optic_extras_hidden_when_scoped_without_pip()
+	t_objective_lens_leaves_palette_pass()
+	t_objective_patched_on_discovery()
 	t_multiple_masks_keep_reticle_between_them()
+	t_reset_restores_objective_lens()
 	t_dead_entries_are_pruned()
 	print("")
 	if fails == 0:
@@ -274,7 +276,12 @@ func _is_hidden(mat: Material) -> bool:
 	return "ALPHA = 0.0" in _code_of(mat)
 
 
-func t_optic_extras_hidden_when_scoped_without_pip() -> void:
+func _is_transparent_lens(mat: Material) -> bool:
+	var code := _code_of(mat)
+	return "ALPHA = 1.0" in code and "depth_draw_always" in code
+
+
+func t_objective_lens_leaves_palette_pass() -> void:
 	var mi := _optic_rig()
 	var keep := mi.get_surface_override_material(1)
 	var objective := mi.get_surface_override_material(3)
@@ -284,16 +291,27 @@ func t_optic_extras_hidden_when_scoped_without_pip() -> void:
 	o.set_scope_mode(true, false)
 	ck(mi.get_surface_override_material(1) == keep, "the main reticle before the mask stays visible")
 	ck("depth_draw_never" in _code_of(mi.get_surface_override_material(2)), "mask stays depthless in the same state")
-	var hidden_objective := mi.get_surface_override_material(3)
-	ck(hidden_objective != objective, "objective behind the mask is hidden while scoped without PIP")
-	ck(_is_hidden(hidden_objective), "hidden objective uses an invisible surface")
+	var lens := mi.get_surface_override_material(3)
+	ck(lens != objective, "objective lens gets its own runtime material")
+	ck(_is_transparent_lens(lens), "objective writes alpha and keeps its depth write")
+	ck(not _is_hidden(lens), "objective lens is not turned into a hole")
 	ck(_is_hidden(mi.get_surface_override_material(4)), "second reticle behind the mask is hidden")
 	o.set_scope_mode(true, true)
-	ck(mi.get_surface_override_material(3) == objective, "PIP restores the objective surface")
+	ck(mi.get_surface_override_material(3) == lens, "PIP keeps the objective lens material")
 	ck(mi.get_surface_override_material(4) == reticle2, "PIP restores the second reticle")
 	o.set_scope_mode(false, false)
-	ck(mi.get_surface_override_material(3) == objective, "unscoped restores the objective surface")
+	ck(mi.get_surface_override_material(3) == lens, "unscoped keeps the objective lens material")
 	ck(mi.get_surface_override_material(4) == reticle2, "unscoped restores the second reticle")
+
+
+func t_objective_patched_on_discovery() -> void:
+	var mi := _optic_rig()
+	var objective := mi.get_surface_override_material(3)
+	var o = WeaponOcclusion.new()
+	o.tick()
+	var lens := mi.get_surface_override_material(3)
+	ck(lens != objective, "objective is patched as soon as the rig is discovered")
+	ck(_is_transparent_lens(lens), "discovered objective is already outside the opaque pass")
 
 
 func t_multiple_masks_keep_reticle_between_them() -> void:
@@ -308,8 +326,21 @@ func t_multiple_masks_keep_reticle_between_them() -> void:
 	o.tick()
 	o.set_scope_mode(true, false)
 	ck(mi.get_surface_override_material(1) == keep, "reticle between two masks stays visible")
-	ck(_is_hidden(mi.get_surface_override_material(3)), "layers after the last mask are still hidden")
+	ck(_is_transparent_lens(mi.get_surface_override_material(3)), "objective after the last mask leaves the palette pass")
 	ck(_is_hidden(mi.get_surface_override_material(4)), "last layer after two masks is hidden")
+
+
+func t_reset_restores_objective_lens() -> void:
+	var mi := _optic_rig()
+	var objective := mi.get_surface_override_material(3)
+	var o = WeaponOcclusion.new()
+	o.tick()
+	ck(mi.get_surface_override_material(3) != objective, "objective is patched before the manager disappears")
+	var mgr := _manager_of(mi)
+	var parent: Node = mgr.get_parent()
+	parent.remove_child(mgr)
+	o.tick()
+	ck(mi.get_surface_override_material(3) == objective, "reset restores the vanilla objective material")
 
 
 func t_dead_entries_are_pruned() -> void:

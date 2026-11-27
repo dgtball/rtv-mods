@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.10.48] - 2026-11-27
+
+### Fixed
+- Thermal vision no longer recolours the lenses of ACOG, HMR and VDU sights.
+
 ## [2.10.47] - 2026-11-27
 
 ### Fixed

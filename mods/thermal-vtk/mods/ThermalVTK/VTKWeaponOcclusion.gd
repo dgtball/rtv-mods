@@ -19,8 +19,10 @@ const RESWEEP_FRAMES := 90
 var _mgr: Node = null
 var _connected: bool = false
 var _mask_shaders: Dictionary = {}
+var _objective_shaders: Dictionary = {}
 var _mask_entries: Array = []
 var _extra_entries: Array = []
+var _objective_entries: Array = []
 var _hidden_mat: ShaderMaterial = null
 var _scope_scoped: bool = false
 var _scope_pip: bool = false
@@ -79,11 +81,20 @@ func _reset() -> void:
 		var idx: int = int(e.get("index"))
 		if mesh.get_surface_override_material(idx) == _hidden_mat:
 			mesh.set_surface_override_material(idx, e.get("orig"))
+	for e in _objective_entries:
+		var mesh = e.get("mesh")
+		if mesh == null or not is_instance_valid(mesh):
+			continue
+		var idx: int = int(e.get("index"))
+		if mesh.get_surface_override_material(idx) == e.get("lens"):
+			mesh.set_surface_override_material(idx, e.get("orig"))
 	_mgr = null
 	_connected = false
 	_mask_shaders.clear()
+	_objective_shaders.clear()
 	_mask_entries.clear()
 	_extra_entries.clear()
+	_objective_entries.clear()
 	_scope_ready = false
 	_resweep_cd = 0
 
@@ -167,9 +178,11 @@ func _scan_optic_extras(mesh: MeshInstance3D, mask_indices: Array, count: int) -
 	for i in mask_indices:
 		after = maxi(after, int(i))
 	# Only surfaces drawn after the mask were hidden by its depth barrier. The
-	# main reticle sits before it and must stay red and visible. Those later
-	# Objective/Reticle layers are the dark bars seen through the lens once the
-	# mask becomes depthless, so hide them in exactly that state.
+	# main reticle sits before it and must stay red and visible. The Objective
+	# lens is the one opaque optic surface, so the palette pass would repaint it
+	# from the opaque screen copy; keep it visually opaque but move it to the
+	# transparent pipeline. The later Reticle layer is only an extra once the
+	# mask becomes depthless, so hide that one in exactly that state.
 	for j in range(after + 1, count):
 		var mat: Material = mesh.get_surface_override_material(j)
 		if mat == null:
@@ -180,7 +193,17 @@ func _scan_optic_extras(mesh: MeshInstance3D, mask_indices: Array, count: int) -
 		if sm.shader == null:
 			continue
 		var path := sm.shader.resource_path
-		if path.find(OBJECTIVE_SHADER) == -1 and path.find(RETICLE_SHADER) == -1:
+		if path.find(OBJECTIVE_SHADER) != -1:
+			var lens := _objective_material(sm)
+			_objective_entries.append({
+				"mesh": mesh,
+				"index": j,
+				"orig": mat,
+				"lens": lens,
+			})
+			mesh.set_surface_override_material(j, lens)
+			continue
+		if path.find(RETICLE_SHADER) == -1:
 			continue
 		_extra_entries.append({
 			"mesh": mesh,
@@ -198,6 +221,37 @@ func _hidden_material() -> ShaderMaterial:
 		_hidden_mat = ShaderMaterial.new()
 		_hidden_mat.shader = sh
 	return _hidden_mat
+
+
+func _objective_material(src: ShaderMaterial) -> ShaderMaterial:
+	var dup := src.duplicate() as ShaderMaterial
+	dup.shader = _objective_shader(src.shader)
+	return dup
+
+
+func _objective_shader(src: Shader) -> Shader:
+	if src == null:
+		return null
+	var rid_id: int = src.get_rid().get_id()
+	if rid_id in _objective_shaders:
+		return _objective_shaders[rid_id]
+	var out := Shader.new()
+	var code := src.code
+	if "depth_draw_always" not in code:
+		code = code.replace(
+			"render_mode shadows_disabled;",
+			"render_mode shadows_disabled, depth_draw_always;"
+		)
+	# Objective has a single fragment() function, so the last brace closes it.
+	# Writing ALPHA moves the lens out of the opaque copy the palette samples
+	# while ALPHA = 1.0 keeps it visually solid.
+	if "ALPHA = 1.0" not in code:
+		var close := code.rfind("}")
+		if close != -1:
+			code = code.substr(0, close) + "\tALPHA = 1.0;\n" + code.substr(close)
+	out.code = code
+	_objective_shaders[rid_id] = out
+	return out
 
 
 func _mask_shader(src: Shader) -> Shader:
