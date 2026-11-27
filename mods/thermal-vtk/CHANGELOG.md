@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.10.54] - 2026-11-27
+
+### Fixed
+- NPC outlines are visible again through optical sights and keep their assigned colour.
+
 ## [2.10.53] - 2026-11-27
 
 ### Fixed
