@@ -32,7 +32,7 @@ const RESWEEP_FRAMES := 90
 # the tube spans most of the optic's length and every zoom level changes the
 # projected radius. The two percent margin covers the disk's boundary.
 const CLIP_DECL := "uniform vec3 opticMaskCenter;\nuniform float opticMaskRadius;\nvarying vec3 vOpticLocalPos;"
-const CLIP_VERTEX := "\tvOpticLocalPos = POSITION.xyz;"
+const CLIP_VERTEX := "\tvOpticLocalPos = VERTEX;"
 const CLIP_FRAGMENT := "\tif (length(vOpticLocalPos.xy - opticMaskCenter.xy) < opticMaskRadius * 1.02) {\n\t\tdiscard;\n\t}"
 
 var _mgr: Node = null

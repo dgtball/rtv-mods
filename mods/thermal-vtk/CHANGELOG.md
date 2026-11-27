@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.10.52] - 2026-11-27
+
+### Fixed
+- Optical sight bodies are visible again, with the extra inner ring still removed.
+
 ## [2.10.51] - 2026-11-27
 
 ### Fixed
