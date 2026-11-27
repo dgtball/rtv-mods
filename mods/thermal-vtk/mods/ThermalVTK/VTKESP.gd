@@ -12,6 +12,7 @@ const WeaponOcclusion = preload("res://mods/ThermalVTK/VTKWeaponOcclusion.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 const Paths = preload("res://mods/ThermalVTK/VTKPaths.gd")
 const ScopeDebug = preload("res://mods/ThermalVTK/VTKScopeDebug.gd")
+const OPTIC = preload("res://mods/ThermalVTK/VTKOPTIC.gd")
 
 
 # Polling cadence for state re-reads / fallback discovery (frames).
@@ -58,6 +59,10 @@ var p_color_normal: Color = States.DEFAULT_NORMAL
 var p_color_combat: Color = States.DEFAULT_COMBAT
 var p_color_defend: Color = States.DEFAULT_DEFEND
 var p_brightness: float = Settings.OUTLINE_BRIGHTNESS
+# Cached optic state: read once per frame in _process, reused by every NPC's
+# opts and by the live tuning panel refresh when the game is paused.
+var view_scoped: bool = false
+var view_pip: bool = false
 
 # The X-ray Triggers toggle state: on = a live trigger window swaps that bot's
 # ring to the x-ray shader (through walls). Off = windows are still tagged,
@@ -469,6 +474,8 @@ func _process(delta: float) -> void:
 	_weapon.tick()
 	var scoped := _scoped_now()
 	var pip := _pip_now()
+	view_scoped = scoped
+	view_pip = pip
 	_weapon.set_scope_mode(scoped and _any_layer(), pip)
 	_scope_probe(delta)
 	_frame += 1
@@ -984,6 +991,9 @@ func _fill_opts(opts: Dictionary, e: Dictionary, now: float) -> void:
 		color = p_color_combat
 	elif cat == States.DEFEND:
 		color = p_color_defend
+	var pip_compensate := view_scoped and view_pip
+	if pip_compensate:
+		color = OPTIC.inverse(color)
 	opts["color"] = color
 	opts["brightness"] = p_brightness
 	opts["fill_alpha"] = p_fill_alpha
@@ -991,6 +1001,8 @@ func _fill_opts(opts: Dictionary, e: Dictionary, now: float) -> void:
 	opts["grow"] = p_thickness
 	opts["band"] = _band_for(float(e.get("dist", 0.0)))
 	opts["xray"] = xray
+	opts["depth_bypass"] = view_scoped and not view_pip
+	opts["pip_compensate"] = pip_compensate
 
 
 

@@ -6,6 +6,7 @@ const S = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Outline = preload("res://mods/ThermalVTK/VTKOutline.gd")
 const Sh = preload("res://mods/ThermalVTK/VTKShaders.gd")
 const Tracker = preload("res://mods/ThermalVTK/VTKTracker.gd")
+const OPTIC = preload("res://mods/ThermalVTK/VTKOPTIC.gd")
 const Labels = preload("res://mods/ThermalVTK/VTKLabels.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 
@@ -68,6 +69,9 @@ func _run() -> void:
 	t_no_perframe_subject_log()
 	t_crosshair_target()
 	t_debug_state_is_sticky()
+	t_scope_opts_from_view_flags()
+	t_pip_opts_compensate_color()
+	t_live_panel_refresh_keeps_compensation()
 	print("")
 	if fails == 0:
 		print("ESP tests passed")
@@ -851,4 +855,52 @@ func t_debug_state_is_sticky() -> void:
 	ck(int(e["cat"]) == S.COMBAT, "F10 assignment survives the normal state reader")
 	ck(int(e["cat"]) != S.NORMAL, "the live AI state cannot undo a held debug state")
 	bot.free()
+	esp.free()
+
+# The optic path is decided once per frame from the values _process already
+# reads; the contour only needs a flag in its reusable opts dictionary.
+func opts_for(esp, scoped: bool, pip: bool) -> Dictionary:
+	esp.view_scoped = scoped
+	esp.view_pip = pip
+	var e := {"win": Tracker.EMPTY_WINDOW, "xray_live": false, "cat": S.NORMAL, "dist": 10.0}
+	var opts: Dictionary = {}
+	esp._fill_opts(opts, e, 0.0)
+	return opts
+
+func t_scope_opts_from_view_flags() -> void:
+	var esp = ESP.new()
+	var o := opts_for(esp, true, false)
+	ck(bool(o.get("depth_bypass", false)), "scoped without PIP asks for depth bypass")
+	ck(not bool(o.get("pip_compensate", false)), "no PIP colour compensation without PIP")
+	ck(o.get("color") == S.DEFAULT_NORMAL, "outside the lens the colour stays literal")
+	esp.free()
+
+func t_pip_opts_compensate_color() -> void:
+	var esp = ESP.new()
+	var o := opts_for(esp, true, true)
+	ck(bool(o.get("pip_compensate", false)), "PIP asks for colour compensation")
+	ck(not bool(o.get("depth_bypass", false)), "PIP keeps the vanilla depth barrier")
+	var want := OPTIC.inverse(S.DEFAULT_NORMAL)
+	var got: Color = o.get("color", Color.BLACK)
+	ck(absf(got.r - want.r) < 0.0001 and absf(got.g - want.g) < 0.0001 and absf(got.b - want.b) < 0.0001,
+		"PIP opts carry the inverse-transformed colour")
+	esp.free()
+
+# The tuning panel can refresh outlines while the game is paused, outside the
+# normal _process path: the cached view flags must still be in force.
+func t_live_panel_refresh_keeps_compensation() -> void:
+	var esp = ESP.new()
+	var e := {"win": Tracker.EMPTY_WINDOW, "xray_live": false, "cat": S.NORMAL, "dist": 10.0}
+	var opts: Dictionary = {}
+	esp.view_scoped = true
+	esp.view_pip = true
+	esp._fill_opts(opts, e, 0.0)
+	var first: Color = opts["color"]
+	esp._fill_opts(opts, e, 0.0)
+	ck(opts["color"] == first, "the live panel refresh keeps the compensated colour")
+	esp.view_scoped = false
+	esp.view_pip = false
+	esp._fill_opts(opts, e, 0.0)
+	ck(opts["color"] == S.DEFAULT_NORMAL, "leaving the scope restores the literal colour")
+	ck(not bool(opts["depth_bypass"]) and not bool(opts["pip_compensate"]), "leaving the scope clears both flags")
 	esp.free()
