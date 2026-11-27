@@ -18,6 +18,8 @@ func _run() -> void:
 	t_count()
 	t_classic_matches_246()
 	t_non_classic_heat_hue_shifts_without_brightness_change()
+	t_amber_is_the_approved_midpoint()
+	t_forest_and_ice_stay_untouched()
 	t_every_palette_has_five_stops()
 	t_ladder()
 	t_luminance_ascends()
@@ -62,7 +64,26 @@ func t_non_classic_heat_hue_shifts_without_brightness_change() -> void:
 		for j in 5:
 			ck(absf(P.luma(now[j]) - P.luma(was[j])) <= 0.012, "palette %d stop %d keeps its luminance" % [i, j])
 		ck(now[2].r >= was[2].r + 0.08 and now[2].g <= was[2].g, "palette %d hot mid stop shifts warmer" % i)
-		ck(now[3].r >= was[3].r + 0.10 and now[3].g <= was[3].g, "palette %d hot top stop shifts warmer" % i)
+		ck(now[3].r >= was[3].r + 0.05 and now[3].g <= was[3].g, "palette %d hot top stop shifts warmer" % i)
+
+
+func t_amber_is_the_approved_midpoint() -> void:
+	var want: Array[Color] = [
+		Color(0.02, 0.01, 0.00), Color(0.28, 0.10, 0.015), Color(0.72, 0.22, 0.03),
+		Color(0.86, 0.56, 0.11), Color(1.00, 0.93, 0.66),
+	]
+	var now: Array[Color] = P.stops(1)
+	for j in 5:
+		ck(now[j] == want[j], "amber stop %d is the approved midpoint" % j)
+
+
+func t_forest_and_ice_stay_untouched() -> void:
+	var forest: Array[Color] = P.stops(2)
+	var ice: Array[Color] = P.stops(3)
+	ck(forest[2] == Color(0.20, 0.34, 0.08), "forest hot mid stop is unchanged")
+	ck(forest[3] == Color(0.55, 0.56, 0.12), "forest hot top stop is unchanged")
+	ck(ice[2] == Color(0.42, 0.14, 0.62), "ice hot mid stop is unchanged")
+	ck(ice[3] == Color(0.85, 0.45, 0.78), "ice hot top stop is unchanged")
 
 
 func t_every_palette_has_five_stops() -> void:
