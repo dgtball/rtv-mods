@@ -1,20 +1,17 @@
 # Changelog
 
-## [2.10.48] - 2026-11-27
+## [2.10.49] - 2026-11-27
 
 ### Fixed
-- Thermal vision no longer recolours the lenses of ACOG, HMR and VDU sights.
+- Sights render exactly like the base game again: no extra artefacts inside the lens and no broken zoom with PIP on.
 
-## [2.10.47] - 2026-11-27
-
-### Fixed
-- Dark bars inside ACOG, HMR and VDU sights are gone while thermal vision is on.
+### Changed
+- NPC outlines are no longer drawn through optical sights while PIP is off.
 
 ## [2.10.46] - 2026-11-27
 
 ### Fixed
 - Optical sights are clear again instead of looking washed out.
-- NPC outlines stay visible through ACOG, HMR and VDU sights when PIP is off.
 
 ## [2.10.45] - 2026-11-27
 

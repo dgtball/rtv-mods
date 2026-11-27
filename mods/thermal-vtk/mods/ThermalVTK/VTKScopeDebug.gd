@@ -243,31 +243,11 @@ static func _snapshot_ring(cam: Camera3D, weapon) -> void:
 		Dbg.log("SCOPE", "rig: no camera manager attached")
 		return
 	Dbg.log("SCOPE", "rig children=%d patched=%d skipped=%d" % [mgr.get_child_count(), weapon._dbg_patched, weapon._dbg_layer_skip])
-	# The Mask depth swap is driven entirely by VTKWeaponOcclusion; report its
-	# own state here so a live run tells us whether collection, the scope flags
-	# or the material assignment is what leaves the vanilla depth barrier up.
-	var entries: Array = weapon._mask_entries
-	Dbg.log("SCOPE", "mask entries=%d scoped=%s pip=%s ready=%s" % [
-		entries.size(), str(weapon._scope_scoped), str(weapon._scope_pip), str(weapon._scope_ready),
-	])
-	var shown := 0
-	for e in entries:
-		if shown >= MAX_SURF:
-			break
-		var mesh = e.get("mesh")
-		if mesh == null or not is_instance_valid(mesh):
-			continue
-		shown += 1
-		var idx: int = int(e.get("index"))
-		var mat: Material = mesh.get_surface_override_material(idx)
-		var sp := "(none)"
-		if mat is ShaderMaterial:
-			var sm := mat as ShaderMaterial
-			if sm.shader != null:
-				sp = sm.shader.resource_path if sm.shader.resource_path != "" else "(runtime)"
-		Dbg.log("SCOPE", "mask mesh=%s idx=%d override=%s depthless=%s" % [
-			str((mesh as Node).name), idx, sp, str(mat == e.get("depthless")),
-		])
+	# Optic materials are never patched: VTKWeaponOcclusion is a no-op, so the
+	# Mask keeps its vanilla depth barrier and every sight surface keeps its own
+	# shader. Report that plainly instead of dumping a swap table that no longer
+	# exists.
+	Dbg.log("SCOPE", "mask: vanilla, no optic material patching")
 	for child in mgr.get_children():
 		_list_front_meshes(child, cam)
 
