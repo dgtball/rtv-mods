@@ -1,42 +1,28 @@
 extends Node
-## Two fullscreen spatial quads that palettize the 3D view.
+## One fullscreen spatial quad that palettizes the 3D view.
 ##
 ## Godot copies the screen texture after opaque geometry and never includes
-## transparent materials in that copy. One opaque quad at -128 palettizes the
-## world; a second, semi-transparent quad at 12 blends the same palette over
-## the transparent optic picture drawn between them (priorities 0/11). Exact-
-## colour ESP contours and mine shells draw afterwards at 20/21. Both meshes
-## are parented to the current camera and their vertex shader writes clip
-## space directly, so they always cover the viewport and are never culled.
+## transparent materials in that copy. The quad therefore runs once at -128,
+## before vanilla optics (0/11), and palettizes the world and the weapon model.
+## Transparent optics draw afterwards and stay untouched: a second pass over
+## them would only blend the palette at partial alpha and wash out the lens.
+## Exact-colour ESP contours and mine shells draw later at 20/21. The mesh is
+## parented to the current camera and its vertex shader writes clip space
+## directly, so it always covers the viewport and is never culled.
 
 const Shaders = preload("res://mods/ThermalVTK/VTKShaders.gd")
-const TINT_ALPHA := 0.35
 
 var _mesh: MeshInstance3D = null
 var _mat: ShaderMaterial = null
-var _tint_mesh: MeshInstance3D = null
-var _tint_mat: ShaderMaterial = null
 
 
 func material() -> ShaderMaterial:
 	if _mat == null:
 		_mat = ShaderMaterial.new()
 		_mat.shader = Shaders.palette()
-		# First pass: the opaque world is palettized in full, as before.
 		_mat.render_priority = -128
 		_mat.set_shader_parameter("paletteAlpha", 1.0)
 	return _mat
-
-
-func tint_material() -> ShaderMaterial:
-	if _tint_mat == null:
-		_tint_mat = ShaderMaterial.new()
-		_tint_mat.shader = Shaders.palette()
-		# After vanilla optics (0/11) so the sight picks up the palette,
-		# before exact-colour ESP/mines (20/21) so they keep their colours.
-		_tint_mat.render_priority = 12
-		_tint_mat.set_shader_parameter("paletteAlpha", TINT_ALPHA)
-	return _tint_mat
 
 
 func _make_mesh(mesh_name: String, mat: ShaderMaterial) -> MeshInstance3D:
@@ -57,31 +43,21 @@ func attach(cam: Camera3D) -> void:
 		return
 	if _mesh == null or not is_instance_valid(_mesh):
 		_mesh = _make_mesh("VTKPaletteQuad", material())
-	if _tint_mesh == null or not is_instance_valid(_tint_mesh):
-		_tint_mesh = _make_mesh("VTKPaletteQuadTint", tint_material())
-	_attach_one(cam, _mesh)
-	_attach_one(cam, _tint_mesh)
-
-
-func _attach_one(cam: Camera3D, mesh: MeshInstance3D) -> void:
-	if mesh.get_parent() == cam:
+	if _mesh.get_parent() == cam:
 		return
-	var parent := mesh.get_parent()
+	var parent := _mesh.get_parent()
 	if parent != null:
-		parent.remove_child(mesh)
-	cam.add_child(mesh)
+		parent.remove_child(_mesh)
+	cam.add_child(_mesh)
 
 
 func set_enabled(on: bool) -> void:
 	if _mesh != null and is_instance_valid(_mesh):
 		_mesh.visible = on
-	if _tint_mesh != null and is_instance_valid(_tint_mesh):
-		_tint_mesh.visible = on
 
 
 func apply(stops: Array, out: float, gain: float, knee: float) -> void:
 	_push(material(), stops, out, gain, knee, 1.0)
-	_push(tint_material(), stops, out, gain, knee, TINT_ALPHA)
 
 
 func _push(mat: ShaderMaterial, stops: Array, out: float, gain: float, knee: float, alpha: float) -> void:

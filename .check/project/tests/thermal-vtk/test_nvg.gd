@@ -53,13 +53,10 @@ func t_quad_attaches_to_camera() -> void:
 	root.add_child(cam)
 	q.attach(cam)
 	ck(q.material() != null, "world quad owns a ShaderMaterial")
-	ck(q.tint_material() != null, "tint quad owns a ShaderMaterial")
 	ck(q.material().render_priority == -128, "world quad palettizes the opaque world")
-	ck(q.tint_material().render_priority == 12, "tint quad palettizes optics after vanilla surfaces")
-	ck(q.tint_material().render_priority > 11 and q.tint_material().render_priority < 20, "tint quad sits between optics and exact-colour overlays")
-	ck(cam.get_child_count() == 2, "both quads are parented to the camera, never culled")
+	ck(cam.get_child_count() == 1, "one quad is parented to the camera, never culled")
 	q.set_enabled(false)
-	ck(not cam.get_child(0).visible and not cam.get_child(1).visible, "both quads hide cleanly when thermal is off")
+	ck(not cam.get_child(0).visible, "the quad hides cleanly when thermal is off")
 	q.free()
 	cam.free()
 
@@ -68,11 +65,8 @@ func t_quad_uniforms() -> void:
 	var q = Quad.new()
 	q.apply([Color.BLACK, Color(0.24, 0.10, 0.38), Color(0.65, 0.0, 0.10), Color(0.9, 0.65, 0.0), Color.WHITE], 0.7, 1.7, 0.55)
 	ck(q.material().get_shader_parameter("paletteStop2") == Color(0.65, 0.0, 0.10), "live stops reach the world quad material")
-	ck(q.tint_material().get_shader_parameter("paletteStop2") == Color(0.65, 0.0, 0.10), "live stops reach the tint quad material")
 	ck(is_equal_approx(float(q.material().get_shader_parameter("inputGain")), 1.7), "live gain reaches the world quad material")
-	ck(is_equal_approx(float(q.tint_material().get_shader_parameter("inputGain")), 1.7), "live gain reaches the tint quad material")
 	ck(is_equal_approx(float(q.material().get_shader_parameter("paletteAlpha")), 1.0), "world quad is a full palette")
-	ck(is_equal_approx(float(q.tint_material().get_shader_parameter("paletteAlpha")), 0.35), "tint quad keeps the optics visible")
 	q.free()
 
 func t_quad_runtime_contract() -> void:

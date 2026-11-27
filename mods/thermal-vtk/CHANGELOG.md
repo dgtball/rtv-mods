@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.10.46] - 2026-11-27
+
+### Fixed
+- Optical sights are clear again instead of looking washed out.
+- NPC outlines stay visible through ACOG, HMR and VDU sights when PIP is off.
+
 ## [2.10.45] - 2026-11-27
 
 ### Changed

@@ -7,6 +7,7 @@ const BODY_LOS_RES := "res://mods/ThermalVTK/VTKEspBody.gdshader"
 const BODY_XRAY_RES := "res://mods/ThermalVTK/VTKEspBodyXray.gdshader"
 const RING_LOS_RES := "res://mods/ThermalVTK/VTKEspRing.gdshader"
 const RING_XRAY_RES := "res://mods/ThermalVTK/VTKEspRingXray.gdshader"
+const PaletteQuad = preload("res://mods/ThermalVTK/VTKPaletteQuad.gd")
 
 var fails := 0
 
@@ -28,6 +29,7 @@ func _run() -> void:
 	t_nvg_compositor_contract()
 	t_palette_ramp()
 	t_palette_quad_contract()
+	t_single_palette_pass()
 	t_nvg_shader_compiles()
 	t_runtime_contract()
 	t_daylight_contract()
@@ -142,6 +144,31 @@ func t_palette_quad_contract() -> void:
 	ck(not src.contains("minePassthrough"), "quad has no colour passthrough")
 	ck(src.contains("pow(v, 1.0 / 2.2)"), "quad applies display gamma before the ramp")
 	ck(src.contains("ALPHA = paletteAlpha"), "each palette pass sets its own alpha")
+
+func t_single_palette_pass() -> void:
+	# A second fullscreen pass over the transparent optic picture only blends
+	# the palette at partial alpha; that is what made the lens look washed out.
+	var cam := Camera3D.new()
+	var quad = PaletteQuad.new()
+	quad.attach(cam)
+	ck(cam.get_child_count() == 1, "only one palette quad is attached")
+	var mesh := cam.get_child(0) as MeshInstance3D
+	if mesh == null:
+		ck(false, "the remaining quad is a mesh")
+		cam.free()
+		quad.free()
+		return
+	ck(mesh.name == "VTKPaletteQuad", "the remaining quad is the world palette pass")
+	var mat := mesh.material_override as ShaderMaterial
+	if mat == null:
+		ck(false, "the palette quad carries a shader material")
+		cam.free()
+		quad.free()
+		return
+	ck(mat.render_priority == -128, "the single pass stays before optics")
+	ck(is_equal_approx(float(mat.get_shader_parameter("paletteAlpha")), 1.0), "the single pass is fully opaque")
+	cam.free()
+	quad.free()
 
 func t_nvg_shader_compiles() -> void:
 	var sh = load(NVG_SHADER_RES)

@@ -21,6 +21,7 @@ func _run() -> void:
 	t_late_mask_material_is_picked_up_on_resweep()
 	t_pip_mask_is_never_touched()
 	t_reset_restores_and_allows_rediscovery()
+	t_scope_reapply_repairs_overwritten_mask()
 	t_dead_entries_are_pruned()
 	print("")
 	if fails == 0:
@@ -183,6 +184,21 @@ func t_reset_restores_and_allows_rediscovery() -> void:
 	o.set_scope_mode(false, false)
 	ck("depth_draw_always" in _mask_code(mask), "rediscovered mask returns to the vanilla depth barrier")
 
+
+func t_scope_reapply_repairs_overwritten_mask() -> void:
+	_clear_rigs()
+	var mask := _mask_rig()
+	var o = WeaponOcclusion.new()
+	o.tick()
+	o.set_scope_mode(true, false)
+	ck("depth_draw_never" in _mask_code(mask), "mask starts depthless while scoped without PIP")
+	# The live log caught one Mask surface back on the vanilla shader while the
+	# scope state never changed. A state-change-only swap cannot repair that.
+	var put_back := ShaderMaterial.new()
+	put_back.shader = _fixture_shader()
+	mask.set_surface_override_material(0, put_back)
+	o.set_scope_mode(true, false)
+	ck("depth_draw_never" in _mask_code(mask), "an overwritten mask is restored without a scope state change")
 
 func t_dead_entries_are_pruned() -> void:
 	_clear_rigs()

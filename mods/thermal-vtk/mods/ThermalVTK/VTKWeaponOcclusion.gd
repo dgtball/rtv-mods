@@ -161,8 +161,9 @@ func set_scope_mode(scoped: bool, pip: bool) -> void:
 		if mesh != null and is_instance_valid(mesh):
 			live.append(e)
 	_mask_entries = live
-	if _scope_ready and scoped == _scope_scoped and pip == _scope_pip:
-		return
+	# Reapply on every call, not only when the flags change. A live run caught a
+	# Mask surface back on the vanilla shader while scoped stayed true; one
+	# depth-writing surface is enough to erase depth-tested contours in the lens.
 	_scope_ready = true
 	_scope_scoped = scoped
 	_scope_pip = pip
