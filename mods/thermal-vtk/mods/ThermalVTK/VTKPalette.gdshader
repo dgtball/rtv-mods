@@ -2,9 +2,10 @@ shader_type spatial;
 render_mode unshaded, fog_disabled, depth_test_disabled, depth_draw_never, cull_disabled;
 
 // Fullscreen palette pass in the main 3D view. Godot copies the screen after
-// the opaque pass and before transparent geometry. This quad draws after
-// vanilla optics (render_priority 12): it palettizes the world and the optic
-// picture, then our exact-colour ESP/mine overlays draw on top.
+// the opaque pass and before transparent geometry, and never puts transparent
+// materials into that copy. Two quads share this shader: one at -128 palettizes
+// the world in full, one at 12 blends the same palette over the transparent
+// optic picture, leaving ESP/mine overlays at 20/21 in their exact colours.
 
 uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_nearest;
 
@@ -20,6 +21,9 @@ uniform vec3 paletteStop2 : source_color = vec3(0.65, 0.00, 0.10);
 uniform vec3 paletteStop3 : source_color = vec3(0.90, 0.65, 0.00);
 uniform vec3 paletteStop4 : source_color = vec3(1.00, 1.00, 0.80);
 uniform float paletteOut : hint_range(0.1, 1.0, 0.01) = 0.7;
+// World pass writes 1.0; optic tint pass writes a fraction so the sight stays
+// readable while picking up the palette colour.
+uniform float paletteAlpha : hint_range(0.0, 1.0, 0.01) = 1.0;
 
 // C1 highlight shoulder: luminance above the knee bends down toward a bounded
 // top, so the palette never receives a flat clipped value for the brightest
@@ -66,9 +70,9 @@ void fragment() {
 	v = pow(v, 1.0 / 2.2);
 	vec3 pal = ramp(v) * paletteOut;
 	ALBEDO = pal;
-	// The palette is total. It draws after the vanilla optic surfaces, so the
-	// scope picture is coloured like the collimator sights; ESP/mines at 20/21
-	// still keep their exact colours. The screen copy above only supplies the
-	// luminance for the ramp.
-	ALPHA = 1.0;
+	// The world pass is opaque; the later optic pass blends the same palette
+	// fractionally so the sight stays visible. Both sample the same screen copy,
+	// so already-palettized world pixels are unchanged by the second pass. The
+	// screen copy only supplies the luminance for the ramp.
+	ALPHA = paletteAlpha;
 }

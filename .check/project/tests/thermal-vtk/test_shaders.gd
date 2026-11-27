@@ -136,12 +136,12 @@ func t_palette_quad_contract() -> void:
 	ck(src.contains("POSITION = vec4(VERTEX.xy, 1.0, 1.0)"), "quad uses clip-space fullscreen position")
 	ck(src.contains("texture(screen_texture, SCREEN_UV)"), "quad samples with SCREEN_UV")
 	ck(src.contains("depth_test_disabled") and src.contains("depth_draw_never"), "quad never reads or writes depth")
-	for u in ["inputGain", "inputKnee", "paletteOut", "paletteStop0", "paletteStop4"]:
+	for u in ["inputGain", "inputKnee", "paletteOut", "paletteAlpha", "paletteStop0", "paletteStop4"]:
 		ck(src.contains(u), "quad declares %s" % u)
 	ck(not src.contains("paletteStrength"), "palette mix is fixed, not a live uniform")
 	ck(not src.contains("minePassthrough"), "quad has no colour passthrough")
 	ck(src.contains("pow(v, 1.0 / 2.2)"), "quad applies display gamma before the ramp")
-	ck(src.contains("ALPHA = 1.0"), "palette is total, so optics are not washed by a half-transparent overlay")
+	ck(src.contains("ALPHA = paletteAlpha"), "each palette pass sets its own alpha")
 
 func t_nvg_shader_compiles() -> void:
 	var sh = load(NVG_SHADER_RES)
