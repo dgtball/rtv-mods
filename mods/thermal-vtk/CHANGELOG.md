@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.10.57] - 2026-11-28
+
+### Fixed
+- Mine highlights keep their colour in optical sights with PIP off.
+
 ## [2.10.56] - 2026-11-28
 
 ### Fixed
