@@ -9,6 +9,7 @@ const RING_LOS_RES := "res://mods/ThermalVTK/VTKEspRing.gdshader"
 const RING_XRAY_RES := "res://mods/ThermalVTK/VTKEspRingXray.gdshader"
 const BODY_SCOPED_RES := "res://mods/ThermalVTK/VTKEspBodyScoped.gdshader"
 const RING_SCOPED_RES := "res://mods/ThermalVTK/VTKEspRingScoped.gdshader"
+const MINE_SCOPED_RES := "res://mods/ThermalVTK/VTKMineScoped.gdshader"
 const PaletteQuad = preload("res://mods/ThermalVTK/VTKPaletteQuad.gd")
 
 var fails := 0
@@ -28,6 +29,7 @@ func _run() -> void:
 	t_body_contracts()
 	t_ring_contracts()
 	t_scoped_depth_contract()
+	t_mine_scoped_shader_contract()
 	t_band_contract()
 	t_nvg_compositor_contract()
 	t_palette_ramp()
@@ -108,6 +110,24 @@ func t_scoped_depth_contract() -> void:
 		ck(src.contains("discard"), "scoped shader discards fragments behind walls")
 		ck(src.contains("depth_test_disabled") and src.contains("depth_draw_never"),
 			"scoped shader keeps the mask bypass and writes no depth")
+
+# Scoped mines cross the vanilla Mask but stay behind real walls: a flat
+# dedicated shader, with the ESP fresnel/grow logic left out.
+func t_mine_scoped_shader_contract() -> void:
+	if not FileAccess.file_exists(MINE_SCOPED_RES):
+		ck(false, "scoped mine shader file exists")
+		return
+	var sh_class: Variant = Sh
+	var sh: Shader = sh_class.call("mine_scoped")
+	ck(sh != null, "scoped mine shader resolves")
+	var names := _uniform_names(sh)
+	ck(names.has("mine_color"), "scoped mine shader exposes mine_color")
+	var src := FileAccess.get_file_as_string(MINE_SCOPED_RES)
+	for token in ["hint_depth_texture", "INV_PROJECTION_MATRIX", "FRAGCOORD.z", "discard",
+			"depth_test_disabled", "depth_draw_never", "ALBEDO = mine_color", "ALPHA = 1.0"]:
+		ck(src.contains(token), "scoped mine shader contains %s" % token)
+	for bad in ["rim_power", "grow"]:
+		ck(not src.contains(bad), "scoped mine shader has no %s" % bad)
 
 # Overlay-only baseline: direct display materials are applied as source overlays.
 # Outline keeps the stencil/ring chain and display uniforms.

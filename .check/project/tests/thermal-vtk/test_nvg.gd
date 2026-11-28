@@ -25,6 +25,7 @@ func _run() -> void:
 	t_mine_color_stored_and_applied()
 	t_mine_material_stays_exact_after_palette()
 	t_mine_highlight_uses_main_view_shells()
+	t_mine_scope_material_switch()
 	t_script_kind_cache()
 	print("")
 	if fails == 0:
@@ -174,6 +175,54 @@ func t_mine_highlight_uses_main_view_shells() -> void:
 	ck(mesh.material_overlay == null, "out-of-range mine clears overlay")
 	nvg._update_mine(id, true, Vector3.ZERO)
 	ck(mesh.material_overlay == nvg._mat_mine, "mine repaints overlay on re-entry")
+	nvg.free()
+	mine.free()
+
+# Scoped non-PIP view swaps the already painted mine to a dedicated flat shader
+# without losing priority or colour; PIP and normal view keep the plain shell.
+func t_mine_scope_material_switch() -> void:
+	var nvg = NVG.new()
+	root.add_child(nvg)
+	if not nvg.has_method("set_scope_view"):
+		ck(false, "NVG exposes set_scope_view()")
+		nvg.free()
+		return
+	nvg.set_mine_color(Color(0.2, 0.4, 0.9))
+	nvg.set_mines = true
+	nvg.set_thermal = true
+	var mine := Node3D.new()
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = BoxMesh.new()
+	mine.add_child(mesh)
+	root.add_child(mine)
+	mine.global_position = Vector3(2.0, 0.0, 0.0)
+	nvg._register_mine(mine)
+	var id := mine.get_instance_id()
+	nvg._update_mine(id, true, Vector3.ZERO)
+	var plain: Material = nvg.get("_current_mine_material")
+	ck(plain == nvg._mat_mine, "fresh paint uses the plain mine material")
+	ck(mesh.material_overlay == plain, "unscoped mine paints the plain material")
+	nvg.call("set_scope_view", true, false)
+	var scoped: Material = nvg.get("_current_mine_material")
+	ck(scoped is ShaderMaterial, "scoped non-PIP mine uses a ShaderMaterial")
+	ck(mesh.material_overlay == scoped, "scoped switch repaints the painted mine")
+	var scoped_sm := scoped as ShaderMaterial
+	if scoped_sm == null:
+		ck(false, "scoped mine material carries exact-colour uniforms")
+		nvg.call("set_scope_view", false, false)
+		nvg.free()
+		mine.free()
+		return
+	ck(scoped_sm.render_priority == 20, "scoped mine keeps the transparent pass priority")
+	ck(scoped_sm.get_shader_parameter("mine_color") == Color(0.2, 0.4, 0.9, 1.0),
+		"scoped mine carries the configured colour")
+	nvg.set_mine_color(Color(0.1, 0.8, 0.3))
+	ck(scoped_sm.get_shader_parameter("mine_color") == Color(0.1, 0.8, 0.3, 1.0),
+		"a colour update reaches the scoped mine uniform")
+	nvg.call("set_scope_view", true, true)
+	ck(mesh.material_overlay == plain, "PIP on restores the plain mine overlay")
+	nvg.call("set_scope_view", false, false)
+	ck(mesh.material_overlay == plain, "leaving scope restores the plain mine overlay")
 	nvg.free()
 	mine.free()
 
