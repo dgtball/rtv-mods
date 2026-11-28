@@ -23,6 +23,7 @@ func _run() -> void:
 	t_mine_retry_is_bounded()
 	t_off_upkeep_clears_dead_mines()
 	t_mine_color_stored_and_applied()
+	t_mine_material_stays_exact_after_palette()
 	t_mine_highlight_uses_main_view_shells()
 	t_script_kind_cache()
 	print("")
@@ -123,6 +124,23 @@ func t_mine_color_stored_and_applied() -> void:
 	sm = nvg._mat_mine as StandardMaterial3D
 	ck(nvg.mine_color() == Color(0.1, 0.8, 0.3), "mine colour updates")
 	ck(sm != null and sm.albedo_color == Color(0.1, 0.8, 0.3), "mine display material follows colour updates")
+	nvg.free()
+
+# An opaque mine is painted into the frame before the full-screen palette pass;
+# it must sit in the transparent queue at full alpha to keep its own colour.
+func t_mine_material_stays_exact_after_palette() -> void:
+	var nvg = NVG.new()
+	root.add_child(nvg)
+	var sm := nvg._mat_mine as StandardMaterial3D
+	ck(sm != null, "mine display material exists")
+	ck(sm.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED,
+		"mine display material is drawn after the palette pass")
+	ck(sm.albedo_color.a > 0.999, "transparent queue keeps the shell visually opaque")
+	ck(not sm.get_flag(BaseMaterial3D.FLAG_DISABLE_DEPTH_TEST),
+		"mine shell still obeys the depth test")
+	ck(sm.render_priority == 20, "mine shell keeps its transparent pass priority")
+	nvg.set_mine_color(Color(0.2, 0.4, 0.9))
+	ck(sm.albedo_color.a > 0.999, "a colour update keeps the shell opaque")
 	nvg.free()
 
 # Mines are highlighted in the main view while thermal is on and NVG is worn;

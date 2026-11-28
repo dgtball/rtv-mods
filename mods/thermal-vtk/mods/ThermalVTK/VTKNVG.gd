@@ -153,10 +153,11 @@ func _scan_node(n: Node) -> void:
 func _mine_display_material(c: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.albedo_color = c
+	m.albedo_color = Color(c.r, c.g, c.b, 1.0)
 	m.emission_enabled = false
-	# Above the palette quad (-128), below contour rings; same depth test as
-	# ordinary world geometry so walls still occlude mine shells.
+	# Transparent queue (priority 20) draws after the full-screen palette quad
+	# (-128); the depth test stays on so walls still occlude mine shells.
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.render_priority = 20
 	return m
 
@@ -165,7 +166,7 @@ func _refresh_mine_material() -> void:
 	if _mat_mine == null:
 		_mat_mine = _mine_display_material(_mine_color)
 		return
-	_mat_mine.albedo_color = _mine_color
+	_mat_mine.albedo_color = Color(_mine_color.r, _mine_color.g, _mine_color.b, 1.0)
 
 
 func _on_node_added(node: Node) -> void:
