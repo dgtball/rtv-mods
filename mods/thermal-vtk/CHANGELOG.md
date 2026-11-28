@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.10.56] - 2026-11-28
+
+### Fixed
+- Mine highlight colour no longer changes with the thermal palette.
+
 ## [2.10.55] - 2026-11-27
 
 ### Fixed
