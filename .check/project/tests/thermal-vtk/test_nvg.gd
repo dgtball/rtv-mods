@@ -133,14 +133,17 @@ func t_mine_material_stays_exact_after_palette() -> void:
 	root.add_child(nvg)
 	var sm := nvg._mat_mine as StandardMaterial3D
 	ck(sm != null, "mine display material exists")
-	ck(sm.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED,
+	ck(sm.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA,
 		"mine display material is drawn after the palette pass")
 	ck(sm.albedo_color.a > 0.999, "transparent queue keeps the shell visually opaque")
 	ck(not sm.get_flag(BaseMaterial3D.FLAG_DISABLE_DEPTH_TEST),
 		"mine shell still obeys the depth test")
 	ck(sm.render_priority == 20, "mine shell keeps its transparent pass priority")
 	nvg.set_mine_color(Color(0.2, 0.4, 0.9))
+	ck(sm.transparency == BaseMaterial3D.TRANSPARENCY_ALPHA,
+		"a colour update keeps the shell in the transparent queue")
 	ck(sm.albedo_color.a > 0.999, "a colour update keeps the shell opaque")
+	ck(sm.render_priority == 20, "a colour update keeps the transparent pass priority")
 	nvg.free()
 
 # Mines are highlighted in the main view while thermal is on and NVG is worn;
