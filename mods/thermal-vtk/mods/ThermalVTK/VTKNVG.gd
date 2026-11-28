@@ -7,6 +7,7 @@ const States = preload("res://mods/ThermalVTK/VTKStates.gd")
 const Dbg = preload("res://mods/ThermalVTK/VTKDebug.gd")
 const SceneProbe = preload("res://mods/ThermalVTK/VTKSceneProbe.gd")
 const PaletteQuad = preload("res://mods/ThermalVTK/VTKPaletteQuad.gd")
+const Shaders = preload("res://mods/ThermalVTK/VTKShaders.gd")
 
 # Owns the NVG overlay shader, the world palette quad and mine highlighting.
 #
@@ -53,6 +54,9 @@ var _installed: bool = false
 var _quad = null
 
 var _mat_mine: StandardMaterial3D = null
+var _mat_mine_scoped: ShaderMaterial = null
+var _current_mine_material: Material = null
+var _mine_scoped: bool = false
 
 var _mines: Dictionary = {}
 var _mine_watch: Dictionary = {}
@@ -104,8 +108,12 @@ func _ready() -> void:
 	if ResourceLoader.exists(SHADER_RES):
 		_shader = load(SHADER_RES) as Shader
 
-	# Direct mine display material for main-view shells.
+	# Direct mine display material for main-view shells. Scoped non-PIP optics
+	# swap to a flat shader that crosses the vanilla Mask but still respects
+	# opaque depth; both materials are built once and only swapped per state.
 	_mat_mine = _mine_display_material(_mine_color)
+	_mat_mine_scoped = _scoped_mine_material(_mine_color)
+	_current_mine_material = _mat_mine
 
 	# The quad node stays ours; only its mesh is parented to the live camera.
 	_quad = PaletteQuad.new()
@@ -162,11 +170,20 @@ func _mine_display_material(c: Color) -> StandardMaterial3D:
 	return m
 
 
+func _scoped_mine_material(c: Color) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = Shaders.mine_scoped()
+	m.set_shader_parameter("mine_color", Color(c.r, c.g, c.b, 1.0))
+	m.render_priority = 20
+	return m
+
+
 func _refresh_mine_material() -> void:
 	if _mat_mine == null:
 		_mat_mine = _mine_display_material(_mine_color)
-		return
 	_mat_mine.albedo_color = Color(_mine_color.r, _mine_color.g, _mine_color.b, 1.0)
+	if _mat_mine_scoped != null:
+		_mat_mine_scoped.set_shader_parameter("mine_color", Color(_mine_color.r, _mine_color.g, _mine_color.b, 1.0))
 
 
 func _on_node_added(node: Node) -> void:
@@ -302,6 +319,23 @@ func mine_color() -> Color:
 	return _mine_color
 
 
+# Scoped optics without PIP swap already painted mines to the flat, depth-aware
+# shader. PIP and normal view keep the plain transparent shell. Only a state
+# change touches the overlays; no counters or materials are recreated.
+func set_scope_view(scoped: bool, pip: bool) -> void:
+	var want: bool = scoped and not pip
+	if want == _mine_scoped:
+		return
+	_mine_scoped = want
+	_current_mine_material = _mat_mine_scoped if want else _mat_mine
+	if _current_mine_material == null:
+		_current_mine_material = _mat_mine
+	for id in _mines.keys():
+		var e = _mines.get(id)
+		if e != null and bool(e.get("painted", false)):
+			_apply_mine_paint(e, true)
+
+
 func _nvg_active() -> bool:
 	if _game_data == null or not _game_data.has_method("get"):
 		return false
@@ -341,6 +375,8 @@ func _process(delta: float) -> void:
 				_installed = false
 	if worn:
 		_daylight_tick(delta)
+	# Two plain flag reads decide which shared mine material painted shells use.
+	set_scope_view(_game_flag("isScoped"), _game_flag("PIP"))
 	# Player position, fetched once per frame.
 	var ppos := _player_pos()
 
@@ -755,7 +791,7 @@ func _apply_mine_paint(entry: Dictionary, show: bool) -> void:
 		var gi := m as GeometryInstance3D
 		if gi == null:
 			continue
-		gi.material_overlay = _mat_mine if show else null
+		gi.material_overlay = (_current_mine_material if _current_mine_material != null else _mat_mine) if show else null
 
 
 func _remove_mine(id: int) -> void:

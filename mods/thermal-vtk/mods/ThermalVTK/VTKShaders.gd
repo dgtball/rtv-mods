@@ -9,6 +9,7 @@ const RING_LOS_SRC := preload("res://mods/ThermalVTK/VTKEspRing.gdshader")
 const RING_XRAY_SRC := preload("res://mods/ThermalVTK/VTKEspRingXray.gdshader")
 const BODY_SCOPED_SRC := preload("res://mods/ThermalVTK/VTKEspBodyScoped.gdshader")
 const RING_SCOPED_SRC := preload("res://mods/ThermalVTK/VTKEspRingScoped.gdshader")
+const MINE_SCOPED_SRC := preload("res://mods/ThermalVTK/VTKMineScoped.gdshader")
 const PALETTE_SRC := preload("res://mods/ThermalVTK/VTKPalette.gdshader")
 
 static func body_los() -> Shader:
@@ -28,6 +29,9 @@ static func body_scoped() -> Shader:
 
 static func ring_scoped() -> Shader:
 	return RING_SCOPED_SRC
+
+static func mine_scoped() -> Shader:
+	return MINE_SCOPED_SRC
 
 static func palette() -> Shader:
 	return PALETTE_SRC
